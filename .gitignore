@@ -74,10 +74,7 @@ backup_codes/
 test.py
 poetry.lock
 TODO.md
-proposal.md
-project_structure.md
-explanations.md
-text_docs/
+other_repos/
 
 # Hydra
 multirun/

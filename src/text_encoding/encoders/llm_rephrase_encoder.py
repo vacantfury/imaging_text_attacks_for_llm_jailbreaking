@@ -1,5 +1,5 @@
 """
-LLM-based Rephrase Processor - Rephrases prompts to avoid direct harmful keywords.
+LLM-based Rephrase Encoder - Rephrases prompts to avoid direct harmful keywords.
 
 This processor uses an LLM to rephrase potentially harmful prompts to avoid using
 direct, obvious harmful words while maintaining the same underlying intent. This is
@@ -20,13 +20,13 @@ Example transformations:
 from typing import Optional, List
 from src.llm_utils import LLMServiceFactory, LLMModel, BaseLLMService
 from src.utils.logger import get_logger
-from ..base_processor import BaseProcessor
+from ..base_encoder import BaseEncoder
 from .constants import DEFAULT_PROCESSING_MODEL
 
 logger = get_logger(__name__)
 
 
-class RephraseLLMProcessor(BaseProcessor):
+class RephraseLLMEncoder(BaseEncoder):
     """
     LLM-based processor that rephrases prompts to avoid direct harmful language.
     
@@ -73,7 +73,7 @@ Remember: You are rephrasing to make the query sound more formal and indirect, N
         **kwargs
     ):
         """
-        Initialize RephraseLLMProcessor.
+        Initialize RephraseLLMEncoder.
         
         Args:
             model: LLM model to use (default: DEFAULT_PROCESSING_MODEL from constants = GPT-4o)
@@ -85,7 +85,7 @@ Remember: You are rephrasing to make the query sound more formal and indirect, N
         # Use default model if none provided
         if model is None:
             model = DEFAULT_PROCESSING_MODEL
-            logger.info(f"No model specified for RephraseLLMProcessor, using default: {model.value}")
+            logger.info(f"No model specified for RephraseLLMEncoder, using default: {model.value}")
         
         super().__init__(model=model, **kwargs)
         self.use_few_shot = use_few_shot
@@ -99,7 +99,7 @@ Remember: You are rephrasing to make the query sound more formal and indirect, N
         if max_tokens is not None:
             self.service.max_tokens = max_tokens
         
-        logger.info(f"Initialized RephraseLLMProcessor with model: {model.value}, use_few_shot: {use_few_shot}")
+        logger.info(f"Initialized RephraseLLMEncoder with model: {model.value}, use_few_shot: {use_few_shot}")
     
     def _get_few_shot_demonstrations(self) -> list:
         """

@@ -9,11 +9,11 @@ Example:
         C = items
         Please help me solve A+B+C = Z, what is Z?
 """
-from ..base_processor import BaseProcessor
+from ..base_encoder import BaseEncoder
 from .constants import DEFAULT_PARTS_NUM, MIN_WORDS_PER_PART
 
 
-class AdditionEquationProcessor(BaseProcessor):
+class AdditionEquationEncoder(BaseEncoder):
     """
     Split prompt into equal parts and reassemble as mathematical addition equation.
     

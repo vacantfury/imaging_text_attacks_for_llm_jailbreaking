@@ -36,7 +36,7 @@ def _save_config(out_dir: Path, config: dict):
 
 
 
-# Mapping from user-facing encoding names to ProcessorType values
+# Mapping from user-facing encoding names to EncoderType values
 ENCODING_MAP = {
     "plain": "non_llm_baseline",
     "math": "llm_set_theory",
@@ -71,24 +71,24 @@ def _run_text_encode(config: dict) -> dict[str, Any]:
     """
     Mode: text_encode
     
-    Reads raw prompts from data/, encodes them with the specified processor,
+    Reads raw prompts from data/, encodes them with the specified encoder,
     and writes encoded prompts to outputs/.
     """
-    from src.text_encoding import create_processor, ProcessorType
+    from src.text_encoding import create_encoder, EncoderType
     from src.data_loader.schemas import RawPrompt, EncodedPrompt
     
     encoding = config.get("encoding", "plain")
     source_file = config.get("source_file", "data/harmbench_prompts.jsonl")
     
     # Resolve encoding name to processor type
-    processor_type = ENCODING_MAP.get(encoding)
-    if processor_type is None:
+    encoder_type = ENCODING_MAP.get(encoding)
+    if encoder_type is None:
         raise ValueError(
             f"Unknown encoding: '{encoding}'. "
             f"Available: {list(ENCODING_MAP.keys())}"
         )
     
-    logger.info(f"Text encoding: {encoding} → {processor_type} from {source_file}")
+    logger.info(f"Text encoding: {encoding} → {encoder_type} from {source_file}")
     
     # Load raw prompts
     prompts = []
@@ -99,10 +99,10 @@ def _run_text_encode(config: dict) -> dict[str, Any]:
     
     logger.info(f"Loaded {len(prompts)} prompts")
     
-    # Create processor and encode
-    processor = create_processor(ProcessorType(processor_type))
+    # Create encoder and encode
+    encoder = create_encoder(EncoderType(encoder_type))
     raw_texts = [p.prompt for p in prompts]
-    encoded_texts = processor.batch_process(raw_texts)
+    encoded_texts = encoder.batch_process(raw_texts)
     
     # Build output
     benchmark = config.get("benchmark", _infer_benchmark(source_file))

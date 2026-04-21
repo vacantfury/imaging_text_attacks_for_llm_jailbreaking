@@ -7,7 +7,7 @@ experiment. This enables controlled "exact repeat" experiments: same processed
 prompt → same model → potentially different result (demonstrating non-determinism).
 
 Usage:
-    processor = RepeatProcessor(experiment_dir="/path/to/previous/experiment")
+    processor = RepeatEncoder(experiment_dir="/path/to/previous/experiment")
     # process() receives the original prompt text and looks up the stored
     # processed_prompt by matching original_prompt text.
 """
@@ -17,16 +17,16 @@ from pathlib import Path
 from typing import Optional, Dict, List
 
 # Some encoded prompts (e.g. quantum mechanics) exceed Python's default 128 KB
-# CSV field limit.  Raise it so RepeatProcessor can read any experiment CSV.
+# CSV field limit.  Raise it so RepeatEncoder can read any experiment CSV.
 csv.field_size_limit(sys.maxsize)
 
-from ..base_processor import BaseProcessor
+from ..base_encoder import BaseEncoder
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-class RepeatProcessor(BaseProcessor):
+class RepeatEncoder(BaseEncoder):
     """
     Replay exact processed prompts from a previous experiment.
     
@@ -92,7 +92,7 @@ class RepeatProcessor(BaseProcessor):
                 count += 1
         
         logger.info(
-            f"RepeatProcessor loaded {count} prompts from {csv_path} "
+            f"RepeatEncoder loaded {count} prompts from {csv_path} "
             f"({len(self._lookup)} by text, {len(self._id_lookup)} by id)"
         )
     
@@ -120,13 +120,13 @@ class RepeatProcessor(BaseProcessor):
         # Fallback: lookup by data_id
         data_id = kwargs.get('data_id', '')
         if data_id and data_id in self._id_lookup:
-            logger.info(f"RepeatProcessor: matched by id={data_id}")
+            logger.info(f"RepeatEncoder: matched by id={data_id}")
             processed = self._id_lookup[data_id]
             return processed + "\n" + processed
         
         # No match found
         logger.warning(
-            f"RepeatProcessor: no match for prompt "
+            f"RepeatEncoder: no match for prompt "
             f"'{prompt_stripped[:80]}...' — returning raw prompt"
         )
         return prompt
@@ -154,6 +154,6 @@ class RepeatProcessor(BaseProcessor):
             results.append(result)
         
         logger.info(
-            f"RepeatProcessor: matched {matched}/{len(prompts)} prompts"
+            f"RepeatEncoder: matched {matched}/{len(prompts)} prompts"
         )
         return results

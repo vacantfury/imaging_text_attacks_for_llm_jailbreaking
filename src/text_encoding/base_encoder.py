@@ -1,5 +1,5 @@
 """
-Base processor class and helper functions for all prompt processors.
+Base processor class and helper functions for all prompt encoders.
 """
 import re
 from abc import ABC, abstractmethod
@@ -20,23 +20,23 @@ INSTRUCTION_END_TAG = "[/INSTRUCTION]"
 REPEAT_TRANSITION = "\n"
 
 
-class BaseProcessor(ABC):
+class BaseEncoder(ABC):
     """
-    Abstract base class for all prompt processors.
+    Abstract base class for all prompt encoders.
     
     Processors transform prompts using different techniques (LLM-based or rule-based).
     Each processor must implement process() for single prompt transformation.
     The default batch_process() uses multiprocessing for efficiency.
     
     Built-in pre/post processing:
-    - rephrase_first: If True, rephrases prompts via RephraseLLMProcessor before core processing.
+    - rephrase_first: If True, rephrases prompts via RephraseLLMEncoder before core processing.
     - is_repeating: If True, repeats the output after core processing.
     
     All processors accept an optional 'model' parameter for consistency,
     even if they don't use it (e.g., rule-based processors).
     
     If no model is provided for LLM-based processors, they will use 
-    DEFAULT_PROCESSING_MODEL from processors/constants.py (GPT-4o).
+    DEFAULT_PROCESSING_MODEL from encoders/constants.py (GPT-4o).
     """
     
     # Default prefix prepended to processed prompts when sent to target model.
@@ -57,11 +57,11 @@ class BaseProcessor(ABC):
         Args:
             model: Optional LLM model (used by LLM-based processors).
                   If None, LLM-based processors will use DEFAULT_PROCESSING_MODEL.
-            rephrase_first: If True, pre-process prompts through RephraseLLMProcessor
+            rephrase_first: If True, pre-process prompts through RephraseLLMEncoder
                            before the core processing logic runs.
             is_repeating: If True, repeat the entire output after core processing.
             rephrase_model: Optional model for rephrasing. If None, uses DEFAULT_PROCESSING_MODEL.
-            **kwargs: Processor-specific parameters
+            **kwargs: Encoder-specific parameters
         """
         self.model = model
         self.rephrase_first = rephrase_first
@@ -76,7 +76,7 @@ class BaseProcessor(ABC):
         
         Args:
             prompt: The prompt to process
-            **kwargs: Processor-specific parameters
+            **kwargs: Encoder-specific parameters
             
         Returns:
             Processed prompt or response
@@ -100,8 +100,8 @@ class BaseProcessor(ABC):
     def _get_rephraser(self):
         """Lazily create the rephrase processor."""
         if self._rephraser is None:
-            from .processors.llm_rephrase_processor import RephraseLLMProcessor
-            self._rephraser = RephraseLLMProcessor(model=self.rephrase_model)
+            from .encoders.llm_rephrase_encoder import RephraseLLMEncoder
+            self._rephraser = RephraseLLMEncoder(model=self.rephrase_model)
             logger.info(f"Initialized rephraser for pre-processing (model: {self.rephrase_model})")
         return self._rephraser
     
@@ -113,7 +113,7 @@ class BaseProcessor(ABC):
         
         Args:
             prompts: List of prompts to process
-            **kwargs: Processor-specific parameters
+            **kwargs: Encoder-specific parameters
             
         Returns:
             List of processed prompts/responses
@@ -154,7 +154,7 @@ class BaseProcessor(ABC):
         
         Args:
             prompts: List of prompts to process
-            **kwargs: Processor-specific parameters
+            **kwargs: Encoder-specific parameters
             
         Returns:
             List of processed prompts/responses
@@ -170,7 +170,7 @@ class BaseProcessor(ABC):
         
         Args:
             prompts: List of prompts to process
-            **kwargs: Processor-specific parameters
+            **kwargs: Encoder-specific parameters
             
         Returns:
             List of processed prompts
@@ -191,7 +191,7 @@ class BaseProcessor(ABC):
         
         Args:
             prompt: The prompt to process
-            **kwargs: Processor-specific parameters
+            **kwargs: Encoder-specific parameters
             
         Returns:
             Processed result or error message
@@ -234,7 +234,7 @@ def split_into_parts(words: list[str], num_parts: int) -> list[list[str]]:
         List of parts, where each part is a list of words
     """
     # Import constants locally to avoid circular imports
-    from .processors.constants import (
+    from .encoders.constants import (
         BOUNDARY_WINDOW_PERCENT,
         SENTENCE_BOUNDARY_SCORE,
         PHRASE_BOUNDARY_SCORE,

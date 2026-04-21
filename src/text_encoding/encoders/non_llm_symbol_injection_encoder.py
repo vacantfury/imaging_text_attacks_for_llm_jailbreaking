@@ -9,7 +9,7 @@ from typing import Optional, List
 
 from src.llm_utils import LLMModel
 from src.utils.logger import get_logger
-from ..base_processor import BaseProcessor
+from ..base_encoder import BaseEncoder
 from .constants import (
     DEFAULT_INJECTION_NUM_SYMBOLS,
     DEFAULT_INJECTION_SYMBOLS
@@ -18,7 +18,7 @@ from .constants import (
 logger = get_logger(__name__)
 
 
-class SymbolInjectionProcessor(BaseProcessor):
+class SymbolInjectionEncoder(BaseEncoder):
     """
     Inject mathematical and special symbols randomly and evenly into prompts.
     
@@ -63,7 +63,7 @@ class SymbolInjectionProcessor(BaseProcessor):
         self.symbols = symbols if symbols is not None else DEFAULT_INJECTION_SYMBOLS
         
         logger.info(
-            f"Initialized SymbolInjectionProcessor with {self.num_symbols} symbols "
+            f"Initialized SymbolInjectionEncoder with {self.num_symbols} symbols "
             f"from a pool of {len(self.symbols)} available symbols"
         )
     
@@ -152,7 +152,7 @@ class SymbolInjectionProcessor(BaseProcessor):
     def __repr__(self) -> str:
         """String representation of the processor."""
         return (
-            f"SymbolInjectionProcessor("
+            f"SymbolInjectionEncoder("
             f"num_symbols={self.num_symbols}, "
             f"symbols_pool_size={len(self.symbols)})"
         )

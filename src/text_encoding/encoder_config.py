@@ -1,5 +1,5 @@
 """
-Configuration for prompt processors.
+Configuration for prompt encoders.
 """
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -9,15 +9,15 @@ from src.llm_utils.llm_model import LLMModel
 
 
 @dataclass
-class ProcessorConfig:
+class EncoderConfig:
     """
-    Configuration for prompt processors.
+    Configuration for prompt encoders.
     
     Contains fields for ALL processor types with sensible defaults.
     Each processor picks the fields it needs; unused fields are ignored.
     
     Attributes:
-        strategy: Processor strategy name (single string).
+        strategy: Encoder strategy name (single string).
         model_config: LLM configuration for LLM-based processors.
                       Defaults to GPT-4o-mini (sufficient for encoding).
                       Ignored by non-LLM processors.
@@ -37,11 +37,11 @@ class ProcessorConfig:
     num_symbols: int = 10
     rephrase_first: bool = False
     is_repeating: bool = False
-    experiment_dir: Optional[str] = None  # Source experiment dir for RepeatProcessor
+    experiment_dir: Optional[str] = None  # Source experiment dir for RepeatEncoder
     
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ProcessorConfig":
-        """Create ProcessorConfig from a dictionary."""
+    def from_dict(cls, data: dict[str, Any]) -> "EncoderConfig":
+        """Create EncoderConfig from a dictionary."""
         if not data:
             return cls()
         

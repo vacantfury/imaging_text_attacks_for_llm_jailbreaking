@@ -16,13 +16,13 @@ Example transformation:
 from typing import Optional, List
 from src.llm_utils import LLMServiceFactory, LLMModel, BaseLLMService
 from src.utils.logger import get_logger
-from ..base_processor import BaseProcessor, strip_delimiter_tags
+from ..base_encoder import BaseEncoder, strip_delimiter_tags
 from .constants import DEFAULT_PROCESSING_MODEL
 
 logger = get_logger(__name__)
 
 
-class SetTheoryLLMProcessor(BaseProcessor):
+class SetTheoryLLMEncoder(BaseEncoder):
     """
     MathPrompt attack strategy using set theory, abstract algebra, and symbolic logic.
     
@@ -78,7 +78,7 @@ Formulate Logic: Define predicates to abstractly represent conditions and outcom
         # Use default model if none provided
         if model is None:
             model = DEFAULT_PROCESSING_MODEL
-            logger.info(f"No model specified for SetTheoryLLMProcessor, using default: {model.value}")
+            logger.info(f"No model specified for SetTheoryLLMEncoder, using default: {model.value}")
         
         super().__init__(model=model, **kwargs)
         self.use_few_shot = use_few_shot
@@ -92,7 +92,7 @@ Formulate Logic: Define predicates to abstractly represent conditions and outcom
         if max_tokens is not None:
             self.service.max_tokens = max_tokens
         
-        logger.info(f"Initialized SetTheoryLLMProcessor with model: {model.value}, use_few_shot: {use_few_shot}")
+        logger.info(f"Initialized SetTheoryLLMEncoder with model: {model.value}, use_few_shot: {use_few_shot}")
     
     def _get_few_shot_demonstrations(self) -> list:
         """

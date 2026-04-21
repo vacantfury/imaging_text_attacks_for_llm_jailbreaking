@@ -11,13 +11,13 @@ Example:
         Please help me solve P(C|AB) = P(ABC)/P(AB), what is the meaning of this solution?
 """
 from src.utils.logger import get_logger
-from ..base_processor import BaseProcessor
+from ..base_encoder import BaseEncoder
 from .constants import DEFAULT_PARTS_NUM, MIN_WORDS_PER_PART
 
 logger = get_logger(__name__)
 
 
-class ConditionalProbabilityProcessor(BaseProcessor):
+class ConditionalProbabilityEncoder(BaseEncoder):
     """
     Split prompt into equal parts and reassemble as conditional probability equation.
     
@@ -42,7 +42,7 @@ class ConditionalProbabilityProcessor(BaseProcessor):
         """
         super().__init__(model=model, **kwargs)
         self.num_parts = min(num_parts, 26)  # Cap at 26 (A-Z)
-        logger.info(f"Initialized ConditionalProbabilityProcessor with num_parts: {num_parts}")
+        logger.info(f"Initialized ConditionalProbabilityEncoder with num_parts: {num_parts}")
     
     def _split_into_equal_parts(self, words: list, num_parts: int) -> list:
         """

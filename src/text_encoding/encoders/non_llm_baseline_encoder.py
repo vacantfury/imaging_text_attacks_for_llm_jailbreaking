@@ -4,10 +4,10 @@ Baseline processor - passthrough that returns input unchanged.
 Used to measure target model behavior without any encoding/transformation.
 Supports is_repeating for "baseline + repeat" defense experiments.
 """
-from src.text_encoding.base_processor import BaseProcessor
+from src.text_encoding.base_encoder import BaseEncoder
 
 
-class BaselineProcessor(BaseProcessor):
+class BaselineEncoder(BaseEncoder):
     """
     No-op processor that passes prompts through unchanged.
     

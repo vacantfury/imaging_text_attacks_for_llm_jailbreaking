@@ -1,14 +1,14 @@
 """
-Processor type enumeration.
+Encoder type enumeration.
 
-Defines all available prompt processors with type-safe enum.
+Defines all available prompt encoders with type-safe enum.
 """
 from enum import Enum
 
 
-class ProcessorType(str, Enum):
+class EncoderType(str, Enum):
     """
-    Enumeration of available prompt processors.
+    Enumeration of available prompt encoders.
     
     Provides type-safe processor selection with IDE autocomplete.
     Inherits from str to allow direct string comparison and JSON serialization.

@@ -1,73 +1,73 @@
 """
-Prompt Processor Package
+Prompt Encoder Package
 
 Provides prompt transformation processors using different techniques (LLM-based and rule-based).
 
 Main Components:
-- BaseProcessor: Abstract base for all processors
-- Built-in processors: SetTheoryLLMProcessor, ConditionalProbabilityProcessor, AdditionEquationProcessor
-- Factory: create_processor() for creating processor instances
+- BaseEncoder: Abstract base for all processors
+- Built-in processors: SetTheoryLLMEncoder, ConditionalProbabilityEncoder, AdditionEquationEncoder
+- Factory: create_encoder() for creating processor instances
 
 Usage:
-    >>> from src.prompt_processor import create_processor, ProcessorType
+    >>> from src.text_encoding import create_encoder, EncoderType
     >>> from src.llm_utils import LLMModel
     >>> 
     >>> # LLM-based processing (MathPrompt approach)
-    >>> processor = create_processor(
-    ...     ProcessorType.LLM_SET_THEORY,
+    >>> processor = create_encoder(
+    ...     EncoderType.LLM_SET_THEORY,
     ...     model=LLMModel.GPT_4O
     ... )
     >>> processed = processor.batch_process(prompts)
     >>> 
     >>> # Rule-based processing
-    >>> processor = create_processor(
-    ...     ProcessorType.NON_LLM_ADDITION_EQUATION_SPLIT_REASSEMBLE,
+    >>> processor = create_encoder(
+    ...     EncoderType.NON_LLM_ADDITION_EQUATION_SPLIT_REASSEMBLE,
     ...     num_parts=6
     ... )
     >>> processed = processor.batch_process(prompts)
 """
 
 # Import base
-from .base_processor import BaseProcessor, split_into_parts
+from .base_encoder import BaseEncoder, split_into_parts
 
 # Import processor types enum
-from .processor_type import ProcessorType
+from .encoder_type import EncoderType
 
 # Import concrete processors
-from .processors import (
-    SetTheoryLLMProcessor,
-    AdditionEquationProcessor,
-    ConditionalProbabilityProcessor,
+from .encoders import (
+    SetTheoryLLMEncoder,
+    AdditionEquationEncoder,
+    ConditionalProbabilityEncoder,
 )
 
 # Import factory functions
-from .processor_factory import (
-    PROCESSORS,
-    register_processor,
-    get_processor,
-    list_processors,
-    create_processor,
+from .encoder_factory import (
+    ENCODERS,
+    register_encoder,
+    get_encoder,
+    list_encoders,
+    create_encoder,
 )
 
 
 __all__ = [
     # Base
-    'BaseProcessor',
+    'BaseEncoder',
     'split_into_parts',
     
-    # Processor types enum
-    'ProcessorType',
+    # Encoder types enum
+    'EncoderType',
     
     # Concrete processors
-    'SetTheoryLLMProcessor',
-    'AdditionEquationProcessor',
-    'ConditionalProbabilityProcessor',
-    'QuantumMechanicsLLMProcessor',
+    'SetTheoryLLMEncoder',
+    'AdditionEquationEncoder',
+    'ConditionalProbabilityEncoder',
+    'QuantumMechanicsLLMEncoder',
     
     # Factory functions
-    'PROCESSORS',
-    'register_processor',
-    'get_processor',
-    'list_processors',
-    'create_processor',
+    'ENCODERS',
+    'register_encoder',
+    'get_encoder',
+    'list_encoders',
+    'create_encoder',
 ]

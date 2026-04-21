@@ -11,11 +11,11 @@ tasks:
 
   # Stage 2: Render encoded prompts as images
   - mode: imaging
-    source_dir: outputs/harmbench/text_encode_plain_20260420_181209
+    source_dir: outputs/harmbench/text_encode_plain_20260421_135559
 
   # Stage 3: Evaluate (stub — model query not yet implemented)
   - mode: evaluate
     model: gpt-4o
     encoding: plain
     modality: text
-    source_dir: outputs/harmbench/text_encode_plain_20260420_181209
+    source_dir: outputs/harmbench/text_encode_plain_20260421_135559

@@ -17,13 +17,13 @@ Example transformation:
 from typing import Optional, List
 from src.llm_utils import LLMServiceFactory, LLMModel, BaseLLMService
 from src.utils.logger import get_logger
-from ..base_processor import BaseProcessor, strip_delimiter_tags
+from ..base_encoder import BaseEncoder, strip_delimiter_tags
 from .constants import DEFAULT_PROCESSING_MODEL
 
 logger = get_logger(__name__)
 
 
-class QuantumMechanicsLLMProcessor(BaseProcessor):
+class QuantumMechanicsLLMEncoder(BaseEncoder):
     """
     Mathematical encoding strategy using Quantum Mechanics and Operator Theory.
     
@@ -76,7 +76,7 @@ Formulate Measurement Theory: Define observables and measurement operators to ab
         """
         if model is None:
             model = DEFAULT_PROCESSING_MODEL
-            logger.info(f"No model specified for QuantumMechanicsLLMProcessor, using default: {model.value}")
+            logger.info(f"No model specified for QuantumMechanicsLLMEncoder, using default: {model.value}")
         
         super().__init__(model=model, **kwargs)
         self.use_few_shot = use_few_shot
@@ -87,7 +87,7 @@ Formulate Measurement Theory: Define observables and measurement operators to ab
         if max_tokens is not None:
             self.service.max_tokens = max_tokens
         
-        logger.info(f"Initialized QuantumMechanicsLLMProcessor with model: {model.value}")
+        logger.info(f"Initialized QuantumMechanicsLLMEncoder with model: {model.value}")
 
     def _get_few_shot_demonstrations(self) -> list:
         """
