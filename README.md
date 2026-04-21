@@ -28,7 +28,7 @@ LLM safety alignment is trained on tokenized text, but frontier models now accep
 |------|--------|-------|
 | `data/harmbench_prompts.jsonl` | HarmBench (standard + contextual) | 240 |
 | `data/jbb_prompts.jsonl` | JailbreakBench | 100 |
-| `data/benign_prompts.jsonl` | JBB benign (controls) | 100 |
+| `data/jbb_benign_prompts.jsonl` | JBB benign (controls) | 100 |
 
 All in unified `RawPrompt` schema: `{id, category, source, prompt}`.
 
