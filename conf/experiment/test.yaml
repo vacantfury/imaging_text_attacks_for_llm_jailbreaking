@@ -1,0 +1,21 @@
+# ============================================================
+# Test experiment: one task per mode to verify pipeline
+# ============================================================
+# Usage: python main.py test
+
+tasks:
+  # Stage 1: Encode harmbench prompts with plain passthrough
+  - mode: text_encode
+    encoding: plain
+    source_file: data/harmbench_prompts.jsonl
+
+  # Stage 2: Render encoded prompts as images
+  - mode: imaging
+    source_dir: outputs/harmbench/text_encode_plain_20260420_181209
+
+  # Stage 3: Evaluate (stub — model query not yet implemented)
+  - mode: evaluate
+    model: gpt-4o
+    encoding: plain
+    modality: text
+    source_dir: outputs/harmbench/text_encode_plain_20260420_181209

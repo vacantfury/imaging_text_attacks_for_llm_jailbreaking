@@ -1,0 +1,29 @@
+# ============================================================
+# Stage 2: Render encoded prompts as images
+# ============================================================
+# Usage: python main.py -e imaging
+#
+# Run AFTER text_encode stage. Update source_dir paths to point
+# to the actual output directories from the encoding stage.
+
+tasks:
+  - mode: imaging
+    source_dir: outputs/encode_plain_YYYYMMDD_HHMMSS
+    renderer:
+      font_size: 16
+      width: 1024
+      height: 768
+
+  - mode: imaging
+    source_dir: outputs/encode_math_YYYYMMDD_HHMMSS
+    renderer:
+      font_size: 16
+      width: 1024
+      height: 768
+
+  - mode: imaging
+    source_dir: outputs/encode_classical_chinese_YYYYMMDD_HHMMSS
+    renderer:
+      font_size: 16
+      width: 1024
+      height: 768

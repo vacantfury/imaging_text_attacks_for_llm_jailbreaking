@@ -1,10 +1,15 @@
-from .data_loader import DataLoader, get_available_datasets, get_mmmu_subjects
-from .constants import MAP_FROM_DATASET_NAME_TO_CONSTANTS, MMMU_SUBJECTS
+"""
+Data loader package.
+
+Exports Pydantic schemas for inter-stage data contracts.
+Legacy PTP DataLoader is kept but not imported by default (requires `datasets` library).
+"""
+from .schemas import RawPrompt, EncodedPrompt, ImagePrompt, ModelResponse, Judgment
 
 __all__ = [
-    "DataLoader",
-    "get_available_datasets",
-    "get_mmmu_subjects",
-    "MAP_FROM_DATASET_NAME_TO_CONSTANTS",
-    "MMMU_SUBJECTS",
+    "RawPrompt",
+    "EncodedPrompt",
+    "ImagePrompt",
+    "ModelResponse",
+    "Judgment",
 ]

@@ -1,0 +1,9 @@
+# Evaluation defaults for Encoding × Modality project
+# Dual-judge: GPT-4o (HarmBench protocol) + Llama Guard 3
+
+judge_method: harmbench          # "harmbench" or "jailbreakbench"
+
+judge_llm_config:
+  model: gpt-4o
+  max_tokens: 1024
+  temperature: 0.0

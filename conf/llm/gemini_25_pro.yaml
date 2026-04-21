@@ -1,0 +1,8 @@
+# @package _global_
+# Gemini 2.5 Pro (Google) — frontier target model
+
+defaults:
+  - default
+
+model:
+  model: gemini-2.5-pro

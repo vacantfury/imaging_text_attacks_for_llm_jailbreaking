@@ -1,26 +1,12 @@
-from .evaluator import Evaluator, evaluate
-from .constants import (
-    BINARY_PREDICTION_COLUMN, RANKED_PREDICTION_COLUMN,
-    BINARY_LABEL_COLUMN, RANKED_LABEL_COLUMN,
-    ACCURACY,
-    PRECISION_MICRO, RECALL_MICRO, F1_MICRO,
-    PRECISION_MACRO, RECALL_MACRO, F1_MACRO,
-    MAE, MSE, RMSE, SPEARMAN_CORR, PEARSON_CORR,
-    NORMALIZED_MAE, QWK,
-    QUESTION_PLACEHOLDER, LABEL_PLACEHOLDER, PREDICTION_PLACEHOLDER, RANK_MAX_PLACEHOLDER,
-    REASONING_FIELD, CORRECT_VALUE, INCORRECT_VALUE,
-)
+"""
+Evaluation package: ASR judging for jailbreak experiments.
+
+Provides HarmBench and JailbreakBench evaluators.
+"""
+from .base_evaluator import BaseEvaluator
+from .evaluator_factory import EvaluatorFactory
 
 __all__ = [
-    "Evaluator",
-    "evaluate",
-    "BINARY_PREDICTION_COLUMN", "RANKED_PREDICTION_COLUMN",
-    "BINARY_LABEL_COLUMN", "RANKED_LABEL_COLUMN",
-    "ACCURACY",
-    "PRECISION_MICRO", "RECALL_MICRO", "F1_MICRO",
-    "PRECISION_MACRO", "RECALL_MACRO", "F1_MACRO",
-    "MAE", "MSE", "RMSE", "SPEARMAN_CORR", "PEARSON_CORR",
-    "NORMALIZED_MAE", "QWK",
-    "QUESTION_PLACEHOLDER", "LABEL_PLACEHOLDER", "PREDICTION_PLACEHOLDER", "RANK_MAX_PLACEHOLDER",
-    "REASONING_FIELD", "CORRECT_VALUE", "INCORRECT_VALUE",
+    "BaseEvaluator",
+    "EvaluatorFactory",
 ]

@@ -1,0 +1,8 @@
+# @package _global_
+# GPT-4o-mini (OpenAI)
+
+defaults:
+  - default
+
+model:
+  model: gpt-4o-mini

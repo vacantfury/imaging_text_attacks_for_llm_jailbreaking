@@ -1,0 +1,17 @@
+# ============================================================
+# Default experiment: encode all 3 types (plain, math, classical chinese)
+# ============================================================
+# Usage: python main.py
+
+tasks:
+  - mode: text_encode
+    encoding: plain
+    source_file: data/harmbench_prompts.jsonl
+
+  - mode: text_encode
+    encoding: math
+    source_file: data/harmbench_prompts.jsonl
+
+  - mode: text_encode
+    encoding: classical_chinese
+    source_file: data/harmbench_prompts.jsonl

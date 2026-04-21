@@ -1,0 +1,35 @@
+# @package _global_
+# Shared LLM defaults — all presets inherit these
+
+# Model request params (maps to ModelConfig)
+model:
+  max_tokens: 16384
+  temperature: 0.0
+  top_p: 1.0
+  top_k: 0
+  frequency_penalty: 0.0
+  presence_penalty: 0.0
+  stop_sequences: []
+  seed: 42
+  n_completions: 1
+  stream: false
+
+# Cluster/vLLM server params (maps to ClusterServerConfig)
+cluster:
+  partition: gpu
+  gpu_types_excluded: []
+  num_gpus: 1
+  cpus_per_task: 4
+  mem_gb: 32
+  time_limit: "48:00:00"
+  port: 8000
+  gpu_memory_utilization: 0.9
+  max_model_len: 16384
+  dtype: null
+  chat_template: null
+  server_start_timeout: 3600
+  endpoint_wait_timeout: 30
+  cluster_server_endpoint_timeout: 10000  # max seconds a task waits for a free server
+  conda_env: LLM_prompting
+  cuda_module: "cuda/12.1.1"
+  hf_home: /scratch/zhang.haoyu6/huggingface_cache

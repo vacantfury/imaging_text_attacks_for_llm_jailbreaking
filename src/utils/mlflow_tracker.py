@@ -1,15 +1,15 @@
 """
-MLflow experiment tracking wrapper for PTP.
+MLflow experiment tracking for Encoding × Modality jailbreaking.
 
 Thin wrapper around MLflow that handles run lifecycle, param/metric logging,
 and artifact storage. All data is stored locally in mlruns/ (no server needed).
 
-Usage (called by BaseOptimizer — not directly):
+Usage (called by task.py — not directly):
     tracker = MLflowTracker()
-    run_id = tracker.start_run(mode="baseline", dataset="M3CoT", model="Pixtral-12B")
-    tracker.log_params(llm_config, data_loader_config)
-    tracker.log_metrics({"accuracy": 0.85, "f1_macro": 0.67})
-    tracker.log_artifact("/path/to/results.json")
+    run_id = tracker.start_run(mode="evaluate", encoding="math", model="gpt-4o", modality="image")
+    tracker.log_params(task_config)
+    tracker.log_metrics({"attack_success_rate": 45.2, "success_count": 108})
+    tracker.log_artifact("/path/to/results.jsonl")
     tracker.end_run()
 """
 import os
@@ -23,7 +23,7 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 # MLflow experiment name
-EXPERIMENT_NAME = "PTP"
+EXPERIMENT_NAME = "encoding_modality_jailbreak"
 
 # Local tracking directory (relative to project root)
 TRACKING_URI = f"file://{PROJECT_ROOT / 'mlruns'}"
@@ -48,85 +48,88 @@ class MLflowTracker:
         """Get the current run ID (None if no active run)."""
         return self._run_id
     
-    def start_run(self, mode: str, dataset: str, model: str) -> str:
+    def start_run(self, mode: str, encoding: str = "",
+                  model: str = "", modality: str = "") -> str:
         """Start an MLflow run.
         
         Args:
-            mode: Experiment mode (e.g., "baseline", "naive")
-            dataset: Dataset name (e.g., "M3CoT")
-            model: Model identifier (e.g., "Pixtral-12B-2409")
+            mode: Task mode ("text_encode", "imaging", "evaluate")
+            encoding: Encoding strategy ("plain", "math", "classical_chinese")
+            model: Target model ("gpt-4o", "llava-next", etc.)
+            modality: Input modality ("text", "image")
         
         Returns:
             The MLflow run ID (UUID string)
         """
         mlflow.set_experiment(EXPERIMENT_NAME)
         
-        run_name = f"{mode}_{dataset}_{model}"
+        parts = [mode]
+        if encoding:
+            parts.append(encoding)
+        if model:
+            parts.append(model)
+        if modality:
+            parts.append(modality)
+        run_name = "_".join(parts)
+        
         run = mlflow.start_run(run_name=run_name)
         self._run_id = run.info.run_id
         self._active = True
         
-        # Set tags for easy filtering
-        mlflow.set_tags({
-            "mode": mode,
-            "dataset": dataset,
-            "model": model,
-        })
+        # Set tags for easy filtering in MLflow UI
+        tags = {"mode": mode}
+        if encoding:
+            tags["encoding"] = encoding
+        if model:
+            tags["model"] = model
+        if modality:
+            tags["modality"] = modality
+        mlflow.set_tags(tags)
         
         logger.info(f"MLflow run started: {run_name} (ID: {self._run_id})")
         return self._run_id
     
-    def log_params(self, llm_config, data_loader_config) -> None:
-        """Log experiment parameters from configs.
-        
-        Flattens nested config into dot-notation keys:
-            llm_config.temperature -> "llm.temperature"
-            data_loader_config['name'] -> "data.name"
+    def log_params(self, task_config: dict) -> None:
+        """Log task config as MLflow parameters.
         
         Args:
-            llm_config: DictConfig or dict with LLM settings
-            data_loader_config: DictConfig or dict with data loader settings
+            task_config: The task configuration dict from experiment YAML
         """
         if not self._active:
             return
         
         try:
-            # DictConfig supports .items() natively — no conversion needed
-            llm_dict = dict(llm_config)
-            if "model" in llm_dict:
-                llm_dict["model"] = str(llm_dict["model"])
-            llm_params = {f"llm.{k}": str(v) for k, v in llm_dict.items()}
+            params = {}
+            for key, value in task_config.items():
+                if isinstance(value, dict):
+                    # Flatten one level: renderer.font_size, etc.
+                    for sub_key, sub_val in value.items():
+                        params[f"{key}.{sub_key}"] = str(sub_val)
+                else:
+                    params[key] = str(value)
             
-            data_params = {f"data.{k}": str(v) for k, v in data_loader_config.items()}
-            
-            # MLflow has a 500-param limit, but we're well under it
-            mlflow.log_params({**llm_params, **data_params})
-            logger.debug(f"Logged {len(llm_params) + len(data_params)} params to MLflow")
+            mlflow.log_params(params)
+            logger.debug(f"Logged {len(params)} params to MLflow")
         except Exception as e:
             # Don't let MLflow errors break the experiment
             logger.warning(f"MLflow param logging failed (non-fatal): {e}")
     
-    def log_metrics(self, eval_results: dict[str, Any]) -> None:
+    def log_metrics(self, metrics: dict[str, Any]) -> None:
         """Log evaluation metrics.
         
-        Only logs numeric values (int, float). Skips non-numeric fields
-        like question_type.
+        Only logs numeric values (int, float). Skips non-numeric fields.
         
         Args:
-            eval_results: Dict with evaluation metrics from Evaluator
+            metrics: Dict with evaluation metrics (e.g., attack_success_rate)
         """
         if not self._active:
             return
         
         try:
-            metrics = {}
-            for key, value in eval_results.items():
-                if isinstance(value, (int, float)):
-                    metrics[key] = value
-            
-            if metrics:
-                mlflow.log_metrics(metrics)
-                logger.debug(f"Logged {len(metrics)} metrics to MLflow: {list(metrics.keys())}")
+            numeric = {k: v for k, v in metrics.items() if isinstance(v, (int, float))}
+            if numeric:
+                mlflow.log_metrics(numeric)
+                logger.debug(f"Logged {len(numeric)} metrics to MLflow: {list(numeric.keys())}")
         except Exception as e:
             logger.warning(f"MLflow metric logging failed (non-fatal): {e}")
     
