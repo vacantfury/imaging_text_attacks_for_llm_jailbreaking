@@ -3,8 +3,8 @@
 # ============================================================
 # Usage: python main.py test
 #
-# NOTE: Stage 2 and 3 depend on previous output directories.
-# Update source_dir paths after running Stage 1 and 2.
+# NOTE: Stages depend on previous outputs.
+# Update source_dir paths after running each stage.
 
 tasks:
   # Stage 1: Encode harmbench prompts with plain passthrough
@@ -12,16 +12,15 @@ tasks:
     encoding: plain
     source_file: data/harmbench_prompts.jsonl
 
-  # Stage 2: Render encoded prompts as images
-  # source_dir → must point to a text_encode output
+  # Stage 2: Render images (both original and encoded)
+  # source_dir → text_encode output
   - mode: imaging
-    source_dir: outputs/harmbench/text_encode_plain_20260421_160940
+    source_dir: outputs/text_encode/harmbench/plain_20260421_230005
+    render: [original, encoded]
 
-  # Stage 3: Evaluate using imaging folder
-  # source_dir → must point to an imaging output (has encoded_prompts.jsonl + images/)
-  # prompt_stages → which stages to evaluate (subset of: original, text_encoded, imaging)
+  # Stage 3: Evaluate with GPT-4o on text stages only (quick test)
+  # source_dir → imaging output
   - mode: evaluate
     model: gpt-4o
-    encoding: plain
-    source_dir: outputs/harmbench/imaging_plain_plain_20260421_225349
-    prompt_stages: [original, text_encoded, imaging]
+    source_dir: outputs/imaging/harmbench/plain_plain_20260422_065802
+    prompt_stages: [text_original, text_encoded]

@@ -1,11 +1,12 @@
 """
 Pydantic schemas for inter-stage data contracts.
 
-Pipeline stages:
-  text_encode → imaging → evaluate
+Pipeline: text_encode → imaging → evaluate
 
-Write: model.model_dump_json() → JSONL line
-Read: ModelClass.model_validate_json(line) → validated object
+2×2 condition grid:
+              Text modality    Image modality
+  Original    text_original    image_original
+  Encoded     text_encoded     image_encoded
 """
 from typing import Optional
 from pydantic import BaseModel
@@ -19,54 +20,64 @@ class RawPrompt(BaseModel):
     prompt: str
 
 
-class EncodedPrompt(BaseModel):
-    """Prompt after text encoding stage.
+class Prompt(BaseModel):
+    """Unified prompt record used across text_encode and imaging stages.
     
-    The imaging stage copies this and adds image_path.
+    text_encode creates rows with {id, encoding, original, encoded}.
+    imaging copies and adds image_original / image_encoded paths.
     """
     id: str
-    encoding: str         # "plain" | "math" | "formal_logic" | ...
+    encoding: str
     original: str         # original harmful prompt (always preserved)
     encoded: str          # text-encoded version
-    image_path: Optional[str] = None  # relative path to PNG, added by imaging stage
+    image_original: Optional[str] = None   # path to image of original text
+    image_encoded: Optional[str] = None    # path to image of encoded text
 
 
-class EvaluationResult(BaseModel):
-    """One evaluation row: one prompt × one prompt_stage × one model."""
+class EvaluationRow(BaseModel):
+    """One row in raw_results.jsonl (long format).
+    
+    One row per (prompt × prompt_stage).
+    """
+    id: str
+    prompt_stage: str     # text_original | text_encoded | image_original | image_encoded
+    response: str         # model response
+    asr: Optional[bool] = None  # ASR judgment (null if judging not yet run)
+
+
+class Judgment(BaseModel):
+    """ASR judgment for a single response (used by evaluation/)."""
     id: str
     model: str
     encoding: str
-    prompt_stage: str     # "original" | "text_encoded" | "imaging"
-    prompt_sent: str      # what was actually sent to the model (text or image instruction)
-    response: str         # model response
-    original_prompt: str  # original harmful prompt (for ASR judging)
-    timestamp: str
+    prompt_stage: str
+    judge_output: str     # "yes" | "no"
+    judge_reasoning: Optional[str] = None
+    is_jailbroken: bool
 
 
 # Legacy schemas kept for backward compatibility
+class EncodedPrompt(BaseModel):
+    """Legacy: prompt after text encoding stage."""
+    id: str
+    encoding: str
+    original: str
+    encoded: str
+    image_path: Optional[str] = None
+
+
 class ImagePrompt(BaseModel):
-    """Reference to a rendered image prompt (legacy)."""
+    """Legacy: reference to a rendered image prompt."""
     id: str
     encoding: str
     image_path: str
 
 
 class ModelResponse(BaseModel):
-    """Raw response from target model (legacy)."""
+    """Legacy: raw response from target model."""
     id: str
     model: str
     encoding: str
-    modality: str         # "text" | "image"
+    modality: str
     response: str
     timestamp: str
-
-
-class Judgment(BaseModel):
-    """ASR judgment for a single response."""
-    id: str
-    model: str
-    encoding: str
-    prompt_stage: str
-    gpt4o_judge: Optional[bool] = None
-    llamaguard_judge: Optional[bool] = None
-    asr: Optional[bool] = None
