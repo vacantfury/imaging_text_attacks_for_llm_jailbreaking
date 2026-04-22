@@ -1,0 +1,24 @@
+# ============================================================
+# Default imaging parameters — all renderers inherit these.
+# Specific renderer YAMLs only need to override what differs.
+# ============================================================
+
+renderer_type: plain
+
+# Canvas
+width: 1024
+height: 768
+
+# Colors
+bg_color: "#FFFFFF"
+fg_color: "#000000"
+
+# Text layout
+font_size: 28
+padding: 40
+line_spacing: 8
+
+# Degradation (post-processing)
+blur_radius: 0
+jpeg_quality: 100
+noise_std: 0

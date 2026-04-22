@@ -1,0 +1,13 @@
+# FC-Typography renderer — overrides from default.yaml
+# FC-Attack (Zhang et al., EMNLP Findings 2025)
+# Pacifico = best-performing font (4% → 28% ASR on Claude-3.5)
+
+renderer_type: fc_typography
+
+# Typography-specific overrides
+font_family: "Pacifico"
+font_size: 40
+fg_color: "#333333"
+padding: 30
+spacing: 8
+wrap_width: 40

@@ -14,21 +14,21 @@ To add a new encoder:
 
 # Import concrete encoders
 from .llm_set_theory_encoder import SetTheoryLLMEncoder
-from .llm_markov_chain_encoder import MarkovChainLLMEncoder
-from .llm_rephrase_encoder import RephraseLLMEncoder
 from .non_llm_addition_equation_split_reassemble_encoder import AdditionEquationEncoder
 from .non_llm_conditional_probability_encoder import ConditionalProbabilityEncoder
 from .non_llm_symbol_injection_encoder import SymbolInjectionEncoder
-from .non_llm_repeat_encoder import RepeatEncoder
+from .llm_quantum_mechanics_encoder import QuantumMechanicsLLMEncoder
+from .llm_formal_logic_encoder import FormalLogicLLMEncoder
+from .non_llm_baseline_encoder import BaselineEncoder
 
 
 # Export all
 __all__ = [
     'SetTheoryLLMEncoder',
-    'MarkovChainLLMEncoder',
-    'RephraseLLMEncoder',
     'AdditionEquationEncoder',
     'ConditionalProbabilityEncoder',
     'SymbolInjectionEncoder',
-    'RepeatEncoder',
+    'QuantumMechanicsLLMEncoder',
+    'FormalLogicLLMEncoder',
+    'BaselineEncoder',
 ]

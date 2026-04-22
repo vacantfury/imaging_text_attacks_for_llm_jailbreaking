@@ -12,11 +12,5 @@ PROJECT_ROOT = Path(__file__).parent.parent
 # Input data
 DATA_DIR = PROJECT_ROOT / "data"
 
-# Experiment outputs — per-run results, logs, configs (gitignored)
+# Experiment outputs (gitignored)
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
-
-# Curated analysis — figures, tables for paper (git tracked)
-RESULTS_DIR = PROJECT_ROOT / "results"
-
-# Config directory
-CONF_DIR = PROJECT_ROOT / "conf"

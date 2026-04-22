@@ -1,0 +1,5 @@
+# Set Theory encoder (MathPrompt approach)
+# Transforms prompts into symbolic math using sets, groups, predicates.
+encoder_type: llm_set_theory
+model: gpt_4o
+use_few_shot: true

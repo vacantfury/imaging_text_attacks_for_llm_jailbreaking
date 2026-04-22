@@ -1,0 +1,2 @@
+# Baseline encoder — passthrough, no transformation.
+encoder_type: non_llm_baseline

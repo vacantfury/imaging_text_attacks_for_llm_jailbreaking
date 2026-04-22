@@ -1,0 +1,12 @@
+# FC-Flowchart renderer — overrides from default.yaml
+# FC-Attack (Zhang et al., EMNLP Findings 2025) Graphviz flowchart.
+# Requires: pip install graphviz && brew install graphviz
+
+renderer_type: fc_flowchart
+
+# Flowchart-specific overrides
+layout: vertical
+dpi: 600
+wrap_width: 30
+font_name: "Times-Roman"
+font_size: "14"

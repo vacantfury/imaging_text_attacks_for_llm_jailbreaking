@@ -54,19 +54,65 @@ python main.py -e default   # encodes plain + math + classical_chinese
 
 ### Stage 2: Image Rendering (~30 min)
 
-Render all encoded prompts as images. Reusable across all models.
+Render all encoded prompts as images using the **Plain** renderer (clean baseline). Reusable across all models.
 
 ```
-python main.py -e imaging
+python main.py imaging
 ```
+
+**Core renderer (plain):** Used for the main encoding × modality experiment (Table 1).
 
 | Input | Output | Settings |
 |-------|--------|----------|
-| 3 × `prompts.jsonl` from Stage 1 | 3 × `images/` directories | Arial 16pt, 1024×768, black-on-white |
+| 3 × `prompts.jsonl` from Stage 1 | 3 × `images/` directories | Arial 28pt, 1024×768, black-on-white |
 
-**Output:** 3 directories in `outputs/image_*_YYYYMMDD/`, each with PNGs + `images.jsonl`.
+**Output:** 3 directories in `outputs/<benchmark>/imaging_*_YYYYMMDD/`, each with PNGs + `images.jsonl`.
 
 **Gate:** Visually verify 5 images per encoding (plain English readable, math symbols intact, Chinese characters clear).
+
+---
+
+### Stage 2b: Rendering Ablations (~1 hour)
+
+Three additional renderers ablate one dimension each against the Plain baseline. Run on the best-performing encoding from Stage 3/4 results.
+
+| Renderer | `renderer_type` | Dimension | Inspired by |
+|----------|----------------|-----------|-------------|
+| **FigStep** | `figstep` | Prompt structure (numbered steps, "fill in the blanks") | FigStep (AAAI 2025) |
+| **FC-Typography** | `fc_typography` | OCR clarity (hard-to-read fonts/contrast) | FC-Attack (EMNLP Findings 2025) |
+| **FC-Flowchart** | `fc_flowchart` | Visual structure (boxes, arrows, steps) | FC-Attack (EMNLP Findings 2025) |
+
+**Degradation** is an orthogonal post-processing layer in the base renderer, controlled by `blur_radius`, `jpeg_quality`, `noise_std`. Can be applied to any renderer.
+
+YAML example:
+```yaml
+tasks:
+  # FigStep ablation (numbered steps + "fill in the blanks")
+  - mode: imaging
+    renderer_type: figstep
+    source_dir: outputs/harmbench/text_encode_math_YYYYMMDD
+
+  # Typography ablation
+  - mode: imaging
+    renderer_type: fc_typography
+    renderer: {font_family: "Pacifico", font_size: 16, fg_color: "#666666"}
+    source_dir: outputs/harmbench/text_encode_math_YYYYMMDD
+
+  # Flowchart ablation
+  - mode: imaging
+    renderer_type: fc_flowchart
+    renderer: {layout: "vertical"}
+    source_dir: outputs/harmbench/text_encode_math_YYYYMMDD
+
+  # Degradation ablation (applied to Plain baseline)
+  - mode: imaging
+    renderer_type: plain
+    renderer: {blur_radius: 2, jpeg_quality: 30}
+    source_dir: outputs/harmbench/text_encode_math_YYYYMMDD
+```
+
+**Paper placement:** Results in Table 2 (rendering ablation) — 4 renderers × best encoding × 4 models = 16 conditions. Degradation can optionally add rows.
+Future-work renderers (VisCo screenshot, GANwriting, adversarial optimization, Text-DJ multi-image) supported by factory but reserved for §8.2.
 
 ---
 

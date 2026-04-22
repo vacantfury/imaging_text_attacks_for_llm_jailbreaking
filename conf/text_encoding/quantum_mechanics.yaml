@@ -1,0 +1,5 @@
+# Quantum Mechanics encoder
+# Transforms prompts into quantum mechanics notation.
+encoder_type: llm_quantum_mechanics
+model: gpt_4o
+use_few_shot: true

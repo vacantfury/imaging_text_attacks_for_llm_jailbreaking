@@ -9,15 +9,12 @@ from .encoder_type import EncoderType
 
 # Import all built-in encoders
 from .encoders.llm_set_theory_encoder import SetTheoryLLMEncoder
-from .encoders.llm_markov_chain_encoder import MarkovChainLLMEncoder
-from .encoders.llm_rephrase_encoder import RephraseLLMEncoder
 from .encoders.non_llm_addition_equation_split_reassemble_encoder import AdditionEquationEncoder
 from .encoders.non_llm_conditional_probability_encoder import ConditionalProbabilityEncoder
 from .encoders.non_llm_symbol_injection_encoder import SymbolInjectionEncoder
 from .encoders.llm_quantum_mechanics_encoder import QuantumMechanicsLLMEncoder
 from .encoders.llm_formal_logic_encoder import FormalLogicLLMEncoder
 from .encoders.non_llm_baseline_encoder import BaselineEncoder
-from .encoders.non_llm_repeat_encoder import RepeatEncoder
 
 
 logger = get_logger(__name__)
@@ -31,15 +28,12 @@ logger = get_logger(__name__)
 # Maps processor names (enum values) to their implementation classes
 ENCODERS: Dict[str, type] = {
     EncoderType.LLM_SET_THEORY: SetTheoryLLMEncoder,
-    EncoderType.LLM_MARKOV_CHAIN: MarkovChainLLMEncoder,
-    EncoderType.LLM_REPHRASE: RephraseLLMEncoder,
     EncoderType.NON_LLM_ADDITION_EQUATION_SPLIT_REASSEMBLE: AdditionEquationEncoder,
     EncoderType.NON_LLM_CONDITIONAL_PROBABILITY: ConditionalProbabilityEncoder,
     EncoderType.NON_LLM_SYMBOL_INJECTION: SymbolInjectionEncoder,
     EncoderType.LLM_QUANTUM_MECHANICS: QuantumMechanicsLLMEncoder,
     EncoderType.LLM_FORMAL_LOGIC: FormalLogicLLMEncoder,
     EncoderType.NON_LLM_BASELINE: BaselineEncoder,
-    EncoderType.NON_LLM_REPEAT: RepeatEncoder,
 }
 
 

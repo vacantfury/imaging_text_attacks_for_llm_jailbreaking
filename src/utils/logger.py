@@ -1,6 +1,7 @@
 import colorlog
 import logging
-from .constants import DEFAULT_LOGGER_NAME
+
+DEFAULT_LOGGER_NAME = "my_logger"
 
 def get_logger(name=DEFAULT_LOGGER_NAME, level=logging.INFO):
     logger = colorlog.getLogger(name)

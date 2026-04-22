@@ -1,0 +1,15 @@
+# FigStep renderer — overrides from default.yaml
+# Matches Gong et al. (AAAI 2025) exactly.
+# Reference: other_repos/FigStep/src/generate_prompts.py
+
+renderer_type: figstep
+
+# FigStep-specific overrides
+font_size: 80
+width: 760
+height: 760
+text_x: 20
+text_y: 10
+spacing: 11
+wrap_width: 15
+num_steps: 3

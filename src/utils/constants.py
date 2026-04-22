@@ -1,1 +1,0 @@
-DEFAULT_LOGGER_NAME = "my_logger"

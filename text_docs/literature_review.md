@@ -54,19 +54,55 @@ HADES ("Hiding and Amplifying harmfulness in images to DEStroy multimodal alignm
 
 Results: 90.3% ASR on LLaVA-1.5, 71.6% on Gemini Pro Vision (ECCV 2024 Oral). HADES goes beyond FigStep by combining typography with adversarial perturbation, but it **confounds** the typographic effect with image manipulation and adversarial noise. Isolating the typography-only effect would require a controlled setting without these additional manipulations.
 
-### 3.3 Text-DJ (Chen et al., 2026)
+### 3.3 CS-DJ (Yang et al., CVPR 2025)
 
-Text-DJ (Text Distraction Jailbreaking) decomposes harmful queries into multiple benign sub-queries, renders them as text-in-image grids, and scatters them among semantically distant distraction queries (also rendered as images). The key innovation over its predecessor CS-DJ: **text-based "semantic distraction" is more effective than visual distraction** — the distracting images need not contain harmful or relevant visual content, only maximally unrelated text.
+CS-DJ (Contrasting Subimage Distraction Jailbreaking) introduces the **Distraction Hypothesis**: visual complexity overwhelms MLLM safety mechanisms. The framework decomposes harmful queries into benign sub-queries (structured distraction) and combines them with maximally irrelevant contrasting subimages (visual-enhanced distraction). The composite image with a harmless-sounding instruction bypasses safety alignment.
+
+CS-DJ is the predecessor to Text-DJ and established that distributional shift via decomposition + visual distraction is an effective attack vector. However, its reliance on visual distraction (query-irrelevant images) was shown by its successor Text-DJ to be less effective than text-based semantic distraction.
+
+### 3.4 Text-DJ (Chen et al., 2026)
+
+Text-DJ (Text Distraction Jailbreaking) decomposes harmful queries into multiple benign sub-queries, renders them as text-in-image grids, and scatters them among semantically distant distraction queries (also rendered as images). The key innovation over CS-DJ: **text-based "semantic distraction" is more effective than visual distraction** — the distracting images need not contain harmful or relevant visual content, only maximally unrelated text.
 
 Text-DJ exploits **OCR-mediated understanding** — the model reads text from images but processes it through a different pathway than direct text input. Tested on Qwen3-VL (4B/8B/30B), it achieves 48–83% ASR across models and harm categories.
 
 **Critical ablation (Table 6):** Text-DJ provides the closest existing evidence for a modality safety gap via its TiI (text-in-image) ablation. When the same decomposed+distracted attack is delivered as plain text vs. rendered as images, the image version achieves **2–4× higher ASR** (e.g., 52.7% vs. 11.6% on Qwen3-VL-8B). This is the strongest directional evidence that cross-modal delivery amplifies jailbreak effectiveness. However, this comparison is **confounded**: the TiI effect is measured within the decomposition+distraction framework, not on raw harmful queries. The pure modality effect on unmodified content remains unmeasured. Additionally, Text-DJ tests only one model family (Qwen3-VL) and uses only plain English rendering — no encoding variation, no frontier closed-source models, and minimal defense evaluation (OpenAI Moderation API catches 0% of attacks).
 
-### 3.4 MM-SafetyBench (Liu et al., 2024)
+### 3.5 FC-Attack (Zhang et al., EMNLP Findings 2025)
+
+FC-Attack (Flowchart Attack) converts harmful queries into auto-generated flowcharts and feeds them as images to MLLMs. A fine-tuned step-description generator produces structured step-by-step instructions, which are rendered as flowcharts (vertical, horizontal, or S-shaped layouts) paired with benign textual prompts.
+
+**Key results:** Up to 96% ASR via images and 78% via videos. FC-Attack is the first approach to exploit the video modality for MLLM jailbreaking.
+
+**Critical finding for our study — font ablation:** FC-Attack provides the first empirical evidence that **rendering parameters directly affect ASR**. Testing five Google Fonts (Creepster, Fruktur Italic, Pacifico, Shojumaru, UnifrakturMaguntia) chosen for low readability, they found that switching from Times New Roman to Pacifico increased ASR on Claude-3.5 from **4% to 28%**. This validates our FC-Typography renderer and demonstrates that rendering is not a neutral variable — it is an independent attack surface.
+
+**Limitations:** FC-Attack confounds rendering (flowchart layout) with attack structure (query decomposition into steps). It also requires a fine-tuned step generator, making it less clean than our controlled approach. The font ablation is preliminary (5 fonts, one model), motivating our systematic typography sweep.
+
+### 3.6 VisCo and CIA (Miao et al., EMNLP 2025; Xiong et al., 2025)
+
+VisCo (Visual Contextual Attack) defines a novel **vision-centric jailbreak** setting where visual information is a necessary component of a complete jailbreak context, not merely a trigger. VisCo fabricates contextual dialogue using four vision-focused strategies, dynamically generating auxiliary images to construct realistic scenarios. It achieves **85% ASR on GPT-4o** (vs. 22.2% baseline on MM-SafetyBench).
+
+CIA (Contextual Image Attack, Xiong et al., 2025) extends this work, using a multi-agent system to embed harmful queries into benign-appearing visual contexts.
+
+Both methods are fundamentally different from our typographic approach: they exploit **visual context** (realistic scenes, fabricated dialogues) rather than text-in-image rendering. However, they demonstrate that the vision pathway is a powerful attack vector even on frontier models (GPT-4o), which supports our hypothesis that image-rendered text may also bypass safety.
+
+### 3.7 Visual Exclusivity Attacks (Zhang et al., 2026)
+
+Visual Exclusivity (VE) introduces an "Image-as-Basis" threat model where harmful intent is only achievable through joint reasoning over text and complex, unperturbed visual content (e.g., technical schematics, blueprints). The MM-Plan framework uses agentic planning with GRPO optimization to generate multi-turn attack strategies. Tested on the new VE-Safety benchmark (440 instances, 15 categories), it achieves **46.3% ASR on Claude 4.5 Sonnet** and **13.8% on GPT-5**.
+
+VE is conceptually distinct from our work — it requires the image to carry **visual** (not textual) harmful content. However, several findings are relevant: (1) frontier models remain vulnerable to vision-based attacks, and (2) the gap between Claude (46.3%) and GPT-5 (13.8%) suggests significant cross-model variation in vision safety, which our study also expects to observe.
+
+Critically, Zhang et al. claim that typographic attacks are **"structurally brittle, as standard defenses neutralize them once the payload is exposed."** This motivates their shift to visual-reasoning attacks. However, this claim assumes the extracted text is recognizably harmful — which holds for plain English typography but may not hold when encoding is applied. An image containing `∀x ∈ S : f(x) → ¬safe(x)` or Classical Chinese text will survive OCR extraction but remain opaque to standard text safety filters. Our encoding × modality design directly tests whether this "brittleness" assumption breaks under encoding.
+
+### 3.8 GANwriting (Kang et al., ECCV 2020)
+
+GANwriting generates realistic handwritten word images conditioned on both calligraphic style and textual content. The generator uses three learning objectives (realism, style imitation, content accuracy) and supports few-shot style transfer to unseen writers. While not a jailbreaking paper, GANwriting is relevant as a potential rendering backend: rendering harmful text as handwriting (rather than typed font) could evade OCR-based safety filters trained on standard fonts. This remains a future work direction in our study.
+
+### 3.9 MM-SafetyBench (Liu et al., 2024)
 
 A benchmark of 5,040 text-image pairs across 13 harmful scenarios, testing both typography-based and Stable Diffusion-generated image attacks. Key finding: adding query-relevant images can unlock harmful content that text-only filters would block. However, MM-SafetyBench measures the **combined** text+image effect, not the isolated modality difference for identical content.
 
-### 3.5 JailBreakV-28K (Luo et al., 2024)
+### 3.10 JailBreakV-28K (Luo et al., 2024)
 
 JailBreakV-28K (COLM 2024) is a 28,000-sample benchmark testing whether text-based LLM jailbreaks transfer to MLLMs. It includes LLM transfer attacks (Template, Persuade, Logic) paired with 4 image types (Nature, Random Noise, Blank, Stable Diffusion) and 2 MLLM-specific image attacks (FigStep, Query-Relevant).
 
@@ -74,17 +110,19 @@ JailBreakV-28K (COLM 2024) is a 28,000-sample benchmark testing whether text-bas
 
 These findings have two important implications. First, safety alignment in MLLMs operates primarily through the text encoder, not the vision pathway. Second, JailBreakV tested harmful text *in the text channel* paired with various images, but never tested the inverse: harmful content delivered *only* as image-rendered text with no harmful text in the text channel. This leaves open the fundamental question of whether the vision pathway can independently trigger safety mechanisms when it is the sole carrier of harmful intent.
 
-### 3.6 Gap Analysis
+### 3.11 Gap Analysis
 
-The typographic attack literature reveals a consistent theme: text rendered as images can bypass safety filters. But the field suffers from four critical gaps:
+The typographic and visual attack literature reveals a consistent theme: the vision pathway is a potent attack vector. But the field suffers from five critical gaps:
 
-1. **No controlled comparison.** Every study either (a) tests image-text attacks without a plain-text baseline (FigStep, HADES), or (b) tests text attacks with various paired images (JailBreakV). Nobody measures Δ(ASR) for identical content across modalities.
+1. **No controlled comparison.** Every study either (a) tests image-text attacks without a plain-text baseline (FigStep, HADES, FC-Attack), or (b) tests text attacks with various paired images (JailBreakV). Nobody measures Δ(ASR) for identical content across modalities.
 
-2. **No frontier model coverage.** FigStep tested 2023-era open-source models. HADES tested LLaVA-1.5 and early Gemini. GPT-4o, Gemini 2.5, Claude with vision — the most-deployed multimodal models — remain untested for typographic attacks.
+2. **No frontier model coverage.** FigStep tested 2023-era open-source models. HADES tested LLaVA-1.5 and early Gemini. FC-Attack tests some frontier models but confounds rendering with attack structure. GPT-4o, Gemini 2.5, Claude — tested cleanly for typographic attacks — remain absent.
 
 3. **No defense evaluation.** Despite OCR-preprocessing being an obvious countermeasure (extract text from images → run through text safety filter), no study has evaluated this. The Immune framework (Ghosal et al., 2025) and DeTAM (Li et al., 2025) address multimodal defense at the inference level but do not specifically target typographic attacks.
 
-4. **No rendering parameter analysis.** Does font matter? Resolution? Classical script vs. modern? No systematic ablation exists.
+4. **No systematic rendering parameter analysis.** FC-Attack's font ablation (5 fonts, one model) is the only evidence that rendering parameters affect ASR. No study has systematically varied font, layout, contrast, and image quality across multiple models and encodings.
+
+5. **No encoding × modality interaction.** All typographic attacks use plain English. No study has combined encoding transformations (classical language, mathematical notation) with modality change to characterize the double indirection effect.
 
 ---
 
@@ -97,6 +135,8 @@ The typographic attack literature reveals a consistent theme: text rendered as i
 **Ensemble optimization.** Mosaic (Li et al., 2026) uses multi-view ensemble optimization across multiple surrogate models to improve transferability to closed-source VLMs.
 
 **Visual puzzles.** PuzzleV-JailBench (Wang et al., 2025) constructs cross-modal puzzles embedding harmful intent (weapon assembly, chemical synthesis) in visual structures.
+
+**Vision-centric jailbreaks.** Visual Exclusivity Attacks (Zhang et al., 2026) and the visual prompt jailbreak for image editing models (Hou et al., 2026) represent an emerging "Image-as-Basis" paradigm where harm requires visual reasoning over unperturbed images (schematics, blueprints). These differ from both perturbation attacks and typographic attacks: the image carries genuinely visual (not textual) harmful content.
 
 ### 4.2 Gap Analysis
 
@@ -225,8 +265,10 @@ The literature suggests several high-value open problems:
 - Gemini Team. *Gemini 1.5.* arXiv:2403.05530, 2024.
 - Ghosal, S. et al. *Immune: Improving Safety via Inference-Time Alignment.* CVPR, 2025.
 - Gong, Y. et al. *FigStep: Jailbreaking LVLMs via Typographic Visual Prompts.* AAAI, 2025.
+- Hou, J. et al. *When the Prompt Becomes Visual: Vision-Centric Jailbreak Attacks for Large Image Editing Models.* arXiv:2602.10179, 2026.
 - Huang, X. et al. *Obscure but Effective: Classical Chinese Jailbreak via Bio-Inspired Search.* ICLR, 2026.
 - Inan, H. et al. *Llama Guard.* arXiv:2312.06674, 2023.
+- Kang, L. et al. *GANwriting: Content-Conditioned Generation of Styled Handwritten Word Images.* ECCV, 2020.
 - Li, L. et al. *DeTAM: Defending LLMs via Targeted Attention Modification.* ACL Findings, 2025.
 - Li, Y. et al. *Images are Achilles' Heel of Alignment (HADES).* ECCV, 2024.
 - Li, Y. et al. *Mosaic: Multimodal Jailbreak via Multi-View Ensemble.* arXiv, 2026.
@@ -236,12 +278,17 @@ The literature suggests several high-value open problems:
 - Liu, X. et al. *Safety of Multimodal Large Language Models on Images and Text.* IJCAI, 2024.
 - Luo, W. et al. *JailBreakV-28K.* COLM, 2024.
 - Mazeika, M. et al. *HarmBench.* ICML, 2024.
+- Miao, Z. et al. *Visual Contextual Attack: Jailbreaking MLLMs with Image-Driven Context Injection (VisCo).* EMNLP, 2025.
 - OpenAI. *GPT-4V(ision) System Card.* Technical Report, 2023.
 - Ouyang, L. et al. *Training Language Models to Follow Instructions with Human Feedback.* NeurIPS, 2022.
 - Qi, X. et al. *Visual Adversarial Examples Jailbreak Aligned LLMs.* AAAI, 2024.
 - Shen, X. et al. *Do Anything Now.* CCS, 2024.
 - Thompson, A. et al. *Jailbreaking LLMs with Symbolic Mathematics.* arXiv:2409.11445, 2024.
 - Wang, Y. et al. *PuzzleV-JailBench.* arXiv, 2025.
+- Xiong, Y. et al. *Contextual Image Attack: How Visual Context Exposes Multimodal Safety Vulnerabilities (CIA).* arXiv:2512.02973, 2025.
+- Yang, Z. et al. *Distraction is All You Need for MLLM Jailbreaking (CS-DJ).* CVPR, 2025.
 - Yong, Z.-X. et al. *Low-Resource Languages Jailbreak GPT-4.* SoLaR Workshop, 2023.
 - Yuan, Y. et al. *GPT-4 Is Too Smart To Be Safe: Stealthy Chat with LLMs via Cipher.* ICLR, 2024.
+- Zhang, Y. et al. *Visual Exclusivity Attacks: Automatic Multimodal Red Teaming via Agentic Planning.* arXiv:2603.20198, 2026.
+- Zhang, Z. et al. *FC-Attack: Jailbreaking MLLMs via Auto-Generated Flowcharts.* EMNLP Findings, 2025.
 - Zou, A. et al. *Universal and Transferable Adversarial Attacks on Aligned Language Models.* arXiv:2307.15043, 2023.

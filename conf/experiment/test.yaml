@@ -2,6 +2,9 @@
 # Test experiment: one task per mode to verify pipeline
 # ============================================================
 # Usage: python main.py test
+#
+# NOTE: Stage 2 and 3 depend on previous output directories.
+# Update source_dir paths after running Stage 1 and 2.
 
 tasks:
   # Stage 1: Encode harmbench prompts with plain passthrough
@@ -10,12 +13,15 @@ tasks:
     source_file: data/harmbench_prompts.jsonl
 
   # Stage 2: Render encoded prompts as images
+  # source_dir → must point to a text_encode output
   - mode: imaging
-    source_dir: outputs/harmbench/text_encode_plain_20260421_135559
+    source_dir: outputs/harmbench/text_encode_plain_20260421_160940
 
-  # Stage 3: Evaluate (stub — model query not yet implemented)
+  # Stage 3: Evaluate using imaging folder
+  # source_dir → must point to an imaging output (has encoded_prompts.jsonl + images/)
+  # prompt_stages → which stages to evaluate (subset of: original, text_encoded, imaging)
   - mode: evaluate
     model: gpt-4o
     encoding: plain
-    modality: text
-    source_dir: outputs/harmbench/text_encode_plain_20260421_135559
+    source_dir: outputs/harmbench/imaging_plain_plain_20260421_225349
+    prompt_stages: [original, text_encoded, imaging]

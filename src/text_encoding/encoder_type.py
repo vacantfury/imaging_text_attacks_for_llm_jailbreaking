@@ -25,11 +25,7 @@ class EncoderType(str, Enum):
     LLM_SET_THEORY = "llm_set_theory"
     """LLM-based set theory transformation (MathPrompt approach)."""
     
-    LLM_MARKOV_CHAIN = "llm_markov_chain"
-    """LLM-based Markov chain transformation (Stochastic processes approach)."""
-    
-    LLM_REPHRASE = "llm_rephrase"
-    """LLM-based rephrasing to avoid direct harmful keywords while maintaining intent."""
+
     
     # =============================================================================
     # Rule-based processors (non-LLM)
@@ -53,6 +49,5 @@ class EncoderType(str, Enum):
     LLM_FORMAL_LOGIC = "llm_formal_logic"
     """LLM-based Formal Logic transformation (first-order logic and proof theory)."""
 
-    NON_LLM_REPEAT = "non_llm_repeat"
-    """Replay exact processed prompts from a previous experiment (controlled repeat)."""
+
 

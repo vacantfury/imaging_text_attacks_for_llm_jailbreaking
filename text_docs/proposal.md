@@ -8,6 +8,8 @@ FigStep (Gong et al., 2025) showed that rendering harmful text as typographic im
 
 Meanwhile, classical language attacks (CC-BOS, near-100% ASR) and mathematical encoding attacks (MathPrompt, 73.6% ASR) have independently demonstrated that **encoding transformations** bypass safety filters. But these attacks have only been studied in the text modality. Combining encoding with modality change introduces a **double indirection** — the model must OCR the image then decode the encoding — whose effect is entirely unknown.
 
+Recent work argues that typographic attacks are "structurally brittle" because standard defenses neutralize them once OCR exposes the payload (Zhang et al., 2026). However, this assumes the extracted text is recognizably harmful — which fails when encoding is applied. An image of `∀x ∈ S : f(x) → ¬safe(x)` survives OCR but remains opaque to text safety filters. Our encoding × modality design directly tests whether encoding makes typographic attacks **non-brittle**.
+
 We propose the first systematic study of the **encoding × modality interaction**: does rendering an encoded jailbreak prompt (classical language, mathematical notation) as an image amplify, diminish, or not affect its jailbreaking effectiveness compared to text input? This 2D factorial design yields insights impossible from studying either dimension alone, and the clean, unconfounded comparison on frontier models addresses the most fundamental open question in multimodal safety.
 
 ## 2. Research Questions
@@ -39,10 +41,20 @@ We propose the first systematic study of the **encoding × modality interaction*
 
 ### 3.3 Image Rendering
 
-Standard typography rendering via Python + Pillow:
-- Font: Arial 16pt, black text, white background
-- Resolution: 1024×768 (sufficient for model OCR)
-- Text wrapping for long prompts
+Rendering uses a factory pattern (`create_renderer(name)`) with four renderers in the main paper:
+
+| Renderer | Dimension | What it tests | Source paper |
+|----------|-----------|---------------|-------------|
+| **Plain** (baseline) | — | Pure modality effect; clean text on white, no tricks | — |
+| **FigStep** | Prompt structure | Does numbered-step formatting + "fill in the blanks" trick affect ASR? | FigStep (AAAI 2025) |
+| **FC-Typography** | OCR clarity | Does harder-to-read font/contrast help or hurt? | FC-Attack (EMNLP Findings 2025) |
+| **FC-Flowchart** | Visual structure | Does formatting as steps/boxes change safety response? | FC-Attack (EMNLP Findings 2025) |
+
+**Image degradation** (blur, JPEG compression, noise) is implemented as an orthogonal post-processing layer in the base renderer class, parameterized by `blur_radius`, `jpeg_quality`, and `noise_std`. Any renderer can be degraded — this tests whether image quality affects the modality gap without being a separate rendering method.
+
+The core experiment (§3.1 matrix) uses the **Plain** renderer to isolate the encoding × modality interaction without rendering confounds. The rendering ablation (Table 2) runs all 4 renderers on the best-performing encoding to decompose which rendering properties matter — directly addressing the literature gap of "no rendering parameter analysis."
+
+Four additional renderers (screenshot/VisCo, AI handwriting, adversarial optimization, multi-image splitting) are supported by the factory infrastructure but reserved for future work (§8.2).
 
 System prompt for image conditions: *"Read the text in the image and follow the instructions."*
 
@@ -238,4 +250,13 @@ Across all scenarios, **we have ≥1 viable top-venue target**. The encoding × 
 ### 8.1 Composable Encoding Attacks
 
 The natural extension of our encoding × modality matrix is **composing encoding layers**: translate to Classical Chinese *then* encode as math, or vice versa. This tests whether stacked encodings amplify ASR beyond either method alone — a composability question with fundamental implications for defense architecture. If stacked encodings compound effectiveness, point defenses are architecturally insufficient. This includes cross-linguistic generalization (Latin, Sanskrit, Classical Arabic) and translation-based defense evaluation against composite attacks.
+
+### 8.2 Extended Rendering Methods
+
+Our rendering ablation covers 4 renderers (FigStep, FC-Typography, FC-Flowchart, Noise). Four additional rendering strategies are supported by the factory infrastructure for future work:
+
+- **Screenshot/document simulation (VisCo):** Framing text within realistic chat interfaces or email layouts to test whether visual context framing affects safety response. Adds a confounding variable (context) beyond pure rendering.
+- **AI-based handwriting generation (GANwriting):** Rendering prompts as handwritten text to test whether non-standard text styles evade OCR-based safety filters.
+- **Adversarial typography optimization:** Automated search over font, size, color, spacing, and background to maximize ASR — treating rendering parameters as a full attack surface (extending FC-Attack's preliminary font results).
+- **Multi-image splitting (Text-DJ):** Distributing a prompt across multiple images to evade per-image safety checks, testing whether models aggregate safety across image boundaries.
 
