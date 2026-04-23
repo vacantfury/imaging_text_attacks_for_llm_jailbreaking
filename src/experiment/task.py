@@ -59,18 +59,6 @@ def _load_prompts(source_dir: str) -> list:
     return prompts
 
 
-# Mapping from user-facing encoding names to EncoderType values
-ENCODING_MAP = {
-    "plain": "non_llm_baseline",
-    "math": "llm_set_theory",
-    "set_theory": "llm_set_theory",
-    "formal_logic": "llm_formal_logic",
-    "quantum": "llm_quantum_mechanics",
-    "classical_chinese": "llm_set_theory",  # TODO: implement ClassicalChineseEncoder
-    "addition_equation": "non_llm_addition_equation_split_reassemble",
-    "conditional_probability": "non_llm_conditional_probability",
-    "symbol_injection": "non_llm_symbol_injection",
-}
 
 BENCHMARK_MAP = {
     "harmbench": "harmbench",
@@ -105,20 +93,13 @@ def _run_text_encode(config: dict) -> dict[str, Any]:
       parameters.json
       prompts.jsonl     — {id, encoding, original, encoded}
     """
-    from src.text_encoding import create_encoder, EncoderType
+    from src.text_encoding import create_encoder
     from .schemas import RawPrompt, Prompt
     
     encoding = config.get("encoding", "plain")
     source_file = config.get("source_file", "data/harmbench_prompts.jsonl")
     
-    encoder_type = ENCODING_MAP.get(encoding)
-    if encoder_type is None:
-        raise ValueError(
-            f"Unknown encoding: '{encoding}'. "
-            f"Available: {list(ENCODING_MAP.keys())}"
-        )
-    
-    logger.info(f"Text encoding: {encoding} → {encoder_type} from {source_file}")
+    logger.info(f"Text encoding: {encoding} from {source_file}")
     
     # Load raw prompts
     prompts = []
@@ -129,7 +110,7 @@ def _run_text_encode(config: dict) -> dict[str, Any]:
     
     logger.info(f"Loaded {len(prompts)} prompts")
     
-    # Create encoder
+    # Create encoder via factory (handles alias resolution + kwargs merging)
     conf_dir = Path(__file__).resolve().parent.parent.parent / "conf"
     encoder_config = {}
     
@@ -148,7 +129,8 @@ def _run_text_encode(config: dict) -> dict[str, Any]:
     if task_encoder_overrides:
         encoder_config.update(task_encoder_overrides)
     
-    encoder = create_encoder(EncoderType(encoder_type), **encoder_config)
+    # Factory resolves alias → encoder_type + merges ENCODING_KWARGS automatically
+    encoder = create_encoder(encoding, **encoder_config)
     raw_texts = [p.prompt for p in prompts]
     encoded_texts = encoder.batch_process(raw_texts)
     

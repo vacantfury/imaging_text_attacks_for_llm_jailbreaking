@@ -40,7 +40,7 @@ class BaseEncoder(ABC):
     """
     
     # Default prefix prepended to processed prompts when sent to target model.
-    # Override in subclasses for domain-specific framing.
+    # Can be overridden via YAML config (target_prefix kwarg) or subclass attribute.
     TARGET_PREFIX: str = ""
     
     def __init__(
@@ -49,6 +49,7 @@ class BaseEncoder(ABC):
         rephrase_first: bool = False,
         is_repeating: bool = False,
         rephrase_model: Optional[LLMModel] = None,
+        target_prefix: Optional[str] = None,
         **kwargs
     ):
         """
@@ -61,6 +62,8 @@ class BaseEncoder(ABC):
                            before the core processing logic runs.
             is_repeating: If True, repeat the entire output after core processing.
             rephrase_model: Optional model for rephrasing. If None, uses DEFAULT_PROCESSING_MODEL.
+            target_prefix: Override for TARGET_PREFIX (loaded from YAML config).
+                          If provided, takes precedence over the class attribute.
             **kwargs: Encoder-specific parameters
         """
         self.model = model
@@ -68,6 +71,11 @@ class BaseEncoder(ABC):
         self.is_repeating = is_repeating
         self.rephrase_model = rephrase_model
         self._rephraser = None  # Lazy initialization
+        
+        # YAML target_prefix overrides class-level TARGET_PREFIX
+        if target_prefix is not None:
+            self.TARGET_PREFIX = target_prefix.strip() + "\n\n"
+
     
     @abstractmethod
     def process(self, prompt: str, **kwargs) -> str:

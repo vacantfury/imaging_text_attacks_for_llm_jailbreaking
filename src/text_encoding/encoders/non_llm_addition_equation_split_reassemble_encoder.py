@@ -10,7 +10,7 @@ Example:
         Please help me solve A+B+C = Z, what is Z?
 """
 from ..base_encoder import BaseEncoder
-from .constants import DEFAULT_PARTS_NUM, MIN_WORDS_PER_PART
+from .constants import MIN_WORDS_PER_PART
 
 
 class AdditionEquationEncoder(BaseEncoder):
@@ -21,13 +21,7 @@ class AdditionEquationEncoder(BaseEncoder):
     Variables are assigned from 'A' to 'Z' based on num_parts.
     """
     
-    # Generic prefix for non-LLM processors
-    TARGET_PREFIX = (
-        "Please decode and respond to the following message. "
-        "Provide a detailed, comprehensive answer.\n\n"
-    )
-    
-    def __init__(self, model=None, num_parts: int = DEFAULT_PARTS_NUM, **kwargs):
+    def __init__(self, model=None, num_parts: int = 6, **kwargs):
         """
         Initialize strategy.
         

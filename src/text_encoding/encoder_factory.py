@@ -1,6 +1,14 @@
 """
 Encoder factory for creating and managing prompt encoders.
+
+Name resolution (in order):
+1. EncoderType enum values (e.g., 'llm_set_theory')
+2. ENCODING_ALIASES: shorthands (e.g., 'math' → 'llm_set_theory')
+3. Classical language auto-resolution: checks if a YAML config exists in
+   conf/text_encoding/classical_language/{name}.yaml. Supports '_literary'
+   suffix to set strategy='literary' (e.g., 'latin_literary').
 """
+from pathlib import Path
 from typing import Dict, Optional, Union
 from src.utils.logger import get_logger
 
@@ -15,17 +23,26 @@ from .encoders.non_llm_symbol_injection_encoder import SymbolInjectionEncoder
 from .encoders.llm_quantum_mechanics_encoder import QuantumMechanicsLLMEncoder
 from .encoders.llm_formal_logic_encoder import FormalLogicLLMEncoder
 from .encoders.non_llm_baseline_encoder import BaselineEncoder
+from .encoders.llm_classical_language_encoder import LLMClassicalLanguageEncoder
 
 
 logger = get_logger(__name__)
+
+# Path to classical language YAML configs
+_CLASSICAL_LANG_DIR = (
+    Path(__file__).resolve().parent.parent.parent
+    / "conf" / "text_encoding" / "classical_language"
+)
+
+# Strategy suffix convention for classical languages
+_LITERARY_SUFFIX = "_literary"
 
 
 # =============================================================================
 # Encoder Registry
 # =============================================================================
 
-# Built-in processors registry
-# Maps processor names (enum values) to their implementation classes
+# Maps encoder_type values to their implementation classes.
 ENCODERS: Dict[str, type] = {
     EncoderType.LLM_SET_THEORY: SetTheoryLLMEncoder,
     EncoderType.NON_LLM_ADDITION_EQUATION_SPLIT_REASSEMBLE: AdditionEquationEncoder,
@@ -34,8 +51,101 @@ ENCODERS: Dict[str, type] = {
     EncoderType.LLM_QUANTUM_MECHANICS: QuantumMechanicsLLMEncoder,
     EncoderType.LLM_FORMAL_LOGIC: FormalLogicLLMEncoder,
     EncoderType.NON_LLM_BASELINE: BaselineEncoder,
+    EncoderType.LLM_CLASSICAL_LANGUAGE: LLMClassicalLanguageEncoder,
 }
 
+
+# =============================================================================
+# User-Facing Aliases (true shorthands only)
+# =============================================================================
+
+# Maps user-friendly shorthand names to their canonical encoder_type values.
+# Only needed when the shorthand differs from the YAML filename / encoder_type.
+ENCODING_ALIASES: Dict[str, str] = {
+    "plain": "non_llm_baseline",
+    "math": "llm_set_theory",
+    "set_theory": "llm_set_theory",
+    "formal_logic": "llm_formal_logic",
+    "quantum": "llm_quantum_mechanics",
+    "addition_equation": "non_llm_addition_equation_split_reassemble",
+    "conditional_probability": "non_llm_conditional_probability",
+    "symbol_injection": "non_llm_symbol_injection",
+}
+
+
+# =============================================================================
+# Name Resolution
+# =============================================================================
+
+def _resolve_classical_language(name: str) -> Optional[tuple[str, dict]]:
+    """
+    Check if `name` matches a classical language YAML config.
+    
+    Supports the '_literary' suffix convention:
+      - 'latin'          → language='latin', strategy='direct'
+      - 'latin_literary'  → language='latin', strategy='literary'
+    
+    Returns:
+        (encoder_type, extra_kwargs) if matched, None otherwise.
+    """
+    strategy = "direct"
+    lang = name
+    if name.endswith(_LITERARY_SUFFIX):
+        strategy = "literary"
+        lang = name[: -len(_LITERARY_SUFFIX)]
+    
+    yaml_path = _CLASSICAL_LANG_DIR / f"{lang}.yaml"
+    if yaml_path.exists():
+        return "llm_classical_language", {"language": lang, "strategy": strategy}
+    
+    return None
+
+
+def resolve_encoding_name(name: str) -> tuple[str, dict]:
+    """
+    Resolve a user-facing encoding name to an encoder_type and extra kwargs.
+    
+    Resolution order:
+      1. Simple aliases (ENCODING_ALIASES): 'math' → 'llm_set_theory'
+      2. Direct encoder_type match: 'llm_set_theory' → as-is
+      3. Classical language YAML: 'latin_literary' → 'llm_classical_language'
+         + {language: 'latin', strategy: 'literary'}
+    
+    Args:
+        name: User-facing encoding name
+    
+    Returns:
+        Tuple of (encoder_type_value, extra_kwargs)
+    
+    Raises:
+        ValueError: If name cannot be resolved
+    """
+    # 1. Simple aliases
+    if name in ENCODING_ALIASES:
+        return ENCODING_ALIASES[name], {}
+    
+    # 2. Direct encoder_type
+    if name in ENCODERS:
+        return name, {}
+    
+    # 3. Classical language auto-resolution from YAML directory
+    result = _resolve_classical_language(name)
+    if result is not None:
+        return result
+    
+    # Not found
+    classical_langs = [
+        p.stem for p in _CLASSICAL_LANG_DIR.glob("*.yaml")
+    ] if _CLASSICAL_LANG_DIR.exists() else []
+    available = sorted(
+        set(list(ENCODING_ALIASES.keys()) + list(ENCODERS.keys()) + classical_langs)
+    )
+    raise ValueError(f"Unknown encoding '{name}'. Available: {available}")
+
+
+# =============================================================================
+# Public API
+# =============================================================================
 
 def register_encoder(name: str, encoder_class: type):
     """
@@ -44,86 +154,59 @@ def register_encoder(name: str, encoder_class: type):
     Args:
         name: Name for the processor
         encoder_class: Encoder class (must inherit from BaseEncoder)
-    
-    Example:
-        ```python
-        from src.text_encoding import BaseEncoder, register_encoder
-        
-        class MyCustomEncoder(BaseEncoder):
-            def process(self, prompt: str, **kwargs) -> str:
-                return f"Custom: {prompt}"
-        
-        register_encoder('my_custom', MyCustomEncoder)
-        ```
     """
     ENCODERS[name] = encoder_class
     logger.info(f"Registered processor: {name}")
 
 
 def get_encoder(name: str) -> Optional[type]:
-    """
-    Get a processor class by name.
-    
-    Args:
-        name: Encoder name
-        
-    Returns:
-        Encoder class or None if not found
-    """
+    """Get a processor class by name. Returns None if not found."""
     return ENCODERS.get(name)
 
 
 def list_encoders() -> list[str]:
-    """
-    List all registered processor names.
-    
-    Returns:
-        List of processor names
-    """
+    """List all registered processor names."""
     return list(ENCODERS.keys())
 
 
 def create_encoder(name: Union[str, EncoderType], **kwargs):
     """
-    Factory function to create a processor instance by name or enum.
+    Create an encoder instance by name, enum, or user-facing alias.
     
-    This is the main factory method that handles processor creation with
-    the appropriate parameters for each processor type.
+    Supports:
+      - EncoderType enum:  create_encoder(EncoderType.LLM_SET_THEORY)
+      - Alias shorthand:   create_encoder('math')
+      - Classical language: create_encoder('latin_literary')
+    
+    For classical languages, language/strategy kwargs are auto-resolved
+    from the encoding name and can be overridden via explicit kwargs.
     
     Args:
-        name: Encoder name as string or EncoderType enum
-              (e.g., EncoderType.LLM_SET_THEORY or 'llm_set_theory')
-        **kwargs: Encoder-specific parameters
+        name: Encoder name (string, enum, or alias)
+        **kwargs: Encoder-specific parameters (override auto-resolved defaults)
         
     Returns:
         Encoder instance
         
     Raises:
-        ValueError: If processor name not found
-        
-    Examples:
-        >>> # Recommended: Use enum for type safety and IDE autocomplete
-        >>> from src.llm_utils import LLMModel
-        >>> processor = create_encoder(EncoderType.LLM_SET_THEORY, model=LLMModel.GPT_4O)
-        
-        >>> # Alternative: Use string (for dynamic processor selection)
-        >>> processor = create_encoder('llm_set_theory', model=LLMModel.GPT_4O)
-        
-        >>> # Rule-based processor
-        >>> processor = create_encoder(EncoderType.NON_LLM_ADDITION_EQUATION_SPLIT_REASSEMBLE, num_parts=6)
+        ValueError: If encoder name not found
     """
-    # Convert enum to string if needed
     encoder_name = name.value if isinstance(name, EncoderType) else name
     
-    if encoder_name not in ENCODERS:
-        available = ", ".join(list_encoders())
-        raise ValueError(f"Unknown processor '{encoder_name}'. Available: {available}")
+    # Resolve name → encoder_type + auto-kwargs
+    encoder_type, extra_kwargs = resolve_encoding_name(encoder_name)
     
-    encoder_class = ENCODERS[encoder_name]
+    if encoder_type not in ENCODERS:
+        raise ValueError(
+            f"Unknown encoder type '{encoder_type}'. "
+            f"Available: {', '.join(list_encoders())}")
+    
+    # User kwargs override auto-resolved kwargs
+    merged_kwargs = {**extra_kwargs, **kwargs}
+    encoder_class = ENCODERS[encoder_type]
     
     try:
-        return encoder_class(**kwargs)
+        return encoder_class(**merged_kwargs)
     except Exception as e:
-        logger.error(f"Error creating processor '{encoder_name}': {e}")
+        logger.error(f"Error creating encoder '{encoder_name}': {e}")
         raise
-

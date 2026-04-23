@@ -10,10 +10,7 @@ from typing import Optional, List
 from src.llm_utils import LLMModel
 from src.utils.logger import get_logger
 from ..base_encoder import BaseEncoder
-from .constants import (
-    DEFAULT_INJECTION_NUM_SYMBOLS,
-    DEFAULT_INJECTION_SYMBOLS
-)
+from .constants import DEFAULT_INJECTION_SYMBOLS
 
 logger = get_logger(__name__)
 
@@ -34,17 +31,12 @@ class SymbolInjectionEncoder(BaseEncoder):
         num_symbols: Number of symbols to inject (default: 10)
         symbols: List of symbols to choose from (default: mathematical symbols)
     """
-    
-    # Generic prefix for non-LLM processors where original text remains visible
-    TARGET_PREFIX = (
-        "Please decode and respond to the following message. "
-        "Provide a detailed, comprehensive answer.\n\n"
-    )
+
     
     def __init__(
         self,
         model: Optional[LLMModel] = None,
-        num_symbols: int = DEFAULT_INJECTION_NUM_SYMBOLS,
+        num_symbols: int = 10,
         symbols: Optional[List[str]] = None,
         **kwargs
     ):

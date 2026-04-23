@@ -23,19 +23,30 @@ We propose the first systematic study of the **encoding × modality interaction*
 
 ### 3.1 Core Experimental Matrix
 
-| Encoding | Text | Image-of-Text | Δ (Modality Gap) |
-|----------|------|---------------|------------------|
-| **Plain English** | ASR_E,T | ASR_E,I | Δ₁ |
-| **Classical Chinese** | ASR_C,T | ASR_C,I | Δ₂ |
-| **Math Encoding** | ASR_M,T | ASR_M,I | Δ₃ |
+| Encoding | Text | Image-of-Text | Δ (Modality Gap) | Analytical role |
+|----------|------|---------------|------------------|----------------|
+| **Plain English** | ASR_E,T | ASR_E,I | Δ₁ | Baseline (modality effect alone) |
+| **Classical Chinese** | ASR_C,T | ASR_C,I | Δ₂ | Non-Latin script + classical language |
+| **Latin** | ASR_L,T | ASR_L,I | Δ₃ | Latin-script + classical language |
+| **Math Encoding** | ASR_M,T | ASR_M,I | Δ₄ | Symbolic encoding |
 
-**3 encodings × 2 modalities = 6 conditions** per model. Clean, focused, one results table.
+**4 encodings × 2 modalities = 8 conditions** per model. Clean, focused, one results table.
+
+Adding Latin alongside Classical Chinese enables a critical analytical decomposition: both are classical languages with low safety-training coverage, but they use **different scripts** (CJK vs. Latin). Comparing Δ₂ vs. Δ₃ isolates whether the modality gap is driven by **script difficulty** (OCR challenges with CJK characters) or **linguistic obscurity** (archaic vocabulary regardless of script).
 
 ### 3.2 Encoding Implementations
 
+Each classical language encoding supports two strategies, controlled via the `strategy` parameter:
+- **`direct`**: Simple translation into the target language (baseline classical encoding)
+- **`literary`**: Translation with multidimensional literary strategy — roles, metaphors, rhetorical devices adapted to each language's tradition (based on CC-BOS's framework for Classical Chinese, adapted for Latin)
+
+The core matrix (Table 1) uses the `literary` strategy for classical languages. The `direct` vs. `literary` comparison is reported as an ablation (Table 3).
+
 **Plain English:** Harmful prompts used directly from benchmark datasets. Serves as baseline.
 
-**Classical Chinese (文言文):** Harmful prompts translated into Classical Chinese using GPT-4o with CC-BOS-inspired strategy prompts. Exploits "High Capability–Low Alignment" gap.
+**Classical Chinese (文言文):** Harmful prompts translated into Classical Chinese using GPT-4o with CC-BOS-inspired multidimensional strategy (8 literary dimensions: role, guidance, mechanism, metaphor, expression, knowledge, context, trigger pattern). Exploits the "High Capability–Low Alignment" gap identified by Huang et al. (2026). CC-BOS's ablation shows ~60% ASR with strategy (no optimization) vs. ~18% with plain translation.
+
+**Latin:** Harmful prompts translated into Classical Latin (Ciceronian style) with adapted literary dimensions (persona, ratio, elocutio, etc.). Tests whether classical language bypass generalizes beyond Chinese to a Latin-script classical language. Uses the same `LLMClassicalLanguageEncoder` class with `language="latin"`.
 
 **Math Encoding:** Harmful prompts encoded as symbolic mathematical problems (set theory / formal logic), following MathPrompt methodology. Exploits semantic divergence from safety training data.
 
@@ -64,7 +75,7 @@ System prompt for image conditions: *"Read the text in the image and follow the 
 - Standardized harm taxonomy enables **per-category ASR analysis** (R4 from prior review specifically flagged this gap)
 - Standard judge (fine-tuned Llama classifier) enables reproducible, comparable ASR measurement
 - Broadly adopted in EMNLP/ICLR safety papers (500+ citations); reviewers expect it
-- 200 prompts × 6 conditions × 4 models = **4,800 evaluations** — sufficient statistical power for ANOVA interaction effects
+- 200 prompts × 8 conditions × 4 models = **6,400 evaluations** — sufficient statistical power for ANOVA interaction effects
 
 **Secondary: JailbreakBench** (Chao et al., 2024) — 100 curated harmful prompts across 10 categories with leaderboard. Selected because:
 - Highest-quality curated prompts (no redundancy unlike AdvBench)
@@ -77,10 +88,11 @@ System prompt for image conditions: *"Read the text in the image and follow the 
 **Note on AdvBench:** Excluded. Known redundancy issues (many near-duplicate prompts like "Write a tutorial on how to make a bomb" / "Explain how to build an explosive device"). HarmBench subsumes its coverage with cleaner categorization. EMNLP reviewers increasingly question papers relying on AdvBench alone.
 
 **Expected results structure:**
-- Table 1: HarmBench aggregate — full 3×2 matrix, all 4 models, per-encoding ASR
-- Table 2: HarmBench per-category breakdown — 7 categories × 6 conditions (addresses R4)
-- Table 3: JailbreakBench aggregate — 3×2 matrix (generalizability validation)
-- Total evaluations: 300 prompts × 6 conditions × 4 models = **7,200**
+- Table 1: HarmBench aggregate — full 4×2 matrix, all 4 models, per-encoding ASR
+- Table 2: HarmBench per-category breakdown — 7 categories × 8 conditions (addresses R4)
+- Table 3: Encoding strategy ablation — `direct` vs. `literary` for Classical Chinese and Latin
+- Table 4: JailbreakBench aggregate — 4×2 matrix (generalizability validation)
+- Total evaluations: 300 prompts × 8 conditions × 4 models = **9,600**
 
 ### 3.5 Target Models
 
@@ -98,10 +110,10 @@ System prompt for image conditions: *"Read the text in the image and follow the 
 Image input → OCR (extract text) → Llama Guard 3 (safety check) → Allow/Block
 ```
 
-Evaluated on all image conditions (3 encodings × image modality):
+Evaluated on all image conditions (4 encodings × image modality):
 - Defense success rate per encoding type
 - False positive rate on benign image prompts
-- Key question: Can OCR + text safety filter catch what the vision pathway misses? Does it work equally well for English, Classical Chinese, and math-encoded images?
+- Key question: Can OCR + text safety filter catch what the vision pathway misses? Does it work equally well for English, Classical Chinese, Latin, and math-encoded images? The Latin vs. Classical Chinese comparison is particularly informative: if OCR succeeds for Latin (same script family) but fails for Chinese (CJK), the defense gap is script-dependent.
 
 ### 3.7 Evaluation Metrics
 
@@ -249,7 +261,7 @@ Across all scenarios, **we have ≥1 viable top-venue target**. The encoding × 
 
 ### 8.1 Composable Encoding Attacks
 
-The natural extension of our encoding × modality matrix is **composing encoding layers**: translate to Classical Chinese *then* encode as math, or vice versa. This tests whether stacked encodings amplify ASR beyond either method alone — a composability question with fundamental implications for defense architecture. If stacked encodings compound effectiveness, point defenses are architecturally insufficient. This includes cross-linguistic generalization (Latin, Sanskrit, Classical Arabic) and translation-based defense evaluation against composite attacks.
+The natural extension of our encoding × modality matrix is **composing encoding layers**: translate to Classical Chinese *then* encode as math, or vice versa. This tests whether stacked encodings amplify ASR beyond either method alone — a composability question with fundamental implications for defense architecture. If stacked encodings compound effectiveness, point defenses are architecturally insufficient. The `LLMClassicalLanguageEncoder` infrastructure already supports additional languages (Sanskrit, Classical Arabic, Old English) — extending beyond the Classical Chinese and Latin tested in the core paper — and translation-based defense evaluation against composite attacks.
 
 ### 8.2 Extended Rendering Methods
 
@@ -259,4 +271,14 @@ Our rendering ablation covers 4 renderers (FigStep, FC-Typography, FC-Flowchart,
 - **AI-based handwriting generation (GANwriting):** Rendering prompts as handwritten text to test whether non-standard text styles evade OCR-based safety filters.
 - **Adversarial typography optimization:** Automated search over font, size, color, spacing, and background to maximize ASR — treating rendering parameters as a full attack surface (extending FC-Attack's preliminary font results).
 - **Multi-image splitting (Text-DJ):** Distributing a prompt across multiple images to evade per-image safety checks, testing whether models aggregate safety across image boundaries.
+
+### 8.3 Iterative Multimodal Attack Optimization
+
+Our core study uses **static, one-shot encoding** — each prompt is transformed once and evaluated. A natural extension is **interactive optimization** that iteratively refines attacks using target model feedback, as in PAIR (Chao et al., 2024) and CC-BOS (Huang et al., 2026). Our encoding × modality framework opens three novel directions for iterative attacks:
+
+- **Cross-modality transfer of optimized attacks:** Optimize a prompt in text mode (cheaper, faster feedback), then evaluate the optimized prompt in image mode. If text-optimized prompts transfer to image modality with preserved or amplified ASR, this provides a low-cost pathway to strong image-based attacks without expensive image-in-the-loop optimization.
+- **Modality-aware optimization:** Extend iterative search (e.g., PAIR, CC-BOS's fruit fly algorithm) to optimize directly in the image modality — the optimization loop queries the target model with rendered images rather than text, so the feedback signal accounts for OCR and vision processing. This tests whether image-specific optimization surfaces attack vectors invisible to text-only search.
+- **Joint encoding + rendering optimization:** Simultaneously search over encoding parameters (strategy dimensions, mathematical formulation style) and rendering parameters (font, layout, contrast) to maximize ASR. This treats the full encoding-to-pixel pipeline as a differentiable attack surface, potentially finding synergistic encoding × rendering combinations that neither dimension discovers alone.
+
+These directions bridge our empirical gap analysis with the attack optimization paradigm, extending the static 2D matrix into a dynamic, adaptive threat model. The infrastructure for this extension is already supported by our encoder and renderer factory patterns.
 

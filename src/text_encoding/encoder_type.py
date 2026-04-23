@@ -49,5 +49,9 @@ class EncoderType(str, Enum):
     LLM_FORMAL_LOGIC = "llm_formal_logic"
     """LLM-based Formal Logic transformation (first-order logic and proof theory)."""
 
+    LLM_CLASSICAL_LANGUAGE = "llm_classical_language"
+    """LLM-based classical language encoding (Classical Chinese, Latin, etc.).
+    Supports direct translation and literary strategy modes."""
+
 
 
