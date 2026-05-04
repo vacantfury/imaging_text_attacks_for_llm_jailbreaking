@@ -38,6 +38,7 @@ from .encoders import (
     SetTheoryLLMEncoder,
     AdditionEquationEncoder,
     ConditionalProbabilityEncoder,
+    QuantumMechanicsLLMEncoder,
 )
 
 # Import factory functions

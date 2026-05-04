@@ -3,7 +3,6 @@
 # Strategy "literary" = Anglo-Saxon poetic tradition (kennings, riddles, alliterative verse)
 encoder_type: llm_classical_language
 language: old_english
-model: gpt_4o
 
 direct:
   system_prompt: |

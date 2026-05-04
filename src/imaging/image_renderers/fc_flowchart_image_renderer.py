@@ -9,23 +9,22 @@ Generates Graphviz DOT flowcharts with:
   - Layouts: vertical (TB), horizontal (LR), tortuous (S-shaped)
   - dpi=600 for high resolution
 
-FC-Attack uses a fine-tuned step-description generator to split harmful queries 
-into numbered steps. Since our experiment tests rendering (not decomposition), 
-we render the FULL prompt text in the goal node. This isolates the rendering 
+FC-Attack uses a fine-tuned step-description generator to split harmful queries
+into numbered steps. Since our experiment tests rendering (not decomposition),
+we render the FULL prompt text in the goal node. This isolates the rendering
 variable from the decomposition confound.
 
 Requires: graphviz Python package and Graphviz system binary.
   pip install graphviz
   brew install graphviz  (macOS) / apt install graphviz (Linux)
 """
-import os
 import textwrap
 from io import BytesIO
-from typing import Optional
 
 from PIL import Image
 
 from src.imaging.base_image_renderer import BaseImageRenderer
+from src.imaging.font_utils import GRAPHVIZ_FONT_FOR_SCRIPT, detect_script
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -136,19 +135,19 @@ class FCFlowchartImageRenderer(BaseImageRenderer):
             "horizontal": self._build_horizontal,
             "tortuous": self._build_tortuous,
         }
-        
+
         if self.layout not in builders:
             raise ValueError(f"Unknown layout '{self.layout}'. Options: {list(builders.keys())}")
-        
+
         dot = builders[self.layout](text)
-        
-        # Set global font
-        dot.attr("node", fontname=self.font_name, fontsize=self.font_size)
-        
-        # Render to PNG bytes
+
+        script = detect_script(text)
+        font_name = GRAPHVIZ_FONT_FOR_SCRIPT.get(script, self.font_name)
+        dot.attr("node", fontname=font_name, fontsize=self.font_size)
+
         png_bytes = dot.pipe(format="png")
         img = Image.open(BytesIO(png_bytes)).convert("RGB")
-        
+
         return img
     
     def get_config(self) -> dict:

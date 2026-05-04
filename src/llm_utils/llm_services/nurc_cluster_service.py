@@ -1,33 +1,27 @@
 """
-NURC Cluster service via vLLM OpenAI-compatible HTTP server.
+NURC Cluster service — uses ``AsyncOpenAI`` + ``asyncio.gather`` pointed at
+a vLLM OpenAI-compatible HTTP endpoint.
 
-This service uses the ClusterModelServerManager's dynamic endpoint pool.
-Before each batch call, it acquires an endpoint; after the call, it releases it.
-This allows multiple tasks to share a pool of vLLM servers.
+Acquires an endpoint from ``ClusterModelServerManager`` for each batch call
+and releases it afterwards so multiple tasks can share the server pool.
 """
-from typing import List, Tuple, Optional, Any
+import asyncio
+import random
+from typing import Any, Dict, List, Optional, Tuple
+
+import httpx
+from openai import AsyncOpenAI
 
 from ..base_llm_service import BaseLLMService
 from ..llm_model import LLMModel
 from ...utils.logger import get_logger
-from types import SimpleNamespace
 
 logger = get_logger(__name__)
 
-_DEFAULT_CONFIG = SimpleNamespace(temperature=0.0, max_tokens=0)
-
 
 class NURCClusterService(BaseLLMService):
-    """
-    Service for models running on NURC cluster via vLLM HTTP server.
-    
-    Requires a ClusterModelServerManager with running/pending servers.
-    Acquires an endpoint from the pool for each batch call, releases after completion.
-    
-    Args (via kwargs):
-        server_manager: Required. The ClusterModelServerManager instance.
-    """
-    
+    """Service for models running on NURC cluster via vLLM HTTP server."""
+
     def __init__(self, model: LLMModel, config=None, **kwargs):
         server_manager = kwargs.pop("server_manager", None)
         if not server_manager:
@@ -35,145 +29,129 @@ class NURCClusterService(BaseLLMService):
                 "NURCClusterService requires 'server_manager' kwarg. "
                 "Use ClusterModelServerManager to start the vLLM server first."
             )
-        
-        super().__init__()
+
+        super().__init__(
+            max_concurrency=kwargs.pop("max_concurrency", 20),
+            max_retries=kwargs.pop("max_retries", 5),
+            batch_poll_interval=kwargs.pop("batch_poll_interval", 30),
+            batch_timeout=kwargs.pop("batch_timeout", 3600),
+        )
         self.model = model
-        self.config = config or _DEFAULT_CONFIG
-        self.temperature = kwargs.get('temperature', self.config.temperature)
-        self.max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
+        self.temperature = kwargs.get("temperature", 0.0)
+        self.max_tokens = kwargs.get("max_tokens", 4096)
         self.server_manager = server_manager
-        
+
         logger.info(f"Initialized cluster service for {model.model_id} (dynamic pool)")
-    
-    def _create_client(self, server_url: str):
-        """Create an OpenAI client pointed at the given vLLM endpoint."""
-        try:
-            import httpx
-            from openai import OpenAI
-            return OpenAI(
-                base_url=server_url,
-                api_key="unused",  # vLLM doesn't require an API key
-                http_client=httpx.Client(
-                    trust_env=False,  # Bypass cluster Squid proxy
-                    timeout=httpx.Timeout(600.0, connect=60.0),
-                ),
-            )
-        except ImportError:
-            raise ImportError(
-                "openai package is required for NURCClusterService. "
-                "Install with: pip install openai"
-            )
-    
-    def batch_generate(
+
+    def _make_async_client(self, server_url: str) -> AsyncOpenAI:
+        return AsyncOpenAI(
+            base_url=server_url,
+            api_key="unused",
+            http_client=httpx.AsyncClient(
+                trust_env=False,
+                timeout=httpx.Timeout(600.0, connect=60.0),
+            ),
+        )
+
+    # ------------------------------------------------------------------
+    # Message formatting (text-only for vLLM)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _format_conversation(
+        messages: List[Tuple[str, Optional[Any]]], system_message: Optional[str],
+    ) -> List[Dict[str, str]]:
+        openai_msgs: List[Dict[str, str]] = []
+        if system_message:
+            openai_msgs.append({"role": "system", "content": system_message})
+        for text, _image in messages:
+            openai_msgs.append({"role": "user", "content": text})
+        return openai_msgs
+
+    # ------------------------------------------------------------------
+    # Async execution
+    # ------------------------------------------------------------------
+
+    async def _one_call(
         self,
-        prompts: List[Tuple[str, str]],
-        system_message: Optional[str] = None,
-        is_test: bool = False,
-        **kwargs
-    ) -> List[Tuple[str, str]]:
-        """Generate text responses via vLLM server."""
-        temperature = kwargs.get('temperature', self.temperature)
-        max_tokens = kwargs.get('max_tokens', self.max_tokens)
-        
-        # Acquire endpoint from pool
-        endpoint = self.server_manager.acquire_endpoint(self.model)
-        client = self._create_client(endpoint)
-        
-        try:
-            results = []
-            total = len(prompts)
-            log_interval = max(1, total // 10)
-            
-            for idx, (prompt_id, prompt_text) in enumerate(prompts, 1):
+        client: AsyncOpenAI,
+        sem: asyncio.Semaphore,
+        messages: List[Dict],
+        temperature: float,
+        max_tokens: int,
+        is_test: bool,
+    ) -> str:
+        async with sem:
+            for attempt in range(self.max_retries + 1):
                 try:
-                    if idx == 1 or idx % log_interval == 0 or idx == total:
-                        logger.info(f"Processing request {idx}/{total} ({idx*100//total}%)")
-                    
-                    messages = []
-                    if system_message:
-                        messages.append({"role": "system", "content": system_message})
-                    messages.append({"role": "user", "content": prompt_text})
-                    
-                    response = client.chat.completions.create(
+                    response = await client.chat.completions.create(
                         model=self.model.model_id,
                         messages=messages,
                         temperature=temperature,
                         max_tokens=max_tokens,
                     )
-                    
-                    response_text = response.choices[0].message.content or ""
-                    if not response_text.strip():
-                        response_text = f"[Empty response from vLLM server]"
-                    
-                    # Track usage (vLLM returns OpenAI-compatible usage)
-                    if hasattr(response, 'usage') and response.usage:
+
+                    text = response.choices[0].message.content or ""
+                    if not text.strip():
+                        text = "[Empty response from vLLM server]"
+
+                    if hasattr(response, "usage") and response.usage:
                         in_tok = response.usage.prompt_tokens or 0
                         out_tok = response.usage.completion_tokens or 0
                         self._record_usage(in_tok, out_tok, 0.0, is_test)
-                    
-                    results.append((prompt_id, response_text))
-                    
+
+                    return text
+
                 except Exception as e:
-                    error_msg = str(e)
-                    logger.error(f"vLLM API error for prompt {prompt_id}: {error_msg}")
-                    results.append((prompt_id, f"Error: {error_msg}"))
-            
-            return results
-        finally:
-            self.server_manager.release_endpoint(self.model, endpoint)
-    
+                    err = str(e)
+                    if ("429" in err or "rate" in err.lower()) and attempt < self.max_retries:
+                        wait = (2 ** attempt) + random.random()
+                        logger.warning(
+                            f"Rate limit hit, retry {attempt + 1}/{self.max_retries} "
+                            f"in {wait:.1f}s"
+                        )
+                        await asyncio.sleep(wait)
+                        continue
+                    logger.error(f"vLLM API error: {err}")
+                    return f"Error: {err}"
+        return "Error: unreachable"
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
     def batch_chat(
         self,
         conversations: List[Tuple[str, List[Tuple[str, Optional[Any]]]]],
+        system_message: Optional[str] = None,
         is_test: bool = False,
-        **kwargs
+        **kwargs,
     ) -> List[Tuple[str, str]]:
-        """Generate responses for chat conversations via vLLM server."""
-        temperature = kwargs.get('temperature', self.temperature)
-        max_tokens = kwargs.get('max_tokens', self.max_tokens)
-        
-        # Acquire endpoint from pool
+        temperature = kwargs.get("temperature", self.temperature)
+        max_tokens = kwargs.get("max_tokens", self.max_tokens)
+
         endpoint = self.server_manager.acquire_endpoint(self.model)
-        client = self._create_client(endpoint)
-        
         try:
-            results = []
-            total = len(conversations)
-            log_interval = max(1, total // 10)
-            
-            for idx, (conv_id, messages) in enumerate(conversations, 1):
-                try:
-                    if idx == 1 or idx % log_interval == 0 or idx == total:
-                        logger.info(f"Processing conversation {idx}/{total} ({idx*100//total}%)")
-                    
-                    # Build OpenAI-format messages
-                    openai_messages = []
-                    for msg in messages:
-                        text = msg[0]
-                        openai_messages.append({"role": "user", "content": text})
-                    
-                    response = client.chat.completions.create(
-                        model=self.model.model_id,
-                        messages=openai_messages,
-                        temperature=temperature,
-                        max_tokens=max_tokens,
-                    )
-                    
-                    response_text = response.choices[0].message.content or ""
-                    
-                    # Track usage (vLLM returns OpenAI-compatible usage)
-                    if hasattr(response, 'usage') and response.usage:
-                        in_tok = response.usage.prompt_tokens or 0
-                        out_tok = response.usage.completion_tokens or 0
-                        self._record_usage(in_tok, out_tok, 0.0, is_test)
-                    
-                    results.append((conv_id, response_text))
-                    
-                except Exception as e:
-                    error_msg = str(e)
-                    logger.error(f"vLLM API error for conversation {conv_id}: {error_msg}")
-                    results.append((conv_id, f"Error: {error_msg}"))
-            
-            return results
+            client = self._make_async_client(endpoint)
+            prepared = [
+                (cid, self._format_conversation(msgs, system_message))
+                for cid, msgs in conversations
+            ]
+
+            logger.info(
+                f"Sending {len(prepared)} requests async to vLLM "
+                f"(concurrency={self.max_concurrency})"
+            )
+
+            async def _run() -> List[str]:
+                sem = asyncio.Semaphore(self.max_concurrency)
+                tasks = [
+                    self._one_call(client, sem, msgs, temperature, max_tokens, is_test)
+                    for _, msgs in prepared
+                ]
+                return await asyncio.gather(*tasks)
+
+            responses = asyncio.run(_run())
+            return [(cid, resp) for (cid, _), resp in zip(prepared, responses)]
         finally:
             self.server_manager.release_endpoint(self.model, endpoint)

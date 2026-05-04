@@ -7,16 +7,20 @@ for isolating the modality effect (text vs. image-rendered text).
 
 Uses sensible typographic defaults for maximum readability:
   - Sans-serif font (Arial/DejaVuSans) at readable size
+  - Script-aware font selection: CJK → Noto Sans CJK, Devanagari → Noto Sans Devanagari
   - Black text on white background
   - Automatic word wrapping within padded area
 """
-import os
 import textwrap
 from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
 from src.imaging.base_image_renderer import BaseImageRenderer
+from src.imaging.font_utils import (
+    LATIN_FONTS, detect_script, estimate_wrap_width, get_font_for_text,
+    measure_text_height,
+)
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -28,28 +32,24 @@ DEFAULT_BG_COLOR = "#FFFFFF"
 DEFAULT_FG_COLOR = "#000000"
 DEFAULT_PADDING = 40
 DEFAULT_LINE_SPACING = 8
+MAX_IMAGE_HEIGHT = 7680  # Stay under Claude's 8000px API limit
 
 
 class PlainImageRenderer(BaseImageRenderer):
     """
     Plain text-on-image renderer — the simplest baseline.
-    
+
     Renders the full prompt text onto a white image with automatic
     word wrapping. No numbered steps, no prompt tricks, no special
     formatting. Used as the clean baseline for encoding × modality
     experiments where we want to measure the pure modality gap.
-    
-    Attributes:
-        font_size: Font size in points
-        width: Image width in pixels
-        height: Image height in pixels
-        bg_color: Background color
-        fg_color: Text color
-        padding: Padding around text area
-        line_spacing: Extra spacing between lines
-        font_path: Optional explicit path to .ttf file
+
+    Font selection is script-aware: if text contains CJK or Devanagari
+    characters, a Noto Sans font with those glyphs is used instead of
+    the default Latin font. Font files are resolved from the project
+    ``fonts/`` directory first, then system paths.
     """
-    
+
     def __init__(
         self,
         font_size: int = DEFAULT_FONT_SIZE,
@@ -73,66 +73,72 @@ class PlainImageRenderer(BaseImageRenderer):
         self.fg_color = fg_color
         self.padding = padding
         self.line_spacing = line_spacing
-        
-        # Load a clean, readable font
-        self.font = self._load_font(font_size, font_path)
-        
-        # Estimate wrap width based on font metrics
-        self._wrap_width = self._estimate_wrap_width()
-    
-    def _load_font(self, size: int, explicit_path: Optional[str]) -> ImageFont.FreeTypeFont:
-        """Load a readable sans-serif font."""
-        if explicit_path and os.path.exists(explicit_path):
-            return ImageFont.truetype(explicit_path, size)
-        
-        # Try common readable fonts in priority order
-        for candidate in ["Arial.ttf", "DejaVuSans.ttf", "Helvetica.ttf", "FreeSans.ttf"]:
-            try:
-                font = ImageFont.truetype(candidate, size)
-                logger.debug(f"Loaded font: {candidate}")
-                return font
-            except (OSError, IOError):
-                continue
-        
-        logger.warning("No preferred font found, using Pillow default")
-        return ImageFont.load_default()
-    
-    def _estimate_wrap_width(self) -> int:
-        """Estimate character wrap width based on font and available space."""
-        available = self.width - 2 * self.padding
-        # Measure average character width
-        try:
-            avg_char_w = self.font.getlength("x")
-        except AttributeError:
-            avg_char_w = self.font_size * 0.6  # fallback estimate
-        
-        if avg_char_w > 0:
-            return max(10, int(available / avg_char_w))
-        return 60  # safe default
-    
+        self._explicit_font_path = font_path
+        self._font_cache: dict[str, ImageFont.FreeTypeFont] = {}
+        self._latin_font = get_font_for_text(
+            "x", font_size, LATIN_FONTS, font_path, self._font_cache)
+        self._wrap_width = estimate_wrap_width(
+            self._latin_font, self.width - 2 * self.padding)
+
+    def _get_font(self, text: str) -> ImageFont.FreeTypeFont:
+        return get_font_for_text(
+            text, self.font_size, LATIN_FONTS,
+            self._explicit_font_path, self._font_cache)
+
     def _render_clean(self, text: str) -> Image.Image:
-        """Render text directly onto a clean white image."""
-        wrapped = textwrap.fill(text, width=self._wrap_width)
-        
-        im = Image.new("RGB", (self.width, self.height), self.bg_color)
+        """Render text onto an auto-sized image (fixed width, height fits text).
+
+        If the rendered image would exceed MAX_IMAGE_HEIGHT, font size is
+        reduced proportionally so all content fits within the limit.
+        """
+        font = self._get_font(text)
+        font_size = self.font_size
+        wrap_width = estimate_wrap_width(
+            font, self.width - 2 * self.padding, text)
+
+        wrapped = textwrap.fill(text, width=wrap_width)
+        text_h = measure_text_height(wrapped, font, self.line_spacing)
+        auto_h = max(100, text_h + 2 * self.padding)
+
+        if auto_h > MAX_IMAGE_HEIGHT:
+            original_h = auto_h
+            min_font = 10
+            for _ in range(3):
+                scale = (MAX_IMAGE_HEIGHT - 2 * self.padding) / text_h * 0.92
+                font_size = max(min_font, int(font_size * scale))
+                font = ImageFont.truetype(font.path, font_size)
+                wrap_width = estimate_wrap_width(
+                    font, self.width - 2 * self.padding, text)
+                wrapped = textwrap.fill(text, width=wrap_width)
+                text_h = measure_text_height(wrapped, font, self.line_spacing)
+                auto_h = max(100, text_h + 2 * self.padding)
+                if auto_h <= MAX_IMAGE_HEIGHT or font_size <= min_font:
+                    break
+            logger.info(
+                f"Image would be {original_h}px tall (limit {MAX_IMAGE_HEIGHT}px); "
+                f"reduced font {self.font_size}pt→{font_size}pt, final height {auto_h}px")
+
+        height = auto_h if self.height == 0 else min(self.height, auto_h) \
+            if auto_h < self.height else auto_h
+
+        im = Image.new("RGB", (self.width, height), self.bg_color)
         dr = ImageDraw.Draw(im)
         dr.text(
             (self.padding, self.padding),
             wrapped,
             fill=self.fg_color,
-            font=self.font,
+            font=font,
             spacing=self.line_spacing,
         )
-        
         return im
-    
+
     def get_config(self) -> dict:
-        """Return renderer config for saving alongside output."""
         config = {
             "renderer_type": "plain",
             "font_size": self.font_size,
             "width": self.width,
             "height": self.height,
+            "max_image_height": MAX_IMAGE_HEIGHT,
             "bg_color": self.bg_color,
             "fg_color": self.fg_color,
             "padding": self.padding,

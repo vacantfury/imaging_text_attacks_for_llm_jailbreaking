@@ -1,17 +1,19 @@
 import colorlog
 import logging
 
-DEFAULT_LOGGER_NAME = "my_logger"
+DEFAULT_LOGGER_NAME = "imaging_text_attacks"
 
-def get_logger(name=DEFAULT_LOGGER_NAME, level=logging.INFO):
+
+def get_logger(name: str = DEFAULT_LOGGER_NAME, level: int = logging.INFO) -> logging.Logger:
     logger = colorlog.getLogger(name)
     logger.setLevel(level)
     if not logger.handlers:
         for h in logging.root.handlers[:]:
             logger.root.removeHandler(h)
+
         handler = colorlog.StreamHandler()
         formatter = colorlog.ColoredFormatter(
-            fmt='%(log_color)s[%(levelname)s]%(asctime)s - %(message)s',
+            fmt='%(log_color)s[%(levelname)s]%(asctime)s %(name)s - %(message)s',
             datefmt='%H:%M:%S',
             log_colors={
                 'DEBUG': 'cyan',
@@ -23,5 +25,5 @@ def get_logger(name=DEFAULT_LOGGER_NAME, level=logging.INFO):
         )
         handler.setFormatter(formatter)
         logger.addHandler(handler)
-        logger.propagate = True  # Allow logs to propagate to root for file handlers
+
     return logger

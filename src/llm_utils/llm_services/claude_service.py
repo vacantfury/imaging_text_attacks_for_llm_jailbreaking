@@ -1,312 +1,177 @@
 """
-Anthropic Claude service implementation.
+Anthropic Claude service — uses the native **Message Batches API** for
+concurrent processing at 50 % reduced cost.
+
+Flow: submit batch → poll until ``processing_status == "ended"`` → collect
+results by ``custom_id``.
 """
-from typing import List, Tuple, Optional, Dict, Any
-from pathlib import Path
-import base64
-import io
+import time
+from typing import Any, Dict, List, Optional, Tuple
+
+from anthropic import Anthropic
 
 from ..base_llm_service import BaseLLMService
 from ..llm_model import LLMModel
 from ..constants import ANTHROPIC_API_KEY
+from ..media_utils import encode_image_to_b64
 from ...utils.logger import get_logger
-from types import SimpleNamespace
 
 logger = get_logger(__name__)
 
-_DEFAULT_CONFIG = SimpleNamespace(temperature=0.0, max_tokens=0)
+
+def _extract_text(message) -> str:
+    """Safely extract text from a Claude message object."""
+    if not message.content:
+        return ""
+    for block in message.content:
+        if hasattr(block, "text"):
+            return block.text
+    return ""
 
 
 class ClaudeService(BaseLLMService):
     """Service for Anthropic Claude models."""
-    
+
     def __init__(self, model: LLMModel, config=None, **kwargs):
-        """
-        Initialize Claude service.
-        
-        Args:
-            model: The LLM model to use
-            config: Optional config with default parameters
-            **kwargs: Additional parameters
-                - api_key (str): Anthropic API key (optional, will load from env)
-                - temperature (float): Sampling temperature
-                - max_tokens (int): Maximum tokens to generate
-        """
-        super().__init__()
+        super().__init__(
+            max_concurrency=kwargs.pop("max_concurrency", 20),
+            max_retries=kwargs.pop("max_retries", 5),
+            batch_poll_interval=kwargs.pop("batch_poll_interval", 30),
+            batch_timeout=kwargs.pop("batch_timeout", 3600),
+        )
         self.model = model
-        self.config = config or _DEFAULT_CONFIG
-        self.api_key = kwargs.get('api_key') or ANTHROPIC_API_KEY
+        self.api_key = kwargs.get("api_key") or ANTHROPIC_API_KEY
         if not self.api_key:
-            logger.error("Anthropic API key not found")
-            raise ValueError("Anthropic API key not found. Set ANTHROPIC_API_KEY in .env or pass api_key parameter")
-        self.temperature = kwargs.get('temperature', self.config.temperature)
-        self.max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
-        
-        # Initialize Anthropic client
-        try:
-            from anthropic import Anthropic
-            self.client = Anthropic(api_key=self.api_key)
-            logger.info(f"Initialized Claude service with {model.model_id}")
-        except ImportError:
-            logger.error("Anthropic package not installed")
-            raise ImportError("Anthropic package not installed. Install with: pip install anthropic")
-    
-    @staticmethod
-    def _prepare_prompt(
-        prompt_data: Tuple[str, str],
-        system_message: Optional[str]
-    ) -> Tuple[str, Dict[str, Any]]:
-        """
-        Prepare a single prompt for API call (CPU-bound preprocessing).
-        
-        Args:
-            prompt_data: (id, prompt_text) tuple
-            system_message: Optional system message
-        
-        Returns:
-            (id, params_dict) tuple ready for API call
-        """
-        prompt_id, prompt_text = prompt_data
-        params = {
-            "messages": [{"role": "user", "content": prompt_text}]
-        }
-        if system_message:
-            params["system"] = system_message
-        return (prompt_id, params)
-    
-    @staticmethod
-    def _encode_image(image: Any) -> Tuple[str, str]:
-        """
-        Encode an image to base64 and determine its media type.
-        
-        Args:
-            image: Either a file path (str/Path) or a PIL Image object
-            
-        Returns:
-            (base64_data, media_type) tuple
-        """
-        # Check if it's a PIL Image
-        try:
-            from PIL import Image
-            if isinstance(image, Image.Image):
-                # It's a PIL Image - encode directly
-                buffer = io.BytesIO()
-                img_format = image.format or 'PNG'
-                media_type = {
-                    'JPEG': 'image/jpeg',
-                    'JPG': 'image/jpeg',
-                    'PNG': 'image/png',
-                    'GIF': 'image/gif',
-                    'WEBP': 'image/webp'
-                }.get(img_format.upper(), 'image/png')
-                image.save(buffer, format=img_format if img_format != 'JPG' else 'JPEG')
-                image_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
-                return image_data, media_type
-        except ImportError:
-            pass
-        
-        # It's a file path - read from disk
-        image_path = str(image)
-        with open(image_path, 'rb') as img_file:
-            image_data = base64.b64encode(img_file.read()).decode('utf-8')
-        
-        ext = Path(image_path).suffix.lower()
-        media_type = {
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.gif': 'image/gif',
-            '.webp': 'image/webp'
-        }.get(ext, 'image/jpeg')
-        
-        return image_data, media_type
+            raise ValueError(
+                "Anthropic API key not found. Set ANTHROPIC_API_KEY in .env "
+                "or pass api_key parameter"
+            )
+        self.temperature = kwargs.get("temperature", 0.0)
+        self.max_tokens = kwargs.get("max_tokens", 4096)
+
+        self.client = Anthropic(api_key=self.api_key)
+        logger.info(f"Initialized Claude service with {model.model_id}")
+
+    # ------------------------------------------------------------------
+    # Message formatting
+    # ------------------------------------------------------------------
 
     @staticmethod
-    def _prepare_conversation(
-        conversation_data: Tuple[str, List[Tuple[str, Any]]]
-    ) -> Tuple[str, List[Dict[str, Any]]]:
-        """
-        Prepare a single conversation for API call.
-        
-        Args:
-            conversation_data: (id, messages) tuple with (text, image) messages
-                where image can be: None, file path string, PIL Image, or list of images
-        
-        Returns:
-            (id, formatted_messages) tuple ready for API call
-        """
-        conv_id, messages = conversation_data
-        anthropic_messages = []
-        
-        for prompt_text, image in messages:
+    def _format_conversation(
+        messages: List[Tuple[str, Optional[Any]]],
+    ) -> List[Dict[str, Any]]:
+        anthropic_msgs: List[Dict[str, Any]] = []
+        for text, image in messages:
             if image is None:
-                # Text-only message
-                anthropic_messages.append({
-                    "role": "user",
-                    "content": prompt_text
-                })
+                anthropic_msgs.append({"role": "user", "content": text})
             else:
-                # Multimodal message with image(s)
-                try:
-                    # Normalize to list of images
-                    images = image if isinstance(image, list) else [image]
-                    
-                    content = []
-                    for img in images:
-                        if img is not None:
-                            image_data, media_type = ClaudeService._encode_image(img)
-                            content.append({
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": media_type,
-                                    "data": image_data
-                                }
-                            })
-                    content.append({"type": "text", "text": prompt_text})
-                    
-                    anthropic_messages.append({
-                        "role": "user",
-                        "content": content
-                    })
-                except Exception as e:
-                    # If image loading fails, send text only
-                    logger.warning(f"Image load error: {str(e)}")
-                    anthropic_messages.append({
-                        "role": "user",
-                        "content": f"{prompt_text} [Image load error: {str(e)}]"
-                    })
-        
-        return (conv_id, anthropic_messages)
-    
-    def _prepare_prompts(
+                images = image if isinstance(image, list) else [image]
+                content: list = []
+                for img in images:
+                    if img is not None:
+                        b64, media_type = encode_image_to_b64(img)
+                        content.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": b64,
+                            },
+                        })
+                content.append({"type": "text", "text": text})
+                anthropic_msgs.append({"role": "user", "content": content})
+        return anthropic_msgs
+
+    # ------------------------------------------------------------------
+    # Native batch helpers
+    # ------------------------------------------------------------------
+
+    def _submit_batch(
         self,
-        prompts: List[Tuple[str, str]],
-        system_message: Optional[str] = None,
-    ) -> List[Tuple[str, Dict[str, Any]]]:
-        """Prepare multiple prompts for batch API submission."""
-        return [self._prepare_prompt(p, system_message) for p in prompts]
-    
-    def _prepare_conversations(
-        self,
-        conversations: List[Tuple[str, List[Tuple[str, Any]]]],
-    ) -> List[Tuple[str, List[Dict[str, Any]]]]:
-        """Prepare multiple conversations for batch API submission."""
-        return [self._prepare_conversation(c) for c in conversations]
-    
-    def batch_generate(
-        self,
-        prompts: List[Tuple[str, str]],
-        system_message: Optional[str] = None,
-        is_test: bool = False,
-        **kwargs
-    ) -> List[Tuple[str, str]]:
-        """
-        Generate text responses for multiple prompts.
-        
-        Args:
-            prompts: List of (id, prompt) tuples
-            system_message: Optional system message
-            **kwargs: Additional parameters (temperature, max_tokens, etc.)
-        
-        Returns:
-            List of (id, response) tuples
-        """
-        temperature = kwargs.get('temperature', self.temperature)
-        max_tokens = kwargs.get('max_tokens', self.max_tokens)
-        
-        prepared = self._prepare_prompts(prompts, system_message)
-        
-        # Sequential API calls (or submit prepared batch to Anthropic Message Batches API)
-        results = []
-        for prompt_id, params_dict in prepared:
-            try:
-                params = {
-                    "model": self.model.model_id,
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                    **params_dict
-                }
-                
-                response = self.client.messages.create(**params)
-                
-                # Track usage
-                if hasattr(response, 'usage') and response.usage:
-                    in_tok = response.usage.input_tokens or 0
-                    out_tok = response.usage.output_tokens or 0
-                    cost = (in_tok * self.model.input_price + out_tok * self.model.output_price) / 1_000_000
+        prepared: List[Tuple[str, List[Dict]]],
+        system_message: Optional[str],
+        temperature: float,
+        max_tokens: int,
+    ):
+        requests = []
+        for item_id, messages in prepared:
+            params: Dict[str, Any] = {
+                "model": self.model.model_id,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "messages": messages,
+            }
+            if system_message:
+                params["system"] = system_message
+            requests.append({"custom_id": item_id, "params": params})
+
+        logger.info(f"Submitting Claude batch with {len(requests)} requests")
+        return self.client.messages.batches.create(requests=requests)
+
+    def _poll_until_done(self, batch):
+        elapsed = 0
+        while batch.processing_status != "ended":
+            if elapsed >= self.batch_timeout:
+                raise TimeoutError(
+                    f"Claude batch {batch.id} not done after {self.batch_timeout}s"
+                )
+            time.sleep(self.batch_poll_interval)
+            elapsed += self.batch_poll_interval
+            batch = self.client.messages.batches.retrieve(batch.id)
+
+            counts = batch.request_counts
+            logger.info(
+                f"Batch {batch.id}: {batch.processing_status} "
+                f"(succeeded={counts.succeeded}, processing={counts.processing}, "
+                f"errored={counts.errored})"
+            )
+        return batch
+
+    def _collect_results(self, batch, is_test: bool) -> Dict[str, str]:
+        results: Dict[str, str] = {}
+        for entry in self.client.messages.batches.results(batch.id):
+            cid = entry.custom_id
+            result = entry.result
+            if result.type == "succeeded":
+                msg = result.message
+                text = _extract_text(msg)
+                if hasattr(msg, "usage") and msg.usage:
+                    in_tok = msg.usage.input_tokens or 0
+                    out_tok = msg.usage.output_tokens or 0
+                    cost = (
+                        in_tok * self.model.input_price
+                        + out_tok * self.model.output_price
+                    ) / 1_000_000
                     self._record_usage(in_tok, out_tok, cost, is_test)
-                
-                response_text = response.content[0].text
-                results.append((prompt_id, response_text))
-            except Exception as e:
-                # Check for fatal model errors (404 Not Found)
-                error_str = str(e).lower()
-                if "not found" in error_str or (hasattr(e, 'status_code') and e.status_code == 404):
-                    logger.critical(f"FATAL: Model ID {self.model.model_id} not found/unrecognized.")
-                    from src.utils.exceptions import FatalModelError
-                    raise FatalModelError(f"Model {self.model.model_id} not found") from e
-                
-                logger.error(f"Claude API error for prompt {prompt_id}: {str(e)}")
-                results.append((prompt_id, f"Error: {str(e)}"))
-        
+                results[cid] = text
+            else:
+                results[cid] = f"Error: batch result type={result.type}"
         return results
-    
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
     def batch_chat(
         self,
-        conversations: List[Tuple[str, List[Tuple[str, Any]]]],
+        conversations: List[Tuple[str, List[Tuple[str, Optional[Any]]]]],
+        system_message: Optional[str] = None,
         is_test: bool = False,
-        **kwargs
+        **kwargs,
     ) -> List[Tuple[str, str]]:
-        """
-        Generate responses for multiple chat conversations.
-        
-        Args:
-            conversations: List of (id, messages) tuples, where messages is
-                a list of (prompt, image) tuples. Image can be file path, PIL Image, or list.
-            **kwargs: Additional parameters (temperature, max_tokens, etc.)
-        
-        Returns:
-            List of (id, response) tuples
-        """
-        temperature = kwargs.get('temperature', self.temperature)
-        max_tokens = kwargs.get('max_tokens', self.max_tokens)
-        
-        prepared = self._prepare_conversations(conversations)
-        
-        # Sequential API calls (or submit prepared batch to Anthropic Message Batches API)
-        results = []
-        total = len(prepared)
-        log_interval = max(1, total // 10)  # Log every 10% or at least every request
-        for idx, (conv_id, anthropic_messages) in enumerate(prepared, 1):
-            try:
-                if idx == 1 or idx % log_interval == 0 or idx == total:
-                    logger.info(f"Processing request {idx}/{total} ({idx*100//total}%)")
-                response = self.client.messages.create(
-                    model=self.model.model_id,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    messages=anthropic_messages
-                )
-                
-                # Track usage
-                if hasattr(response, 'usage') and response.usage:
-                    in_tok = response.usage.input_tokens or 0
-                    out_tok = response.usage.output_tokens or 0
-                    cost = (in_tok * self.model.input_price + out_tok * self.model.output_price) / 1_000_000
-                    self._record_usage(in_tok, out_tok, cost, is_test)
-                
-                response_text = response.content[0].text
-                results.append((conv_id, response_text))
-            except Exception as e:
-                # Check for fatal model errors (404 Not Found)
-                error_str = str(e).lower()
-                if "not found" in error_str or (hasattr(e, 'status_code') and e.status_code == 404):
-                    logger.critical(f"FATAL: Model ID {self.model.model_id} not found/unrecognized.")
-                    from src.utils.exceptions import FatalModelError
-                    raise FatalModelError(f"Model {self.model.model_id} not found") from e
-                
-                logger.error(f"Claude API error for conversation {conv_id}: {str(e)}")
-                results.append((conv_id, f"Error: {str(e)}"))
-        
-        return results
+        temperature = kwargs.get("temperature", self.temperature)
+        max_tokens = kwargs.get("max_tokens", self.max_tokens)
+
+        prepared = [
+            (cid, self._format_conversation(msgs))
+            for cid, msgs in conversations
+        ]
+
+        batch = self._submit_batch(prepared, system_message, temperature, max_tokens)
+        batch = self._poll_until_done(batch)
+        results_map = self._collect_results(batch, is_test)
+
+        return [
+            (cid, results_map.get(cid, "Error: missing from batch results"))
+            for cid, _ in prepared
+        ]

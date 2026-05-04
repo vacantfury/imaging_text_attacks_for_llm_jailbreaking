@@ -1,26 +1,44 @@
 # ============================================================
-# Test experiment: one task per mode to verify pipeline
+# Smoke test: full pipeline on 2 prompts (text_encode → imaging → evaluate)
 # ============================================================
 # Usage: python main.py test
 #
-# NOTE: Stages depend on previous outputs.
-# Update source_dir paths after running each stage.
+# Validates:
+#   - text_encode: timing, LLM usage tracking, encoder resolution
+#   - imaging: _load_and_slice_prompts, renderer pipeline, timing
+#   - evaluate: _build_conversations_for_stage, usage/timing in results.json
+#
+# Cost: ~$0.01 (2 prompts × gpt-4.1-nano)
+
+num_main_job_threads: 1
 
 tasks:
-  # Stage 1: Encode harmbench prompts with plain passthrough
+  # ── Step 1: Text encode (LLM encoder — validates usage tracking) ──
   - mode: text_encode
-    encoding: plain
+    encoding: set_theory
     source_file: data/harmbench_prompts.jsonl
+    prompt_range: [0, 2]
 
-  # Stage 2: Render images (both original and encoded)
-  # source_dir → text_encode output
+  # ── Step 2: Text encode (classical language — validates resolver fix) ──
+  - mode: text_encode
+    encoding: latin_literary
+    source_file: data/harmbench_prompts.jsonl
+    prompt_range: [0, 2]
+
+  # ── Step 3: Imaging (plain renderer on set_theory output) ──
+  # NOTE: source_dir must be updated after step 1 creates its output.
+  #       For automated test, run steps sequentially or use the output
+  #       from step 1. Use an existing output if available:
   - mode: imaging
-    source_dir: outputs/text_encode/harmbench/plain_20260421_230005
+    renderer_type: plain
+    source_dir: outputs/text_encode/harmbench/set_theory_20260429_182521
     render: [original, encoded]
+    prompt_range: [0, 2]
 
-  # Stage 3: Evaluate with GPT-4o on text stages only (quick test)
-  # source_dir → imaging output
+  # ── Step 4: Evaluate (cheap API model, text-only stages) ──
+  # Uses existing text_encode output to avoid dependency on step ordering
   - mode: evaluate
-    model: gpt-4o
-    source_dir: outputs/imaging/harmbench/plain_plain_20260422_065802
+    model: gpt-4.1-nano
+    source_dir: outputs/text_encode/harmbench/set_theory_20260429_182521
     prompt_stages: [text_original, text_encoded]
+    prompt_range: [0, 2]

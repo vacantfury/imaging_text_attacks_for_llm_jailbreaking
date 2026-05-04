@@ -16,7 +16,7 @@ Reference:
   Prompt Optimization via Bio-Inspired Search." ICLR 2026.
 """
 from typing import Optional, List
-from src.llm_utils import LLMServiceFactory, LLMModel, BaseLLMService
+from src.llm_utils import LLMServiceFactory, BaseLLMService
 from src.utils.logger import get_logger
 from ..base_encoder import BaseEncoder
 from ..prompt_loader import load_prompt_template
@@ -67,7 +67,7 @@ class LLMClassicalLanguageEncoder(BaseEncoder):
         self,
         language: str = "classical_chinese",
         strategy: str = "direct",
-        model: Optional[LLMModel] = None,
+        model: Optional[str] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
         **kwargs
@@ -96,7 +96,7 @@ class LLMClassicalLanguageEncoder(BaseEncoder):
                 f"Supported: {SUPPORTED_STRATEGIES}")
         
         if model is None:
-            model = LLMModel.GPT_4O
+            raise ValueError("model is required — set it in conf/text_encoding/default.yaml")
         
         super().__init__(model=model, **kwargs)
         self.language = language
@@ -132,7 +132,7 @@ class LLMClassicalLanguageEncoder(BaseEncoder):
         s2t_note = " (→ traditional via opencc)" if self._needs_s2t else ""
         logger.info(
             f"Initialized LLMClassicalLanguageEncoder: "
-            f"language={language}, strategy={strategy}, model={model.value}{s2t_note}")
+            f"language={language}, strategy={strategy}, model={model}{s2t_note}")
     
     def _postprocess(self, text: str) -> str:
         """Apply any post-processing (e.g., simplified → traditional conversion)."""
@@ -185,8 +185,9 @@ class LLMClassicalLanguageEncoder(BaseEncoder):
             batch.append((str(i), user_msg))
         
         # Call LLM batch API
-        results = self.service.batch_generate(
-            prompts=batch,
+        conversations = [(pid, [(text, None)]) for pid, text in batch]
+        results = self.service.batch_chat(
+            conversations=conversations,
             system_message=self.system_prompt,
         )
         

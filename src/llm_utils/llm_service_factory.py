@@ -1,7 +1,10 @@
 """
 Factory for creating LLM service instances.
+
+This is the single bridge between YAML configuration and service constructors.
+Services themselves are dumb executors — they take params from kwargs only.
 """
-from typing import Dict, Optional, Type
+from typing import Dict, Optional, Type, Union
 
 from .llm_model import LLMModel, Provider
 from .base_llm_service import BaseLLMService
@@ -11,7 +14,12 @@ from .llm_services import OpenAIService, ClaudeService, GoogleService, LocalLMSe
 
 
 class LLMServiceFactory:
-    """Factory for creating LLM service instances based on model provider."""
+    """Factory for creating LLM service instances based on model provider.
+    
+    Acts as the single bridge between YAML configuration and services.
+    Loads conf/llm/default.yaml + model-specific overrides, merges with
+    caller-provided kwargs, and passes the result to the service constructor.
+    """
     
     # Registry mapping providers to their service implementations
     _PROVIDER_REGISTRY: Dict[Provider, Type[BaseLLMService]] = {
@@ -76,21 +84,34 @@ class LLMServiceFactory:
         cls._PROVIDER_REGISTRY[provider] = service_class
 
     @classmethod
-    def create(cls, model: LLMModel, **kwargs) -> BaseLLMService:
+    def _load_model_defaults(cls, model: LLMModel) -> dict:
+        """Load model params from YAML: default.yaml → model-specific override."""
+        from src.experiment.config import load_conf
+        params = load_conf(
+            "llm", section="model",
+            match_field="model.model", match_value=model.model_id)
+        # 'model' is already passed as a positional arg to service constructors,
+        # so remove it from kwargs to avoid "got multiple values for argument"
+        params.pop("model", None)
+        return params
+
+    @classmethod
+    def create(cls, model: Union[str, LLMModel], **kwargs) -> BaseLLMService:
         """
         Create an LLM service instance for the given model.
         
-        For cluster models, automatically fetches the server endpoint
-        from the registered server manager.
+        Loads YAML defaults for the model and merges with caller kwargs
+        (caller kwargs take priority). For cluster models, automatically
+        injects the server manager.
         
         Args:
-            model: The LLM model to create a service for
-            **kwargs: Additional arguments passed to the service constructor
+            model: The LLM model (LLMModel enum or string model ID)
+            **kwargs: Additional arguments passed to the service constructor.
+                These override YAML defaults.
                 Common kwargs:
                 - temperature (float): Sampling temperature
                 - max_tokens (int): Maximum tokens to generate
                 - api_key (str): API key for API-based services
-                - server_url (str): For cluster models, explicit endpoint URL
         
         Returns:
             Instance of the appropriate service implementation
@@ -98,6 +119,10 @@ class LLMServiceFactory:
         Raises:
             ValueError: If no service is registered for the model's provider
         """
+        # Single conversion point: str → LLMModel
+        if isinstance(model, str):
+            model = LLMModel.from_string(model)
+        
         service_class = cls._PROVIDER_REGISTRY.get(model.provider)
         
         if service_class is None:
@@ -106,14 +131,18 @@ class LLMServiceFactory:
                 f"Available providers: {list(cls._PROVIDER_REGISTRY.keys())}"
             )
         
+        # Load YAML defaults, then let caller kwargs override
+        yaml_defaults = cls._load_model_defaults(model)
+        merged_kwargs = {**yaml_defaults, **kwargs}
+        
         # For cluster models: inject server_manager from manager if not explicitly provided
-        if model.provider == Provider.NU_CLUSTER and "server_manager" not in kwargs:
+        if model.provider == Provider.NU_CLUSTER and "server_manager" not in merged_kwargs:
             if cls._server_manager is None:
                 raise RuntimeError(
                     f"Cannot create service for cluster model {model.model_id}: "
                     f"No ClusterModelServerManager registered. "
                     f"Call LLMServiceFactory.set_server_manager() first."
                 )
-            kwargs["server_manager"] = cls._server_manager
+            merged_kwargs["server_manager"] = cls._server_manager
         
-        return service_class(model, **kwargs)
+        return service_class(model, **merged_kwargs)

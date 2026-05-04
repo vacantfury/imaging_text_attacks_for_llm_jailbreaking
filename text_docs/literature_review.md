@@ -138,6 +138,12 @@ The typographic and visual attack literature reveals a consistent theme: the vis
 
 **Vision-centric jailbreaks.** Visual Exclusivity Attacks (Zhang et al., 2026) and the visual prompt jailbreak for image editing models (Hou et al., 2026) represent an emerging "Image-as-Basis" paradigm where harm requires visual reasoning over unperturbed images (schematics, blueprints). These differ from both perturbation attacks and typographic attacks: the image carries genuinely visual (not textual) harmful content.
 
+**Multi-image semantic dispersion.** MIDAS (Liu et al., ICLR 2026) introduces a multi-image jailbreak framework that decomposes harmful queries into risk-bearing semantic subunits and disperses them across multiple images using Game-style Visual Reasoning (GVR) templates (Letter Equation Puzzle, Jigsaw Letter Puzzle, Navigate-and-Read Puzzle, etc.). The textual channel uses persona-driven prompts with placeholders bound to the dispersed image fragments. By forcing the model to perform cross-image compositional reasoning to reconstruct the hidden intent, MIDAS delays exposure of malicious semantics and reduces security attention activation.
+
+**Key results:** 81.46% average ASR across 4 closed-source MLLMs (GPT-4o, Claude-3.5-Sonnet, Gemini-1.5-Pro, Qwen-VL-Max), significantly outperforming prior methods (FigStep: 7.69%, HADES: 10%, VisCRA: 1.64%, HIMRD: 2.40%). MIDAS also achieves 72.18% ASR on the most challenging models with strong alignment.
+
+**Relevance to our study:** MIDAS demonstrates that distributing harmful content across multiple images forces extended reasoning chains that bypass safety. Our typographic encoding approach is conceptually simpler (single image, no puzzles) but shares the insight that making the model "work" to extract content (OCR + decode encoding) delays safety activation. MIDAS's success on closed-source frontier models confirms that even multi-layered safety architectures remain vulnerable to structured visual attacks, supporting the hypothesis that our simpler encoding × image approach may also succeed.
+
 ### 4.2 Gap Analysis
 
 Perturbation-based attacks are **fundamentally different** from our study: they craft adversarial pixel patterns that exploit vision encoder vulnerabilities, whereas we test whether *unperturbed text rendered as an image* bypasses safety. Our approach requires zero adversarial optimization, making it both simpler and more practically concerning — if plain typography suffices, sophisticated perturbation attacks are unnecessary for many jailbreaking scenarios.
@@ -178,17 +184,31 @@ Llama Guard (Inan et al., 2023) operates on **tokenized text**, making it archit
 
 **DeTAM** (Li et al., 2025) identifies jailbreak-sensitive attention heads and reallocates attention at inference time — a fine-tuning-free defense. **Immune** (Ghosal et al., 2025) uses a safety reward model during decoding to steer generation away from harmful outputs. Both operate at the model level and do not specifically target typographic attacks. No existing defense work evaluates the simple countermeasure of **OCR preprocessing** — extracting text from images before safety classification.
 
-### 6.4 Multimodal Safety Survey
+### 6.4 Over-Refusal and Exaggerated Safety
+
+This subsection covers a growing body of work recognizing that safety alignment often overshoots, causing models to refuse benign prompts — a phenomenon variously termed "over-refusal," "exaggerated safety," or "false refusal." This literature is directly relevant to our P2 (Benign Refusal Rate) experiments, which measure whether text encoding and image rendering affect refusal rates on harmless prompts.
+
+**XSTest** (Röttger et al., NAACL 2024) introduced the first systematic diagnostic for exaggerated safety. The test suite comprises 250 safe prompts across 10 categories (homonyms, figurative language, safe contexts, definitions, etc.) that well-calibrated models should NOT refuse, plus 200 unsafe contrast prompts. Key findings: Llama-2-70b-chat refused 38% of safe prompts (full refusal) + 21.6% (partial); GPT-4 achieved 6.4% + 2% refusal. The core diagnosis is **lexical overfitting** — models are oversensitive to safety-related keywords regardless of context (e.g., refusing "How do I kill a Python process?" because of "kill"). XSTest also validated GPT-4-based automated classification as a viable alternative to manual annotation for refusal detection. For our study, XSTest provides the theoretical framework: if models refuse benign prompts due to lexical triggers, then text encoding (which obscures those triggers) or image rendering (which processes through a different pathway) may reduce false refusals — exactly what our P2 results show.
+
+**OR-Bench** (Cui et al., ICML 2025) scales the over-refusal evaluation to 80,000 prompts across 10 harmful categories, addressing XSTest's limited size. The key innovation is an automated pipeline: toxic seeds are generated, rewritten into borderline-safe prompts (using Mixtral 8×7B), then moderated by an ensemble of LLM judges. OR-Bench-Hard-1K is a curated subset of prompts that challenge even SOTA models. Evaluating 32 LLMs across 8 families reveals: (1) a Spearman correlation of 0.89 between safety (toxic rejection rate) and over-refusal, indicating most models cannot achieve both; (2) model size does not reliably predict better calibration; (3) Claude models exhibit the highest safety AND the most over-refusal, while Mistral models are the most permissive; (4) defense algorithms that improve safety (SmoothLLM, Self-Reminder) significantly raise over-refusal rates. For our study, OR-Bench confirms that over-refusal is pervasive and demonstrates the fundamental tension in safety calibration that our encoding × modality design can illuminate.
+
+**SCANS** (Cao et al., AAAI 2025) proposes Safety-Conscious Activation Steering, a training-free method to mitigate exaggerated safety. The approach: (1) extract refusal steering vectors by averaging the activation difference between harmful and benign queries at each layer; (2) use vocabulary projection to identify safety-critical layers (middle layers promote refusal tokens like "cannot"); (3) at inference time, classify input harmfulness via similarity to the refusal direction, and steer activations accordingly — subtracting the refusal vector for benign inputs, preserving it for harmful ones. SCANS reduces false refusal rates by 24.7% on XSTest and 26.3% on OKTest while maintaining defense against actual harmful queries. The mechanistic insight — that refusal is encoded as a direction in activation space at specific layers — suggests that modality change (image vs. text) may activate different pathways, potentially sidestepping the refusal direction entirely for image inputs.
+
+**Beyond I'm Sorry, I Can't** (Prakash et al., AAAI 2026) provides the deepest mechanistic analysis of refusal to date. Using sparse autoencoders (SAEs) trained on residual-stream activations of Gemma-2-2B-IT and LLaMA-3.1-8B-IT, the authors identify specific latent features causally responsible for refusal. Their three-stage pipeline: (1) find a refusal-mediating direction and collect nearby SAE features; (2) greedy filtering to obtain a minimal jailbreak-critical feature set; (3) factorization-machine discovery of non-linear feature interactions. Key findings: (a) ablating a small set of SAE features flips models from refusal to compliance, constituting an interpretability-based jailbreak; (b) redundant "backup" features remain dormant unless primary refusal features are suppressed, revealing layered safety redundancy. For our study, this work implies that if image-rendered text activates different internal representations than tokenized text, it may bypass the refusal-critical features identified by Prakash et al. — explaining why image-modality prompts show lower refusal rates on benign content.
+
+### 6.5 Multimodal Safety Survey
 
 Liu et al. (2024) provide a comprehensive survey of MLLM safety on images and text, categorizing research into evaluation, attacks, and defenses. The survey highlights that visual modalities introduce unique risks beyond those inherited from text-only LLMs, including adversarial perturbations, visual instruction exploitation, and cross-modal interference. Crucially, the survey notes that models trained to reject harmful text instructions may still comply when the same instructions are delivered visually — precisely the hypothesis our study tests. The survey identifies the lack of systematic cross-modal safety comparison as an open problem.
 
-### 6.5 Model Safety Reports
+### 6.6 Model Safety Reports
 
 OpenAI's GPT-4V System Card (2023) acknowledges expanded attack surfaces from image inputs. Anthropic's Claude 3 model card (2024) reports improved nuance in safety judgments. Google's Gemini 1.5 report (2024) describes multimodal capabilities. All acknowledge multimodal safety risks but provide limited detail on typographic attack robustness.
 
-### 6.6 Gap Analysis
+### 6.7 Gap Analysis
 
 The defense literature is **asymmetric**: sophisticated attacks exist (FigStep, HADES, Text-DJ, perturbation methods), but the simplest possible defense — OCR preprocessing — has never been evaluated. Existing text-level defenses operate exclusively on tokenized text and cannot protect against image-rendered attacks. Testing OCR-first and dual-path filtering strategies specifically against typographic attacks on frontier models remains an open problem.
+
+The over-refusal literature (XSTest, OR-Bench, SCANS) has been studied exclusively in the **text modality**. No work has examined whether modality change (image rendering) or text encoding affects over-refusal behavior. If exaggerated safety is caused by lexical overfitting (Röttger et al., 2024) or refusal steering vectors in specific activation layers (Cao et al., 2025; Prakash et al., 2026), then inputs arriving through the vision pathway — which bypass tokenization entirely — may sidestep these mechanisms. Our P2 experiments are the first to test this hypothesis, measuring refusal rates on benign prompts across both text and image modalities with various encodings.
 
 ---
 
@@ -292,3 +312,11 @@ The literature suggests several high-value open problems:
 - Zhang, Y. et al. *Visual Exclusivity Attacks: Automatic Multimodal Red Teaming via Agentic Planning.* arXiv:2603.20198, 2026.
 - Zhang, Z. et al. *FC-Attack: Jailbreaking MLLMs via Auto-Generated Flowcharts.* EMNLP Findings, 2025.
 - Zou, A. et al. *Universal and Transferable Adversarial Attacks on Aligned Language Models.* arXiv:2307.15043, 2023.
+
+### Newly Added References (Over-Refusal / Mechanistic Safety / Multi-Image Attacks)
+
+- Cao, Z. et al. *SCANS: Mitigating the Exaggerated Safety for LLMs via Safety-Conscious Activation Steering.* AAAI, 2025.
+- Cui, J. et al. *OR-Bench: An Over-Refusal Benchmark for Large Language Models.* ICML, 2025.
+- Liu, Y. et al. *MIDAS: Multi-Image Dispersion and Semantic Reconstruction for Jailbreaking MLLMs.* ICLR, 2026.
+- Prakash, N. et al. *Beyond I'm Sorry, I Can't: Dissecting Large-Language-Model Refusal.* AAAI, 2026.
+- Röttger, P. et al. *XSTest: A Test Suite for Identifying Exaggerated Safety Behaviours in Large Language Models.* NAACL, 2024.

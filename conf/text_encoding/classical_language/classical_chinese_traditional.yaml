@@ -6,7 +6,6 @@
 # forms (繁體字), converted via one-to-one simplified→traditional mapping."
 encoder_type: llm_classical_language
 language: classical_chinese_traditional
-model: gpt_4o
 
 # Uses the same prompts as classical_chinese.yaml — the encoder loads
 # classical_chinese templates and applies opencc s2t post-processing.

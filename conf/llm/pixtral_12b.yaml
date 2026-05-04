@@ -1,0 +1,13 @@
+# @package _global_
+# Pixtral-12B (Mistral) — open-source multimodal
+
+defaults:
+  - default
+
+model:
+  model: mistralai/Pixtral-12B-2409
+  max_tokens: 4096
+
+# Pixtral-12B requires ~24GB VRAM — exclude small GPUs
+cluster:
+  gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4"]

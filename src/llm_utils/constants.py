@@ -58,15 +58,27 @@ MODELS_USING_MAX_COMPLETION_TOKENS: Final[set[LLMModel]] = {
     LLMModel.GPT_4_1,
     LLMModel.GPT_4_1_MINI,
     LLMModel.GPT_4_1_NANO,
-    
+
     # GPT-5 series
     LLMModel.GPT_5,
     LLMModel.GPT_5_MINI,
     LLMModel.GPT_5_NANO,
-    
+    LLMModel.GPT_5_PRO,
+    LLMModel.GPT_5_1,
+    LLMModel.GPT_5_2,
+    LLMModel.GPT_5_2_PRO,
+    LLMModel.GPT_5_4,
+    LLMModel.GPT_5_4_MINI,
+    LLMModel.GPT_5_4_NANO,
+    LLMModel.GPT_5_4_PRO,
+    LLMModel.GPT_5_5,
+    LLMModel.GPT_5_5_PRO,
+
     # O-series models
-    LLMModel.GPT_O3,
-    LLMModel.GPT_O4_MINI,
+    LLMModel.O1,
+    LLMModel.O3,
+    LLMModel.O3_MINI,
+    LLMModel.O4_MINI,
 }
 
 # Note: GPT-3.5-Turbo, GPT-4, GPT-4-Turbo, and GPT-4o use 'max_tokens'
@@ -79,11 +91,26 @@ MODELS_USING_MAX_COMPLETION_TOKENS: Final[set[LLMModel]] = {
 # They only accept the default (temperature=1.0) and will error if you try to set it
 
 MODELS_WITHOUT_TEMPERATURE_SUPPORT: Final[set[LLMModel]] = {
-    # GPT-5 series (nano variant)
+    # GPT-5 series — only support temperature=1 (default)
+    LLMModel.GPT_5,
+    LLMModel.GPT_5_MINI,
     LLMModel.GPT_5_NANO,
-    
-    # Note: Add other models here if they don't support custom temperature
-    # GPT-5 and GPT-5-Mini may support temperature, but GPT-5-Nano doesn't
+    LLMModel.GPT_5_PRO,
+    LLMModel.GPT_5_1,
+    LLMModel.GPT_5_2,
+    LLMModel.GPT_5_2_PRO,
+    LLMModel.GPT_5_4,
+    LLMModel.GPT_5_4_MINI,
+    LLMModel.GPT_5_4_NANO,
+    LLMModel.GPT_5_4_PRO,
+    LLMModel.GPT_5_5,
+    LLMModel.GPT_5_5_PRO,
+
+    # O-series reasoning models
+    LLMModel.O1,
+    LLMModel.O3,
+    LLMModel.O3_MINI,
+    LLMModel.O4_MINI,
 }
 
 
@@ -111,3 +138,11 @@ DEFAULT_LOCAL_BATCH_SIZE: Final[int] = 4  # Good for 1B models on MPS
 # vLLM's llm.chat() handles images automatically via structured messages.
 # No model-specific placeholders needed - just pass PIL.Image in the content:
 #   {"type": "image_url", "image_url": {"url": pil_image}}
+
+
+# =============================================================================
+# NURC Cluster SLURM Limits
+# =============================================================================
+# Hard limits imposed by the NURC gpu partition QOS.
+# See text_docs/nurc_cluster_properties.md for details.
+MAX_SLURM_TIME_LIMIT: Final[str] = "08:00:00"  # max wall time for gpu partition

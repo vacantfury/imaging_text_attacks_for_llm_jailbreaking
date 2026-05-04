@@ -14,6 +14,12 @@ model:
   n_completions: 1
   stream: false
 
+  # Batch processing
+  max_concurrency: 20       # asyncio semaphore limit (OpenAI/vLLM)
+  max_retries: 5            # retry attempts on 429 / rate-limit
+  batch_poll_interval: 30   # seconds between polls (Claude/Google native batch)
+  batch_timeout: 3600       # max seconds to wait for native batch completion
+
 # Cluster/vLLM server params (maps to ClusterServerConfig)
 cluster:
   partition: gpu
@@ -21,7 +27,7 @@ cluster:
   num_gpus: 1
   cpus_per_task: 4
   mem_gb: 32
-  time_limit: "48:00:00"
+  time_limit: "08:00:00"
   port: 8000
   gpu_memory_utilization: 0.9
   max_model_len: 16384
@@ -30,6 +36,6 @@ cluster:
   server_start_timeout: 3600
   endpoint_wait_timeout: 30
   cluster_server_endpoint_timeout: 10000  # max seconds a task waits for a free server
-  conda_env: LLM_prompting
+  conda_env: AI_safety
   cuda_module: "cuda/12.1.1"
   hf_home: /scratch/zhang.haoyu6/huggingface_cache

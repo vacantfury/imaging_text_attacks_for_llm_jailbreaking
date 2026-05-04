@@ -2,7 +2,6 @@
 # Transforms prompts into first-order logic problems using predicates,
 # quantifiers, inference rules, and proof construction.
 encoder_type: llm_formal_logic
-model: gpt_4o
 use_few_shot: true
 
 target_prefix: |

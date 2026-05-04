@@ -3,7 +3,6 @@
 # Strategy "literary" = Ciceronian rhetorical framework (5 canons adapted to 8 dimensions)
 encoder_type: llm_classical_language
 language: latin
-model: gpt_4o
 
 direct:
   system_prompt: |

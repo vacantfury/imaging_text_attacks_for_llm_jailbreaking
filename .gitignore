@@ -76,6 +76,7 @@ poetry.lock
 TODO.md
 other_repos/
 keys/
+fonts/
 
 # Hydra
 multirun/

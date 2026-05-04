@@ -1,189 +1,92 @@
-# Does Modality Matter? Encoding × Modality Interactions in LLM Jailbreaking
+# Safety Miscalibration Across Modalities
 
-**Target venue:** EMNLP 2026 (ARR May cycle) | **Submission deadline:** May 25, 2026
+**Target:** EMNLP 2026 (ARR May cycle, deadline May 25)
 
-## Overview
-
-LLM safety alignment is trained on tokenized text, but frontier models now accept images. This creates an untested gap: the same harmful content, rendered as an image, may bypass text-trained safety filters. We provide the first controlled study of the **encoding × modality interaction** on frontier multimodal LLMs (GPT-4o, Gemini 2.5 Pro, Claude Sonnet 4, LLaVA-NeXT).
-
-## Experimental Design
-
-### Research Questions
-
-- **RQ1 (Modality Gap):** Does rendering text as an image change ASR vs. plain text?
-- **RQ2 (Interaction):** Does double indirection (OCR → decode) amplify or degrade encoded attacks?
-- **RQ3 (Architecture):** Do different model architectures show different modality gaps?
-
-### 3 × 2 Matrix (24 conditions)
-
-| Encoding | Text | Image-of-Text | Δ (Modality Gap) |
-|----------|:----:|:-------------:|:----------------:|
-| **Plain English** | ASR_E,T | ASR_E,I | Δ₁ |
-| **Classical Chinese (文言文)** | ASR_C,T | ASR_C,I | Δ₂ |
-| **Math Encoding** | ASR_M,T | ASR_M,I | Δ₃ |
-
-### Datasets
-
-| File | Source | Count |
-|------|--------|-------|
-| `data/harmbench_prompts.jsonl` | HarmBench (standard + contextual) | 240 |
-| `data/jbb_prompts.jsonl` | JailbreakBench | 100 |
-| `data/jbb_benign_prompts.jsonl` | JBB benign (controls) | 100 |
-
-All in unified `RawPrompt` schema: `{id, category, source, prompt}`.
-
-### Evaluation
-
-- **ASR:** GPT-4o judge (HarmBench protocol) + Llama Guard 3
-- **Modality Gap (Δ):** ASR_image − ASR_text per encoding per model
-- **Statistical rigor:** Bootstrap CIs, permutation tests, ANOVA for interaction effects
+**Core finding:** Image-modality safety adds cost (over-refusal of benign content, +22-62pp) without proportional protection — encoded harmful attacks still succeed at similar rates across text and image modalities. This reveals safety alignment relies on pattern matching rather than semantic understanding.
 
 ---
 
-## How to Run Experiments
+## Research Questions
 
-### Setup
+- **RQ1 (Modality Gap):** Does rendering text as an image change ASR vs. plain text?
+- **RQ2 (Over-refusal):** Do models over-refuse benign content more in image modality?
+- **RQ3 (Interaction):** Does the encoding x modality interaction reveal miscalibration?
 
-```bash
-pip install -r requirements.txt   # or: poetry install
+## Experimental Design
 
-# Set API keys
-export OPENAI_API_KEY=...
-export ANTHROPIC_API_KEY=...
-export GOOGLE_API_KEY=...
-```
+Text encoding strategies (plain, set theory, formal logic, classical Chinese, Sanskrit, etc.) combined with multiple imaging methods (plain rendering, FigStep, FC-Typography, FC-Flowchart), evaluated across frontier multimodal models (GPT-5-mini, Gemini 2.5 Flash, Claude Sonnet 4).
 
-### Core Command
+Datasets: JailbreakBench (harmful + benign), HarmBench, OR-Bench (over-refusal benchmark with 3-class evaluation).
 
-All experiments are driven by YAML presets — one command, no CLI flags:
+---
 
-```bash
-python main.py test         # smoke test: 1 task per mode
-python main.py experiment   # full experiment matrix
-```
+## Key Documents
 
-Presets live in `conf/experiment/`. Available:
+| File | Purpose |
+|------|---------|
+| [`text_docs/experiments_plan.md`](text_docs/experiments_plan.md) | What experiments to run, in what order, what's done, what's next |
+| [`text_docs/experiment_results.md`](text_docs/experiment_results.md) | All evaluation results — ASR tables with experiment directory paths |
+| [`text_docs/experiments_findings.md`](text_docs/experiments_findings.md) | Interpreted findings, story framing, strategic decisions |
+| [`text_docs/proposal.md`](text_docs/proposal.md) | Original research proposal |
+| [`text_docs/nurc_cluster_properties.md`](text_docs/nurc_cluster_properties.md) | NURC cluster SLURM config and constraints |
 
-| Preset | Description |
-|--------|-------------|
-| `test` | Smoke test: 1 task per mode (text_encode → imaging → evaluate) |
-| `default` | Full experiment matrix |
+---
 
-### Three-Phase Pipeline
-
-Each experiment runs through three sequential modes:
-
-#### Phase 1: Text Encoding
-
-Encode raw prompts with a strategy (plain, math, classical_chinese, etc.):
-
-```yaml
-# In conf/experiment/<preset>.yaml
-tasks:
-  - mode: text_encode
-    encoding: plain                       # or: math, classical_chinese, symbol_injection, ...
-    source_file: data/harmbench_prompts.jsonl
-```
-
-Output: `outputs/<benchmark>/text_encode_<encoding>_<timestamp>/prompts.jsonl`
-
-#### Phase 2: Imaging
-
-Render encoded prompts as PNG images:
-
-```yaml
-  - mode: imaging
-    source_dir: outputs/harmbench/text_encode_plain_20260421_135559
-```
-
-Output: `outputs/<benchmark>/imaging_<encoding>_<timestamp>/` (240 PNGs + `images.jsonl`)
-
-#### Phase 3: Evaluate
-
-Query target model + ASR judging:
-
-```yaml
-  - mode: evaluate
-    model: gpt-4o
-    encoding: plain
-    modality: text     # or: image
-    source_dir: outputs/harmbench/text_encode_plain_20260421_135559
-```
-
-Output: `outputs/<benchmark>/eval_<model>_<encoding>_<modality>_<timestamp>/results.jsonl`
-
-### Available Encodings
-
-| Name | Type | EncoderType |
-|------|------|-------------|
-| `plain` | Passthrough | `non_llm_baseline` |
-| `math` / `set_theory` | LLM-based | `llm_set_theory` |
-| `formal_logic` | LLM-based | `llm_formal_logic` |
-| `quantum` | LLM-based | `llm_quantum_mechanics` |
-| `addition_equation` | Rule-based | `non_llm_addition_equation_split_reassemble` |
-| `conditional_probability` | Rule-based | `non_llm_conditional_probability` |
-| `symbol_injection` | Rule-based | `non_llm_symbol_injection` |
-
-### Execution Architecture
-
-The orchestrator (`src/experiment/experiment.py`) uses **async multi-queue scheduling**:
-
-- **Local queue** (text_encode, imaging): Sequential execution
-- **API queue** (GPT-4o, Gemini, Claude): Concurrent with semaphore
-- **Cluster queue** (LLaVA-NeXT, Llama Guard): SLURM sbatch with job limit (max 4)
-
-Tasks auto-classify to queues. All three queues run concurrently via `asyncio.gather`.
-
-### Experiment Tracking
-
-All runs are tracked in MLflow (local, no server):
+## How to Run
 
 ```bash
-mlflow ui   # → http://localhost:5000
+pip install -e .
+
+# API keys in .env
+OPENAI_API_KEY=...
+ANTHROPIC_API_KEY=...
+GOOGLE_API_KEY=...
 ```
 
-Each task logs: params (config), metrics (ASR, count), artifacts (results files), tags (mode, encoding, model, modality).
-
-### Output Structure
-
+```bash
+python main.py experiment   # runs conf/experiment/experiment.yaml
+python main.py test         # smoke test
 ```
-outputs/
-  harmbench/
-    text_encode_plain_20260421/
-    text_encode_math_20260421/
-    imaging_plain_20260421/
-    eval_gpt-4o_plain_text_20260421/
-  jailbreakbench/
-    text_encode_plain_20260421/
-    ...
-```
+
+### Pipeline
+
+1. **`text_encode`** — Encode prompts (plain, set_theory, formal_logic, classical_chinese, etc.)
+2. **`imaging`** — Render text as images (plain, FigStep, FC-Typography, FC-Flowchart)
+3. **`evaluate`** — Query target model + judge for ASR / refusal classification
+
+Tasks are defined in `conf/experiment/experiment.yaml` and run concurrently via async scheduling.
 
 ---
 
 ## Project Structure
 
 ```
+conf/                    # All YAML configs (experiment, llm, imaging, evaluation)
 src/
-├── text_encoding/     # Encoding strategies (13 encoders)
-│   ├── base_encoder.py
-│   ├── encoder_factory.py
-│   ├── encoder_type.py
-│   └── encoders/      # Concrete implementations
-├── imaging/           # Pillow text→image rendering
-├── experiment/        # Async multi-queue orchestrator
-│   ├── experiment.py  # PTP-style task scheduler
-│   └── task.py        # Mode dispatcher (text_encode, imaging, evaluate)
-├── evaluation/        # ASR judging (HarmBench + JBB protocols)
-├── data_loader/       # RawPrompt/EncodedPrompt/ImagePrompt schemas
-├── llm_utils/         # LLM API layer (OpenAI, Claude, Google, vLLM)
-└── utils/             # Logger, MLflow tracker
-conf/experiment/       # YAML experiment presets
-data/                  # Extracted datasets (JSONL)
-scripts/               # Dataset extraction, analysis
+├── experiment/          # Orchestrator + task dispatcher
+├── text_encoding/       # Encoding strategies (LLM-based + rule-based)
+├── imaging/             # Image renderers
+├── evaluation/          # ASR judges (HarmBench, JBB, JBB-refusal, OR-Bench)
+├── llm_utils/           # LLM service layer (OpenAI, Claude, Google, vLLM)
+└── utils/               # Logger, MLflow tracker
+
+data/                    # Datasets (JSONL): harmbench, jbb, jbb_benign, orbench x3
+text_docs/               # Plans, results, findings (see table above)
+outputs/                 # Experiment outputs (on cluster, not in repo)
+fonts/                   # Unicode fonts for rendering (not in repo)
+scripts/                 # Dataset extraction, utilities
 ```
 
-## Detailed Docs
+## LLM Services
 
-- [`text_docs/proposal.md`](text_docs/proposal.md) — full research proposal
-- [`text_docs/experiments_plan.md`](text_docs/experiments_plan.md) — experiment plan and cluster setup
-- [`text_docs/project_structure.md`](text_docs/project_structure.md) — codebase architecture
+Single API: `service.batch_chat(conversations, system_message, is_test)`.
+
+| Provider | Strategy |
+|----------|----------|
+| OpenAI / vLLM | `AsyncOpenAI` + `asyncio.gather` (concurrent, instant) |
+| Claude | Native Message Batches API (50% cheaper) |
+| Google | Native Batch API inline (50% cheaper) |
+
+## Tracking
+
+MLflow (local): `mlflow ui` at http://localhost:5000. Each task logs params, metrics, artifacts.

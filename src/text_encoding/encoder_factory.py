@@ -3,7 +3,7 @@ Encoder factory for creating and managing prompt encoders.
 
 Name resolution (in order):
 1. EncoderType enum values (e.g., 'llm_set_theory')
-2. ENCODING_ALIASES: shorthands (e.g., 'math' → 'llm_set_theory')
+2. ENCODING_ALIASES: shorthands (e.g., 'set_theory' → 'llm_set_theory')
 3. Classical language auto-resolution: checks if a YAML config exists in
    conf/text_encoding/classical_language/{name}.yaml. Supports '_literary'
    suffix to set strategy='literary' (e.g., 'latin_literary').
@@ -63,7 +63,6 @@ ENCODERS: Dict[str, type] = {
 # Only needed when the shorthand differs from the YAML filename / encoder_type.
 ENCODING_ALIASES: Dict[str, str] = {
     "plain": "non_llm_baseline",
-    "math": "llm_set_theory",
     "set_theory": "llm_set_theory",
     "formal_logic": "llm_formal_logic",
     "quantum": "llm_quantum_mechanics",
@@ -106,7 +105,7 @@ def resolve_encoding_name(name: str) -> tuple[str, dict]:
     Resolve a user-facing encoding name to an encoder_type and extra kwargs.
     
     Resolution order:
-      1. Simple aliases (ENCODING_ALIASES): 'math' → 'llm_set_theory'
+      1. Simple aliases (ENCODING_ALIASES): 'set_theory' → 'llm_set_theory'
       2. Direct encoder_type match: 'llm_set_theory' → as-is
       3. Classical language YAML: 'latin_literary' → 'llm_classical_language'
          + {language: 'latin', strategy: 'literary'}
@@ -175,7 +174,7 @@ def create_encoder(name: Union[str, EncoderType], **kwargs):
     
     Supports:
       - EncoderType enum:  create_encoder(EncoderType.LLM_SET_THEORY)
-      - Alias shorthand:   create_encoder('math')
+      - Alias shorthand:   create_encoder('set_theory')
       - Classical language: create_encoder('latin_literary')
     
     For classical languages, language/strategy kwargs are auto-resolved

@@ -7,7 +7,7 @@ Prompts, few-shot demonstrations, and target prefix are loaded from:
 Reference: MathPrompt paper (Figures 3-5, Appendix A.4)
 """
 from typing import Optional, List
-from src.llm_utils import LLMServiceFactory, LLMModel, BaseLLMService
+from src.llm_utils import LLMServiceFactory, BaseLLMService
 from src.utils.logger import get_logger
 from ..base_encoder import BaseEncoder, strip_delimiter_tags
 from ..prompt_loader import load_prompt_template
@@ -25,15 +25,14 @@ class SetTheoryLLMEncoder(BaseEncoder):
     
     def __init__(
         self,
-        model: Optional[LLMModel] = None,
+        model: Optional[str] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
         use_few_shot: bool = True,
         **kwargs
     ):
         if model is None:
-            model = LLMModel.GPT_4O
-            logger.info(f"No model specified for SetTheoryLLMEncoder, using default: {model.value}")
+            raise ValueError("model is required — set it in conf/text_encoding/default.yaml")
         
         super().__init__(model=model, **kwargs)
         self.use_few_shot = use_few_shot
@@ -52,12 +51,17 @@ class SetTheoryLLMEncoder(BaseEncoder):
         if max_tokens is not None:
             self.service.max_tokens = max_tokens
         
-        logger.info(f"Initialized SetTheoryLLMEncoder with model: {model.value}, use_few_shot: {use_few_shot}")
+        logger.info(f"Initialized SetTheoryLLMEncoder with model: {model}, use_few_shot: {use_few_shot}")
     
     # Keep TARGET_PREFIX as a property for backward compatibility
     @property
     def TARGET_PREFIX(self):
         return self.target_prefix + "\n\n" if self.target_prefix else ""
+    
+    @TARGET_PREFIX.setter
+    def TARGET_PREFIX(self, value):
+        # Allow base class __init__ to set via target_prefix override
+        self.target_prefix = value.strip() if value else ""
     
     def _get_few_shot_demonstrations(self) -> list:
         """Get few-shot demonstrations from YAML config."""
@@ -78,13 +82,15 @@ class SetTheoryLLMEncoder(BaseEncoder):
             ])
             full_prompt = f"{few_shot_context}\n\nUser:\n{user_message}\n\nAssistant:"
             
-            results = self.service.batch_generate(
-                prompts=[("single", full_prompt)],
+            conversations = [("single", [(full_prompt, None)])]
+            results = self.service.batch_chat(
+                conversations=conversations,
                 system_message=self.system_prompt
             )
         else:
-            results = self.service.batch_generate(
-                prompts=[("single", user_message)],
+            conversations = [("single", [(user_message, None)])]
+            results = self.service.batch_chat(
+                conversations=conversations,
                 system_message=self.system_prompt
             )
         
@@ -119,8 +125,9 @@ class SetTheoryLLMEncoder(BaseEncoder):
             batch_prompts.append((str(i), full_prompt))
         
         logger.info(f"Sending batch of {len(batch_prompts)} transformation requests to API")
-        batch_results = self.service.batch_generate(
-            prompts=batch_prompts,
+        conversations = [(pid, [(text, None)]) for pid, text in batch_prompts]
+        batch_results = self.service.batch_chat(
+            conversations=conversations,
             system_message=self.system_prompt
         )
         

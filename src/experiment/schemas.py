@@ -56,28 +56,83 @@ class Judgment(BaseModel):
     is_jailbroken: bool
 
 
-# Legacy schemas kept for backward compatibility
-class EncodedPrompt(BaseModel):
-    """Legacy: prompt after text encoding stage."""
-    id: str
+# ====================================================================
+# Task result models — fully resolved config + metrics for results.json
+# ====================================================================
+
+
+class TextEncodeResult(BaseModel):
+    """Complete record of a text_encode task run."""
+    mode: str = "text_encode"
     encoding: str
-    original: str
-    encoded: str
-    image_path: Optional[str] = None
+    encoder_type: str
+    encoder_config: dict
+    benchmark: str
+    source_file: str
+    count: int
+    elapsed_seconds: float
+    output_dir: str
+    usage: Optional[dict] = None
 
 
-class ImagePrompt(BaseModel):
-    """Legacy: reference to a rendered image prompt."""
-    id: str
+class ImagingResult(BaseModel):
+    """Complete record of an imaging task run."""
+    mode: str = "imaging"
     encoding: str
-    image_path: str
+    renderer_type: str
+    renderer_config: dict
+    render: list[str]
+    source_dir: str
+    count: int
+    image_count: int
+    elapsed_seconds: float
+    output_dir: str
+    upstream: Optional[dict] = None
 
 
-class ModelResponse(BaseModel):
-    """Legacy: raw response from target model."""
-    id: str
+class TargetModelConfig(BaseModel):
+    """Resolved LLM inference parameters for the target model."""
+    max_tokens: int
+    temperature: float
+    top_p: float
+    top_k: int
+    frequency_penalty: float
+    presence_penalty: float
+    stop_sequences: list[str]
+    seed: int
+    n_completions: int
+    stream: bool
+
+
+class JudgeLLMConfig(BaseModel):
+    """Resolved parameters for the judge model."""
     model: str
+    max_tokens: int
+    temperature: float
+
+
+class EvaluateResult(BaseModel):
+    """Complete record of an evaluate task run — written to results.json.
+
+    Contains all resolved parameters (from task YAML, evaluation defaults,
+    and LLM defaults) so the result is fully self-contained and reproducible.
+    """
+    mode: str = "evaluate"
+    target_model: str
+    target_model_config: TargetModelConfig
     encoding: str
-    modality: str
-    response: str
-    timestamp: str
+    benchmark: str
+    prompt_stages: list[str]
+    source_dir: str
+    system_message: Optional[str] = None
+    image_instruction: str
+    judge_method: str
+    judge_llm_config: JudgeLLMConfig
+    count: int
+    count_per_stage: dict[str, int]
+    asr: Optional[dict[str, float]] = None
+    refusal_rate: Optional[dict[str, float]] = None
+    usage: dict
+    elapsed_seconds: float
+    output_dir: str
+    upstream: Optional[dict] = None

@@ -2,7 +2,6 @@
 # Transforms prompts into symbolic math using sets, groups, predicates.
 # Reference: MathPrompt paper (Figures 3-5, Appendix A.4)
 encoder_type: llm_set_theory
-model: gpt_4o
 use_few_shot: true
 
 # Prepended to encoded prompts when sent to the TARGET model (not the encoder).

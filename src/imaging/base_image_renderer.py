@@ -12,7 +12,6 @@ import os
 from abc import ABC, abstractmethod
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from PIL import Image, ImageFilter

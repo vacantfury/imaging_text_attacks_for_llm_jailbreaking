@@ -2,6 +2,8 @@ from typing import Optional, Dict, Any
 from .base_evaluator import BaseEvaluator
 from .harmbench_evaluation.evaluator import HarmBenchEvaluator
 from .jailbreakbench_evaluation.evaluator import JailbreakBenchEvaluator
+from .jailbreakbench_refusal_evaluation.evaluator import JailbreakBenchRefusalEvaluator
+from .orbench_evaluation.evaluator import ORBenchEvaluator
 from src.llm_utils import LLMModel
 
 class EvaluatorFactory:
@@ -15,7 +17,7 @@ class EvaluatorFactory:
         Create an evaluator instance.
         
         Args:
-            method: Evaluation method ('harmbench' or 'jailbreakbench'). Default is 'harmbench'.
+            method: Evaluation method ('harmbench', 'jailbreakbench', or 'refusal').
             model: The LLM model to use for evaluation.
             **kwargs: Additional arguments required by specific evaluators.
             
@@ -31,5 +33,12 @@ class EvaluatorFactory:
             return HarmBenchEvaluator(model=model, **kwargs)
         elif method == "jailbreakbench" or method == "jbb":
             return JailbreakBenchEvaluator(model=model, **kwargs)
+        elif method == "refusal":
+            return JailbreakBenchRefusalEvaluator(model=model, **kwargs)
+        elif method == "orbench":
+            return ORBenchEvaluator(model=model, **kwargs)
         else:
-            raise ValueError(f"Unknown evaluation method: {method}. Supported: 'harmbench', 'jailbreakbench'")
+            raise ValueError(
+                f"Unknown evaluation method: {method}. "
+                "Supported: 'harmbench', 'jailbreakbench', 'refusal', 'orbench'"
+            )

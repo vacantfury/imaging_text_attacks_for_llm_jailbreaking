@@ -1,5 +1,4 @@
 # Markov Chain encoder
 # Transforms prompts into stochastic process notation.
 encoder_type: llm_markov_chain
-model: gpt_4o
 use_few_shot: true

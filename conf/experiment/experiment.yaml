@@ -1,17 +1,243 @@
 # ============================================================
-# Default experiment: encode all 3 types (plain, math, classical chinese)
+# Stage 7d — Round 2: Evaluate all FigStep + FC-Typography
+# + GPT-5-mini benign Sanskrit plain (killed task rerun)
+# 37 eval tasks total (~4h estimated)
 # ============================================================
-# Usage: python main.py
+
+num_main_job_threads: 6
 
 tasks:
-  - mode: text_encode
-    encoding: plain
-    source_file: data/harmbench_prompts.jsonl
+  # ================================================================
+  # FigStep — JBB harmful (9 tasks: 3 models × 3 encodings)
+  # ================================================================
 
-  - mode: text_encode
-    encoding: math
-    source_file: data/harmbench_prompts.jsonl
+  # -- GPT-5-mini --
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/set_theory_figstep_20260504_023839_11301844
+    prompt_stages: [image_original, image_encoded]
+    target_model: gpt-5-mini
 
-  - mode: text_encode
-    encoding: classical_chinese
-    source_file: data/harmbench_prompts.jsonl
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/formal_logic_figstep_20260504_023839_5274239
+    prompt_stages: [image_original, image_encoded]
+    target_model: gpt-5-mini
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/classical_chinese_simplified_literary_figstep_20260504_023839_17399638
+    prompt_stages: [image_original, image_encoded]
+    target_model: gpt-5-mini
+
+  # -- Gemini 2.0 Flash --
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/set_theory_figstep_20260504_023839_11301844
+    prompt_stages: [image_original, image_encoded]
+    target_model: gemini-2.0-flash
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/formal_logic_figstep_20260504_023839_5274239
+    prompt_stages: [image_original, image_encoded]
+    target_model: gemini-2.0-flash
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/classical_chinese_simplified_literary_figstep_20260504_023839_17399638
+    prompt_stages: [image_original, image_encoded]
+    target_model: gemini-2.0-flash
+
+  # -- Claude Sonnet 4 --
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/set_theory_figstep_20260504_023839_11301844
+    prompt_stages: [image_original, image_encoded]
+    target_model: claude-sonnet-4
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/formal_logic_figstep_20260504_023839_5274239
+    prompt_stages: [image_original, image_encoded]
+    target_model: claude-sonnet-4
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/classical_chinese_simplified_literary_figstep_20260504_023839_17399638
+    prompt_stages: [image_original, image_encoded]
+    target_model: claude-sonnet-4
+
+  # ================================================================
+  # FigStep — JBB benign (9 tasks: 3 models × 3 encodings)
+  # ================================================================
+
+  # -- GPT-5-mini --
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/set_theory_figstep_20260504_023839_52210561
+    prompt_stages: [image_original, image_encoded]
+    target_model: gpt-5-mini
+    judge_method: refusal
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/formal_logic_figstep_20260504_023839_88053311
+    prompt_stages: [image_original, image_encoded]
+    target_model: gpt-5-mini
+    judge_method: refusal
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/classical_chinese_simplified_literary_figstep_20260504_023839_98243274
+    prompt_stages: [image_original, image_encoded]
+    target_model: gpt-5-mini
+    judge_method: refusal
+
+  # -- Gemini 2.0 Flash --
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/set_theory_figstep_20260504_023839_52210561
+    prompt_stages: [image_original, image_encoded]
+    target_model: gemini-2.0-flash
+    judge_method: refusal
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/formal_logic_figstep_20260504_023839_88053311
+    prompt_stages: [image_original, image_encoded]
+    target_model: gemini-2.0-flash
+    judge_method: refusal
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/classical_chinese_simplified_literary_figstep_20260504_023839_98243274
+    prompt_stages: [image_original, image_encoded]
+    target_model: gemini-2.0-flash
+    judge_method: refusal
+
+  # -- Claude Sonnet 4 --
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/set_theory_figstep_20260504_023839_52210561
+    prompt_stages: [image_original, image_encoded]
+    target_model: claude-sonnet-4
+    judge_method: refusal
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/formal_logic_figstep_20260504_023839_88053311
+    prompt_stages: [image_original, image_encoded]
+    target_model: claude-sonnet-4
+    judge_method: refusal
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/classical_chinese_simplified_literary_figstep_20260504_023839_98243274
+    prompt_stages: [image_original, image_encoded]
+    target_model: claude-sonnet-4
+    judge_method: refusal
+
+  # ================================================================
+  # FC-Typography — JBB harmful (9 tasks: 3 models × 3 encodings)
+  # ================================================================
+
+  # -- GPT-5-mini --
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/set_theory_fc_typography_20260504_025625_73732417
+    prompt_stages: [image_original, image_encoded]
+    target_model: gpt-5-mini
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/formal_logic_fc_typography_20260504_025625_9603398
+    prompt_stages: [image_original, image_encoded]
+    target_model: gpt-5-mini
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/classical_chinese_simplified_literary_fc_typography_20260504_025625_45401919
+    prompt_stages: [image_original, image_encoded]
+    target_model: gpt-5-mini
+
+  # -- Gemini 2.0 Flash --
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/set_theory_fc_typography_20260504_025625_73732417
+    prompt_stages: [image_original, image_encoded]
+    target_model: gemini-2.0-flash
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/formal_logic_fc_typography_20260504_025625_9603398
+    prompt_stages: [image_original, image_encoded]
+    target_model: gemini-2.0-flash
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/classical_chinese_simplified_literary_fc_typography_20260504_025625_45401919
+    prompt_stages: [image_original, image_encoded]
+    target_model: gemini-2.0-flash
+
+  # -- Claude Sonnet 4 --
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/set_theory_fc_typography_20260504_025625_73732417
+    prompt_stages: [image_original, image_encoded]
+    target_model: claude-sonnet-4
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/formal_logic_fc_typography_20260504_025625_9603398
+    prompt_stages: [image_original, image_encoded]
+    target_model: claude-sonnet-4
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench/classical_chinese_simplified_literary_fc_typography_20260504_025625_45401919
+    prompt_stages: [image_original, image_encoded]
+    target_model: claude-sonnet-4
+
+  # ================================================================
+  # FC-Typography — JBB benign (9 tasks: 3 models × 3 encodings)
+  # ================================================================
+
+  # -- GPT-5-mini --
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/set_theory_fc_typography_20260504_025625_90117580
+    prompt_stages: [image_original, image_encoded]
+    target_model: gpt-5-mini
+    judge_method: refusal
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/formal_logic_fc_typography_20260504_025625_66957046
+    prompt_stages: [image_original, image_encoded]
+    target_model: gpt-5-mini
+    judge_method: refusal
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/classical_chinese_simplified_literary_fc_typography_20260504_025625_33272661
+    prompt_stages: [image_original, image_encoded]
+    target_model: gpt-5-mini
+    judge_method: refusal
+
+  # -- Gemini 2.0 Flash --
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/set_theory_fc_typography_20260504_025625_90117580
+    prompt_stages: [image_original, image_encoded]
+    target_model: gemini-2.0-flash
+    judge_method: refusal
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/formal_logic_fc_typography_20260504_025625_66957046
+    prompt_stages: [image_original, image_encoded]
+    target_model: gemini-2.0-flash
+    judge_method: refusal
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/classical_chinese_simplified_literary_fc_typography_20260504_025625_33272661
+    prompt_stages: [image_original, image_encoded]
+    target_model: gemini-2.0-flash
+    judge_method: refusal
+
+  # -- Claude Sonnet 4 --
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/set_theory_fc_typography_20260504_025625_90117580
+    prompt_stages: [image_original, image_encoded]
+    target_model: claude-sonnet-4
+    judge_method: refusal
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/formal_logic_fc_typography_20260504_025625_66957046
+    prompt_stages: [image_original, image_encoded]
+    target_model: claude-sonnet-4
+    judge_method: refusal
+
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/classical_chinese_simplified_literary_fc_typography_20260504_025625_33272661
+    prompt_stages: [image_original, image_encoded]
+    target_model: claude-sonnet-4
+    judge_method: refusal
+
+  # ================================================================
+  # Killed task rerun: GPT-5-mini benign Sanskrit plain
+  # ================================================================
+  - mode: evaluate
+    source_dir: outputs/imaging/jailbreakbench_benign/sanskrit_literary_plain_20260503_001525_73650481
+    prompt_stages: [image_encoded]
+    target_model: gpt-5-mini
+    judge_method: refusal

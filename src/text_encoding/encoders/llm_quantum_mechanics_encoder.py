@@ -6,7 +6,7 @@ Prompts, few-shot demonstrations, and target prefix are loaded from:
   conf/text_encoding/quantum_mechanics.yaml
 """
 from typing import Optional, List
-from src.llm_utils import LLMServiceFactory, LLMModel, BaseLLMService
+from src.llm_utils import LLMServiceFactory, BaseLLMService
 from src.utils.logger import get_logger
 from ..base_encoder import BaseEncoder, strip_delimiter_tags
 from ..prompt_loader import load_prompt_template
@@ -24,15 +24,14 @@ class QuantumMechanicsLLMEncoder(BaseEncoder):
     
     def __init__(
         self,
-        model: Optional[LLMModel] = None,
+        model: Optional[str] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
         use_few_shot: bool = True,
         **kwargs
     ):
         if model is None:
-            model = LLMModel.GPT_4O
-            logger.info(f"No model specified for QuantumMechanicsLLMEncoder, using default: {model.value}")
+            raise ValueError("model is required — set it in conf/text_encoding/default.yaml")
         
         super().__init__(model=model, **kwargs)
         self.use_few_shot = use_few_shot
@@ -50,11 +49,15 @@ class QuantumMechanicsLLMEncoder(BaseEncoder):
         if max_tokens is not None:
             self.service.max_tokens = max_tokens
         
-        logger.info(f"Initialized QuantumMechanicsLLMEncoder with model: {model.value}")
+        logger.info(f"Initialized QuantumMechanicsLLMEncoder with model: {model}")
 
     @property
     def TARGET_PREFIX(self):
         return self.target_prefix + "\n\n" if self.target_prefix else ""
+    
+    @TARGET_PREFIX.setter
+    def TARGET_PREFIX(self, value):
+        self.target_prefix = value.strip() if value else ""
 
     def _get_few_shot_demonstrations(self) -> list:
         """Get few-shot demonstrations from YAML config."""
@@ -78,8 +81,9 @@ class QuantumMechanicsLLMEncoder(BaseEncoder):
         else:
             prompts_to_send = [("single", user_message)]
             
-        results = self.service.batch_generate(
-            prompts=prompts_to_send,
+        conversations = [(pid, [(text, None)]) for pid, text in prompts_to_send]
+        results = self.service.batch_chat(
+            conversations=conversations,
             system_message=self.system_prompt
         )
         
@@ -109,8 +113,9 @@ class QuantumMechanicsLLMEncoder(BaseEncoder):
                 full_prompt = user_message
             batch_prompts.append((str(i), full_prompt))
             
-        batch_results = self.service.batch_generate(
-            prompts=batch_prompts,
+        conversations = [(pid, [(text, None)]) for pid, text in batch_prompts]
+        batch_results = self.service.batch_chat(
+            conversations=conversations,
             system_message=self.system_prompt
         )
         

@@ -1,11 +1,11 @@
 [project]
-name = "ptp"
+name = "imaging_text_attacks_for_llm_jailbreaking"
 version = "0.1.0"
-description = "This project is a prompt optimization algorithm."
+description = ""
 authors = [
-    {name = "Your Name",email = "you@example.com"}
+    {name = "Haoyu Zhang",email = "zhang.haoyu6@northeastern.edu"}
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.15"
 dependencies = [
     "datasets (>=4.5.0,<5.0.0)",
     "pillow (>=12.1.0,<13.0.0)",
@@ -22,6 +22,7 @@ dependencies = [
     "transformers (>=4.51,<5)",
     "numpy (>=2.0,<2.3)",
     "graphviz (>=0.21,<0.22)",
+    "pyyaml (>=6.0.3,<7.0.0)",
 ]
 
 

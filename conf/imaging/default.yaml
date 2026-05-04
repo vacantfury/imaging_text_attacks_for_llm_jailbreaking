@@ -22,3 +22,11 @@ line_spacing: 8
 blur_radius: 0
 jpeg_quality: 100
 noise_std: 0
+
+# Quality check — applied after every imaging task
+# fail_threshold: ink % below which images are certainly broken (tofu) → task fails
+# warn_threshold: ink % below which images are suspicious → logged warning
+quality_check:
+  fail_threshold: 1.0
+  warn_threshold: 3.0
+  sample_size: 5

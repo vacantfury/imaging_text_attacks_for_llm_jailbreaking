@@ -5,7 +5,7 @@
 encoder_type: non_llm_baseline
 
 # LLM parameters (for LLM-based encoders)
-model: gpt_4o               # default processing model
+model: gpt-4.1-mini          # helper model for LLM-based encoding (capable + cheap)
 temperature: null            # null = use service default
 max_tokens: null             # null = use service default
 use_few_shot: true           # include few-shot demonstrations

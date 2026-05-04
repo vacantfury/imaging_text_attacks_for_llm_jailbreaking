@@ -318,8 +318,9 @@ service = LLMServiceFactory.create(
 - `LLMModel.GPT_4O`
 
 ### Anthropic (API)
-- `LLMModel.CLAUDE_3_OPUS`
-- `LLMModel.CLAUDE_3_SONNET`
+- `LLMModel.CLAUDE_SONNET_4` / `CLAUDE_SONNET_4_5` / `CLAUDE_SONNET_4_6`
+- `LLMModel.CLAUDE_OPUS_4` through `CLAUDE_OPUS_4_7`
+- `LLMModel.CLAUDE_HAIKU_4_5`
 
 ### Ollama (Local Server)
 - `LLMModel.LLAMA2`

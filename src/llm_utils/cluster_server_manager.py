@@ -83,6 +83,11 @@ class ClusterModelServerManager:
         if model.provider != Provider.NU_CLUSTER:
             raise ValueError(f"{model.model_id} is not a cluster model (provider: {model.provider})")
         
+        # Convert dict to DictConfig for dot-access + OmegaConf.merge compatibility
+        from omegaconf import OmegaConf
+        if isinstance(config, dict):
+            config = OmegaConf.create(config)
+        
         # Store config for later lookups
         self.model_configs[model] = config
         
@@ -99,7 +104,6 @@ class ClusterModelServerManager:
         # Submit N sbatch jobs
         for i in range(num_instances):
             instance_port = base_port + i
-            from omegaconf import OmegaConf
             instance_config = OmegaConf.merge(config, {"port": instance_port})
             
             sbatch_path = self._generate_sbatch(model, instance_config, instance_id=i)
@@ -135,7 +139,7 @@ class ClusterModelServerManager:
         while not self._stop_monitor.is_set():
             all_done = True
             
-            for model, jobs in self._jobs.items():
+            for model, jobs in list(self._jobs.items()):
                 config = self.model_configs[model]
                 
                 for job_info in jobs:
@@ -448,8 +452,17 @@ class ClusterModelServerManager:
         instance_id: int = 0
     ) -> Path:
         """Generate sbatch script for a vLLM server instance."""
+        from .constants import MAX_SLURM_TIME_LIMIT
+        
         model_safe_name = model.name.lower()
         instance_suffix = f"_i{instance_id}" if instance_id > 0 else ""
+        
+        # Clamp time_limit to cluster max
+        time_limit = config.time_limit
+        if time_limit and time_limit > MAX_SLURM_TIME_LIMIT:
+            logger.warning(
+                f"time_limit '{time_limit}' exceeds cluster max '{MAX_SLURM_TIME_LIMIT}', clamping")
+            time_limit = MAX_SLURM_TIME_LIMIT
         
         # Build vLLM serve command
         vllm_args = [
@@ -480,7 +493,7 @@ class ClusterModelServerManager:
 #SBATCH --gres=gpu:{config.num_gpus}
 #SBATCH --cpus-per-task={config.cpus_per_task}
 #SBATCH --mem={config.mem_gb}GB
-#SBATCH --time={config.time_limit}
+#SBATCH --time={time_limit}
 #SBATCH --output=logs/vllm_{model_safe_name}{instance_suffix}_%j.out
 #SBATCH --error=logs/vllm_{model_safe_name}{instance_suffix}_%j.err
 

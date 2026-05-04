@@ -3,7 +3,6 @@
 # Strategy "literary" = Indian śāstric tradition (Nyāya logic + alaṃkāra rhetoric)
 encoder_type: llm_classical_language
 language: sanskrit
-model: gpt_4o
 
 direct:
   system_prompt: |

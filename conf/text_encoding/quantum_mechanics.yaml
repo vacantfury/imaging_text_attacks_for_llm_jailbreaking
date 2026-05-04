@@ -2,7 +2,6 @@
 # Transforms prompts into quantum mechanics problems using Dirac notation,
 # operator formalism, Hamiltonians, and measurement theory.
 encoder_type: llm_quantum_mechanics
-model: gpt_4o
 use_few_shot: true
 
 target_prefix: |

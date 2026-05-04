@@ -3,7 +3,6 @@
 # Strategy "literary" = with multidimensional strategy (CC-BOS "CC + Strategy", ~60% ASR)
 encoder_type: llm_classical_language
 language: classical_chinese_simplified
-model: gpt_4o
 
 direct:
   system_prompt: |

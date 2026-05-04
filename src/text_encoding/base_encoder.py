@@ -76,7 +76,13 @@ class BaseEncoder(ABC):
         if target_prefix is not None:
             self.TARGET_PREFIX = target_prefix.strip() + "\n\n"
 
-    
+    def get_usage(self) -> Optional[dict]:
+        """Return LLM usage stats if this encoder uses an LLM service, else None."""
+        service = getattr(self, "service", None)
+        if service and hasattr(service, "get_usage"):
+            return service.get_usage()
+        return None
+
     @abstractmethod
     def process(self, prompt: str, **kwargs) -> str:
         """
