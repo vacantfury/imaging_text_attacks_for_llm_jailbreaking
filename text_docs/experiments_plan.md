@@ -261,32 +261,43 @@ Technical fix applied: renderer factory now filters kwargs via `inspect.signatur
 
 Benign refusal (image_encoded plain): set_theory 9%, formal_logic 6%, classical_chinese 9%, latin_literary 7%, sanskrit_literary **(killed — rerun needed)**.
 
-### 7d: Make-up — full re-render + re-evaluate ⬜ TODO
+### 7d: Make-up Round 1 — re-render + partial eval ✅ PARTIAL (29/37 eval completed, 8 killed by time limit)
 
 **Code fixes applied:** FigStep (auto-height canvas, script-aware fonts), FC-Typography (script-aware fonts, auto-wrap-width, auto-height canvas). All existing FigStep + FC-Typography results deleted.
 
-**Round 1: Re-render ALL FigStep + FC-Typography images**
+**Round 1: Re-render ALL FigStep + FC-Typography images** ✅ DONE (12 imaging tasks)
 
-| Renderer | Encodings | Datasets | Imaging tasks |
-|----------|-----------|----------|:-------------:|
-| FigStep | set_theory, formal_logic, classical_chinese | JBB harmful + benign | 6 |
-| FC-Typography | set_theory, formal_logic, classical_chinese | JBB harmful + benign | 6 |
+**Round 2: Evaluate (37 tasks submitted, 29 completed)**
 
-**12 imaging tasks** (fast, ~3 min total)
+Completed (29 tasks):
+- FigStep harmful: 9/9 ✅
+- FigStep benign: 9/9 ✅
+- FC-Typography harmful: 9/9 ✅
+- FC-Typography benign: 2/9 (Gemini set_theory + formal_logic only)
 
-**Round 2: Re-evaluate ALL renderer images + killed task**
+Killed by SLURM 8h time limit (6 tasks with empty output dirs, deleted):
+- GPT-5-mini × FC-Typography benign: set_theory, formal_logic, classical_chinese
+- Gemini 2.0 Flash × FC-Typography benign: classical_chinese
+- Claude Sonnet 4 × FC-Typography benign: set_theory, formal_logic
 
-| Eval tasks | Detail |
-|:----------:|-------------------------------------------------|
-| 9 | FigStep harmful: 3 models × 3 encodings |
-| 9 | FigStep benign: 3 models × 3 encodings (judge: refusal) |
-| 9 | FC-Typography harmful: 3 models × 3 encodings |
-| 9 | FC-Typography benign: 3 models × 3 encodings (judge: refusal) |
-| 1 | GPT-5-mini benign Sanskrit plain (killed task rerun) |
+Never started (2 tasks):
+- Claude Sonnet 4 × FC-Typography benign: classical_chinese
+- GPT-5-mini × benign Sanskrit plain (killed task rerun)
 
-**37 eval tasks** — fits in a single job (mix of fast + slow models, ~6h estimated).
+### 7e: Make-up Round 2 — remaining 8 eval tasks ⬜ TODO
 
-**Total make-up: 12 imaging + 37 eval = 49 tasks**
+| # | Model | Dataset | Source (FC-Typography) | Judge |
+|---|-------|---------|------------------------|-------|
+| 1 | GPT-5-mini | jailbreakbench_benign | set_theory_fc_typography | refusal |
+| 2 | GPT-5-mini | jailbreakbench_benign | formal_logic_fc_typography | refusal |
+| 3 | GPT-5-mini | jailbreakbench_benign | classical_chinese_fc_typography | refusal |
+| 4 | Gemini 2.0 Flash | jailbreakbench_benign | classical_chinese_fc_typography | refusal |
+| 5 | Claude Sonnet 4 | jailbreakbench_benign | set_theory_fc_typography | refusal |
+| 6 | Claude Sonnet 4 | jailbreakbench_benign | formal_logic_fc_typography | refusal |
+| 7 | Claude Sonnet 4 | jailbreakbench_benign | classical_chinese_fc_typography | refusal |
+| 8 | GPT-5-mini | jailbreakbench_benign | sanskrit plain (killed task rerun) | refusal |
+
+**8 eval tasks** — ~2h estimated, easily fits in one job.
 
 **Decision points (updated):**
 1. Does FC-Typography produce Δ > +15pp on Gemini/Claude? → ✅ YES confirmed (Claude set_theory: +39pp, formal_logic: +3pp)
@@ -296,32 +307,52 @@ Benign refusal (image_encoded plain): set_theory 9%, formal_logic 6%, classical_
 
 ---
 
-## Stage 8: OR-Bench Calibration (first 100 rows)
+## Stage 8: OR-Bench Calibration (first 100 rows) — PRIMARY EVIDENCE for paper
 
-Unified harmful + benign framework using OR-Bench 3-class judge. Use best imaging method from Stage 7.
+**Purpose:** JBB benign (100 borderline prompts) is weak evidence for over-refusal claims. OR-Bench is the gold-standard over-refusal benchmark (ICLR 2025, dedicated 3-class judge, human-verified benign labels). Reviewers cannot dismiss OR-Bench results.
 
-### 8a: Encode + Image (first 100 rows from each)
+### 8a: Encode OR-Bench (4 tasks, fast ~10 min each)
 
-| Dataset | Rows | Encodings | Renderers |
-|---------|------|-----------|-----------|
-| orbench_harmful | 100 | set_theory, formal_logic, best classical | plain + best from Stage 7 |
-| orbench_benign_hard | 100 | set_theory, formal_logic, best classical | plain + best from Stage 7 |
+| Dataset | Rows | Encodings | Source file |
+|---------|------|-----------|-------------|
+| orbench_harmful | 100 (first 100) | set_theory, formal_logic | `data/orbench_harmful_prompts.jsonl` |
+| orbench_benign_hard | 100 (first 100) | set_theory, formal_logic | `data/orbench_benign_hard_prompts.jsonl` |
 
-### 8b: Evaluate
+**4 text_encode tasks** — can run in parallel with Stage 7e.
 
-| Model | Dataset | Stages | Judge |
-|-------|---------|--------|-------|
-| GPT-5-mini | Both | text_original, text_encoded, image_original, image_encoded | orbench |
-| Gemini 2.0 Flash | Both | text_original, text_encoded, image_original, image_encoded | orbench |
-| Claude Sonnet 4 | Both | text_original, text_encoded, image_original, image_encoded | orbench |
+### 8b: Image OR-Bench (8 tasks, fast ~1 min each)
 
-**Total: ~24-36 tasks** | Cost: ~$15 | Provides unified TPR/FPR calibration analysis.
+| Dataset | Encodings | Renderers | Tasks |
+|---------|-----------|-----------|:-----:|
+| orbench_harmful | set_theory, formal_logic | plain, figstep | 4 |
+| orbench_benign_hard | set_theory, formal_logic | plain, figstep | 4 |
+
+**8 imaging tasks** — depends on 8a output dirs.
+
+### 8c: Evaluate OR-Bench (24 tasks)
+
+| Model | Dataset | Stages | Judge | Tasks |
+|-------|---------|--------|-------|:-----:|
+| GPT-5-mini | harmful × 2 enc × 2 renderers | [image_original, image_encoded] | harmbench | 4 |
+| Gemini 2.0 Flash | harmful × 2 enc × 2 renderers | [image_original, image_encoded] | harmbench | 4 |
+| Claude Sonnet 4 | harmful × 2 enc × 2 renderers | [image_original, image_encoded] | harmbench | 4 |
+| GPT-5-mini | benign_hard × 2 enc × 2 renderers | [image_original, image_encoded] | refusal | 4 |
+| Gemini 2.0 Flash | benign_hard × 2 enc × 2 renderers | [image_original, image_encoded] | refusal | 4 |
+| Claude Sonnet 4 | benign_hard × 2 enc × 2 renderers | [image_original, image_encoded] | refusal | 4 |
+
+**24 eval tasks** — depends on 8b output dirs.
+
+**Note:** text_original + text_encoded evaluation also needed (12 tasks), but these can use source_file directly without imaging. Include in eval batch.
+
+**Total Stage 8: 4 encode + 8 imaging + 36 eval = 48 tasks** | Cost: ~$20
+
+**What this gives us:** Dual-axis (ASR + refusal) measurement on OR-Bench with FigStep vs plain × 2 encodings × 3 models. If the "FigStep + encoding = high ASR + low refusal" pattern replicates on OR-Bench, that IS the paper.
 
 ---
 
-## Stage 9: Generational Safety Calibration
+## Stage 9: Generational Safety Calibration — HIGH PRIORITY (fast, uses existing images)
 
-Test whether the imaging-as-defense pattern strengthens with newer model generations. If confirmed, this is the paper's strongest contribution: a measurable generational trend in multimodal safety.
+Test whether the imaging-as-defense pattern strengthens with newer model generations. Uses EXISTING JBB images — no encoding or imaging needed. Pure evaluation tasks.
 
 ### Hypothesis
 
@@ -333,22 +364,29 @@ Test whether the imaging-as-defense pattern strengthens with newer model generat
 | Gemini 2.0 Flash | 2025 | +6pp (observed) |
 | Gemini 2.5 Flash | 2026 | +??pp or shift negative? |
 
-### 9a: Evaluate GPT-5.4-mini + Gemini 2.5 Flash on JBB
+### 9a: Evaluate GPT-5.4-mini + Gemini 2.5 Flash on existing JBB images
 
-| Model | Encodings | Stages | Tasks |
-|-------|-----------|--------|-------|
-| GPT-5.4-mini | set_theory, formal_logic, classical_chinese | text_original, text_encoded, image_original, image_encoded | 8 |
-| Gemini 2.5 Flash | set_theory, formal_logic, classical_chinese | text_original, text_encoded, image_original, image_encoded | 8 |
-| Same × benign (judge: refusal) | set_theory, formal_logic, classical_chinese | text_encoded, image_encoded | 12 |
+All source images already exist in `outputs/imaging/`. No pipeline needed — just evaluation tasks.
+
+| Model | Encodings | Renderers | Stages | Tasks |
+|-------|-----------|-----------|--------|:-----:|
+| GPT-5.4-mini | set_theory, formal_logic, classical_chinese | plain, figstep | [image_original, image_encoded] harmful | 6 |
+| Gemini 2.5 Flash | set_theory, formal_logic, classical_chinese | plain, figstep | [image_original, image_encoded] harmful | 6 |
+| GPT-5.4-mini | set_theory, formal_logic, classical_chinese | plain, figstep | [image_original, image_encoded] benign (refusal) | 6 |
+| Gemini 2.5 Flash | set_theory, formal_logic, classical_chinese | plain, figstep | [image_original, image_encoded] benign (refusal) | 6 |
+
+**24 eval tasks** — can run immediately after Stage 7e/8a. ~4-6h estimated.
 
 ### 9b: Scale OR-Bench (if generational trend confirmed)
 
 - Full orbench_benign_hard (1319) + orbench_harmful (655) with best models/renderers
 - Unified 3-class judge for clean TPR/FPR calibration plot
 
-**Total: ~28-60 tasks** | Cost: ~$40-80
+**Total: ~24 tasks** | Cost: ~$30-50
 
 **Decision point:** If GPT-5.4-mini shows even larger negative Δ → strong generational story. If Gemini 2.5 Flash shifts from positive to negative → convergence story (all providers improving). If neither → provider-specific only.
+
+**Why this is fast:** All JBB images (plain + FigStep + FC-Typography) already rendered. Just evaluating with new models on existing directories. No sequential pipeline dependency.
 
 ---
 
@@ -380,21 +418,21 @@ Test whether the imaging-as-defense pattern strengthens with newer model generat
 | May 2–3 ✅ | Stage 5 (12 tasks) | Benign image cc+sk + HarmBench re-imaging + Sanskrit height fix |
 | May 3 ✅ | Stage 6 (4 tasks) | GPT-5-mini validation — imaging-as-defense discovered (-15pp) |
 | May 3–4 | Stage 7 (52 tasks, 36 deleted + 1 killed) | Renderer exploration + GPT-5-mini full. FigStep truncation + FC-Typo bugs found. Renderers rewritten. |
-| May 4–5 | Stage 7d make-up (85 tasks) | Full re-render + re-evaluate all FigStep + FC-Typography + killed task |
-| May 4–5 | Stage 8 (24-36 tasks) | OR-Bench calibration (first 100 rows) |
-| May 5–7 | Stage 9 (28-60 tasks) | Generational calibration (GPT-5.4-mini, Gemini 2.5 Flash) |
-| May 7–8 | Stage 10 | Optional: HarmBench / Pixtral |
+| May 4 | Stage 7d make-up R1 (12 img + 37 eval, 29 completed) | Re-render done. 29/37 eval completed, 8 killed by time limit. |
+| May 4–5 | Stage 7e + 8a (12 tasks) | FC-Typo benign + Sanskrit rerun + OR-Bench encoding (parallel) |
+| May 5 | Stage 9a + 8b (24 eval + 8 img) | Generational eval on existing images (fast!) + OR-Bench imaging |
+| May 5–6 | Stage 8c (36 tasks) | OR-Bench full evaluation |
+| May 6–7 | Stage 9b / 10 | Scale OR-Bench or HarmBench/Pixtral (depends on results) |
 | May 8–12 | Stage 11 | Analysis, figures, tables |
 | May 12–18 | — | Writing |
 | May 19–22 | — | Internal review, rewrite, polish |
 | May 23–25 | — | Final formatting, submit ARR |
 
 **Paper core — CANNOT cut:**
-- Stage 7 (imaging exploration + GPT-5-mini full) — validates provider-divergence pattern + renderer effect
-- Stage 9 (generational calibration) — the strongest potential finding (trend across model generations)
+- Stage 9 (generational calibration) — fast (uses existing images), potentially strongest finding (temporal trend). Run FIRST.
+- Stage 8 (OR-Bench calibration) — PRIMARY evidence for over-refusal claim. Required for reviewers.
 
 **Strengthens Paper (in priority order):**
-- Stage 8 (OR-Bench calibration) — unified 3-class framework
 - Stage 10 (HarmBench / Pixtral) — benchmark diversity + open-source comparison
 
 ---
