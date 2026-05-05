@@ -35,6 +35,10 @@ class ModelConfig:
     seed: int = MISSING
     n_completions: int = MISSING
     stream: bool = MISSING
+    max_concurrency: int = MISSING
+    max_retries: int = MISSING
+    batch_poll_interval: int = MISSING
+    batch_timeout: int = MISSING
 
 
 @dataclass

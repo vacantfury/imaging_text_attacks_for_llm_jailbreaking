@@ -1,8 +1,8 @@
 # Experiment Plan: Encoding × Modality Jailbreaking
 
 **Paper 1 target: EMNLP 2026 via ARR May cycle (deadline: May 25)**
-**Paper 1 story:** Safety miscalibration across modalities — image safety adds cost (over-refusal) without proportional protection (encoded attacks pass through).
-**Key insight:** Benign over-refusal (22-62pp increase) is the PRIMARY finding; harmful ASR parity across modalities is SUPPORTING evidence.
+**Direction TBD (decide after Stage 8+9 results):** A=Resurrection Attack, B=Dual-Axis Calibration, C=Provider Divergence, D=Generational Evolution. See `proposal.md §5` for details.
+**Decision point: May 18** — choose framing based on strongest signal from remaining experiments.
 
 ---
 
@@ -307,9 +307,13 @@ Never started (2 tasks):
 
 ---
 
-## Stage 8: OR-Bench Calibration (first 100 rows) — PRIMARY EVIDENCE for paper
+## Stage 8: OR-Bench Calibration (first 100 rows) — feeds Directions B & E
 
-**Purpose:** JBB benign (100 borderline prompts) is weak evidence for over-refusal claims. OR-Bench is the gold-standard over-refusal benchmark (ICLR 2025, dedicated 3-class judge, human-verified benign labels). Reviewers cannot dismiss OR-Bench results.
+**Purpose:** JBB benign (100 borderline prompts) is weak evidence for over-refusal claims. OR-Bench is the gold-standard over-refusal benchmark (ICLR 2025, dedicated 3-class judge, human-verified benign labels). Reviewers cannot dismiss OR-Bench results. Required for statistical credibility (Chouldechova, NeurIPS 2025).
+
+**Feeds which direction?**
+- Direction B (Dual-Axis Calibration): Dual-axis measurement — if encoding simultaneously reduces benign refusal AND increases harmful ASR, format-matching is proven.
+- Direction E (Scale): First step toward large-N cross-modal evaluation if we scale to full 1319/655 rows later.
 
 ### 8a: Encode OR-Bench (4 tasks, fast ~10 min each)
 
@@ -346,13 +350,20 @@ Never started (2 tasks):
 
 **Total Stage 8: 4 encode + 8 imaging + 36 eval = 48 tasks** | Cost: ~$20
 
-**What this gives us:** Dual-axis (ASR + refusal) measurement on OR-Bench with FigStep vs plain × 2 encodings × 3 models. If the "FigStep + encoding = high ASR + low refusal" pattern replicates on OR-Bench, that IS the paper.
+**What this gives us:** Dual-axis (ASR + refusal) measurement on OR-Bench with FigStep vs plain × 2 encodings × 3 models.
+
+**Direction B signal check:** Does encoding simultaneously ↑ ASR (harmful) AND ↓ refusal (benign)? If yes with 95% CI excluding 0 → strong dual-axis story.
+**Direction A signal check:** Does FigStep+encoding show >>0% ASR where plain FigStep = 0%? (resurrection).
 
 ---
 
-## Stage 9: Generational Safety Calibration — HIGH PRIORITY (fast, uses existing images)
+## Stage 9: Generational Safety Calibration — feeds Directions C & D
 
-Test whether the imaging-as-defense pattern strengthens with newer model generations. Uses EXISTING JBB images — no encoding or imaging needed. Pure evaluation tasks.
+Test whether the provider divergence pattern (GPT=defense, Claude/Gemini=amplifier) holds across generations and whether safety calibration is evolving. Uses EXISTING JBB images — no encoding or imaging needed. Pure evaluation tasks.
+
+**Feeds which direction?**
+- Direction C (Provider Divergence): More models per provider confirms the pattern isn't N=1 noise.
+- Direction D (Generational Evolution): Temporal trend across model versions reveals safety calibration trajectory.
 
 ### Hypothesis
 
@@ -360,9 +371,9 @@ Test whether the imaging-as-defense pattern strengthens with newer model generat
 |-------|-----------|------------------------------------------|
 | GPT-4o-mini | 2024 | -7pp (observed) |
 | GPT-5-mini | 2025 | -15pp (observed, set_theory only) |
-| GPT-5.4-mini | 2026 | -??pp (predict larger negative) |
+| GPT-5.4-mini | 2026 | -??pp (predict larger negative → strengthening defense) |
 | Gemini 2.0 Flash | 2025 | +6pp (observed) |
-| Gemini 2.5 Flash | 2026 | +??pp or shift negative? |
+| Gemini 2.5 Flash | 2026 | +??pp or shift negative? (convergence vs divergence) |
 
 ### 9a: Evaluate GPT-5.4-mini + Gemini 2.5 Flash on existing JBB images
 
@@ -377,63 +388,98 @@ All source images already exist in `outputs/imaging/`. No pipeline needed — ju
 
 **24 eval tasks** — can run immediately after Stage 7e/8a. ~4-6h estimated.
 
-### 9b: Scale OR-Bench (if generational trend confirmed)
+### 9b: Scale OR-Bench (if generational trend or dual-axis confirmed)
 
 - Full orbench_benign_hard (1319) + orbench_harmful (655) with best models/renderers
 - Unified 3-class judge for clean TPR/FPR calibration plot
+- Bootstrap CIs on all pairwise comparisons (per Chouldechova methodology)
 
 **Total: ~24 tasks** | Cost: ~$30-50
 
-**Decision point:** If GPT-5.4-mini shows even larger negative Δ → strong generational story. If Gemini 2.5 Flash shifts from positive to negative → convergence story (all providers improving). If neither → provider-specific only.
+**Decision signals from Stage 9:**
+- GPT-5.4-mini shows larger negative Δ → Direction D confirmed (safety improving over generations)
+- Gemini 2.5 Flash shifts from positive to negative Δ → convergence story (providers aligning)
+- Pattern unchanged → Direction C only (static architectural difference, not evolving)
+- Neither interesting → Directions C/D deprioritized; focus on B/E
 
 **Why this is fast:** All JBB images (plain + FigStep + FC-Typography) already rendered. Just evaluating with new models on existing directories. No sequential pipeline dependency.
 
 ---
 
-## Stage 10: Optional/Supplementary
+## Stage 10: Optional/Supplementary — depends on direction chosen
 
-- HarmBench full eval (240 harmful prompts, per-category breakdown) — if needed for reviewer concerns about benchmark diversity
-- Pixtral-12B open-source comparison (cluster) — frontier vs open-source divergence
-
----
-
-## Stage 11: Analysis + Writing
-
-| Analysis | Tool |
-|----------|------|
-| Unified refusal rate table (1-ASR vs benign refusal) | pandas |
-| Safety calibration ROC plot (TPR vs FPR per condition) | matplotlib |
-| Renderer comparison (plain vs FigStep vs Typography) | pandas |
-| Modality gap Δ by renderer × encoding × model | seaborn heatmap |
-| Bootstrap CIs on key differences | scipy/numpy |
-| Figures (grouped bar, calibration curve) | matplotlib/seaborn |
+| Sub-stage | What | Feeds Direction | When to include |
+|-----------|------|-----------------|-----------------|
+| 10a | HarmBench full eval (240 prompts, per-category) | All (benchmark diversity) | If reviewers will ask "only 100 prompts?" |
+| 10b | Pixtral-12B open-source comparison (cluster) | C (provider divergence) | If we need open-source vs. frontier contrast |
+| 10c | FC-Typography on OR-Bench (adds renderer axis) | A (resurrection) | If FigStep resurrection signal is weak but FC-Typo is strong |
+| 10d | Scale OR-Bench to 500+ rows | B, E (statistical power) | If 100-row CIs are too wide for claims |
 
 ---
 
-## Timeline (updated May 3, for May 25 deadline)
+## Stage 11: Analysis + Direction Decision + Writing
+
+### 11a: Decision Point (May 18)
+
+Based on Stage 8 + 9 results, evaluate each direction's viability:
+
+| Signal | Direction | Action |
+|--------|-----------|--------|
+| FigStep+encoding ASR >>40% where plain FigStep ≈ 0% | A (Resurrection) | Write attack paper |
+| Encoding reduces refusal AND increases ASR with CIs excluding 0 | B (Dual-Axis) | Write diagnostic paper |
+| Provider gap consistent across 2+ models per provider | C (Provider Divergence) | Write empirical analysis |
+| Clear temporal trend across generations | D (Generational) | Write longitudinal paper |
+| Everything modest but correct at scale | Combine or E | Combined empirical paper or benchmark contribution |
+| Nothing works | — | Workshop paper (SoLaR/TrustNLP) or ARR June fallback |
+
+### 11b: Analysis (direction-agnostic — run regardless)
+
+| Analysis | Tool | Feeds Direction |
+|----------|------|-----------------|
+| Modality gap Δ by encoding × model (with bootstrap 95% CIs) | scipy/numpy | All |
+| Dual-axis table: ASR change + refusal change per condition | pandas | B |
+| Renderer comparison (plain vs FigStep vs FC-Typography) | pandas | A |
+| Provider divergence heatmap | seaborn | C |
+| Generational trend plot (GPT-4o-mini → GPT-5-mini → GPT-5.4-mini) | matplotlib | D |
+| Safety calibration ROC (TPR vs FPR per condition) | matplotlib | B, E |
+| Per-category breakdown (if HarmBench included) | pandas | All |
+
+### 11c: Writing
+
+Paper structure adapts to chosen direction — see `proposal.md §8.2` for direction→framing mapping.
+
+---
+
+## Timeline (updated May 4, for May 25 deadline)
 
 | Date | Stage | Milestone |
 |------|-------|-----------|
 | May 1–2 ✅ | Stages 1–4 | Data, encoding, JBB text+image, font fix, benign text, JBB re-eval |
 | May 2–3 ✅ | Stage 5 (12 tasks) | Benign image cc+sk + HarmBench re-imaging + Sanskrit height fix |
 | May 3 ✅ | Stage 6 (4 tasks) | GPT-5-mini validation — imaging-as-defense discovered (-15pp) |
-| May 3–4 | Stage 7 (52 tasks, 36 deleted + 1 killed) | Renderer exploration + GPT-5-mini full. FigStep truncation + FC-Typo bugs found. Renderers rewritten. |
-| May 4 | Stage 7d make-up R1 (12 img + 37 eval, 29 completed) | Re-render done. 29/37 eval completed, 8 killed by time limit. |
-| May 4–5 | Stage 7e + 8a (12 tasks) | FC-Typo benign + Sanskrit rerun + OR-Bench encoding (parallel) |
-| May 5 | Stage 9a + 8b (24 eval + 8 img) | Generational eval on existing images (fast!) + OR-Bench imaging |
-| May 5–6 | Stage 8c (36 tasks) | OR-Bench full evaluation |
-| May 6–7 | Stage 9b / 10 | Scale OR-Bench or HarmBench/Pixtral (depends on results) |
-| May 8–12 | Stage 11 | Analysis, figures, tables |
-| May 12–18 | — | Writing |
-| May 19–22 | — | Internal review, rewrite, polish |
-| May 23–25 | — | Final formatting, submit ARR |
+| May 3–4 ✅ | Stage 7 (52 tasks, 36 deleted + 1 killed) | Renderer exploration + GPT-5-mini full. FigStep truncation + FC-Typo bugs found. Renderers rewritten. |
+| May 4 ✅ | Stage 7d make-up R1 (12 img + 37 eval, 29 completed) | Re-render done. 29/37 eval completed, 8 killed by time limit. |
+| May 4–5 | Stage 7e + 8a (12 tasks) | FC-Typo benign make-up + OR-Bench encoding (parallel) |
+| May 5–6 | Stage 9a + 8b + 8c (24 + 8 + 36 tasks) | Generational eval + OR-Bench imaging + eval (max parallelism) |
+| May 6–7 | Stage 10 (conditional) | Scale OR-Bench / HarmBench / Pixtral — only if signal found |
+| May 7–8 | **PAUSE — review all results** | Which direction(s) show strongest signal? |
+| May 8–12 | Stage 11b | Analysis: bootstrap CIs, heatmaps, trend plots |
+| May 12–14 | Stage 11a **DECISION POINT** | Choose paper direction(s) based on quantitative evidence |
+| May 14–20 | — | Writing (direction determines structure) |
+| May 20–23 | — | Internal review, rewrite, polish |
+| May 23–25 | — | Final formatting, submit ARR May |
+| *Fallback* | — | *If not ready: ARR June (~Jun 15) or AAAI 2027 (~Aug)* |
 
-**Paper core — CANNOT cut:**
-- Stage 9 (generational calibration) — fast (uses existing images), potentially strongest finding (temporal trend). Run FIRST.
-- Stage 8 (OR-Bench calibration) — PRIMARY evidence for over-refusal claim. Required for reviewers.
+**Required for ANY direction:**
+- Stage 7e (complete renderer data) — fills gaps in tables
+- Stage 8 (OR-Bench) — statistical credibility, dual-axis evidence
+- Stage 9a (generational) — fast, uses existing images, confirms/refutes temporal trend
 
-**Strengthens Paper (in priority order):**
-- Stage 10 (HarmBench / Pixtral) — benchmark diversity + open-source comparison
+**Direction-specific requirements:**
+- Direction A: Need to confirm FigStep+encoding >> plain FigStep on OR-Bench (Stage 8)
+- Direction B: Need dual-axis CIs from OR-Bench (Stage 8c)
+- Direction C: Need 9a results to confirm pattern across model generations
+- Direction D: Need 9a + potentially 9b for trend significance
 
 ---
 

@@ -16,6 +16,10 @@ This literature review surveys research relevant to our proposed controlled stud
 
 **In-the-wild jailbreaks.** Shen et al. (2024) collected 1,405 real-world jailbreak prompts and showed that DAN (Do Anything Now) style attacks using role-playing, privilege escalation, and prompt injection achieved up to 95% ASR, persisting across model versions for 240+ days.
 
+**Incremental completion decomposition.** Arif et al. (2026) introduced ICD, a trajectory-based jailbreak that elicits a sequence of single-word continuations related to a malicious request before requesting the full response. Evaluated across multiple model families on AdvBench, JailbreakBench, and StrongREJECT, ICD achieves superior ASR compared to existing methods. The key mechanistic finding is that successful attack trajectories **systematically suppress refusal-related representations** and shift activations away from safety-aligned states — providing direct evidence that jailbreaks work by manipulating the model's internal safety geometry, not just bypassing surface-level filters.
+
+**Domain context exploitation.** Hung et al. (2026) demonstrate that domain-specific contexts selectively relax defenses: chemistry contexts lower barriers for chemical knowledge ("vertical unlocking"), while safety-research contexts trigger **broader relaxation spanning all harm categories** ("general unlocking"). Their JARGON framework combines safety-research contexts with multi-turn adversarial interactions, achieving **93–100% ASR** (average **99%**) across seven frontier models including GPT-5.2, Claude-4.5, and Gemini-3. MDS/attention analysis reveals that JARGON queries occupy an intermediate "gray zone" between benign and harmful inputs in activation space where refusal decisions become unreliable — the model cannot cleanly separate them from benign safety-research queries. Defense evaluation shows that even with safety system prompts, JARGON maintains high ASR. This is relevant to our encoding strategy: classical language or mathematical encoding may similarly push prompts into a gray zone where safety classifiers are uncertain — the encoded content looks like legitimate academic/mathematical discourse rather than clear harmful intent.
+
 ### 2.2 Gap Analysis
 
 All text-based attacks operate exclusively in the **text modality**. When the same harmful content is delivered as an image of text, it is unclear whether safety mechanisms — trained on tokenized text — respond identically, more robustly, or less effectively. Our study directly tests this.
@@ -62,11 +66,15 @@ CS-DJ is the predecessor to Text-DJ and established that distributional shift vi
 
 ### 3.4 Text-DJ (Chen et al., 2026)
 
-Text-DJ (Text Distraction Jailbreaking) decomposes harmful queries into multiple benign sub-queries, renders them as text-in-image grids, and scatters them among semantically distant distraction queries (also rendered as images). The key innovation over CS-DJ: **text-based "semantic distraction" is more effective than visual distraction** — the distracting images need not contain harmful or relevant visual content, only maximally unrelated text.
+Text-DJ (Text Distraction Jailbreaking) decomposes harmful queries into `m=3` benign sub-queries (via Qwen2.5-3B-Instruct), renders them as text-in-image cells within a 4×3 grid, and scatters them among `n=9` semantically distant distraction queries (selected by maximizing cosine distance using all-MiniLM-L6-v2). Sub-queries are placed at grid positions 6, 8, 12; text/background colors are randomized with WCAG AA minimum contrast ≥ 4.5. The key innovation over CS-DJ: **text-based "semantic distraction" is more effective than visual distraction** — the distracting images need not contain harmful or relevant visual content, only maximally unrelated text (from a pool of ~100 factual science/culture questions).
 
-Text-DJ exploits **OCR-mediated understanding** — the model reads text from images but processes it through a different pathway than direct text input. Tested on Qwen3-VL (4B/8B/30B), it achieves 48–83% ASR across models and harm categories.
+Text-DJ exploits **OCR-mediated understanding** — the model reads text from images but processes it through a different pathway than direct text input. Tested on both open-source (Qwen3-VL 4B/8B/30B-A3B) and **closed-source** models (GPT-4o-mini, GPT-4.1-mini, Gemini-2.5-Flash), achieving **44–64% average ASR** on the HADES dataset across models: Qwen3-VL-4B 48.1%, Qwen3-VL-8B 52.7%, Qwen3-VL-30B 57.6%, GPT-4o-mini 59.3%, **GPT-4.1-mini 64.3%**, Gemini-2.5-Flash 44.0%. On HEx-PHI: 41–60% average ASR. ASR is judged by PKU-Alignment/beaver-dam-7b.
 
-**Critical ablation (Table 6):** Text-DJ provides the closest existing evidence for a modality safety gap via its TiI (text-in-image) ablation. When the same decomposed+distracted attack is delivered as plain text vs. rendered as images, the image version achieves **2–4× higher ASR** (e.g., 52.7% vs. 11.6% on Qwen3-VL-8B). This is the strongest directional evidence that cross-modal delivery amplifies jailbreak effectiveness. However, this comparison is **confounded**: the TiI effect is measured within the decomposition+distraction framework, not on raw harmful queries. The pure modality effect on unmodified content remains unmeasured. Additionally, Text-DJ tests only one model family (Qwen3-VL) and uses only plain English rendering — no encoding variation, no frontier closed-source models, and minimal defense evaluation (OpenAI Moderation API catches 0% of attacks).
+**Critical ablation (Table 6):** Text-DJ provides the closest existing evidence for a modality safety gap via its TiI (text-in-image) ablation. When the same decomposed+distracted attack is delivered as plain text (with a single white placeholder image) vs. rendered as images, the image version achieves **2–5× higher ASR**: Qwen3-VL-4B 48.1% vs 20.1% (2.4×), **Qwen3-VL-8B 52.7% vs 11.6% (4.5×)**, Qwen3-VL-30B 57.6% vs 20.3% (2.8×). This is the strongest directional evidence that cross-modal delivery amplifies jailbreak effectiveness.
+
+**Defense evaluation (Table 3–4):** OpenAI omni-moderation-latest catches **0%** of Text-DJ attacks (0.00% refusal rate across all categories). GuardReasoner-VL-7B achieves only 8.9–14.9% refusal rate, reducing ASR by merely 3–9 pp. This demonstrates that current guardrails are ineffective against text-in-image attacks.
+
+**However, this comparison is confounded**: the TiI effect is measured within the decomposition+distraction framework, not on raw harmful queries. The pure modality effect on unmodified content remains unmeasured. Additionally, Text-DJ uses only plain English rendering with randomized colors — no encoding variation, no font/script ablation beyond a brief "comic font" test showing minimal sensitivity. Our study directly addresses these gaps with controlled encoding × modality comparisons on identical content.
 
 ### 3.5 FC-Attack (Zhang et al., EMNLP Findings 2025)
 
@@ -110,7 +118,51 @@ JailBreakV-28K (COLM 2024) is a 28,000-sample benchmark testing whether text-bas
 
 These findings have two important implications. First, safety alignment in MLLMs operates primarily through the text encoder, not the vision pathway. Second, JailBreakV tested harmful text *in the text channel* paired with various images, but never tested the inverse: harmful content delivered *only* as image-rendered text with no harmful text in the text channel. This leaves open the fundamental question of whether the vision pathway can independently trigger safety mechanisms when it is the sole carrier of harmful intent.
 
-### 3.11 Gap Analysis
+### 3.11 Adversarial Smuggling (Li et al., 2026)
+
+Adversarial Smuggling introduces a critical threat to MLLM content moderation: encoding harmful content into **human-readable visual formats that remain AI-unreadable**, thereby evading automated detection. The framework defines two pathways with 9 specific techniques:
+
+**Pathway 1 — Perceptual Blindness** (text extraction fails): Tiny Text (scaled to resolution limits), Occluded Text (partial obstruction), Low Contrast (text color near background), Handwritten Style (irregular cursive), Artistic/Distorted (warped geometry), and AI Illusions (ControlNet + diffusion embedding text into scene textures).
+
+**Pathway 2 — Reasoning Blockade** (text readable but intent masked): Dense Text Masking (harmful line buried in irrelevant text), Semantic Camouflage (harm disguised as everyday objects), and Visual Puzzles (content split across visual pieces).
+
+The **SmuggleBench** benchmark (1,700 instances across 9 categories) reveals devastating results: **GPT-5 overall ASR 98.6%** (perceptual 98.5%, reasoning 98.7%), with AI Illusions achieving **100% ASR** on Artistic rendering and **99.5% on AI Illusions** (TER only 0.3% — model completely fails to extract text). Gemini 2.5 Pro: **84.5%** overall. Qwen3-VL variants: **88–92%** regardless of model size (8B to 235B). The paper also evaluates an expanded model zoo (GPT-5-mini, GPT-5-nano, Claude-Haiku/Sonnet/Opus-4.5, Gemini-3-Flash/Pro, Llama-4, Grok-4) on a 10% stratified subset.
+
+**Defenses:** Chain-of-Thought prompting reduces ASR only 7.2 pp (90.4% → 83.2%) on Qwen3-VL-235B while increasing benign FPR from 1.5% to 4.2%. Full-parameter SFT achieves 81.5 pp reduction (95.0% → 13.5%) but at cost of +6.6 pp FPR — and is limited to the specific model fine-tuned.
+
+**Direct relevance to our study:** Adversarial Smuggling is conceptually the closest work to our typographic encoding approach — both exploit the gap between human readability and AI readability of visual text. Our encoding × modality design maps directly onto the "Reasoning Blockade" pathway: math-encoded or Classical Chinese text rendered as images is OCR-readable (high TER) but semantically opaque to safety filters. The finding that **GPT-5 achieves 98.6% ASR** — meaning its content moderation almost never catches smuggled content — directly supports our hypothesis that frontier models have not closed the vision-safety gap. However, Adversarial Smuggling focuses on content **moderation** (detecting harmful images) rather than content **generation** (jailbreaking), making our work complementary: they show models can't *detect* visual-text harm; we show models will *generate* harmful content when prompted via visual text.
+
+### 3.12 Split-Image Attacks — SIVA (Rashid et al., 2026)
+
+SIVA (Split-Image Visual Jailbreak Attacks) identifies a fundamental gap in VLM safety alignment: while pretraining and instruction tuning generalize to split-image inputs, **safety alignment is performed only on holistic images** and does not account for harmful semantics distributed across multiple image fragments. The attack evolves through progressive phases from naive splitting to an adaptive white-box attack, culminating in a black-box transfer attack using adversarial knowledge distillation (Adv-KD). The strongest strategy achieves **up to 60% higher transfer success** than existing baselines on three SOTA VLMs.
+
+**Relevance:** SIVA demonstrates that the visual pathway's safety alignment is incomplete — it doesn't generalize to novel visual configurations. This parallels our hypothesis that text rendered as images exploits a similar generalization failure in safety alignment. SIVA's finding that safety training on holistic images doesn't transfer to split images suggests that safety training on standard text may not transfer to image-rendered text.
+
+### 3.13 CrossTALK (Yan et al., 2026)
+
+CrossTALK (Cross-modal Entanglement Attack) extends the multi-modal jailbreak paradigm by distributing malicious clues across text and image modalities to exceed VLMs' trained and generalized safety alignment patterns. Three mechanisms enable scalable attacks: (1) **knowledge-scalable reframing** extends harmful tasks into multi-hop chain instructions, (2) **cross-modal clue entangling** migrates visualizable entities into images to build multimodal reasoning links, and (3) **cross-modal scenario nesting** uses multimodal contextual instructions to steer VLMs toward detailed harmful outputs.
+
+**Relevance:** CrossTALK demonstrates that distributing harmful semantics across modalities (rather than concentrating them in one) bypasses safety alignment. Our encoding × modality design creates a different form of cross-modal indirection: the harmful content is entirely in the image (as text), but requires two cognitive steps (OCR + decode) rather than cross-modal integration. Both approaches exploit the observation that safety mechanisms struggle with content that requires compositional reasoning across representation boundaries.
+
+### 3.14 Reasoning-Oriented Programming (Zou et al., 2026)
+
+Reasoning-Oriented Programming (ROP) draws a structural analogy to Return-Oriented Programming in systems security: just as ROP chains benign instruction sequences to bypass memory protections, ROP chains **benign visual elements** (semantic gadgets) to produce harmful conclusions through compositional reasoning. The automated framework optimizes for *semantic orthogonality* (each visual gadget is individually benign) and *spatial isolation* (preventing premature feature fusion), forcing malicious logic to emerge only during late-stage reasoning. Tested on SafeBench and MM-SafetyBench across 7 LVLMs including GPT-4o and Claude 3.7, ROP outperforms the strongest baseline by **4.67% on open-source** and **9.50% on commercial models**.
+
+**Relevance:** ROP demonstrates that VLMs can be induced to synthesize harmful conclusions from individually benign visual premises — a fundamental vulnerability in compositional visual reasoning. Our typographic approach is simpler (single image, explicit text) but shares the insight that safety mechanisms operate at the perception level and can be bypassed when harmful intent only emerges at the reasoning level (after OCR + decoding in our case).
+
+### 3.15 MAPA (Choi et al., 2026)
+
+MAPA (Multi-turn Adaptive Prompting Attack) extends multi-turn jailbreaking to LVLMs with a two-level design: (1) at each turn, it **alternates text-vision attack actions** to elicit maximally malicious responses, and (2) across turns, it adjusts the attack trajectory through iterative back-and-forth refinement to gradually amplify response maliciousness. Tested on LLaVA-V1.6, Qwen2.5-VL, Llama-3.2-Vision, and GPT-4o-mini, MAPA improves ASR by **11–35%** over SOTA methods.
+
+**Relevance:** MAPA's key finding is that naively adding visual inputs to text-based multi-turn jailbreaks can cause them to **fail** — overly malicious visual input triggers conservative safety behavior. This is relevant to our study: it suggests that the visual modality's effect on safety is not uniformly permissive; rather, the model's safety response depends on how harmful content is structured across modalities. Our controlled text vs. image-of-text comparison directly tests this modality-dependent safety behavior.
+
+### 3.16 Seeing No Evil (Li et al., 2026)
+
+"Seeing No Evil" introduces Attention-Guided Visual Jailbreaking, which circumvents safety alignment by directly manipulating attention patterns rather than optimizing for harmful output. Two auxiliary objectives with tuned weights (α=10, β=5, K=6 attention heads): (1) **L_suppress**: suppressing attention to alignment-relevant prefix tokens (system prompt), and (2) **L_anchor**: anchoring generation on adversarial image features. This reduces gradient conflict by 45% and achieves **94.4% ASR** vs 68.8% baseline (standard adversarial perturbation) on Qwen-VL with 40% fewer optimization iterations. The key mechanistic finding is **safety blindness**: successful attacks suppress system-prompt attention by **~80%** while amplifying image attention by **×4.1**, causing models to generate harmful content not by overriding safety rules, but by **failing to retrieve them**. Causal validation: restoring attention to safety tokens reduces ASR from 88% to 26%.
+
+**Relevance:** The "safety blindness" mechanism is directly relevant to understanding our modality gap. When text is rendered as an image, the model processes it through the vision pathway, which may **naturally** attend less to safety-relevant tokens in the system prompt — a milder form of the same mechanism that "Seeing No Evil" achieves via adversarial optimization. If our image-rendered attacks succeed without any adversarial perturbation, it suggests the vision pathway inherently creates partial "safety blindness" as a structural property, not just an adversarially-induced one.
+
+### 3.17 Gap Analysis
 
 The typographic and visual attack literature reveals a consistent theme: the vision pathway is a potent attack vector. But the field suffers from five critical gaps:
 
@@ -138,11 +190,13 @@ The typographic and visual attack literature reveals a consistent theme: the vis
 
 **Vision-centric jailbreaks.** Visual Exclusivity Attacks (Zhang et al., 2026) and the visual prompt jailbreak for image editing models (Hou et al., 2026) represent an emerging "Image-as-Basis" paradigm where harm requires visual reasoning over unperturbed images (schematics, blueprints). These differ from both perturbation attacks and typographic attacks: the image carries genuinely visual (not textual) harmful content.
 
-**Multi-image semantic dispersion.** MIDAS (Liu et al., ICLR 2026) introduces a multi-image jailbreak framework that decomposes harmful queries into risk-bearing semantic subunits and disperses them across multiple images using Game-style Visual Reasoning (GVR) templates (Letter Equation Puzzle, Jigsaw Letter Puzzle, Navigate-and-Read Puzzle, etc.). The textual channel uses persona-driven prompts with placeholders bound to the dispersed image fragments. By forcing the model to perform cross-image compositional reasoning to reconstruct the hidden intent, MIDAS delays exposure of malicious semantics and reduces security attention activation.
+**Multi-image semantic dispersion.** MIDAS (Liu et al., ICLR 2026) introduces a multi-image jailbreak framework that: (1) extracts ≤3 risk-bearing keywords from a harmful query; (2) decomposes each keyword into letter-level fragments; (3) disperses fragments across **6 images** with cross-image redundancy (each keyword in ≥2 images); and (4) wraps each image in a Game-style Visual Reasoning (GVR) template — one of six puzzle types: Letter Equation, Jigsaw Letter, Rank-and-Read, Odd-One-Out, Navigate-and-Read, or CAPTCHA. The textual channel uses persona-driven prompts with neutral placeholders replacing all harmful tokens.
 
-**Key results:** 81.46% average ASR across 4 closed-source MLLMs (GPT-4o, Claude-3.5-Sonnet, Gemini-1.5-Pro, Qwen-VL-Max), significantly outperforming prior methods (FigStep: 7.69%, HADES: 10%, VisCRA: 1.64%, HIMRD: 2.40%). MIDAS also achieves 72.18% ASR on the most challenging models with strong alignment.
+**Key results (HADES benchmark):** Tested on GPT-4o, **GPT-5-Chat**, Gemini-2.5-Pro, Gemini-2.5-Flash-Thinking, QVQ-Max, Qwen2.5-VL, and InternVL-2.5. MIDAS achieves: Gemini-2.5-FT **93.3%**, Gemini-2.5-Pro **84.6%**, GPT-4o **61.5%**, **GPT-5-Chat 72.2%**, QVQ-Max **94.2%**, Qwen2.5-VL **97.4%**, InternVL-2.5 **59.4%**. Baselines on the same models are dramatically lower — FigStep: **0–39%** (GPT-5-Chat: **0.00%**), HADES: 2–43%, VisCRA: 8–66%, HIMRD: 8–66%. On AdvBench, MIDAS reaches **98.0%** on Gemini-2.5-Pro and **80.0%** on GPT-4o. Judged by GPT-5-nano using H-CoT protocol with a 0–5 harmfulness scale (ASR = score ≥ 3).
 
-**Relevance to our study:** MIDAS demonstrates that distributing harmful content across multiple images forces extended reasoning chains that bypass safety. Our typographic encoding approach is conceptually simpler (single image, no puzzles) but shares the insight that making the model "work" to extract content (OCR + decode encoding) delays safety activation. MIDAS's success on closed-source frontier models confirms that even multi-layered safety architectures remain vulnerable to structured visual attacks, supporting the hypothesis that our simpler encoding × image approach may also succeed.
+**Defense evaluation (Table 7–8):** ShieldLM reduces MIDAS from 99.2% to 48.8% on Gemini-2.5-FT (vs VisCRA 49.7% → 17.8%). Self-Reminder only drops MIDAS by ~11% (99.2% → 88.1%), while dropping VisCRA by ~70%. Defensive system prompts reduce MIDAS to 67–75% on Gemini-2.5-Pro (still high) and 22–40% on GPT-5-Chat.
+
+**Relevance to our study:** MIDAS demonstrates that distributing harmful content across multiple images forces extended reasoning chains that bypass safety. Our typographic encoding approach is conceptually simpler (single image, no puzzles) but shares the insight that making the model "work" to extract content (OCR + decode encoding) delays safety activation. MIDAS's success on **GPT-5-Chat** (72.2% on HADES) — where FigStep achieves literally 0% — confirms that frontier models remain vulnerable to structured visual attacks while having completely patched simple typographic attacks. This validates our finding that FigStep is "dead" on modern models but encoding can resurrect image-based attacks.
 
 ### 4.2 Gap Analysis
 
@@ -161,6 +215,10 @@ Perturbation-based attacks are **fundamentally different** from our study: they 
 **Mathematical encoding.** Thompson et al. (2024) showed MathPrompt (set theory, logic, algebra encodings) achieves 73.6% ASR across 13 LLMs, with substantial semantic divergence from original prompts.
 
 **Cipher-based encoding.** Yuan et al. (2024) introduced CipherChat, demonstrating that communicating with LLMs via ciphers (Caesar, Base64, Morse code, Unicode) bypasses safety alignment. The key insight is that safety mechanisms are trained on natural language; non-natural encodings evade detection while the model's reasoning capabilities allow it to decode and comply. Their proposed SelfCipher — which evokes the model's latent cipher capabilities through role-playing — outperformed standard human-designed ciphers.
+
+**Cross-modality jailbreak transfer.** Chen et al. (2026b) study the "Alignment Curse" in omni-models (Qwen2.5-Omni-3B/7B, Qwen3-Omni, InteractiveOmni, gpt-4o-audio-preview): strong cross-modal alignment (text↔audio) inadvertently propagates textual vulnerabilities to the audio modality. Text jailbreaks (PAP, ReNeLLM, AutoDAN-Turbo) converted to audio via TTS achieve **SR 0.45–0.70** — substantially outperforming purpose-built audio attacks (VoiceJailbreak SR 0.24, Speech Editing SR 0.23). Qwen3-Omni is particularly vulnerable: ReNeLLM SR 0.88 (text), PAP(A) SR 0.82 (audio-transferred).
+
+The theoretical framework formalizes transfer via KL divergence: if text and audio representations satisfy KL(P_audio ‖ P_text) ≤ δ, then unsafe output probability gap is bounded by √(δ/2). Empirically, PAP achieves final-layer KL of only **0.02** on Qwen2.5-Omni-7B (well below the "curse line" of KL=2), explaining near-perfect transfer. The key insight — that alignment itself creates the vulnerability by ensuring semantic equivalence across modalities — is directly analogous to our text→image hypothesis. **Note:** This paper studies **text→audio** transfer, not text→image. However, the theoretical framework (shared latent space → bounded vulnerability gap) applies equally: if image-rendered text activates similar representations to tokenized text, the same "alignment curse" should propagate text vulnerabilities to the image pathway.
 
 ### 5.2 Gap Analysis
 
@@ -182,7 +240,11 @@ Llama Guard (Inan et al., 2023) operates on **tokenized text**, making it archit
 
 ### 6.3 Multimodal Defense
 
-**DeTAM** (Li et al., 2025) identifies jailbreak-sensitive attention heads and reallocates attention at inference time — a fine-tuning-free defense. **Immune** (Ghosal et al., 2025) uses a safety reward model during decoding to steer generation away from harmful outputs. Both operate at the model level and do not specifically target typographic attacks. No existing defense work evaluates the simple countermeasure of **OCR preprocessing** — extracting text from images before safety classification.
+**DeTAM** (Li et al., 2025) identifies jailbreak-sensitive attention heads and reallocates attention at inference time — a fine-tuning-free defense. **Immune** (Ghosal et al., 2025) uses a safety reward model during decoding to steer generation away from harmful outputs. Both operate at the model level and do not specifically target typographic attacks.
+
+**Cross-Lingual Jailbreak Detection via Semantic Codebooks** (Alanova et al., 2026) proposes a training-free defense: compare multilingual query embeddings (via BGE-M3) against a fixed English codebook of 13,811 known jailbreak prompts using cosine similarity. Results reveal a **two-regime pattern**: on canonical jailbreak templates, detection achieves AUC up to 0.993 and 78–92% TPR at FPR ≤ 1%; under distribution shift (heterogeneous/diverse harmful content), AUC drops to 0.59–0.63 and TPR collapses to single digits. End-to-end, the filter reduces successful jailbreaks by 96% on templated attacks but only 18.6% on diverse benchmarks (Aegis). **Relevance to our encoding approach:** Our encoded prompts (set theory, Classical Chinese) are maximally distant from canonical English jailbreak templates in embedding space, suggesting they would trivially evade such codebook-based defenses — the semantic similarity to known jailbreaks would be near zero.
+
+No existing defense work evaluates the simple countermeasure of **OCR preprocessing** — extracting text from images before safety classification.
 
 ### 6.4 Over-Refusal and Exaggerated Safety
 
@@ -195,6 +257,20 @@ This subsection covers a growing body of work recognizing that safety alignment 
 **SCANS** (Cao et al., AAAI 2025) proposes Safety-Conscious Activation Steering, a training-free method to mitigate exaggerated safety. The approach: (1) extract refusal steering vectors by averaging the activation difference between harmful and benign queries at each layer; (2) use vocabulary projection to identify safety-critical layers (middle layers promote refusal tokens like "cannot"); (3) at inference time, classify input harmfulness via similarity to the refusal direction, and steer activations accordingly — subtracting the refusal vector for benign inputs, preserving it for harmful ones. SCANS reduces false refusal rates by 24.7% on XSTest and 26.3% on OKTest while maintaining defense against actual harmful queries. The mechanistic insight — that refusal is encoded as a direction in activation space at specific layers — suggests that modality change (image vs. text) may activate different pathways, potentially sidestepping the refusal direction entirely for image inputs.
 
 **Beyond I'm Sorry, I Can't** (Prakash et al., AAAI 2026) provides the deepest mechanistic analysis of refusal to date. Using sparse autoencoders (SAEs) trained on residual-stream activations of Gemma-2-2B-IT and LLaMA-3.1-8B-IT, the authors identify specific latent features causally responsible for refusal. Their three-stage pipeline: (1) find a refusal-mediating direction and collect nearby SAE features; (2) greedy filtering to obtain a minimal jailbreak-critical feature set; (3) factorization-machine discovery of non-linear feature interactions. Key findings: (a) ablating a small set of SAE features flips models from refusal to compliance, constituting an interpretability-based jailbreak; (b) redundant "backup" features remain dormant unless primary refusal features are suppressed, revealing layered safety redundancy. For our study, this work implies that if image-rendered text activates different internal representations than tokenized text, it may bypass the refusal-critical features identified by Prakash et al. — explaining why image-modality prompts show lower refusal rates on benign content.
+
+**LOCA: Local causal explanations for jailbreaks** (Kumar & Ahuja, 2026) introduces a method for explaining *why a specific jailbreak succeeds* rather than giving global explanations. LOCA identifies a minimal set of interpretable, intermediate representation changes that causally induce model refusal on an otherwise successful jailbreak. Evaluated on Gemma and Llama models, LOCA can induce refusal by making on average **six interpretable changes**, while prior methods routinely fail after 20 changes. This work is relevant to mechanistic analysis of our modality gap: if image-rendered text bypasses safety, LOCA-style analysis could identify which specific representation changes the image pathway fails to trigger.
+
+**Unified harmful generation mechanism** (Orgad et al., 2026) uses targeted weight pruning as a causal intervention to probe harmfulness in LLMs. The key finding: harmful content generation depends on a **compact set of weights that are general across harm types and distinct from benign capabilities**. Aligned models exhibit greater compression of harm generation weights than unaligned counterparts, indicating that alignment reshapes harmful representations internally. This compression explains emergent misalignment: if harm weights are compressed, fine-tuning that engages them in one domain triggers broad misalignment. Notably, harmful generation capability is **dissociated from harm recognition** — models can identify harmful content without the weights needed to generate it. For our study, this dissociation implies that if image-rendered input bypasses the compressed harm generation pathway, models may still recognize (via text-based reasoning) that the content is harmful, yet comply because the generation pathway operates independently.
+
+**Different paths to harmful compliance** (Kabir & Tiganj, 2026) compares three jailbreak routes — harmful SFT, harmful RLVR, and refusal-suppressing abliteration — and finds they produce **vastly different behavioral and mechanistic profiles** despite similar surface-level harmfulness. RLVR-jailbroken models preserve explicit harm recognition (they can identify harmful prompts in a self-audit) yet still comply, and a reflective safety scaffold almost fully restores safe behavior. SFT-jailbroken models show the largest collapse in safety judgments and capability loss. Abliteration is family-dependent. For our study, these results suggest that different attack vectors (text encoding, image rendering) may similarly produce mechanistically distinct safety failures, which would explain encoding-dependent modality gaps.
+
+**Jailbreak-Related Representation Shift — JRS** (Wei et al., 2026) provides the most direct mechanistic explanation for vision-pathway jailbreaking. Tested on LLaVA-1.5-7B, ShareGPT4V-7B, and InternVL-Chat-19B, JRS reveals that VLMs clearly distinguish benign from harmful inputs in representation space (linear probes achieve near-perfect F1 in middle/deep layers), and among harmful inputs, jailbreak samples form a **distinct internal state separable from refusal samples**.
+
+Key mechanistic findings: (1) The **jailbreak direction** is defined as the normalized mean difference between jailbreak and refusal hidden states at the last token position: `d = (μ_jail − μ_ref) / ‖μ_jail − μ_ref‖`. (2) The **image-induced shift** along this direction reliably predicts jailbreak success — more harmful visual content monotonically increases the shift. (3) A **blank image alone** increases ASR by **28.13 pp** on LLaVA-1.5-7B/HADES, demonstrating that any visual input shifts representations toward the jailbreak state. (4) The jailbreak direction is **stable across datasets and image types** (pairwise cosine similarities > 0.7 across 9 directions).
+
+**JRS-Rem defense:** Subtracting the jailbreak-direction component when shift exceeds threshold τ=0.2 dramatically reduces ASR while preserving utility. LLaVA-1.5-7B HADES: **77.3% → 12.2%** (−65 pp). ShareGPT4V-7B: **71.7% → 2.1%** (−70 pp). Against adversarial attacks (MML-M/R/B64, gradient): **63–76% → 9–11%**. Benign utility (MM-Vet, ScienceQA, MME) remains **unchanged** (±0.5 or less).
+
+**Direct relevance:** JRS provides the most direct mechanistic explanation for our modality gap hypothesis. If image-rendered text shifts representations toward the jailbreak direction (away from refusal), this explains why identical content in text vs. image modalities produces different ASR. Critically, the finding that even a blank image shifts 28 pp suggests the vision pathway inherently biases toward compliance. However, JRS is tested only on **open-source** models (2023–2024 era) — whether frontier models (GPT-5, Claude Sonnet 4) exhibit the same jailbreak direction structure remains unknown. Our experiments on frontier models provide complementary empirical evidence at the behavioral level.
 
 ### 6.5 Multimodal Safety Survey
 
@@ -218,13 +294,25 @@ The over-refusal literature (XSTest, OR-Bench, SCANS) has been studied exclusive
 
 **HarmBench** (Mazeika et al., 2024) provides a standardized framework with 510 test cases across 18 attack methods and 33 models. **JailbreakBench** (Chao et al., 2024) contributes a public leaderboard and JBB-Behaviors dataset of 100 harmful + 100 benign behaviors.
 
-### 7.2 Open-Source Models for Analysis
+### 7.2 ASR Measurement Validity (Chouldechova et al., NeurIPS 2025)
+
+"Comparison requires valid measurement" argues that ASR comparisons in AI red teaming often fail to provide sound evidence for claims about relative system safety or attack efficacy. Drawing on social science measurement theory, the paper articulates a two-part sufficient condition for meaningful ASR comparison:
+
+1. **Conceptual coherence:** The population parameters (estimands) being compared must be meaningfully comparable — same threat model, same attack distributions, same success concept. Comparing ASRs across studies that use different prompt sets, different judges, or different success criteria is "apples-to-oranges."
+
+2. **Measurement validity:** ASRs must be valid (unbiased) estimates of those parameters. Validity threats include: LLM judge disagreement with human ratings, small sample sizes without confidence intervals, temperature/sampling stochasticity, and non-representative prompt selection.
+
+**Key critique examples:** The paper shows that published comparisons often violate conceptual coherence — e.g., comparing ASR of method A (tested with 100 prompts from AdvBench) to method B (tested with 50 prompts from HarmBench) using different judges is not a meaningful comparison even if the raw numbers differ substantially.
+
+**Direct implications for our study:** Our cross-modal comparison satisfies conceptual coherence by design: identical prompts, identical judge (GPT-5-nano), identical evaluation protocol, only the delivery modality varies. However, the paper's emphasis on **statistical significance** (confidence intervals, hypothesis tests) is a concern for our 100-prompt JBB experiments. A 5 pp difference on N=100 may not be significant. This strengthens the case for OR-Bench (larger N) and argues for reporting bootstrap confidence intervals in our paper. We should cite this paper to pre-empt reviewer concerns about measurement validity.
+
+### 7.3 Open-Source Models for Analysis
 
 **LLaVA-NeXT** (Liu et al., 2024) offers 4x resolution and improved OCR. **InternVL 2.5** (Chen et al., 2024) features InternViT-6B with dynamic high-resolution. Both provide open architectures for investigating how vision encoders process rendered text — analyses impossible with closed-source models.
 
-### 7.3 Gap Analysis
+### 7.4 Gap Analysis
 
-HarmBench and JailbreakBench provide excellent text-based evaluation infrastructure but include **no cross-modal comparison protocol**. No benchmark measures Δ(ASR) between text and image-rendered text. Our study contributes the first systematic cross-modal evaluation methodology.
+HarmBench and JailbreakBench provide excellent text-based evaluation infrastructure but include **no cross-modal comparison protocol**. No benchmark measures Δ(ASR) between text and image-rendered text. The Chouldechova framework highlights that such a protocol must ensure conceptual coherence (same prompts, same judge, same criteria) and measurement validity (adequate sample sizes, reported CIs). Our study contributes the first systematic cross-modal evaluation methodology satisfying these criteria.
 
 ---
 
@@ -320,3 +408,24 @@ The literature suggests several high-value open problems:
 - Liu, Y. et al. *MIDAS: Multi-Image Dispersion and Semantic Reconstruction for Jailbreaking MLLMs.* ICLR, 2026.
 - Prakash, N. et al. *Beyond I'm Sorry, I Can't: Dissecting Large-Language-Model Refusal.* AAAI, 2026.
 - Röttger, P. et al. *XSTest: A Test Suite for Identifying Exaggerated Safety Behaviours in Large Language Models.* NAACL, 2024.
+
+### Newly Added References (Evaluation Methodology / Defense)
+
+- Chouldechova, A. et al. *Comparison requires valid measurement: Rethinking attack success rate comparisons in AI red teaming.* NeurIPS Position Paper Track, 2025.
+- Alanova, S. et al. *Cross-Lingual Jailbreak Detection via Semantic Codebooks.* arXiv:2604.25716, 2026.
+
+### Newly Added References (Multimodal Attacks / Mechanistic Analysis / Cross-Modal Transfer)
+
+- Arif, S. et al. *One Word at a Time: Incremental Completion Decomposition Breaks LLM Safety.* arXiv:2604.25921, 2026.
+- Chen, Y. et al. *The Alignment Curse: Cross-Modality Jailbreak Transfer in Omni-Models.* arXiv:2602.02557, 2026.
+- Choi, I.C. et al. *Multi-Turn Adaptive Prompting Attack on Large Vision-Language Models (MAPA).* arXiv:2602.14399, 2026.
+- Hung, K.S. et al. *Into the Gray Zone: Domain Contexts Can Blur LLM Safety Boundaries.* arXiv:2604.15717, 2026.
+- Kabir, M.R. & Tiganj, Z. *Different Paths to Harmful Compliance: Behavioral Side Effects and Mechanistic Divergence Across LLM Jailbreaks.* arXiv:2604.18510, 2026.
+- Kumar, S. & Ahuja, N. *Minimal, Local, Causal Explanations for Jailbreak Success in Large Language Models (LOCA).* arXiv:2605.00123, 2026.
+- Li, J. et al. *Seeing No Evil: Blinding Large Vision-Language Models to Safety Instructions via Adversarial Attention Hijacking.* arXiv:2604.10299, 2026.
+- Li, Z. et al. *Making MLLMs Blind: Adversarial Smuggling Attacks in MLLM Content Moderation.* arXiv:2604.06950, 2026.
+- Orgad, H. et al. *Large Language Models Generate Harmful Content Using a Distinct, Unified Mechanism.* arXiv:2604.09544, 2026.
+- Rashid, M.R. et al. *Robustness of Vision Language Models Against Split-Image Harmful Input Attacks (SIVA).* arXiv:2602.08136, 2026.
+- Wei, Z. et al. *Understanding and Defending VLM Jailbreaks via Jailbreak-Related Representation Shift (JRS).* arXiv:2603.17372, 2026.
+- Yan, Y. et al. *Red-teaming the Multimodal Reasoning: Jailbreaking VLMs via Cross-modal Entanglement Attacks (CrossTALK).* arXiv:2602.10148, 2026.
+- Zou, Q. et al. *Reasoning-Oriented Programming: Chaining Semantic Gadgets to Jailbreak Large Vision Language Models.* arXiv:2603.09246, 2026.
