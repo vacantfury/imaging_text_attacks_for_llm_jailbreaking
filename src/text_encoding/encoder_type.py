@@ -53,5 +53,9 @@ class EncoderType(str, Enum):
     """LLM-based classical language encoding (Classical Chinese, Latin, etc.).
     Supports direct translation and literary strategy modes."""
 
+    LLM_SEMANTIC_CAMO = "llm_semantic_camo"
+    """Multi-step semantic camouflage attack (SemanticCamo, Jiang et al. 2025).
+    Extracts semantic features and reconstructs harmful content indirectly."""
+
 
 

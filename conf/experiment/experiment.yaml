@@ -1,94 +1,129 @@
 # ============================================================
-# Stage 7e + Stage 8a (parallel)
-# 7e: 8 remaining FC-Typo benign evals + Sanskrit rerun
-# 8a: 4 OR-Bench encoding tasks (first 100 rows)
-# Total: 12 tasks, ~2-3h estimated
+# Round: Stage 9d + 9e(encode) + 10b/10c (set_theory, formal_logic)
+# 1 text_encode + 4 Gemini 3 Pro eval + 6 SAGE + 6 SemanticSmooth = 17 tasks
 # ============================================================
 
 num_main_job_threads: 6
 
 tasks:
-  # ================================================================
-  # Stage 7e — Remaining FC-Typography benign evals (7 tasks)
-  # ================================================================
-
-  # -- GPT-5-mini (3 tasks) --
-  - mode: evaluate
-    source_dir: outputs/imaging/jailbreakbench_benign/set_theory_fc_typography_20260504_025625_90117580
-    prompt_stages: [image_original, image_encoded]
-    target_model: gpt-5-mini
-    judge_method: refusal
-
-  - mode: evaluate
-    source_dir: outputs/imaging/jailbreakbench_benign/formal_logic_fc_typography_20260504_025625_66957046
-    prompt_stages: [image_original, image_encoded]
-    target_model: gpt-5-mini
-    judge_method: refusal
-
-  - mode: evaluate
-    source_dir: outputs/imaging/jailbreakbench_benign/classical_chinese_simplified_literary_fc_typography_20260504_025625_33272661
-    prompt_stages: [image_original, image_encoded]
-    target_model: gpt-5-mini
-    judge_method: refusal
-
-  # -- Gemini 2.0 Flash (1 task) --
-  - mode: evaluate
-    source_dir: outputs/imaging/jailbreakbench_benign/classical_chinese_simplified_literary_fc_typography_20260504_025625_33272661
-    prompt_stages: [image_original, image_encoded]
-    target_model: gemini-2.0-flash
-    judge_method: refusal
-
-  # -- Claude Sonnet 4 (3 tasks) --
-  - mode: evaluate
-    source_dir: outputs/imaging/jailbreakbench_benign/set_theory_fc_typography_20260504_025625_90117580
-    prompt_stages: [image_original, image_encoded]
-    target_model: claude-sonnet-4
-    judge_method: refusal
-
-  - mode: evaluate
-    source_dir: outputs/imaging/jailbreakbench_benign/formal_logic_fc_typography_20260504_025625_66957046
-    prompt_stages: [image_original, image_encoded]
-    target_model: claude-sonnet-4
-    judge_method: refusal
-
-  - mode: evaluate
-    source_dir: outputs/imaging/jailbreakbench_benign/classical_chinese_simplified_literary_fc_typography_20260504_025625_33272661
-    prompt_stages: [image_original, image_encoded]
-    target_model: claude-sonnet-4
-    judge_method: refusal
-
-  # ================================================================
-  # Stage 7e — Killed task rerun: GPT-5-mini benign Sanskrit plain
-  # ================================================================
-  - mode: evaluate
-    source_dir: outputs/imaging/jailbreakbench_benign/sanskrit_literary_plain_20260503_001525_73650481
-    prompt_stages: [image_encoded]
-    target_model: gpt-5-mini
-    judge_method: refusal
-
-  # ================================================================
-  # Stage 8a — OR-Bench text encoding (first 100 rows)
-  # 4 tasks: 2 encodings × 2 datasets
-  # ================================================================
-
-  # -- OR-Bench harmful --
+  # -- Stage 9e: Classical Chinese HarmBench encoding --
   - mode: text_encode
-    source_file: data/orbench_harmful_prompts.jsonl
-    encoding: set_theory
-    prompt_range: [0, 100]
+    dataset: harmbench
+    encoding: classical_chinese_simplified
+    strategy: literary
+    prompt_range: [0, 99]
 
-  - mode: text_encode
-    source_file: data/orbench_harmful_prompts.jsonl
-    encoding: formal_logic
-    prompt_range: [0, 100]
+  # -- Stage 9d: Gemini 3 Pro Preview eval (set_theory + formal_logic, text + image) --
+  - mode: evaluate
+    source_dir: outputs/text_encode/harmbench/set_theory_20260429_182521
+    prompt_stages: [text_original, text_encoded]
+    target_model: gemini-3-pro-preview
+    judge_method: harmbench
+    prompt_range: [0, 99]
 
-  # -- OR-Bench benign hard --
-  - mode: text_encode
-    source_file: data/orbench_benign_hard_prompts.jsonl
-    encoding: set_theory
-    prompt_range: [0, 100]
+  - mode: evaluate
+    source_dir: outputs/text_encode/harmbench/formal_logic_20260430_174327
+    prompt_stages: [text_original, text_encoded]
+    target_model: gemini-3-pro-preview
+    judge_method: harmbench
+    prompt_range: [0, 99]
 
-  - mode: text_encode
-    source_file: data/orbench_benign_hard_prompts.jsonl
-    encoding: formal_logic
-    prompt_range: [0, 100]
+  - mode: evaluate
+    source_dir: outputs/imaging/harmbench/set_theory_plain_20260429_215144
+    prompt_stages: [image_original, image_encoded]
+    target_model: gemini-3-pro-preview
+    judge_method: harmbench
+    prompt_range: [0, 99]
+
+  - mode: evaluate
+    source_dir: outputs/imaging/harmbench/formal_logic_plain_20260501_020623
+    prompt_stages: [image_original, image_encoded]
+    target_model: gemini-3-pro-preview
+    judge_method: harmbench
+    prompt_range: [0, 99]
+
+  # -- Stage 10b: SAGE baseline (set_theory + formal_logic × 3 frontier models) --
+  - mode: defense
+    source_dir: outputs/text_encode/harmbench/set_theory_20260429_182521
+    target_model: gpt-5.4
+    defense_method: sage
+    judge_method: harmbench
+    prompt_range: [0, 99]
+
+  - mode: defense
+    source_dir: outputs/text_encode/harmbench/formal_logic_20260430_174327
+    target_model: gpt-5.4
+    defense_method: sage
+    judge_method: harmbench
+    prompt_range: [0, 99]
+
+  - mode: defense
+    source_dir: outputs/text_encode/harmbench/set_theory_20260429_182521
+    target_model: claude-sonnet-4-6
+    defense_method: sage
+    judge_method: harmbench
+    prompt_range: [0, 99]
+
+  - mode: defense
+    source_dir: outputs/text_encode/harmbench/formal_logic_20260430_174327
+    target_model: claude-sonnet-4-6
+    defense_method: sage
+    judge_method: harmbench
+    prompt_range: [0, 99]
+
+  - mode: defense
+    source_dir: outputs/text_encode/harmbench/set_theory_20260429_182521
+    target_model: gemini-3-pro-preview
+    defense_method: sage
+    judge_method: harmbench
+    prompt_range: [0, 99]
+
+  - mode: defense
+    source_dir: outputs/text_encode/harmbench/formal_logic_20260430_174327
+    target_model: gemini-3-pro-preview
+    defense_method: sage
+    judge_method: harmbench
+    prompt_range: [0, 99]
+
+  # -- Stage 10c: SemanticSmooth baseline (set_theory + formal_logic × 3 frontier models) --
+  - mode: defense
+    source_dir: outputs/text_encode/harmbench/set_theory_20260429_182521
+    target_model: gpt-5.4
+    defense_method: semantic_smooth
+    judge_method: harmbench
+    prompt_range: [0, 99]
+
+  - mode: defense
+    source_dir: outputs/text_encode/harmbench/formal_logic_20260430_174327
+    target_model: gpt-5.4
+    defense_method: semantic_smooth
+    judge_method: harmbench
+    prompt_range: [0, 99]
+
+  - mode: defense
+    source_dir: outputs/text_encode/harmbench/set_theory_20260429_182521
+    target_model: claude-sonnet-4-6
+    defense_method: semantic_smooth
+    judge_method: harmbench
+    prompt_range: [0, 99]
+
+  - mode: defense
+    source_dir: outputs/text_encode/harmbench/formal_logic_20260430_174327
+    target_model: claude-sonnet-4-6
+    defense_method: semantic_smooth
+    judge_method: harmbench
+    prompt_range: [0, 99]
+
+  - mode: defense
+    source_dir: outputs/text_encode/harmbench/set_theory_20260429_182521
+    target_model: gemini-3-pro-preview
+    defense_method: semantic_smooth
+    judge_method: harmbench
+    prompt_range: [0, 99]
+
+  - mode: defense
+    source_dir: outputs/text_encode/harmbench/formal_logic_20260430_174327
+    target_model: gemini-3-pro-preview
+    defense_method: semantic_smooth
+    judge_method: harmbench
+    prompt_range: [0, 99]

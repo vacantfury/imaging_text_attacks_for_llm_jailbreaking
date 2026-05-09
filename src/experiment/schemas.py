@@ -69,6 +69,7 @@ class TextEncodeResult(BaseModel):
     encoder_config: dict
     benchmark: str
     source_file: str
+    prompt_range: Optional[list[int]] = None
     count: int
     elapsed_seconds: float
     output_dir: str
@@ -83,6 +84,7 @@ class ImagingResult(BaseModel):
     renderer_config: dict
     render: list[str]
     source_dir: str
+    prompt_range: Optional[list[int]] = None
     count: int
     image_count: int
     elapsed_seconds: float
@@ -123,6 +125,7 @@ class EvaluateResult(BaseModel):
     encoding: str
     benchmark: str
     prompt_stages: list[str]
+    prompt_range: Optional[list[int]] = None
     source_dir: str
     system_message: Optional[str] = None
     image_instruction: str
@@ -133,6 +136,29 @@ class EvaluateResult(BaseModel):
     asr: Optional[dict[str, float]] = None
     refusal_rate: Optional[dict[str, float]] = None
     usage: dict
+    elapsed_seconds: float
+    output_dir: str
+    upstream: Optional[dict] = None
+
+
+class DefenseResult(BaseModel):
+    """Complete record of a defense task run — written to results.json."""
+    mode: str = "defense"
+    defense_method: str
+    defense_config: Optional[dict] = None
+    target_model: str
+    encoding: str
+    benchmark: str
+    prompt_range: Optional[list[int]] = None
+    source_dir: str
+    system_message: Optional[str] = None
+    judge_method: str
+    judge_llm_config: JudgeLLMConfig
+    count: int
+    asr: Optional[float] = None
+    refusal_rate: Optional[float] = None
+    usage: Optional[dict] = None
+    defense_usage: Optional[dict] = None
     elapsed_seconds: float
     output_dir: str
     upstream: Optional[dict] = None

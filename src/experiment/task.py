@@ -28,7 +28,7 @@ from .config import load_conf as _load_conf
 from .schemas import (
     RawPrompt, Prompt, EvaluationRow,
     TextEncodeResult, ImagingResult,
-    EvaluateResult, TargetModelConfig, JudgeLLMConfig,
+    EvaluateResult, DefenseResult, TargetModelConfig, JudgeLLMConfig,
 )
 
 logger = get_logger(__name__)
@@ -77,12 +77,12 @@ def _load_and_slice_prompts(source_dir: str, config: dict) -> list[Prompt]:
 def _apply_prompt_range(items: list, config: dict) -> list:
     """Slice items by prompt_range from config.
     
-    prompt_range: [start, end] — positional index (0-based), end exclusive.
+    prompt_range: [start, end] — positional index (0-based), both inclusive.
     If missing/invalid, returns all items.
     
     Examples:
-        prompt_range: [0, 5]   → first 5 items
-        prompt_range: [10, 20] → items 10–19
+        prompt_range: [0, 99]  → first 100 items (indices 0–99)
+        prompt_range: [10, 19] → items 10–19 (10 items)
     """
     prompt_range = config.get("prompt_range")
     if not prompt_range or not isinstance(prompt_range, list) or len(prompt_range) != 2:
@@ -95,19 +95,23 @@ def _apply_prompt_range(items: list, config: dict) -> list:
         return items
     
     start = max(0, start)
-    end = min(len(items), end)
-    if start >= end:
-        logger.warning(f"prompt_range [{start}, {end}) is empty, using all {len(items)} prompts")
+    end = min(len(items) - 1, end)
+    if start > end:
+        logger.warning(f"prompt_range [{start}, {end}] is empty, using all {len(items)} prompts")
         return items
     
-    sliced = items[start:end]
-    logger.info(f"Applied prompt_range [{start}, {end}): {len(sliced)} of {len(items)} prompts")
+    sliced = items[start:end + 1]
+    logger.info(f"Applied prompt_range [{start}, {end}]: {len(sliced)} of {len(items)} prompts")
     return sliced
 
 
 
 BENCHMARK_ALIASES = {
+    "jbb_benign": "jailbreakbench_benign",
     "jbb": "jailbreakbench",
+    "orbench_benign_hard": "orbench_benign_hard",
+    "orbench_benign_1k": "orbench_benign_1k",
+    "orbench_harmful": "orbench_harmful",
 }
 
 
@@ -119,13 +123,15 @@ def _infer_benchmark(source_path: str) -> str:
     For file paths (data/jbb_prompts.jsonl), checks known aliases.
     """
     parts = Path(source_path).parts
-    known = {"harmbench", "jailbreakbench", "jailbreakbench_benign"}
+    known = {"harmbench", "jailbreakbench", "jailbreakbench_benign",
+             "orbench_harmful", "orbench_benign_hard", "orbench_benign_1k"}
     for part in parts:
         if part in known:
             return part
     # File-based fallback: check aliases in the filename/path
+    # Check longer aliases first to avoid partial matches
     name = str(source_path).lower()
-    for alias, bench in BENCHMARK_ALIASES.items():
+    for alias, bench in sorted(BENCHMARK_ALIASES.items(), key=lambda x: -len(x[0])):
         if alias in name:
             return bench
     return "harmbench"
@@ -196,12 +202,14 @@ def _run_text_encode(config: dict) -> dict[str, Any]:
     
     logger.info(f"Wrote {len(prompts)} encoded prompts to {out_dir} ({elapsed}s)")
 
+    prompt_range = config.get("prompt_range")
     result = TextEncodeResult(
         encoding=encoding,
         encoder_type=resolved_type,
         encoder_config=encoder_config,
         benchmark=benchmark,
         source_file=source_file,
+        prompt_range=prompt_range if prompt_range else None,
         count=len(prompts),
         elapsed_seconds=elapsed,
         output_dir=str(out_dir),
@@ -354,12 +362,14 @@ def _run_imaging(config: dict) -> dict[str, Any]:
     elapsed = round(time.time() - t0, 2)
     logger.info(f"Rendered {image_count} images to {out_dir}/images/ ({elapsed}s)")
 
+    prompt_range = config.get("prompt_range")
     result = ImagingResult(
         encoding=encoding,
         renderer_type=renderer_type,
         renderer_config=renderer_config,
         render=render,
         source_dir=source_dir,
+        prompt_range=prompt_range if prompt_range else None,
         count=len(prompts),
         image_count=image_count,
         elapsed_seconds=elapsed,
@@ -456,6 +466,11 @@ def _run_asr_judging(
             if detailed_df is not None and "is_jailbroken" in detailed_df.columns:
                 verdict_by_id = dict(
                     zip(detailed_df["id"].astype(str), detailed_df["is_jailbroken"]))
+                for row in stage_rows:
+                    row.asr = verdict_by_id.get(row.id)
+            elif detailed_df is not None and "is_refused" in detailed_df.columns:
+                verdict_by_id = dict(
+                    zip(detailed_df["id"].astype(str), detailed_df["is_refused"]))
                 for row in stage_rows:
                     row.asr = verdict_by_id.get(row.id)
 
@@ -590,12 +605,14 @@ def _run_evaluate(config: dict) -> dict[str, Any]:
 
     # Build structured result with all resolved parameters
     judge_llm_raw = eval_config.get("judge_llm_config", {})
+    prompt_range = config.get("prompt_range")
     result = EvaluateResult(
         target_model=model_str,
         target_model_config=TargetModelConfig(**target_model_config),
         encoding=encoding,
         benchmark=benchmark,
         prompt_stages=prompt_stages,
+        prompt_range=prompt_range if prompt_range else None,
         source_dir=source_dir,
         system_message=system_message,
         image_instruction=image_instruction,
@@ -631,12 +648,196 @@ def _run_evaluate(config: dict) -> dict[str, Any]:
     }
 
 
+# ======================== defense ========================
+
+def _run_defense(config: dict) -> dict[str, Any]:
+    """
+    Mode: defense
+
+    Applies a defense strategy (SAGE, SemanticSmooth) to encoded prompts,
+    queries the target model through the defense, runs ASR judging.
+
+    Input: text_encode output dir (prompts.jsonl with encoded field).
+    Output: same format as evaluate (raw_results.jsonl + results.json).
+    """
+    from src.defense import create_defender
+
+    t0 = time.time()
+
+    source_dir = config.get("source_dir")
+    model_str = config.get("target_model")
+    defense_method = config.get("defense_method")
+
+    if not source_dir:
+        raise ValueError("defense mode requires 'source_dir'")
+    if not model_str:
+        raise ValueError("defense mode requires 'target_model'")
+    if not defense_method:
+        raise ValueError("defense mode requires 'defense_method'")
+
+    logger.info(f"Defense: method={defense_method}, model={model_str}")
+
+    # Load prompts from text_encode output
+    prompts = _load_and_slice_prompts(source_dir, config)
+    encoding = prompts[0].encoding if prompts else config.get("encoding", "unknown")
+    benchmark = config.get("benchmark", _infer_benchmark(source_dir))
+
+    # Create defender: 3-layer merge (default → method-specific → task-level)
+    defense_config = _load_conf(
+        "defense", override_name=defense_method,
+        task_overrides=config.get("defense_config"))
+    logger.info(f"Loaded defense config for method={defense_method}: {defense_config}")
+
+    # Extract perturbation_model before passing config to defender constructor
+    perturbation_model = defense_config.pop("perturbation_model", None)
+    defender = create_defender(defense_method, **defense_config)
+
+    # Create target model service
+    service = LLMServiceFactory.create(model_str)
+    system_message = config.get("system_message", None)
+
+    # Inject perturbation service if the defender needs one
+    if perturbation_model:
+        from src.defense.defenders.semantic_smooth_defender import SemanticSmoothDefender
+        if isinstance(defender, SemanticSmoothDefender):
+            perturbation_service = LLMServiceFactory.create(perturbation_model)
+            defender.set_perturbation_service(perturbation_service)
+
+    # Build prompt dicts for defender
+    prompt_dicts = [{"id": p.id, "encoded": p.encoded} for p in prompts]
+
+    # Run defense + query
+    results = defender.defend_and_query(
+        prompts=prompt_dicts,
+        service=service,
+        system_message=system_message,
+    )
+
+    # Build EvaluationRows
+    all_rows: list[EvaluationRow] = []
+    for prompt_id, response_text in results:
+        row = EvaluationRow(
+            id=prompt_id,
+            prompt_stage=f"text_encoded__{defense_method}",
+            response=response_text,
+            asr=None,
+        )
+        all_rows.append(row)
+
+    # Output dir
+    out_dir = Path(get_new_experiment_data_dir(
+        "outputs/defense", dataset=benchmark,
+        model=f"{model_str}_{defense_method}_{encoding}"))
+
+    # ASR judging
+    eval_config = _load_conf("evaluation")
+    judge_method = config.get("judge_method",
+                              eval_config.get("judge_method", "harmbench"))
+
+    if judge_method in ("refusal", "orbench"):
+        stat_key = "refusal_rate"
+        metric_label = "Refusal rate"
+    else:
+        stat_key = "attack_success_rate"
+        metric_label = "ASR"
+
+    metric_value = None
+    try:
+        judge_llm_config = eval_config.get("judge_llm_config", {}).copy()
+        judge_model = judge_llm_config.pop("model", "gpt-5-nano")
+
+        from src.evaluation.evaluator_factory import EvaluatorFactory
+        evaluator = EvaluatorFactory.create(
+            method=judge_method, model=judge_model, **judge_llm_config)
+
+        original_lookup = {p.id: p.original for p in prompts}
+        judge_prompts = [{"id": r.id, "prompt": original_lookup[r.id]} for r in all_rows]
+        judge_processed = [original_lookup[r.id] for r in all_rows]
+        judge_responses = {r.id: r.response for r in all_rows}
+
+        detailed_df, stats = evaluator.evaluate(
+            prompts=judge_prompts,
+            processed_prompts=judge_processed,
+            responses=judge_responses,
+        )
+
+        if detailed_df is not None and "is_jailbroken" in detailed_df.columns:
+            verdict_by_id = dict(
+                zip(detailed_df["id"].astype(str), detailed_df["is_jailbroken"]))
+            for row in all_rows:
+                row.asr = verdict_by_id.get(row.id)
+        elif detailed_df is not None and "is_refused" in detailed_df.columns:
+            verdict_by_id = dict(
+                zip(detailed_df["id"].astype(str), detailed_df["is_refused"]))
+            for row in all_rows:
+                row.asr = verdict_by_id.get(row.id)
+
+        metric_value = stats.get(stat_key, 0.0)
+        logger.info(f"  {metric_label}: {metric_value:.2f}%")
+
+    except Exception as e:
+        logger.warning(f"Judging failed: {e}", exc_info=True)
+
+    # Write raw_results.jsonl
+    results_path = out_dir / "raw_results.jsonl"
+    with open(results_path, "w") as f:
+        for row in all_rows:
+            f.write(row.model_dump_json() + "\n")
+
+    elapsed = round(time.time() - t0, 2)
+    logger.info(f"Defense complete: {len(all_rows)} prompts, {elapsed}s")
+
+    # Build result
+    judge_llm_raw = eval_config.get("judge_llm_config", {})
+    prompt_range = config.get("prompt_range")
+    result = DefenseResult(
+        defense_method=defense_method,
+        defense_config=defense_config if defense_config else None,
+        target_model=model_str,
+        encoding=encoding,
+        benchmark=benchmark,
+        prompt_range=prompt_range if prompt_range else None,
+        source_dir=source_dir,
+        system_message=system_message,
+        judge_method=judge_method,
+        judge_llm_config=JudgeLLMConfig(**judge_llm_raw),
+        count=len(all_rows),
+        usage=service.get_usage(),
+        defense_usage=defender.get_usage(),
+        elapsed_seconds=elapsed,
+        output_dir=str(out_dir),
+        upstream=_load_results(source_dir) or None,
+    )
+
+    if judge_method in ("refusal", "orbench"):
+        result.refusal_rate = metric_value
+    else:
+        result.asr = metric_value
+
+    _save_results(out_dir, result.model_dump(exclude_none=True))
+
+    metric_key = "asr" if result.asr is not None else "refusal_rate"
+    return {
+        "status": "success",
+        "output_dir": str(out_dir),
+        "count": len(all_rows),
+        "defense_method": defense_method,
+        "target_model": model_str,
+        "encoding": encoding,
+        "judge_method": judge_method,
+        metric_key: metric_value,
+        "usage": service.get_usage(),
+        "elapsed_seconds": elapsed,
+    }
+
+
 # ======================== Dispatcher ========================
 
 TASK_MODES = {
     "text_encode": _run_text_encode,
     "imaging": _run_imaging,
     "evaluate": _run_evaluate,
+    "defense": _run_defense,
 }
 
 

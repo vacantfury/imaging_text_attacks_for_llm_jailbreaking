@@ -40,10 +40,16 @@ class BaseImageRenderer(ABC):
         blur_radius: float = 0,
         jpeg_quality: int = 100,
         noise_std: float = 0,
+        max_aspect_ratio: float = 3.0,
     ):
         self.blur_radius = blur_radius
         self.jpeg_quality = jpeg_quality
         self.noise_std = noise_std
+        self.max_aspect_ratio = max_aspect_ratio
+
+    def _width_for_aspect(self, height: int) -> int:
+        """Minimum width to satisfy max_aspect_ratio given a height."""
+        return max(1, int(height / self.max_aspect_ratio))
     
     @abstractmethod
     def _render_clean(self, text: str) -> Image.Image:

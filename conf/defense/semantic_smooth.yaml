@@ -1,0 +1,7 @@
+# SemanticSmooth defense configuration
+# "Defending LLMs against Jailbreak Attacks via Semantic Smoothing" (Ji et al., AACL 2025)
+#
+# Uses SUMMARIZE transformation (strongest training-free variant from the paper).
+
+n_copies: 5                       # Number of summarized copies per prompt
+perturbation_model: gpt-4.1-mini  # Model used for summarization

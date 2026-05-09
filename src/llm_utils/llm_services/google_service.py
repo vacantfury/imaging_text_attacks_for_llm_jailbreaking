@@ -56,14 +56,11 @@ class GoogleService(BaseLLMService):
 
     @staticmethod
     def _build_content_parts(
-        messages: List[Tuple[str, Optional[Any]]], system_message: Optional[str],
+        messages: List[Tuple[str, Optional[Any]]],
     ) -> list:
         """Convert conversation messages to a flat list of content parts
         (strings and PIL images) that Google's API accepts."""
         parts: list = []
-        if system_message:
-            parts.append(system_message)
-
         for text, image in messages:
             if image is None:
                 parts.append(text)
@@ -88,29 +85,30 @@ class GoogleService(BaseLLMService):
         prepared: List[Tuple[str, list]],
         temperature: float,
         max_tokens: int,
+        system_message: Optional[str] = None,
     ) -> list:
         inline_requests = []
         for _item_id, parts in prepared:
-            google_parts = []
+            contents = []
             for p in parts:
-                if isinstance(p, str):
-                    google_parts.append({"text": p})
-                elif isinstance(p, PIL.Image.Image):
-                    google_parts.append(p)
+                if isinstance(p, (str, PIL.Image.Image)):
+                    contents.append(p)
                 else:
-                    google_parts.append({"text": str(p)})
+                    contents.append(str(p))
 
-            req: Dict[str, Any] = {
-                "contents": [{"parts": google_parts, "role": "user"}],
-                "config": {
-                    "temperature": temperature,
-                    "max_output_tokens": max_tokens,
-                },
+            config: Dict[str, Any] = {
+                "temperature": temperature,
+                "max_output_tokens": max_tokens,
             }
             if temperature > 0:
-                req["config"]["top_p"] = self.top_p
+                config["top_p"] = self.top_p
+            if system_message:
+                config["system_instruction"] = system_message
 
-            inline_requests.append(req)
+            inline_requests.append({
+                "contents": contents,
+                "config": config,
+            })
         return inline_requests
 
     def _submit_batch(self, inline_requests: list):
@@ -184,11 +182,13 @@ class GoogleService(BaseLLMService):
         max_tokens = kwargs.get("max_tokens", self.max_tokens)
 
         prepared = [
-            (cid, self._build_content_parts(msgs, system_message))
+            (cid, self._build_content_parts(msgs))
             for cid, msgs in conversations
         ]
 
-        inline_reqs = self._build_inline_requests(prepared, temperature, max_tokens)
+        inline_reqs = self._build_inline_requests(
+            prepared, temperature, max_tokens, system_message
+        )
         batch_job = self._submit_batch(inline_reqs)
         batch_job = self._poll_until_done(batch_job)
         return self._collect_results(batch_job, prepared, is_test)

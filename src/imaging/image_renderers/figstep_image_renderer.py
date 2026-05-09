@@ -75,12 +75,19 @@ class FigstepImageRenderer(BaseImageRenderer):
         wrap_width: int = DEFAULT_WRAP_WIDTH,
         num_steps: int = DEFAULT_NUM_STEPS,
         font_path: Optional[str] = None,
+        # Dynamic adaptation params
+        max_width: int = 2400,
+        min_font_size: int = 40,
         # Degradation params (passed to base)
         blur_radius: float = 0,
         jpeg_quality: int = 100,
         noise_std: float = 0,
+        max_aspect_ratio: float = 3.0,
     ):
-        super().__init__(blur_radius=blur_radius, jpeg_quality=jpeg_quality, noise_std=noise_std)
+        super().__init__(
+            blur_radius=blur_radius, jpeg_quality=jpeg_quality,
+            noise_std=noise_std, max_aspect_ratio=max_aspect_ratio,
+        )
         self.font_size = font_size
         self.width = width
         self.bg_color = bg_color
@@ -91,6 +98,8 @@ class FigstepImageRenderer(BaseImageRenderer):
         self.wrap_width = wrap_width
         self.num_steps = num_steps
         self._font_path = font_path
+        self._max_width = max_width
+        self._min_font_size = min_font_size
         self._font_cache: dict[str, ImageFont.FreeTypeFont] = {}
 
     def _get_font(self, text: str) -> ImageFont.FreeTypeFont:
@@ -108,35 +117,53 @@ class FigstepImageRenderer(BaseImageRenderer):
         return text
 
     def _render_clean(self, text: str) -> Image.Image:
-        """Render text with auto-height canvas to fit all content."""
-        font = self._get_font(text)
-        available_w = self.width - 2 * self.text_x
-        wrap_width = estimate_wrap_width(font, available_w, text)
+        """Render text with dynamic canvas adaptation for aspect ratio.
 
-        formatted = self._format_text(text, wrap_width)
-        text_h = measure_text_height(formatted, font, self.spacing)
-        canvas_h = max(200, text_h + self.text_y + self.text_x)
+        Strategy:
+        1. Start with configured width and font_size.
+        2. Measure height — if aspect ratio exceeds max_aspect_ratio, widen
+           canvas (up to max_width) to reflow text into fewer lines.
+        3. If still too tall after max width, shrink font (down to min_font_size).
+        4. Clamp height to MAX_IMAGE_HEIGHT as a final safety net.
+        """
+        font_size = self.font_size
+        canvas_w = self.width
+        font = self._get_font(text)
+
+        for iteration in range(8):
+            available_w = canvas_w - 2 * self.text_x
+            wrap_width = estimate_wrap_width(font, available_w, text)
+            formatted = self._format_text(text, wrap_width)
+            text_h = measure_text_height(formatted, font, self.spacing)
+            canvas_h = max(200, text_h + self.text_y + self.text_x)
+
+            aspect = canvas_h / canvas_w if canvas_w > 0 else 999
+            if aspect <= self.max_aspect_ratio:
+                break
+
+            min_w = self._width_for_aspect(canvas_h)
+            if min_w <= self._max_width and canvas_w < min_w:
+                canvas_w = min(min_w, self._max_width)
+                continue
+
+            canvas_w = self._max_width
+            if font_size > self._min_font_size:
+                font_size = max(self._min_font_size, int(font_size * 0.75))
+                font = ImageFont.truetype(font.path, font_size)
+                continue
+
+            break
 
         if canvas_h > MAX_IMAGE_HEIGHT:
-            original_h = canvas_h
-            font_size = self.font_size
-            min_font = 10
-            for _ in range(6):
-                available_h = MAX_IMAGE_HEIGHT - self.text_y - self.text_x
-                scale = available_h / text_h * 0.90
-                font_size = max(min_font, int(font_size * scale))
-                font = ImageFont.truetype(font.path, font_size)
-                wrap_width = estimate_wrap_width(font, available_w, text)
-                formatted = self._format_text(text, wrap_width)
-                text_h = measure_text_height(formatted, font, self.spacing)
-                canvas_h = max(200, text_h + self.text_y + self.text_x)
-                if canvas_h <= MAX_IMAGE_HEIGHT or font_size <= min_font:
-                    break
-            logger.info(
-                f"FigStep auto-fit: {self.font_size}pt → {font_size}pt, "
-                f"height {original_h} → {canvas_h}px")
+            canvas_h = MAX_IMAGE_HEIGHT
 
-        im = Image.new("RGB", (self.width, canvas_h), self.bg_color)
+        if canvas_w != self.width or font_size != self.font_size:
+            logger.debug(
+                f"FigStep adaptive: width {self.width}→{canvas_w}px, "
+                f"font {self.font_size}→{font_size}pt, "
+                f"size {canvas_w}x{canvas_h}px (aspect {canvas_h/canvas_w:.1f}:1)")
+
+        im = Image.new("RGB", (canvas_w, canvas_h), self.bg_color)
         dr = ImageDraw.Draw(im)
         dr.text(
             (self.text_x, self.text_y),

@@ -1,5 +1,5 @@
 # FigStep renderer — overrides from default.yaml
-# Matches Gong et al. (AAAI 2025) exactly.
+# Matches Gong et al. (AAAI 2025) exactly for short prompts.
 # Reference: other_repos/FigStep/src/generate_prompts.py
 
 renderer_type: figstep
@@ -13,3 +13,7 @@ text_y: 10
 spacing: 11
 wrap_width: 15
 num_steps: 3
+
+# Dynamic adaptation for long/CJK text (canvas widens to satisfy max_aspect_ratio)
+max_width: 2400
+min_font_size: 40

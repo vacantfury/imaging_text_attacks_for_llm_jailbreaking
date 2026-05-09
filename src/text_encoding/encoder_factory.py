@@ -24,6 +24,7 @@ from .encoders.llm_quantum_mechanics_encoder import QuantumMechanicsLLMEncoder
 from .encoders.llm_formal_logic_encoder import FormalLogicLLMEncoder
 from .encoders.non_llm_baseline_encoder import BaselineEncoder
 from .encoders.llm_classical_language_encoder import LLMClassicalLanguageEncoder
+from .encoders.llm_semantic_camo_encoder import SemanticCamoEncoder
 
 
 logger = get_logger(__name__)
@@ -52,6 +53,7 @@ ENCODERS: Dict[str, type] = {
     EncoderType.LLM_FORMAL_LOGIC: FormalLogicLLMEncoder,
     EncoderType.NON_LLM_BASELINE: BaselineEncoder,
     EncoderType.LLM_CLASSICAL_LANGUAGE: LLMClassicalLanguageEncoder,
+    EncoderType.LLM_SEMANTIC_CAMO: SemanticCamoEncoder,
 }
 
 
@@ -69,6 +71,7 @@ ENCODING_ALIASES: Dict[str, str] = {
     "addition_equation": "non_llm_addition_equation_split_reassemble",
     "conditional_probability": "non_llm_conditional_probability",
     "symbol_injection": "non_llm_symbol_injection",
+    "semantic_camo": "llm_semantic_camo",
 }
 
 

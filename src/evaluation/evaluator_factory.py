@@ -33,12 +33,12 @@ class EvaluatorFactory:
             return HarmBenchEvaluator(model=model, **kwargs)
         elif method == "jailbreakbench" or method == "jbb":
             return JailbreakBenchEvaluator(model=model, **kwargs)
-        elif method == "refusal":
+        elif method in ("jbb_refusal", "refusal"):
             return JailbreakBenchRefusalEvaluator(model=model, **kwargs)
         elif method == "orbench":
             return ORBenchEvaluator(model=model, **kwargs)
         else:
             raise ValueError(
                 f"Unknown evaluation method: {method}. "
-                "Supported: 'harmbench', 'jailbreakbench', 'refusal', 'orbench'"
+                "Supported: 'harmbench', 'jailbreakbench', 'jbb_refusal', 'orbench'"
             )

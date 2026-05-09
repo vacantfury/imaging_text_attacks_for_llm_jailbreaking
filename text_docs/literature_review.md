@@ -20,6 +20,12 @@ This literature review surveys research relevant to our proposed controlled stud
 
 **Domain context exploitation.** Hung et al. (2026) demonstrate that domain-specific contexts selectively relax defenses: chemistry contexts lower barriers for chemical knowledge ("vertical unlocking"), while safety-research contexts trigger **broader relaxation spanning all harm categories** ("general unlocking"). Their JARGON framework combines safety-research contexts with multi-turn adversarial interactions, achieving **93–100% ASR** (average **99%**) across seven frontier models including GPT-5.2, Claude-4.5, and Gemini-3. MDS/attention analysis reveals that JARGON queries occupy an intermediate "gray zone" between benign and harmful inputs in activation space where refusal decisions become unreliable — the model cannot cleanly separate them from benign safety-research queries. Defense evaluation shows that even with safety system prompts, JARGON maintains high ASR. This is relevant to our encoding strategy: classical language or mathematical encoding may similarly push prompts into a gray zone where safety classifiers are uncertain — the encoded content looks like legitimate academic/mathematical discourse rather than clear harmful intent.
 
+**Natural distribution shift attacks.** Ren et al. (ACL 2025) identify that prompts semantically related to harmful content — but not overtly malicious — bypass safety mechanisms through natural distribution shifts. Their ActorBreaker framework, grounded in actor-network theory, identifies both human and non-human actors related to toxic prompts and crafts multi-turn prompts that gradually lead LLMs to reveal unsafe content. This outperforms existing attacks in diversity, effectiveness, and efficiency. **Relevance:** Our encoding approach creates an analogous distribution shift — encoded prompts occupy the space of legitimate academic/mathematical text, not harmful queries, exploiting the same "gray zone" phenomenon.
+
+**Automated jailbreak generation.** Kim et al. (EMNLP Findings 2025) introduce TroGEN, a scenario-driven framework using an adversarial agent to automatically generate jailbreak prompts. TroGEN demonstrates resilience against existing defense methods and adapts to multimodal settings — relevant as a potential future evaluation of our IRC defense against automatically generated attacks.
+
+**Comprehensive attack-defense analysis.** Xu et al. (ACL Findings 2024) systematically evaluate 9 attack and 7 defense techniques across Vicuna, Llama, and GPT-3.5 Turbo. Key findings: white-box attacks underperform universal techniques; special tokens in input significantly affect ASR. This provides methodological grounding for our factorial experimental design and confirms the need for controlled comparison across both attack and defense dimensions.
+
 ### 2.2 Gap Analysis
 
 All text-based attacks operate exclusively in the **text modality**. When the same harmful content is delivered as an image of text, it is unclear whether safety mechanisms — trained on tokenized text — respond identically, more robustly, or less effectively. Our study directly tests this.
@@ -246,7 +252,74 @@ Llama Guard (Inan et al., 2023) operates on **tokenized text**, making it archit
 
 No existing defense work evaluates the simple countermeasure of **OCR preprocessing** — extracting text from images before safety classification.
 
-### 6.4 Over-Refusal and Exaggerated Safety
+### 6.4 Text-Level Jailbreak Defenses (Comparison Baselines)
+
+This subsection surveys existing defenses that could serve as comparison baselines for our proposed image-rendering defense (IRC). These methods were designed primarily for adversarial suffix or prompt-level attacks — their effectiveness against **semantic encoding attacks** (math notation, classical language) is largely untested.
+
+**SmoothLLM** (Robey et al., NeurIPS 2023 R0-FoMo Workshop) introduces random character-level perturbation plus majority-vote aggregation. By sampling N copies of an input with random character substitution/insertion/deletion, it achieves <1% ASR against GCG-style adversarial suffixes. However, the perturbation model targets token-level brittleness — it is unlikely to be effective against semantic encodings (set theory, formal logic) where the meaningful content is at the proposition level, not the character level. **SemanticSmooth** (Ji et al., AACL-IJCNLP 2025) extends this to semantic-level perturbation using LLM-based paraphrasing of multiple input copies, achieving robustness against both token-level and prompt-level attacks while maintaining nominal performance on AlpacaEval and PiQA. This is a stronger baseline for our comparison.
+
+**Baseline Defenses** (Jain et al., 2023) systematically evaluates three categories: (1) detection via perplexity filtering, (2) input preprocessing via paraphrasing and retokenization, and (3) adversarial training. Key finding: paraphrasing is stronger in the LLM domain than in vision (due to discrete input space), but all defenses have robustness-performance trade-offs. For our study, the paraphrasing defense is the most relevant competitor: if an LLM can decode set_theory or formal_logic encoding when asked to "paraphrase," the paraphrasing defense would be effective. If not, our IRC fills the gap.
+
+**Perplexity-Based Detection** (Alon & Kamfonas, 2023) exploits the observation that adversarial suffixes have exceedingly high perplexity. A GPT-2-based perplexity filter with Light-GBM classifier achieves near-perfect detection of machine-generated adversarial attacks but **fails against human-crafted jailbreaks** — and critically, would fail against semantic encodings which are valid natural language with normal perplexity distributions.
+
+**Broken-Token / CPT-Filtering** (Grillotti & Ségerie, 2025; Zheng et al., NeurIPS 2026) targets character-level encoding attacks (Caesar cipher, Base64, Leetspeak, Unicode substitution) via Characters-Per-Token analysis. Obfuscated text requires significantly more tokens per character than natural language (e.g., 613-char English: 128 tokens; Caesar cipher version: 294 tokens). Achieves 99.4–99.8% accuracy on character-level encodings. **Critical limitation for our setting:** CPT-Filtering targets tokenization anomalies. Our semantic encodings (set theory, formal logic, classical Chinese) are valid natural language text with normal tokenization patterns — they would pass CPT-Filtering undetected. This is the key gap our IRC defense fills.
+
+**Erase-and-Check** (Kumar et al., COLM 2024) provides certified safety guarantees by erasing tokens and checking subsequences with a safety filter. Achieves 92% detection of harmful prompts with adversarial suffixes of 20 tokens. Effective against token-level attacks but computationally expensive (multiple evaluations per input) and not designed for semantic-level obfuscation.
+
+**SAGE** (Ding et al., ACL Findings 2025) is a training-free defense exploiting the detection-generation discrepancy: LLMs can identify jailbreaks (99% discrimination accuracy) but still produce harmful responses when processing them directly. SAGE uses a Discriminative Analysis Module to first assess safety, then routes through a safety-aligned generation path. Achieves 99% defense success rate. However, it relies on the model's own safety discrimination — which may fail on encoded prompts that don't pattern-match as jailbreaks.
+
+**EDDF** (Xiang et al., ACL Findings 2025) extracts "attack essences" from known attacks into an offline vector database, then detects new attacks via semantic similarity. Reduces ASR by at least 20% over baselines. **Vulnerability to our encoding attacks:** encoded prompts have near-zero semantic similarity to known jailbreak templates in embedding space, likely evading EDDF's detection.
+
+**ABD: Activation Boundary Defense** (Gao et al., ACL 2025) identifies safety boundaries in activation space and constrains activations within safe regions using Bayesian optimization. Achieves 98% DSR against various jailbreak attacks with <2% capability impact. Requires access to model internals (white-box), unlike our training-free, black-box IRC.
+
+**TRYLOCK** (Thornton, 2026) combines four mechanisms: DPO alignment, Representation Engineering steering, adaptive threat classification, and input canonicalization. Achieves 88% ASR reduction on Mistral-7B while reducing over-refusal from 60% to 48%. A comprehensive defense-in-depth approach, but requires model access and fine-tuning.
+
+**Constitutional Classifiers++** (Anthropic, ICLR 2026) presents production-grade defense using two-stage classifier cascades and ensembles. Achieves 40× lower computational cost than baselines with 0.05% refusal rate on production traffic. This represents the industry frontier but is proprietary and closed-source.
+
+**PromptScreen** (Rao et al., 2025/2026) uses a multi-staged pipeline with text normalization, TF-IDF, and Linear SVM classification. Achieves 93.4% accuracy with 96.5% specificity and 10× latency reduction over ShieldGemma. Lightweight but relies on surface-level features that encoded prompts may bypass.
+
+**DR-Smoothing** (Wang et al., ICLR 2026) improves upon SmoothLLM with a two-stage disrupt-then-rectify scheme. Disruption breaks attack structure; rectification restores in-distribution form before evaluation. Provides theoretical guarantees and defends against both token-level and prompt-level attacks. The strongest smoothing-based defense, but effectiveness against semantic encoding is unknown.
+
+**RID: Real Intentions Defense** (Li et al., COLING 2025) extracts genuine intentions from jailbreak prompts via soft extraction (LLM-based intent analysis) and hard deletion (gradient-based pruning of low-impact tokens). For encoded prompts, intent extraction would need to first decode the encoding — unclear whether this succeeds on formal logic or set theory representations.
+
+**DELMAN** (Wang et al., ACL Findings 2025) uses targeted model editing to neutralize specific harmful behaviors with minimal parameter changes. Preserves utility via KL-divergence regularization. Effective for post-deployment patching of known jailbreaks, but requires identifying harmful behaviors a priori — unsuitable for novel encodings.
+
+**Summary for our IRC defense positioning:** Existing defenses fall into categories that all struggle with semantic encoding attacks:
+- **Token-level** (SmoothLLM, Erase-and-Check, CPT-Filtering): ineffective because encodings are valid language
+- **Embedding-based detection** (EDDF, semantic codebooks): ineffective because encoded prompts have low similarity to known jailbreaks
+- **Paraphrasing** (SemanticSmooth): uncertain — the key competitor to test empirically
+- **Model-internal** (ABD, DELMAN, TRYLOCK): require white-box access, unlike our black-box IRC
+- **Production systems** (Constitutional Classifiers++): proprietary, not comparable
+
+Our IRC occupies a unique niche: black-box, training-free, specifically effective against semantic encodings by leveraging the VLM's own heightened image safety.
+
+### 6.5 VLM-Specific Defenses
+
+**ASTRA** (Wang et al., CVPR 2025) identifies visual tokens most associated with jailbreaks via random ablation, then constructs steering vectors to remove adversarial feature directions during inference. State-of-the-art transferability across perturbation-based, structured-based, and text-only attacks on VLMs. Requires model internals (activation access) — not applicable to black-box API models.
+
+**GuardAlign** (Zhu et al., ICLR 2026) is a training-free defense combining optimal-transport-enhanced safety detection (measuring distribution distances between image patches and unsafe semantics) with cross-modal attentive calibration. Reduces unsafe response rates by up to 39% on SPA-VL while improving utility (VQAv2 78.51% → 79.21%). The closest existing work to our IRC philosophy (training-free, inference-time), but operates on **image-side attacks** (adversarial images, unsafe visual content). It does not address text-encoding attacks delivered through the text channel. Our IRC is complementary: it converts text-channel encoding attacks into image-channel inputs where GuardAlign's safety detection might then apply.
+
+**CASA** (Kumar et al., 2026) uses conditional decoding with internal MLLM representations to predict a binary safety token before response generation. Achieves >97% ASR reduction across modalities without external classifiers or modality-specific fine-tuning. Very strong results but requires model architecture modification (safety attention module insertion). Not applicable to closed-source API models.
+
+**VLMShield** (Qi et al., 2026) is a lightweight, plug-and-play detector using Multimodal Aggregated Feature Extraction (MAFE) to identify distributional patterns between benign and malicious prompts via CLIP features. External defense that operates independently of the target VLM. Evaluated on AdvBench, VLSafe, and MM-Vet. As an external classifier, it could potentially be trained to detect encoded text — but current training focuses on standard harmful prompts, not semantic encodings.
+
+**Safety Perception Distortion Rectification** (Zou et al., NeurIPS 2026) identifies that VLMs suffer from distorted safety perception when visual inputs are present and proposes rectification mechanisms. Relevant as theoretical grounding for why our IRC works: if image inputs distort safety perception toward over-caution, this same mechanism provides defense when we deliberately render text as images.
+
+**Defense-to-Attack** (Zhao et al., Pattern Recognition 2026) reveals an unexpected phenomenon: integrating weak defense cues into attack pipelines enhances jailbreak effectiveness. Three components: adversarial perturbation with encouraging semantics, defense-styled textual prompts, and red-team suffix generation. **Relevance:** This warns that if our IRC defense is too weak (only marginally reduces ASR), attackers might incorporate it into their pipeline. A strong defense must provide decisive ASR reduction, not marginal.
+
+### 6.6 Encoding-Specific Attacks (Expanded)
+
+**SemanticCamo** (Yan et al., ACL Findings 2025) attacks LLMs through semantic camouflage — replacing unsafe content with semantic features that conceal malicious intent while preserving query objectives. Achieves >80% ASR on GPT-4o and Claude-3.5 on average. Evaluated against various defenses, demonstrating that semantic transformations introduce critical challenges. **Directly relevant:** SemanticCamo represents the class of attacks our IRC defense targets — semantically-transformed content that evades surface-level detection.
+
+**Structured Semantic Cloaking (S2C)** (Sun et al., 2026) manipulates semantic intent reconstruction during inference via three mechanisms: contextual reframing, content fragmentation, and clue-guided camouflage. Achieves +12.4–26% ASR improvement over baselines. Against GPT-5-mini: +26% over strongest baseline on JBB-Behaviors. **Key insight:** S2C succeeds because intent isn't present in initial layers and only reconstructs late in generation — safety filters that inspect early representations miss it. Our IRC may catch S2C because the image-safety pathway processes the full rendered text before generation begins.
+
+**FrameShield** (Farzam et al., 2026) proposes detecting concealed jailbreaks via activation disentanglement — separating goal and framing representations in frozen LLMs to identify when harmful goals are preserved despite benign framing. A defense that specifically targets semantic obfuscation. **Relevance as potential competitor:** FrameShield addresses the same threat class (concealed harmful intent) but requires model internals; our IRC is the black-box alternative.
+
+**SATA: Simple Assistive Task Linkage** (Dong et al., ACL Findings 2025) masks harmful keywords and encodes them via an assistive task (masked language model or element lookup). Achieves 85% ASR on AdvBench. **Relevance:** SATA demonstrates that simple encoding schemes (keyword masking + lookup) are highly effective attacks. Our IRC defense would need to handle this class: rendering SATA-style prompts as images should trigger heightened safety because the overall prompt structure (masked query + lookup table) appears suspicious in image form.
+
+**POATE: Contrastive Questions** (Sachdeva et al., EMNLP 2025) uses contrastive reasoning to provoke harmful responses — crafting semantically opposing intents and integrating them with adversarial templates. 44% ASR. Their proposed defenses (Intent-Aware CoT, Reverse Thinking CoT) decompose queries to detect malicious intent — approaches that could complement our IRC.
+
+### 6.7 Over-Refusal and Exaggerated Safety
 
 This subsection covers a growing body of work recognizing that safety alignment often overshoots, causing models to refuse benign prompts — a phenomenon variously termed "over-refusal," "exaggerated safety," or "false refusal." This literature is directly relevant to our P2 (Benign Refusal Rate) experiments, which measure whether text encoding and image rendering affect refusal rates on harmless prompts.
 
@@ -272,19 +345,25 @@ Key mechanistic findings: (1) The **jailbreak direction** is defined as the norm
 
 **Direct relevance:** JRS provides the most direct mechanistic explanation for our modality gap hypothesis. If image-rendered text shifts representations toward the jailbreak direction (away from refusal), this explains why identical content in text vs. image modalities produces different ASR. Critically, the finding that even a blank image shifts 28 pp suggests the vision pathway inherently biases toward compliance. However, JRS is tested only on **open-source** models (2023–2024 era) — whether frontier models (GPT-5, Claude Sonnet 4) exhibit the same jailbreak direction structure remains unknown. Our experiments on frontier models provide complementary empirical evidence at the behavioral level.
 
-### 6.5 Multimodal Safety Survey
+### 6.8 Multimodal Safety Survey
 
 Liu et al. (2024) provide a comprehensive survey of MLLM safety on images and text, categorizing research into evaluation, attacks, and defenses. The survey highlights that visual modalities introduce unique risks beyond those inherited from text-only LLMs, including adversarial perturbations, visual instruction exploitation, and cross-modal interference. Crucially, the survey notes that models trained to reject harmful text instructions may still comply when the same instructions are delivered visually — precisely the hypothesis our study tests. The survey identifies the lack of systematic cross-modal safety comparison as an open problem.
 
-### 6.6 Model Safety Reports
+Yang et al. (2025) provide an updated comprehensive survey specifically on Large Vision-Language Model safety, covering attacks, defenses, and evaluations through a unified lifecycle framework. They evaluate Deepseek Janus-Pro and provide strategic recommendations. The companion resource (Awesome-LVLM-Safety) continuously compiles latest work.
+
+Wang et al. (EMNLP Findings 2025) survey safety in Large Reasoning Models specifically, noting that advanced reasoning capabilities introduce novel safety vulnerabilities distinct from standard LLMs.
+
+### 6.9 Model Safety Reports
 
 OpenAI's GPT-4V System Card (2023) acknowledges expanded attack surfaces from image inputs. Anthropic's Claude 3 model card (2024) reports improved nuance in safety judgments. Google's Gemini 1.5 report (2024) describes multimodal capabilities. All acknowledge multimodal safety risks but provide limited detail on typographic attack robustness.
 
-### 6.7 Gap Analysis
+### 6.10 Gap Analysis
 
-The defense literature is **asymmetric**: sophisticated attacks exist (FigStep, HADES, Text-DJ, perturbation methods), but the simplest possible defense — OCR preprocessing — has never been evaluated. Existing text-level defenses operate exclusively on tokenized text and cannot protect against image-rendered attacks. Testing OCR-first and dual-path filtering strategies specifically against typographic attacks on frontier models remains an open problem.
+The defense literature is **asymmetric**: sophisticated attacks exist (FigStep, HADES, Text-DJ, perturbation methods), but no defense specifically targets **semantic encoding attacks** delivered through VLMs. The newest defenses (Constitutional Classifiers++, CASA, GuardAlign) are powerful but either proprietary, require model internals, or focus on image-side attacks. A training-free, black-box defense that leverages the VLM's own image-safety mechanisms against text-encoding attacks remains unproposed.
 
-The over-refusal literature (XSTest, OR-Bench, SCANS) has been studied exclusively in the **text modality**. No work has examined whether modality change (image rendering) or text encoding affects over-refusal behavior. If exaggerated safety is caused by lexical overfitting (Röttger et al., 2024) or refusal steering vectors in specific activation layers (Cao et al., 2025; Prakash et al., 2026), then inputs arriving through the vision pathway — which bypass tokenization entirely — may sidestep these mechanisms. Our P2 experiments are the first to test this hypothesis, measuring refusal rates on benign prompts across both text and image modalities with various encodings.
+Critically, existing token-level defenses (SmoothLLM, perplexity filtering, CPT-Filtering) are structurally incapable of handling semantic encodings that produce valid natural language. Embedding-based detection (EDDF, semantic codebooks) fails because encoded prompts have near-zero similarity to known jailbreak templates. Paraphrasing-based defenses (SemanticSmooth) are the only plausible competitor, but their effectiveness against formal logic and set theory encodings is untested.
+
+The over-refusal literature (XSTest, OR-Bench, SCANS) has been studied exclusively in the **text modality**. No work has examined whether modality change (image rendering) or text encoding affects over-refusal behavior. If exaggerated safety is caused by lexical overfitting (Röttger et al., 2024) or refusal steering vectors in specific activation layers (Cao et al., 2025; Prakash et al., 2026), then inputs arriving through the vision pathway — which bypass tokenization entirely — may sidestep these mechanisms. Our IRC defense exploits this same mechanism: rendering text as images triggers the image-safety pathway's heightened caution, which serves as defense against encoded attacks but also explains the benign over-refusal cost.
 
 ---
 
@@ -413,6 +492,50 @@ The literature suggests several high-value open problems:
 
 - Chouldechova, A. et al. *Comparison requires valid measurement: Rethinking attack success rate comparisons in AI red teaming.* NeurIPS Position Paper Track, 2025.
 - Alanova, S. et al. *Cross-Lingual Jailbreak Detection via Semantic Codebooks.* arXiv:2604.25716, 2026.
+
+### Newly Added References (Defense Baselines and VLM Defenses)
+
+- Alon, G. & Kamfonas, M. *Detecting Language Model Attacks with Perplexity.* arXiv:2308.14132, 2023.
+- Cunningham, H. et al. *Constitutional Classifiers++: Efficient Production-Grade Defenses against Universal Jailbreaks.* ICLR, 2026.
+- Ding, P. et al. *SAGE: Self-Aware Guard Enhancement.* ACL Findings, 2025.
+- Dong, X. et al. *SATA: A Paradigm for LLM Jailbreak via Simple Assistive Task Linkage.* ACL Findings, 2025.
+- Gao, L. et al. *Shaping the Safety Boundaries: Activation Boundary Defense.* ACL, 2025.
+- Grillotti, L. & Ségerie, C.-R. *Broken-Token: Filtering Obfuscated Prompts by Counting Characters-Per-Token.* arXiv:2510.26847, 2025.
+- Jain, N. et al. *Baseline Defenses for Adversarial Attacks Against Aligned Language Models.* arXiv:2309.00614, 2023.
+- Ji, J. et al. *Defending LLMs against Jailbreak Attacks via Semantic Smoothing (SemanticSmooth).* AACL-IJCNLP, 2025.
+- Kumar, A. et al. *Certifying LLM Safety against Adversarial Prompting (Erase-and-Check).* COLM, 2024.
+- Kumar, A. et al. *Robust Multimodal Safety via Conditional Decoding (CASA).* arXiv:2604.00310, 2026.
+- Li, Y. et al. *Unraveling the Mystery: Defending Against Jailbreak Attacks via Real Intention Defense (RID).* COLING, 2025.
+- Qi, P. et al. *VLMShield: Efficient and Robust Defense of Vision-Language Models.* arXiv:2604.06502, 2026.
+- Rao, A.P. et al. *PromptScreen: Efficient Jailbreak Mitigation Using Semantic Linear Classification.* arXiv:2512.19011, 2025.
+- Robey, A. et al. *SmoothLLM: Defending Large Language Models Against Jailbreaking Attacks.* NeurIPS R0-FoMo Workshop, 2023.
+- Thornton, S. *TRYLOCK: Defense-in-Depth Against LLM Jailbreaks.* arXiv:2601.03300, 2026.
+- Wang, H. et al. *Guaranteed Jailbreaking Defense via Disrupt-and-Rectify Smoothing (DR-Smoothing).* ICLR, 2026.
+- Wang, H. et al. *ASTRA: Steering Away from Harm — Adaptive VLM Defense.* CVPR, 2025.
+- Wang, Y. et al. *DELMAN: Dynamic Defense via Model Editing.* ACL Findings, 2025.
+- Xiang, S. et al. *EDDF: Essence-Driven Defense Framework.* ACL Findings, 2025.
+- Zheng, B.S. et al. *Broken Tokens? Your Language Model can Secretly Handle Non-Canonical Tokenizations.* NeurIPS, 2026.
+- Zhu, X. et al. *GuardAlign: Test-time Safety Alignment in Multimodal LLMs.* ICLR, 2026.
+- Zou, X. et al. *Understanding and Rectifying Safety Perception Distortion in VLMs.* NeurIPS, 2026.
+
+### Newly Added References (Encoding/Semantic Attacks)
+
+- Farzam, A. et al. *Hiding in Plain Text: Detecting Concealed Jailbreaks via Activation Disentanglement (FrameShield).* arXiv:2602.19396, 2026.
+- Sachdeva, R.S. et al. *Turning Logic Against Itself: Probing Model Defenses Through Contrastive Questions (POATE).* EMNLP, 2025.
+- Sun, X. et al. *Structured Semantic Cloaking for Jailbreak Attacks (S2C).* arXiv:2603.16192, 2026.
+- Yan, J. et al. *SemanticCamo: Jailbreaking LLMs through Semantic Camouflage.* ACL Findings, 2025.
+- Zhao, Y. et al. *Defense-to-Attack: Bypassing Weak Defenses Enables Stronger Jailbreaks in VLMs.* Pattern Recognition, 2026.
+
+### Newly Added References (Attack Methodology / Systematic Studies)
+
+- Kim, H. et al. *Beneath the Facade: Probing Safety Vulnerabilities via Auto-Generated Jailbreak Prompts (TroGEN).* EMNLP Findings, 2025.
+- Ren, Q. et al. *LLMs Know Their Vulnerabilities: Uncover Safety Gaps Through Natural Distribution Shifts (ActorBreaker).* ACL, 2025.
+- Xu, Z. et al. *A Comprehensive Study of Jailbreak Attack versus Defense for Large Language Models.* ACL Findings, 2024.
+
+### Newly Added References (VLM Safety Surveys)
+
+- Wang, C. et al. *Safety in Large Reasoning Models: A Survey.* EMNLP Findings, 2025.
+- Yang, M. et al. *A Survey of Safety on Large Vision-Language Models: Attacks, Defenses and Evaluations.* arXiv:2502.14881, 2025.
 
 ### Newly Added References (Multimodal Attacks / Mechanistic Analysis / Cross-Modal Transfer)
 

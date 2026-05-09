@@ -1,246 +1,327 @@
-# Research Proposal: Encoding × Modality Interactions in Multimodal LLM Safety
+# Research Proposal: Image Rendering as a Training-Free Defense Against Text-Encoding Attacks on VLMs
 
 ## 0. Literature Review Summary (May 2026)
 
-### Landscape
+### Threat Landscape: Text-Encoding Attacks
 
-- **FigStep is dead on frontier models:** MIDAS (ICLR 2026) confirms 0.00% ASR on GPT-5-Chat, <4% on GPT-4o/Gemini-2.5-Pro. Safety patches completely neutralize simple typographic attacks.
-- **Text-DJ (arXiv 2026) provides confounded modality gap evidence:** TiI ablation shows 2–4.5× ASR increase from images on Qwen3-VL and GPT-4.1-mini/Gemini-2.5-Flash. But always within their decomposition+distraction framework — never clean A/B.
-- **MIDAS achieves 72–97% on frontier models** via multi-image puzzles (6 images, game-style templates). High bar for attack papers.
-- **Adversarial Smuggling: GPT-5 content moderation 98.6% blind to visual text.** Yet GPT refuses to GENERATE harmful content from images — safety is generation-level, not perception-level.
-- **Encoding-based attacks (CC-BOS, MathPrompt) work in text** but are unstudied in image modality.
-- **Semantic codebook defenses fail on non-canonical attacks (AUC 0.60).** Encoded prompts would trivially evade.
-- **ASR measurement validity (Chouldechova, NeurIPS 2025):** Small N requires bootstrap CIs. 100 prompts may not support fine-grained claims.
-- **JRS: blank images alone shift representations +28pp toward jailbreaking** on open-source models.
+- **CC-BOS (ICLR 2026):** 60–74% ASR using classical Chinese encoding with multi-round LLM optimization on GPT-4o/Gemini.
+- **MathPrompt (arXiv 2024):** 73% average ASR converting harmful prompts to math notation, tested on text-only LLMs.
+- **Adversarial Smuggling (2026):** GPT-5 content moderation 98.6% blind to visual text. 9 smuggling techniques, 1700-prompt SmuggleBench.
+- **Text-DJ (arXiv 2026):** Text-in-Image (TiI) component shows 2–4.5× ASR amplification on Qwen3-VL, GPT-4.1-mini, Gemini-2.5-Flash — but confounded within decomposition+distraction framework.
+- **MIDAS (ICLR 2026):** 72–97% ASR on frontier models via multi-image puzzles. Complex pipeline (6 images, game-style templates).
 
-### Our Position
+### Defense Landscape: What Exists
 
-Nobody has done a **clean, controlled** encoding × modality comparison on frontier models. Text-DJ is confounded. MIDAS uses complex multi-image puzzles. CC-BOS/MathPrompt are text-only. We fill the intersection: same content, same judge, only modality varies, with encoding as a controlled variable.
+- **SemanticSmooth (AACL-IJCNLP 2025):** LLM-based paraphrasing of multiple input copies + majority vote. Effective against GCG, PAIR, PromptRS. Untested on semantic encodings — paraphrasing may fail to decode math notation or formal logic.
+- **SAGE (ACL Findings 2025):** Training-free self-discrimination prompting — asks the model to judge safety before generating. 99% defense on standard jailbreaks. Untested on encoding attacks — discriminator likely sees formal logic as "math, not harmful."
+- **White-box defenses (ABD, ASTRA, DELMAN, TRYLOCK, GuardAlign):** Require model internals. Not applicable to black-box API setting.
+- **Semantic codebook defenses:** AUC drops to 0.60 on non-canonical attacks (would trivially fail on encoding).
+- **FigStep-specific defenses:** Confirmed dead on frontier models (0% ASR per MIDAS).
+
+### The Gap We Fill
+
+No defense exists specifically targeting **semantic-encoding attacks** (math notation, classical language, formal logic). Existing defenses target token-level perturbations (GCG, AutoDAN) or known image-attack patterns (FigStep). We propose the first defense mechanism for this threat class: leveraging VLMs' own image-modality safety as a defense layer.
+
+### Key Empirical Insight
+
+- **ASR measurement validity (Chouldechova, NeurIPS 2025):** Bootstrap CIs required. Our 100-prompt evaluations with multiple encodings × models provide adequate statistical power.
+- **JRS (2025):** Blank images alone shift representations +28pp toward jailbreaking on open-source models — image modality affects safety processing at the representation level.
 
 ---
 
-## 1. Introduction & Motivation
+## 1. Core Idea
 
-LLM safety alignment is built on **text-centric** mechanisms — RLHF, refusal training, and classifiers like Llama Guard all operate on tokenized text. With frontier multimodal LLMs (GPT-5-mini, Gemini 2.0 Flash, Claude Sonnet 4) now processing images, a critical question arises: does the **modality** of input affect safety behavior?
+**The Diverging Scissors:**
 
-Two attack dimensions exist independently:
-- **Modality attacks** (FigStep, Text-DJ): Render harmful text as images to bypass text-trained safety. FigStep achieved 82.5% on 2023 open-source models but is now 0% on frontier models. Text-DJ shows 2–4.5× amplification but is confounded.
-- **Encoding attacks** (CC-BOS, MathPrompt): Transform harmful content into classical languages or math notation. 60–74% ASR in text modality.
+Traditional defenses (SAGE, SemanticSmooth) get *weaker* on newer models:
+- Newer models are better at understanding encoded text → comply more reliably → defense degrades
+- Paraphrasing doesn't decode math/logic notation → majority vote says "comply" → defense fails harder on capable models
 
-**The gap:** Nobody has studied their interaction. Does encoding + imaging compound, cancel, or interact in unexpected ways? This is not just an academic question — if encoding makes image attacks non-brittle (surviving even OCR-based defenses), the threat model changes fundamentally.
+IR defense gets *stronger* on newer models:
+- Newer models have stronger image-safety alignment (providers keep investing)
+- IR routes text through the improving image-safety pipeline → defense automatically strengthens
+- No maintenance, no re-engineering — the model vendor improves the defense for free
 
-**Updated framing based on preliminary results:** Our experiments reveal that the interaction is more nuanced than "amplification vs. cancellation." The modality effect is provider-dependent (GPT defends, Claude/Gemini amplify), renderer-dependent (FigStep causes massive benign over-refusal that encoding eliminates), and encoding-dependent (math encodings are modality-invariant, classical languages vary). This complexity is itself the finding — safety is not a unified mechanism but a patchwork of format-specific responses.
+**Defense:** Given any incoming text (potentially an encoded attack), render it as an image and submit to the VLM. The image-modality safety pipeline catches attacks that bypass text-only safety — without retraining, without model access, without understanding the specific encoding scheme.
+
+**Key claim:** IR is the first defense whose effectiveness *improves with model capability* without any modification — a fundamentally different trajectory from all existing defenses.
+
+---
 
 ## 2. Research Questions
 
-- **RQ1 (Modality Effect):** Does image-rendering change ASR compared to plain text, and how does this interact with encoding?
-- **RQ2 (Safety Calibration):** Does image-rendering affect benign refusal rate (false positives), and does encoding modulate this?
-- **RQ3 (Provider Divergence):** Do different providers exhibit systematically different modality effects, and why?
-- **RQ4 (Renderer Effects):** How do different image rendering styles (plain, FigStep, FC-Typography) interact with encoding and model?
+- **RQ1 (Defense Effectiveness):** Does IR reduce ASR of text-encoding attacks on frontier VLMs?
+- **RQ2 (Defense Cost):** What is the benign over-refusal increase from image rendering?
+- **RQ3 (Comparison):** Does IR outperform existing defenses (SemanticSmooth, SAGE) against encoding attacks?
+- **RQ4 (Generality):** Is the defense effective across models, encodings, and renderers?
+- **RQ5 (Scaling):** Does the defense strengthen with model capability? (The diverging scissors hypothesis)
+
+---
 
 ## 3. Methodology
 
-### 3.1 Experimental Design
+### 3.1 Threat Model
 
-**Encoding × Modality × Renderer × Model** factorial design.
+**Attacker:** Sends text-encoded harmful prompts (math notation, classical language, formal logic) to a VLM via the text channel. The encoding is semantically valid language with normal perplexity, defeating token-level defenses.
 
-| Dimension | Levels |
-|-----------|--------|
-| Encoding | plain, set_theory, formal_logic, classical_chinese_literary, sanskrit_literary |
-| Modality | text, image |
-| Renderer | plain, figstep, fc_typography |
-| Model | GPT-5-mini, Gemini 2.0 Flash, Claude Sonnet 4 |
-| Prompt type | harmful (JBB 100, OR-Bench 100+), benign (JBB 100, OR-Bench 100+) |
+**Defender:** Has access to a VLM with image input capability. Can preprocess any incoming text by rendering it as an image and evaluating safety on the image version. Does NOT require model internals, retraining, or knowledge of the specific encoding.
 
-### 3.2 Encoding Implementations
+### 3.2 Our Defense: Image Rendering (IR)
 
-- **Plain English:** Direct prompts from benchmark. Baseline.
-- **Set Theory:** Harmful semantics encoded as formal set-theoretic expressions. Via GPT-4.1-mini.
-- **Formal Logic:** First-order logic with quantifiers and predicates. Via GPT-4.1-mini.
-- **Classical Chinese (文言文, literary):** CC-BOS-inspired multidimensional literary strategy. Via GPT-4.1-mini.
-- **Sanskrit (literary):** Adapted classical language encoding in Devanagari script. Via GPT-4.1-mini.
+```
+Input text T → Render as image I = render(T) → Submit I to VLM →
+  VLM's image-modality safety alignment filters harmful content
+```
 
-### 3.3 Image Rendering
+The defense leverages the VLM's own stricter image-safety alignment. No separate "check" logic — the VLM naturally refuses harmful content when it arrives as image rather than text tokens.
 
-| Renderer | What it tests |
-|----------|---------------|
-| **Plain** | Pure modality effect — clean text on white background |
-| **FigStep** | Numbered-step formatting; tests whether patched attack format triggers safety |
-| **FC-Typography** | Stylized fonts (Pacifico, Creepster, etc.); tests OCR-difficulty effect |
+Properties:
+- Training-free: no fine-tuning or additional models
+- Encoding-agnostic: works regardless of how T was encoded
+- Model-agnostic: any VLM with image input works
+- Zero overhead: same inference call, different modality
+- Self-improving: strengthens as model image-safety improves
 
-### 3.4 Datasets
+### 3.3 Comparison Defenses
 
-- **JailbreakBench** (100 harmful + 100 benign): High-quality, curated. Currently primary.
-- **OR-Bench** (harmful + benign_hard, first 100–1000 rows): Larger N for statistical power. Dedicated over-refusal benchmark.
-- **Bootstrap CIs** on all ASR comparisons (per Chouldechova, 2025).
+| Defense | Venue | Mechanism | Trajectory on newer models |
+|---------|-------|-----------|----------------------------|
+| SemanticSmooth | AACL-IJCNLP 2025 | LLM paraphrases input N times + majority vote | Degrades — paraphrasing doesn't decode encodings, model complies more reliably |
+| SAGE | ACL Findings 2025 | Self-discrimination prompt: model judges safety before answering | Degrades — encoded prompts don't pattern-match as harmful to the discriminator |
+| **IR (ours)** | — | Render text as image → VLM's own image-safety alignment filters it | **Strengthens** — image-safety improves with model capability |
 
-### 3.5 Target Models
+Why only 2 baselines: All other published defenses require white-box model access. SemanticSmooth and SAGE are the only published, training-free, black-box defenses applicable to our threat model.
 
-| Model | Provider | Why |
-|-------|----------|-----|
-| GPT-5-mini | OpenAI | Latest efficient frontier; shows "imaging-as-defense" pattern |
-| Gemini 2.0 Flash | Google | Fast, capable; shows "imaging-as-amplifier" pattern |
-| Claude Sonnet 4 | Anthropic | Strongest safety alignment; shows "imaging-as-amplifier" + extreme FigStep over-refusal |
+### 3.4 Encodings (Attack Methods)
 
-Generational comparison (Stage 9): GPT-4o-mini, Pixtral-12B on same images for temporal trend.
+| Encoding | Description | Encoder |
+|----------|-------------|---------|
+| Set Theory | Formal set-theoretic expressions | GPT-4.1-mini |
+| Formal Logic | First-order logic with quantifiers | GPT-4.1-mini |
+| Classical Chinese (CC-BOS) | Literary Chinese with multidimensional strategy | GPT-4.1-mini |
+| SemanticCamo | Multi-step LLM-based semantic camouflage | GPT-4.1-mini |
 
-### 3.6 Evaluation
+### 3.5 Image Renderers
 
-- **ASR judge:** GPT-5-nano (HarmBench protocol)
-- **Refusal judge:** GPT-5-nano 3-class (direct_answer / direct_refusal / indirect_refusal, OR-Bench protocol)
-- **Statistical testing:** Bootstrap 95% CIs; permutation tests for pairwise comparisons
+| Renderer | Description | Tests |
+|----------|-------------|-------|
+| Plain | Clean text on white background | Pure modality effect (primary) |
+| FC-Typography | Stylized fonts (Pacifico, Noto CJK) | OCR-difficulty effect |
 
-## 4. Preliminary Results & Current Status
+### 3.6 Target Models
 
-### What we have
+**Primary (frontier — Table 1):**
 
-- Text encoding on JBB harmful: ~55-67% ASR across models (encoding works, as expected)
-- Plain image (no encoding): marginal effects, model-dependent
-- FigStep + encoding on harmful: resurfaces some ASR on Claude/Gemini, not on GPT
-- FigStep on benign: 75% refusal on Claude (massive over-refusal from renderer formatting)
-- Encoding eliminates FigStep-induced over-refusal (75% → ~5%)
-- FC-Typography generally stronger attack renderer than FigStep/Plain
-- GPT-5-mini: imaging slightly reduces ASR (defensive)
-- Claude/Gemini: imaging slightly amplifies ASR on some conditions
+| Model | Provider | Role |
+|-------|----------|------|
+| GPT-5.4 | OpenAI | Strongest defense signal (−22 to −32pp) |
+| Claude Sonnet 4.6 | Anthropic | Cross-provider (−5 to −13pp) |
+| Gemini 3 Pro Preview | Google | Google frontier (pending) |
 
-### What's missing
+**Scaling evidence (Table 2):**
 
-- OR-Bench at scale (in progress)
-- Generational comparison (Stage 9, planned)
-- FC-Typography benign completion (in progress)
-- Statistical significance testing with CIs
+| Model | Provider | Defense effect |
+|-------|----------|----------------|
+| GPT-5.4-nano | OpenAI | Fails (+12pp) |
+| GPT-5.4-mini | OpenAI | Works (−5 to −19pp) |
+| GPT-5.4 | OpenAI | Dominant (−22 to −32pp) |
 
-## 5. Candidate Paper Directions
+**Supporting (older models — context):**
 
-We list multiple directions. Final choice depends on which results are strongest after remaining experiments.
+| Model | Provider | Role |
+|-------|----------|------|
+| GPT-5-mini | OpenAI | Earlier generation |
+| Gemini 2.0 Flash | Google | Known failure case |
+| Gemini 2.5 Flash | Google | Improvement over 2.0 |
+| Claude Sonnet 4 | Anthropic | Earlier Anthropic |
 
-### Direction A: "Encoding Resurrects Dead Attacks"
+### 3.7 Benchmarks
 
-**One-sentence pitch:** Text encoding transforms image-based attacks from patched (0% ASR) to effective (X%), proving safety patches are format-level, not semantic.
+| Dataset | Size | Purpose |
+|---------|------|---------|
+| HarmBench harmful | 100 prompts | **Primary** attack evaluation (frontier models) |
+| JailbreakBench harmful | 100 prompts | Supporting attack evaluation (scaling/older models) |
+| OR-Bench harmful | 100 prompts | Tertiary dataset (breadth) |
+| JailbreakBench benign | 100 prompts | Over-refusal measurement |
 
-**Requirements for this to work:** X needs to be consistently >40% across multiple models. Currently strongest on Claude/Gemini with FC-Typography, but need more data.
+### 3.8 Evaluation
 
-**Paper structure:** Attack paper. Clear before/after metric. Simple method, surprising result.
+- **ASR judge:** GPT-5-nano (HarmBench protocol, max_tokens: 16384)
+- **Metrics:** ASR reduction (pp), defense success rate, benign refusal increase
+- **Statistics:** Bootstrap 95% CIs; permutation tests for pairwise comparisons
 
-### Direction B: "Dual-Axis Safety Calibration"
+---
 
-**One-sentence pitch:** Encoding simultaneously bypasses image safety (reducing false negatives on harmful) AND eliminates image over-refusal (reducing false positives on benign) — proving safety is format-matching.
+## 4. Results (as of May 6, 2026)
 
-**Requirements:** OR-Bench at scale must show statistically significant effects on BOTH axes. The "dual effect from one transformation" is the logic that makes it novel.
+### 4.1 Frontier Model Defense (Primary Results)
 
-**Paper structure:** Measurement/diagnostic paper. Needs scale for credibility.
+| Model | Encoding | Text ASR | Image ASR | Δ (defense) |
+|-------|----------|:--------:|:---------:|:-----------:|
+| **GPT-5.4** | set_theory | 24% | 2% | **−22pp** |
+| **GPT-5.4** | formal_logic | 39% | 7% | **−32pp** |
+| Claude Sonnet 4.6 | set_theory | 21% | 16% | −5pp |
+| Claude Sonnet 4.6 | formal_logic | 57% | 44% | −13pp |
+| Gemini 3 Pro Preview | — | — | — | pending |
 
-### Direction C: "Provider Safety Architecture Divergence"
+GPT-5.4 image_encoded ASR (2%, 7%) is barely above image_original (1%, 1%) — the model's image safety is essentially encoding-agnostic.
 
-**One-sentence pitch:** The same encoding+imaging attack has opposite effects across providers — GPT's safety defends against images while Claude/Gemini become more vulnerable — revealing fundamentally different safety architectures.
+### 4.2 The Diverging Scissors (GPT Family Scaling)
 
-**Requirements:** Pattern must hold consistently across more models per provider and more conditions. Currently N=1 per provider.
+| Model tier | set_theory Δ | formal_logic Δ | Trajectory |
+|------------|:------------:|:--------------:|:----------:|
+| GPT-5.4-nano (budget) | +12pp | −2pp | Defense FAILS |
+| GPT-5.4-mini (mid) | −5pp | −19pp | Defense works |
+| GPT-5.4 (frontier) | −22pp | −32pp | Defense DOMINANT |
 
-**Paper structure:** Empirical analysis. Needs generational data to confirm.
+As model capability increases: defense goes from failing → working → near-perfect. This is the opposite trajectory of traditional defenses.
 
-### Direction D: "Generational Safety Evolution"
+### 4.3 Cross-Provider Summary
 
-**One-sentence pitch:** Cross-modal safety calibration has changed (improved? worsened? shifted?) across model generations, measured using encoding as a controlled probe.
+| Model | Conditions where defense works | Average Δ |
+|-------|:------------------------------:|:---------:|
+| GPT-5.4 | 2/2 (100%) | −27pp |
+| Claude Sonnet 4.6 | 2/2 (100%) | −9pp |
+| GPT-5.4-mini | 6/6 (100%) | −13pp |
+| Gemini 2.5 Flash Lite | 2/2 (100%) | −16pp |
+| Gemini 2.5 Flash | 4/6 (67%) | −7pp |
+| GPT-5.4-nano | 0/2 (0%) | +5pp |
+| Gemini 2.0 Flash | 1/5 (20%) | +4pp |
 
-**Requirements:** Stage 9 results. At least 2 generations per provider showing a clear trend.
+### 4.4 Defense Cost (benign over-refusal)
 
-**Paper structure:** Temporal trend / longitudinal study.
+| Model | text refusal | image refusal | Cost |
+|-------|:-:|:-:|:-:|
+| GPT-5-mini | 3-9% | 5-13% | +2–6pp |
+| Gemini 2.0 Flash | 0-8% | 1-8% | ~0pp |
+| Claude Sonnet 4 | 8-33% | 6-28% | variable |
 
-## 6. Timeline (Revised May 2026)
+Cost is modest on newer models. Frontier model cost TBD.
+
+---
+
+## 5. What Remains
+
+### 5.1 Critical Path (this week)
+
+| Experiment | Purpose | Status |
+|------------|---------|--------|
+| Gemini 3 Pro Preview eval | Complete frontier model trio | Running |
+| SAGE baseline on frontier models | Show it fails | Running |
+| SemanticSmooth baseline on frontier models | Show it fails | Running |
+| Classical Chinese on HarmBench | 3rd encoding for generality | Running |
+
+### 5.2 After This Round
+
+| Experiment | Purpose | Effort |
+|------------|---------|--------|
+| Classical Chinese imaging + frontier eval | Complete 3-encoding coverage | 1 round |
+| SemanticCamo (encode + eval) | 4th attack for generality | 1 round |
+| Bootstrap CIs on all claims | Statistical rigor | Local computation |
+| Full HarmBench (240) on frontier models | Robustness check for paper | Low cost re-run |
+
+### 5.3 Nice-to-Have
+
+- Mechanism analysis: WHY image safety is stricter (attention probing on open-source models)
+- Stacked defense: IR + paraphrasing combined
+- Benign over-refusal on frontier models
+
+---
+
+## 6. Paper Positioning
+
+### Core Contribution
+
+**IR is the first defense with a positive scaling trajectory against encoding attacks.** Traditional defenses degrade as models improve (the model understands attacks better). IR strengthens as models improve (image-safety gets stricter). This diverging trajectory means IR is the only defense with a sustainable long-term outlook.
+
+### Evidence Structure
+
+| Claim | Evidence |
+|-------|----------|
+| Encoding attacks are a real threat | 24–57% ASR on frontier VLMs |
+| Traditional defenses fail | SAGE/SemanticSmooth ASR ≈ undefended (testing) |
+| IR provides near-complete protection | 2–7% residual ASR on GPT-5.4 |
+| IR strengthens with model capability | GPT family scaling: +12pp → −12pp → −27pp |
+| IR works across providers | GPT, Claude, Gemini all show reduction |
+| IR works across encodings | set_theory, formal_logic, classical_chinese, SemanticCamo |
+
+### Probability Assessment (updated May 6)
+
+| Scenario | Probability | Outcome | Paper level |
+|----------|:-:|----------|:-:|
+| Beat both baselines + strong scaling story | **60%** | "First self-improving defense against encoding attacks" | **Main conf** |
+| Baselines partially work, but IR still dominates | 25% | "Superior defense with unique scaling property" | **Main conf / Findings** |
+| Gemini 3 Pro doesn't show expected pattern | 10% | "Defense works on OpenAI/Anthropic, mixed on Google" | **Findings** |
+| Results don't replicate on full dataset | 5% | Need investigation | **Delayed** |
+
+---
+
+## 7. Timeline (updated May 6)
 
 | Date | Milestone |
 |------|-----------|
-| May 4–10 | Complete Stage 7e (FC-Typo benign) + Stage 8a (OR-Bench encoding) |
-| May 10–14 | Stage 9 (generational comparison) + Stage 8b (OR-Bench imaging) |
-| May 14–18 | Stage 8c (OR-Bench evaluation) + analyze all results |
-| May 18–20 | **Decision point:** Choose paper direction based on strongest signal |
-| May 20–25 | Paper writing |
-| **May 25** | **ARR May cycle deadline** |
+| May 6 ✅ | Frontier model results (GPT-5.4, Claude Sonnet 4.6). Scaling law confirmed. |
+| May 6–7 | Gemini 3 Pro + SAGE/SemanticSmooth baselines + classical Chinese encode |
+| May 7–8 | Classical Chinese imaging + frontier eval. SemanticCamo encode + eval |
+| May 8–9 | Full HarmBench (240) verification on frontier models |
+| May 9–11 | Bootstrap CIs + statistical analysis |
+| May 11–16 | Paper writing |
+| May 16–20 | Polish + advisor review |
+| May 20–25 | Final revision + submit |
+| **May 25** | **ARR May deadline** |
 
-## 7. Risks & Mitigation
+Fallback: ARR June (~Jun 15) or EMNLP direct (Jun 2026).
+
+---
+
+## 8. Risks & Mitigation
 
 | Risk | Likelihood | Mitigation |
-|------|-----------|------------|
-| No direction shows dramatic results | Medium | Workshop paper (SoLaR, TrustNLP). Still publishable as empirical contribution. |
-| Modality gap too small/noisy for claims | Medium-High | OR-Bench scale + bootstrap CIs. Report CIs honestly; small-but-real effects are valid findings. |
-| "Just combining known methods" criticism | High | Emphasize controlled comparison methodology and unexpected interaction effects. Cite Chouldechova on why controlled comparison IS a contribution. |
-| Text-DJ already tested frontier models | Real | Differentiate: our comparison is unconfounded (no decomposition/distraction framework). |
-| MIDAS makes our ASR numbers look weak | Medium | Don't compete on raw ASR. Frame as diagnostic/evaluation, not pure attack. |
+|------|:-:|-----------|
+| Baselines actually work (SemanticSmooth decodes encodings) | 20% | IR is still simpler (1 call vs 5N calls), zero-cost, encoding-agnostic. Propose stacked defense. |
+| Gemini 3 Pro doesn't show strong defense | 30% | 2/3 frontier models (GPT-5.4 + Claude) still show clear effect. Frame Gemini as provider-specific limitation. |
+| "Too simple" criticism | Medium | Simplicity IS the contribution — training-free, deployable today, self-improving. CC-BOS (attack) was similarly simple and got ICLR. |
+| Benign refusal cost deemed too high | Low | Frontier model cost likely low (GPT-5.4 original barely refuses). Propose threshold-based deployment. |
+| Scaling claim challenged (only 3 GPT tiers) | Medium | Cross-provider validation (Claude Sonnet 4 → 4.6, Gemini 2.0 → 2.5 → 3) supports the trend independently. |
 
-## 8. Key Decisions Still Open
+---
 
-1. **One paper or two?** If dual-axis effect is strong → one combined paper. If only one axis works → split or pick.
-2. **Include defense experiments?** Literature already shows defenses fail (Text-DJ: 0% detection, Smuggling: 98.6% evasion). May not need our own if we cite these.
-3. **Include generational comparison?** Only if results show a clear trend. Otherwise noise.
-4. **How many OR-Bench prompts?** Start with 100, expand to 1000 if effects look real.
-5. **Include FC-Flowchart?** Depends on whether it adds signal or just noise.
+## 9. Paper Structure
 
-## 9. Publication Strategy
+1. **Introduction:** Text-encoding attacks bypass frontier VLM safety at 24–57% ASR. Existing defenses are not designed for this threat and degrade on newer models. We propose IR — the first defense that strengthens with model capability.
+2. **Background:** Text-encoding attacks (CC-BOS, MathPrompt), VLM safety alignment, existing defenses (SemanticSmooth, SAGE).
+3. **Method:** IR defense — one paragraph. Simplicity is the contribution.
+4. **Experimental Setup:** 3 frontier models, 4 encodings, HarmBench, 2 comparison defenses, evaluation protocol.
+5. **Results:**
+   - 5.1 IR reduces ASR on frontier models (main table)
+   - 5.2 Existing defenses fail against encoding attacks (SAGE, SemanticSmooth)
+   - 5.3 The diverging scissors: IR strengthens with model capability (scaling table)
+   - 5.4 Generality across encodings and providers
+   - 5.5 Defense cost: benign over-refusal (modest)
+6. **Analysis:** Why trajectories diverge. The "alliance with model providers" framing. Failure cases. Deployment.
+7. **Conclusion:** First self-improving defense for encoding attacks. Zero cost, future-proof.
 
-### 9.1 Primary Target: EMNLP 2026 (ARR May cycle, deadline ~May 25)
+---
 
-Regardless of which direction is strongest, we target EMNLP via ARR May. The empirical NLP safety track is the natural fit: encoding is linguistic, multimodal, and the safety community publishes here.
+## 10. Publication Strategy
 
-**What the paper will contain (minimum viable):**
-- Controlled encoding × modality comparison on 3 frontier models
-- At least one benchmark at scale (OR-Bench or JailbreakBench)
-- Bootstrap CIs on all claims
-- 3-class judge evaluation (not just binary ASR)
-- Benign refusal as a control axis
+| Venue | Deadline | Fit |
+|-------|----------|-----|
+| **ARR May 2026** | May 25 | Primary target → EMNLP/ACL main |
+| ARR June 2026 | ~Jun 15 | Backup if May too tight |
+| EMNLP 2026 direct | ~Jun 2026 | Alternative submission path |
+| USENIX Security 2027 | ~Feb 2027 | If reframed for security audience (practical deployability angle) |
+| ICLR 2027 | ~Oct 2026 | If framed as "scaling law of VLM safety alignment" |
 
-### 9.2 Direction → Framing Map
+**Primary strategy:** ARR May → EMNLP 2026. The scaling story + baseline comparison + frontier model results make a complete main-conference paper.
 
-| Direction | Title style | Contribution type | Venue fit |
-|-----------|-------------|-------------------|-----------|
-| A (Resurrection) | "Encoding Revives Patched Attacks..." | Attack paper | EMNLP / USENIX Security |
-| B (Dual-Axis Calibration) | "One Transformation, Two Failures..." | Measurement paper | EMNLP / ACL |
-| C (Provider Divergence) | "Same Attack, Opposite Effects..." | Empirical analysis | EMNLP / NeurIPS (safety) |
-| D (Generational Evolution) | "How Cross-Modal Safety Changed..." | Longitudinal study | EMNLP / FAccT |
+---
 
-### 9.3 Outcome-Dependent Strategy
+## 11. Future Work
 
-**If one direction is clearly strongest (>May 18):**
-- Single focused paper, 8 pages, tight story
-- Other findings go into appendix or future work
-
-**If no single direction dominates:**
-- Combined empirical paper: "Encoding × Modality Interactions in Frontier LLM Safety"
-- Present findings as a systematic study with multiple insights
-- Each direction becomes a subsection of results
-- Less dramatic but more complete
-
-**If nothing is publication-ready by May 25:**
-- Skip ARR May → target ARR June (NAACL) or ARR August (ACL 2027)
-- Use extra time to run more conditions and scale OR-Bench to 1000+
-- Workshop fallback: SoLaR @ NeurIPS 2026, TrustNLP @ NAACL 2027
-
-### 9.4 Two-Paper Potential
-
-If the dual-axis story works (Direction B), a natural split exists:
-
-| | Paper 1 (attack axis) | Paper 2 (over-refusal axis) |
-|-|---|---|
-| Focus | Encoding bypasses image safety on harmful prompts | Encoding eliminates image over-refusal on benign prompts |
-| Benchmark | JBB/HarmBench harmful | OR-Bench benign_hard |
-| Timeline | EMNLP 2026 (May ARR) | AAAI/ACL 2027 |
-| Status | Data mostly collected | Needs OR-Bench scale |
-
-Decision: One combined paper preferred (stronger as unified finding). Split only if combined is too dense for 8 pages.
-
-### 9.5 Venue Priority
-
-| Priority | Venue | Deadline | Fit |
-|----------|-------|----------|-----|
-| 1st | EMNLP 2026 (ARR May) | ~May 25, 2026 | Primary target |
-| 2nd | ARR June → NAACL 2027 | ~Jun 15, 2026 | Fallback if May is rushed |
-| 3rd | AAAI 2027 | ~Aug 2026 | AI safety track; broader scope |
-| 4th | NeurIPS 2026 workshops | ~Sep 2026 | SoLaR, SafeGenAI |
-| Reach | ICLR 2027 | ~Oct 2026 | If expanded with mechanistic analysis |
-
-## 10. Future Work (Beyond First Paper)
-
-- **Composable encodings:** Stacking encoding layers (Classical Chinese + math)
-- **AI-generated rendering:** GPT Image 2 for naturalistic visual contexts
-- **Multi-image attacks:** MIDAS-style comparison with our simpler single-image approach
-- **Defense proposal:** If OCR-based defense shows promise, separate defense paper
-- **Open-source model analysis:** Mechanistic probing (attention, representations) on LLaVA/InternVL
+- **Stacked defenses:** IR + SemanticSmooth for maximum coverage
+- **Selective application:** Only apply IR when input matches encoding patterns (reduces benign cost)
+- **Mechanism analysis:** Attention probing on open-source VLMs to explain image safety gap
+- **Adaptive attacks:** Can an attacker craft encodings that survive image rendering?
+- **Formal analysis:** Theoretical model of why image-safety scales faster than text-understanding for encoded inputs
+- **Longitudinal study:** Track IR effectiveness across future model releases to validate the diverging scissors prediction

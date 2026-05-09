@@ -209,19 +209,15 @@ class Experiment:
     def _load_cluster_config(self, model):
         """
         Load cluster server config for a model.
-        
+
         Uses the shared _load_conf helper: merges conf/llm/default.yaml
         with any model-specific overrides, returns the 'cluster' section.
         """
         from .config import load_conf
-        
-        cluster_config = load_conf(
+
+        return load_conf(
             "llm", section="cluster",
             match_field="model.model", match_value=model.model_id)
-        
-        cluster_config.setdefault("num_instances", 1)
-
-        return cluster_config
 
     def _setup_cluster_servers(self, cluster_models: set) -> None:
         """Start vLLM servers for all cluster models.
@@ -317,14 +313,19 @@ class Experiment:
                 return result
             except Exception as e:
                 elapsed = time.time() - t0
-                logger.error(f"[{queue_name}] Failed: {task.name} ({elapsed:.1f}s) — {e}")
-                logger.error(traceback.format_exc())
+                err_str = str(e)
+                err_summary = err_str[:500] + "..." if len(err_str) > 500 else err_str
+                tb = traceback.format_exc()
+                tb_lines = tb.splitlines()
+                tb_short = "\n".join(tb_lines[:20] + (["  ... (truncated)"] if len(tb_lines) > 20 else []))
+                logger.error(f"[{queue_name}] Failed: {task.name} ({elapsed:.1f}s) — {err_summary}")
+                logger.error(tb_short)
                 return {
                     "task_name": task.name,
                     "original_index": task.index,
                     "status": "failed",
-                    "error": str(e),
-                    "traceback": traceback.format_exc(),
+                    "error": err_summary,
+                    "traceback": tb_short,
                     "elapsed_seconds": round(elapsed, 1),
                 }
 

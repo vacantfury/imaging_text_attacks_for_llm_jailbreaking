@@ -23,8 +23,10 @@ model:
 # Cluster/vLLM server params (maps to ClusterServerConfig)
 cluster:
   partition: gpu
+  excluded_nodes: [d1027]
   gpu_types_excluded: []
   num_gpus: 1
+  num_instances: 1
   cpus_per_task: 4
   mem_gb: 32
   time_limit: "08:00:00"
@@ -36,6 +38,9 @@ cluster:
   server_start_timeout: 3600
   endpoint_wait_timeout: 30
   cluster_server_endpoint_timeout: 10000  # max seconds a task waits for a free server
-  conda_env: AI_safety
+  monitor_poll_interval: 10              # seconds between health-check polls
+  health_check_timeout: 5                # seconds per health-check request
+  slurm_cmd_timeout: 15                  # seconds for squeue/scontrol commands
+  conda_env: AI_security
   cuda_module: "cuda/12.1.1"
   hf_home: /scratch/zhang.haoyu6/huggingface_cache

@@ -18,6 +18,9 @@ font_size: 28
 padding: 40
 line_spacing: 8
 
+# Readability constraint — renderers adapt to keep aspect ratio within this limit
+max_aspect_ratio: 3.0
+
 # Degradation (post-processing)
 blur_radius: 0
 jpeg_quality: 100

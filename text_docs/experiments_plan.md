@@ -1,8 +1,40 @@
-# Experiment Plan: Encoding × Modality Jailbreaking
+# Experiment Plan: Image Rendering as Defense Against Text-Encoding Attacks
 
-**Paper 1 target: EMNLP 2026 via ARR May cycle (deadline: May 25)**
-**Direction TBD (decide after Stage 8+9 results):** A=Resurrection Attack, B=Dual-Axis Calibration, C=Provider Divergence, D=Generational Evolution. See `proposal.md §5` for details.
-**Decision point: May 18** — choose framing based on strongest signal from remaining experiments.
+**Direction (defense paper, May 6):** We PROPOSE Image Rendering (IR) as a training-free, zero-overhead defense against text-encoding attacks on production frontier VLMs. IR exploits frontier VLMs' stronger image-safety alignment: encoding attacks that achieve 24–57% ASR via text are neutralized to 2–16% when rendered as images. The defense automatically strengthens with model capability.
+
+**Primary evaluation models (frontier):** GPT-5.4, Claude Sonnet 4.6, Gemini 3 Pro Preview
+**Scaling/mechanism evidence:** GPT-5.4-nano → GPT-5.4-mini → GPT-5.4 (defense emerges with capability)
+**Older models:** context for why defense works on production models, not legacy ones
+
+**Research questions:**
+- RQ1: Does IR reduce ASR of encoding attacks on frontier VLMs? (defense effectiveness)
+- RQ2: What is the benign over-refusal cost?
+- RQ3: Does IR outperform SemanticSmooth + SAGE?
+- RQ4: Generality across models, encodings, renderers?
+- RQ5: Does defense effectiveness scale with model capability?
+
+**Key remaining work:**
+1. Gemini 3 Pro Preview evaluation (Stage 9d) — 4 tasks
+2. Run defense baselines (SAGE, SemanticSmooth) — prove they fail on encoding attacks
+3. Bootstrap CIs + statistical analysis
+4. Benign over-refusal (secondary)
+
+---
+
+## IMPORTANT: Dataset Row Limit
+
+**All datasets use only the first 100 rows for all current experiments.** Full dataset runs deferred to a late stage after core findings are confirmed.
+
+| Dataset | Total rows | Rows used now |
+|---------|:----------:|:-------------:|
+| JBB harmful | 100 | 100 (full) |
+| JBB benign | 100 | 100 (full) |
+| HarmBench | 240 | **100** |
+| OR-Bench harmful | 655 | **100** |
+| OR-Bench benign hard | 1319 | **100** |
+| OR-Bench benign 1k | 1000 | **100** |
+
+This keeps per-task cost low, enables fast iteration, and ensures consistent sample sizes across datasets for fair comparison.
 
 ---
 
@@ -39,11 +71,17 @@
 
 | Tier | Model | Provider | Cost (input/output per M tokens) |
 |------|-------|----------|----------------------------------|
-| Tier 1 (weaker) | GPT-4o-mini | OpenAI | $0.15 / $0.60 |
-| Tier 1 (weaker) | Claude Sonnet 4 | Anthropic | $3.00 / $15.00 |
-| Tier 1 (weaker) | Gemini 2.0 Flash | Google | $0.10 / $0.40 |
-| Tier 2 (stronger) | GPT-4o | OpenAI | $2.50 / $10.00 |
-| Tier 2 (stronger) | Gemini 2.5 Pro | Google | $1.25 / $10.00 |
+| Tier 1 (older/weaker) | GPT-4o-mini | OpenAI | $0.15 / $0.60 |
+| Tier 1 (older/weaker) | Claude Sonnet 4 | Anthropic | $3.00 / $15.00 |
+| Tier 1 (older/weaker) | Gemini 2.0 Flash | Google | $0.10 / $0.40 |
+| Tier 2 (newer/stronger) | GPT-5-mini | OpenAI | $0.25 / $2.00 |
+| Tier 2 (newer/stronger) | GPT-5.4-mini | OpenAI | $0.75 / $4.50 |
+| Tier 2 (newer/stronger) | Gemini 2.5 Flash | Google | $0.30 / $2.50 |
+| Tier 3 (budget) | GPT-5.4-nano | OpenAI | $0.20 / $1.25 |
+| Tier 3 (budget) | Gemini 2.5 Flash Lite | Google | $0.075 / $0.30 |
+| Tier 4 (frontier) | GPT-5.4 | OpenAI | $2.50 / $15.00 |
+| Tier 4 (frontier) | Claude Sonnet 4.6 | Anthropic | $3.00 / $15.00 |
+| Tier 4 (frontier) | Gemini 3 Flash Preview | Google | $0.50 / $3.00 |
 | Cluster | Pixtral-12B | vLLM (NURC) | $0 |
 
 **Analytical decomposition:**
@@ -169,7 +207,7 @@ Combined stage: (a) fix font bug, (b) run benign text evaluation, (c) re-evaluat
 | Latin Literary | 8 | 6 | 9 |
 | Sanskrit Literary | 9 | 8 | 22 |
 
-`judge_method: refusal` | **Key finding:** Claude over-refuses encoded benign (27-33%). GPT/Gemini math encodings reduce refusal below baseline.
+`judge_method: jbb_refusal` | **Key finding:** Claude over-refuses encoded benign (27-33%). GPT/Gemini math encodings reduce refusal below baseline.
 
 ### 4c: Re-evaluate JBB Image — Harmful cc+sk (6 tasks) ✅
 
@@ -195,7 +233,7 @@ Results in `experiment_results.md`. Completes the P1b table for all 5 encodings.
 | Step | Task | Result |
 |------|------|--------|
 | 1 | Re-render `jailbreakbench_benign` Sanskrit with height cap | ✅ 200 images, max height capped |
-| 2 | Re-eval Sanskrit benign × 3 models (`judge_method: refusal`) | ✅ GPT: 83%, Gemini: 8%, Claude: 6% |
+| 2 | Re-eval Sanskrit benign × 3 models (`judge_method: jbb_refusal`) | ✅ GPT: 83%, Gemini: 8%, Claude: 6% |
 
 **After Stage 5:** JBB fully complete (all 36 harmful + 36 benign evaluations). HarmBench images for cc + sk ready for Stage 6.
 
@@ -263,9 +301,9 @@ Benign refusal (image_encoded plain): set_theory 9%, formal_logic 6%, classical_
 
 ### 7d: Make-up Round 1 — re-render + partial eval ✅ PARTIAL (29/37 eval completed, 8 killed by time limit)
 
-**Code fixes applied:** FigStep (auto-height canvas, script-aware fonts), FC-Typography (script-aware fonts, auto-wrap-width, auto-height canvas). All existing FigStep + FC-Typography results deleted.
+**Code fixes applied:** FC-Typography (script-aware fonts, auto-wrap-width, auto-height canvas). FigStep also rewritten but **later invalidated** — see Stage 9a note.
 
-**Round 1: Re-render ALL FigStep + FC-Typography images** ✅ DONE (12 imaging tasks)
+**Round 1: Re-render ALL FigStep + FC-Typography images** ✅ DONE (12 imaging tasks) — ⚠️ FigStep images later invalidated (extreme aspect ratios for long/CJK text)
 
 **Round 2: Evaluate (37 tasks submitted, 29 completed)**
 
@@ -284,7 +322,7 @@ Never started (2 tasks):
 - Claude Sonnet 4 × FC-Typography benign: classical_chinese
 - GPT-5-mini × benign Sanskrit plain (killed task rerun)
 
-### 7e: Make-up Round 2 — remaining 8 eval tasks ⬜ TODO
+### 7e: Make-up Round 2 — remaining 8 eval tasks ✅ DONE (job mj_6574716, May 5)
 
 | # | Model | Dataset | Source (FC-Typography) | Judge |
 |---|-------|---------|------------------------|-------|
@@ -297,7 +335,7 @@ Never started (2 tasks):
 | 7 | Claude Sonnet 4 | jailbreakbench_benign | classical_chinese_fc_typography | refusal |
 | 8 | GPT-5-mini | jailbreakbench_benign | sanskrit plain (killed task rerun) | refusal |
 
-**8 eval tasks** — ~2h estimated, easily fits in one job.
+**All 8 tasks completed** in job mj_6574716 (May 5).
 
 **Decision points (updated):**
 1. Does FC-Typography produce Δ > +15pp on Gemini/Claude? → ✅ YES confirmed (Claude set_theory: +39pp, formal_logic: +3pp)
@@ -307,218 +345,404 @@ Never started (2 tasks):
 
 ---
 
-## Stage 8: OR-Bench Calibration (first 100 rows) — feeds Directions B & E
+## Stage 8: OR-Bench Harmful (first 100 rows)
 
-**Purpose:** JBB benign (100 borderline prompts) is weak evidence for over-refusal claims. OR-Bench is the gold-standard over-refusal benchmark (ICLR 2025, dedicated 3-class judge, human-verified benign labels). Reviewers cannot dismiss OR-Bench results. Required for statistical credibility (Chouldechova, NeurIPS 2025).
+**Purpose (RQ1):** Additional harmful dataset beyond JBB/HarmBench. OR-Bench harmful (655 prompts) is diverse and challenging. First 100 rows as calibration.
 
-**Feeds which direction?**
-- Direction B (Dual-Axis Calibration): Dual-axis measurement — if encoding simultaneously reduces benign refusal AND increases harmful ASR, format-matching is proven.
-- Direction E (Scale): First step toward large-N cross-modal evaluation if we scale to full 1319/655 rows later.
-
-### 8a: Encode OR-Bench (4 tasks, fast ~10 min each)
+### 8a: Encode OR-Bench (4 tasks, fast ~10 min each) ✅ DONE (job mj_6574716, May 5)
 
 | Dataset | Rows | Encodings | Source file |
 |---------|------|-----------|-------------|
 | orbench_harmful | 100 (first 100) | set_theory, formal_logic | `data/orbench_harmful_prompts.jsonl` |
 | orbench_benign_hard | 100 (first 100) | set_theory, formal_logic | `data/orbench_benign_hard_prompts.jsonl` |
 
-**4 text_encode tasks** — can run in parallel with Stage 7e.
+**4 text_encode tasks** — completed in job mj_6574716. (benign_hard encoding done, eval deferred to Stage 12.)
 
-### 8b: Image OR-Bench (8 tasks, fast ~1 min each)
+### 8b: Image OR-Bench harmful (2 tasks) ✅ DONE (job mj_6578843, May 6)
 
-| Dataset | Encodings | Renderers | Tasks |
-|---------|-----------|-----------|:-----:|
-| orbench_harmful | set_theory, formal_logic | plain, figstep | 4 |
-| orbench_benign_hard | set_theory, formal_logic | plain, figstep | 4 |
+| # | Type | Dataset | Detail | Tasks |
+|---|------|---------|--------|:-----:|
+| 1–2 | imaging | orbench_harmful | set_theory, formal_logic × plain | 2 |
 
-**8 imaging tasks** — depends on 8a output dirs.
+Output dirs:
+- `outputs/imaging/orbench_harmful/set_theory_plain_20260506_030606_87130643`
+- `outputs/imaging/orbench_harmful/formal_logic_plain_20260506_030606_81884761`
 
-### 8c: Evaluate OR-Bench (24 tasks)
+### 8c: Evaluate OR-Bench harmful
+
+**Text eval (6 tasks) ✅ DONE (job mj_6578843, May 6):**
+
+| Model | Encoding | text_original ASR | text_encoded ASR |
+|-------|----------|:-:|:-:|
+| GPT-5-mini | set_theory | 6% | 86% |
+| GPT-5-mini | formal_logic | 6% | 86% |
+| Gemini 2.0 Flash | set_theory | 4% | 97% |
+| Gemini 2.0 Flash | formal_logic | 3% | 92% |
+| Claude Sonnet 4 | set_theory | 20% | 67% |
+| Claude Sonnet 4 | formal_logic | 18% | 93% |
+
+**Image eval (6 tasks) — NEXT JOB:**
 
 | Model | Dataset | Stages | Judge | Tasks |
 |-------|---------|--------|-------|:-----:|
-| GPT-5-mini | harmful × 2 enc × 2 renderers | [image_original, image_encoded] | harmbench | 4 |
-| Gemini 2.0 Flash | harmful × 2 enc × 2 renderers | [image_original, image_encoded] | harmbench | 4 |
-| Claude Sonnet 4 | harmful × 2 enc × 2 renderers | [image_original, image_encoded] | harmbench | 4 |
-| GPT-5-mini | benign_hard × 2 enc × 2 renderers | [image_original, image_encoded] | refusal | 4 |
-| Gemini 2.0 Flash | benign_hard × 2 enc × 2 renderers | [image_original, image_encoded] | refusal | 4 |
-| Claude Sonnet 4 | benign_hard × 2 enc × 2 renderers | [image_original, image_encoded] | refusal | 4 |
+| GPT-5-mini | harmful × 2 enc × plain | [image_original, image_encoded] | harmbench | 2 |
+| Gemini 2.0 Flash | harmful × 2 enc × plain | [image_original, image_encoded] | harmbench | 2 |
+| Claude Sonnet 4 | harmful × 2 enc × plain | [image_original, image_encoded] | harmbench | 2 |
 
-**24 eval tasks** — depends on 8b output dirs.
+**6 image eval tasks** — depends on 8b output dirs (done ✅).
 
-**Note:** text_original + text_encoded evaluation also needed (12 tasks), but these can use source_file directly without imaging. Include in eval batch.
-
-**Total Stage 8: 4 encode + 8 imaging + 36 eval = 48 tasks** | Cost: ~$20
-
-**What this gives us:** Dual-axis (ASR + refusal) measurement on OR-Bench with FigStep vs plain × 2 encodings × 3 models.
-
-**Direction B signal check:** Does encoding simultaneously ↑ ASR (harmful) AND ↓ refusal (benign)? If yes with 95% CI excluding 0 → strong dual-axis story.
-**Direction A signal check:** Does FigStep+encoding show >>0% ASR where plain FigStep = 0%? (resurrection).
+**What this gives us (RQ1):** With 86–97% text ASR, even a modest image reduction (e.g. −20pp) would be a dramatic defense demonstration.
 
 ---
 
-## Stage 9: Generational Safety Calibration — feeds Directions C & D
+## Stage 9: IR Defense on Newer Models (GPT-5.4-mini + Gemini 2.5 Flash) ✅ DONE
 
-Test whether the provider divergence pattern (GPT=defense, Claude/Gemini=amplifier) holds across generations and whether safety calibration is evolving. Uses EXISTING JBB images — no encoding or imaging needed. Pure evaluation tasks.
+**Purpose (RQ1, RQ4, RQ5):** Confirm IR defense on newer-generation models. Preliminary data shows GPT-5.4-mini averages −13pp ASR reduction across all conditions — the strongest defense signal we have.
 
-**Feeds which direction?**
-- Direction C (Provider Divergence): More models per provider confirms the pattern isn't N=1 noise.
-- Direction D (Generational Evolution): Temporal trend across model versions reveals safety calibration trajectory.
+**Key comparison:** `text_encoded ASR` vs `image_encoded ASR`. If image_encoded < text_encoded → IR defense works.
 
-### Hypothesis
+### 9a: Evaluate GPT-5.4-mini + Gemini 2.5 Flash — HARMFUL
 
-| Model | Generation | Expected Modality Gap (image - text ASR) |
-|-------|-----------|------------------------------------------|
-| GPT-4o-mini | 2024 | -7pp (observed) |
-| GPT-5-mini | 2025 | -15pp (observed, set_theory only) |
-| GPT-5.4-mini | 2026 | -??pp (predict larger negative → strengthening defense) |
-| Gemini 2.0 Flash | 2025 | +6pp (observed) |
-| Gemini 2.5 Flash | 2026 | +??pp or shift negative? (convergence vs divergence) |
+**Datasets:** JBB harmful (100) + HarmBench harmful (first 100).
 
-### 9a: Evaluate GPT-5.4-mini + Gemini 2.5 Flash on existing JBB images
+#### 9a Batch 1 — ✅ DONE (job mj_6574716, May 5)
 
-All source images already exist in `outputs/imaging/`. No pipeline needed — just evaluation tasks.
+| Type | Tasks | Status |
+|------|:-----:|--------|
+| Text eval (2 models × 2 datasets × 3 enc) | 12 | ✅ all completed |
+| JBB image eval (2 models × 3 enc × plain + fc_typo) | 12 | ✅ all completed |
+| HarmBench plain image eval (2 models × 3 enc) | 6 | ✅ all completed |
+| **Imaging: JBB + HarmBench fc_flowchart (6 tasks)** | 6 | ❌ **FAILED — graphviz timeout bug** |
+
+**Failure detail:** `graphviz` on cluster lacks `timeout` in `pipe()`. Code fix deployed (thread-based timeout via `ThreadPoolExecutor`).
+
+#### 9a Batch 2 — ✅ DONE (job mj_6578843, May 6)
+
+| Type | Tasks | Status |
+|------|:-----:|--------|
+| HarmBench fc_typography eval (2 models × 3 enc) | 6 | ✅ all completed |
+
+**FigStep + FC-Flowchart deferred to Stage 13** (dynamic adaptation needed).
+
+*Benign evaluation on newer models deferred to Stage 12 (RQ2 lower priority).*
+
+#### 9b: Budget/Newer Model Exploration — HarmBench (100 rows) ✅ PARTIAL (job mj_6579252)
+
+**Purpose (RQ4, RQ5):** Extend generality claim across model tiers.
+
+| Model | Provider | Cost (in/out $/M) | Dataset | Encodings | Modalities | Tasks | Status |
+|-------|----------|-------------------|---------|-----------|------------|:-----:|--------|
+| GPT-5.4-nano | OpenAI | $0.20 / $1.25 | HarmBench (100) | set_theory, formal_logic | text + image | 4 | ✅ Done |
+| Gemini 2.5 Flash Lite | Google | $0.075 / $0.30 | HarmBench (100) | set_theory, formal_logic | text + image | 4 | ✅ Done |
+| ~~Claude 4.5 Haiku~~ | ~~Anthropic~~ | — | — | — | — | — | ❌ Discarded (batch API timeout) |
+
+**8 eval tasks completed.** Claude Haiku discarded — batch API never processed image requests (stuck 3600s).
+
+**Results:** GPT-5.4-nano defense FAILS (+12pp on set_theory). Gemini 2.5 Flash Lite defense STRONG (−22pp on set_theory).
+
+#### 9c: Frontier Model Exploration — HarmBench (100 rows) ✅ DONE (job mj_6580412)
+
+**Purpose (RQ5):** Test whether stronger models with more safety investment show stronger IR defense effect.
+
+| Model | Provider | Cost (in/out $/M) | Dataset | Encodings | Modalities | Tasks | Status |
+|-------|----------|-------------------|---------|-----------|------------|:-----:|--------|
+| GPT-5.4 | OpenAI | $2.50 / $15.00 | HarmBench (100) | set_theory, formal_logic | text + image | 4 | ✅ Done |
+| Claude Sonnet 4.6 | Anthropic | $3.00 / $15.00 | HarmBench (100) | set_theory, formal_logic | text + image | 4 | ✅ Done |
+| Gemini 3 Flash Preview | Google | $0.50 / $3.00 | HarmBench (100) | set_theory, formal_logic | text + image | 4 | ✅ Done |
+
+**12 eval tasks completed.** Estimated cost: ~$15-20.
+
+**Results:** GPT-5.4 shows **strongest IR defense in entire experiment** (−22pp, −32pp). Claude Sonnet 4.6 consistent (−5pp, −13pp). Gemini 3 Flash Preview mixed (+4pp, −6pp).
+
+**CONFIRMED:** IR defense scales with model capability within GPT family (nano → mini → full: +12pp → −12pp → −27pp avg).
+
+#### 9d: Gemini 3 Pro Preview — HarmBench (100 rows)
+
+**Purpose:** Complete the Gemini scaling test. Gemini 3 Flash showed mixed results; Pro should have stronger safety alignment.
+
+| Model | Provider | Cost (in/out $/M) | Dataset | Encodings | Modalities | Tasks |
+|-------|----------|-------------------|---------|-----------|------------|:-----:|
+| Gemini 3 Pro Preview | Google | $1.25 / $10.00 | HarmBench (100) | set_theory, formal_logic | text + image | 4 |
+
+**4 eval tasks.** Can run alongside next stage tasks.
+
+#### 9e: Classical Chinese on HarmBench — encode + image + frontier eval
+
+**Purpose:** Add classical_chinese encoding to HarmBench so all 3 encodings are available for frontier model comparison and defense baselines.
+
+| Step | Task type | Details | Tasks |
+|------|-----------|---------|:-----:|
+| Encode | text_encode | HarmBench (100), classical_chinese, GPT-4.1-mini | 1 |
+| Image | imaging | Render classical_chinese plain images | 1 |
+| Eval text | evaluate | GPT-5.4, Claude Sonnet 4.6, Gemini 3 Pro Preview × text | 3 |
+| Eval image | evaluate | GPT-5.4, Claude Sonnet 4.6, Gemini 3 Pro Preview × image | 3 |
+
+**8 tasks total.** Encode + image are cheap (GPT-4.1-mini + local). Eval ~$3.
+
+---
+
+## Stage 10: Defense Baselines — SAGE + SemanticSmooth
+
+**Purpose (RQ3):** Run existing defense baselines on the same encoded prompts to demonstrate that IR outperforms them against encoding attacks.
+
+**Implementation:** Already done in `src/defense/` — SAGE (prompt-wrapping) and SemanticSmooth (SUMMARIZE variant, N=5 copies + majority vote).
+
+### 10a: Quick Validation — Does SemanticSmooth decode our encodings?
+
+Before committing compute: test whether paraphrasing decodes the encoding.
+- Give GPT-4.1-mini: "Paraphrase the following: [set_theory encoded prompt]"
+- If output remains encoded → SemanticSmooth fails as defense → IR clearly wins
+- If output decodes to plain harmful English → SemanticSmooth is a real competitor
+
+**1 manual test** — determines how much to invest in SemanticSmooth runs.
+
+### 10b: SAGE baseline (low compute — 1 call per prompt)
+
+Run SAGE on the same models × dataset × encodings as main IR defense results (Table 1).
+
+| Model | Dataset | Encodings | Tasks |
+|-------|---------|-----------|:-----:|
+| GPT-5.4 | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
+| Claude Sonnet 4.6 | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
+| Gemini 3 Pro Preview | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
+
+**9 defense tasks** — wraps encoded prompt with SAGE template, evaluates with harmbench judge.
+
+**Expected outcome:** SAGE fails because discriminator sees formal logic / math / classical Chinese as "not harmful."
+
+### 10c: SemanticSmooth baseline (high compute — N=5 calls per prompt)
+
+| Model | Dataset | Encodings | Tasks |
+|-------|---------|-----------|:-----:|
+| GPT-5.4 | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
+| Claude Sonnet 4.6 | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
+| Gemini 3 Pro Preview | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
+
+**9 defense tasks** — each generates 5 summarized copies, queries target 5 times, majority vote.
+
+**Cost:** ~5× higher than normal eval per task (N=5 queries × 100 prompts = 500 target queries per task). Estimate ~$30 for this stage.
+
+**Expected outcome:** Paraphrasing may fail to decode math notation / classical Chinese → SemanticSmooth's majority vote sees 5 harmful responses → defense fails.
+
+**Stage 10 total: 1 manual test + 18 defense tasks = ~19 tasks** | Cost: ~$35
+
+*Benign false-positive test for baselines deferred to Stage 12c.*
+
+---
+
+## Stage 11: SemanticCamo Attack Baseline
+
+**Purpose:** Validate our SemanticCamo encoder implementation as an additional attack baseline. Demonstrates generality — IR defends against diverse encoding attacks, including multi-step LLM-based ones.
+
+### 11a: Encode HarmBench with SemanticCamo (1 task)
+
+| Dataset | Encoder | LLM | Task |
+|---------|---------|-----|:----:|
+| HarmBench (100) | llm_semantic_camo | GPT-4.1-mini | 1 |
+
+### 11b: Image SemanticCamo (1 task)
+
+Render SemanticCamo output as plain image.
+
+### 11c: Evaluate SemanticCamo (text + image) on frontier models
+
+| Model | Dataset | Stages | Tasks |
+|-------|---------|--------|:-----:|
+| GPT-5.4 | HarmBench (100) | [text_encoded, image_encoded] | 2 |
+| Claude Sonnet 4.6 | HarmBench (100) | [text_encoded, image_encoded] | 2 |
+
+**4 eval tasks** — shows IR defense reduces ASR even for SemanticCamo on frontier models.
+
+**Stage 11 total: 6 tasks** | Cost: ~$5
+
+---
+
+## Stage 12: Benign Over-Refusal Measurement (RQ2) — LOWER PRIORITY
+
+**Purpose:** Quantify the defense cost (over-refusal on benign inputs). Needed for full paper but not decision-critical.
+
+### 12a: Newer models benign (12 tasks)
 
 | Model | Encodings | Renderers | Stages | Tasks |
 |-------|-----------|-----------|--------|:-----:|
-| GPT-5.4-mini | set_theory, formal_logic, classical_chinese | plain, figstep | [image_original, image_encoded] harmful | 6 |
-| Gemini 2.5 Flash | set_theory, formal_logic, classical_chinese | plain, figstep | [image_original, image_encoded] harmful | 6 |
-| GPT-5.4-mini | set_theory, formal_logic, classical_chinese | plain, figstep | [image_original, image_encoded] benign (refusal) | 6 |
-| Gemini 2.5 Flash | set_theory, formal_logic, classical_chinese | plain, figstep | [image_original, image_encoded] benign (refusal) | 6 |
+| GPT-5.4-mini | set_theory, formal_logic, classical_chinese | plain, fc_typography | [image_original, image_encoded] benign (refusal) | 6 |
+| Gemini 2.5 Flash | set_theory, formal_logic, classical_chinese | plain, fc_typography | [image_original, image_encoded] benign (refusal) | 6 |
 
-**24 eval tasks** — can run immediately after Stage 7e/8a. ~4-6h estimated.
+### 12b: OR-Bench benign_hard eval (8 tasks)
 
-### 9b: Scale OR-Bench (if generational trend or dual-axis confirmed)
+| Model | Dataset | Stages | Judge | Tasks |
+|-------|---------|--------|-------|:-----:|
+| GPT-5-mini | benign_hard × 2 enc × plain | [image_original, image_encoded] | refusal | 2 |
+| Gemini 2.0 Flash | benign_hard × 2 enc × plain | [image_original, image_encoded] | refusal | 2 |
+| Claude Sonnet 4 | benign_hard × 2 enc × plain | [image_original, image_encoded] | refusal | 2 |
 
-- Full orbench_benign_hard (1319) + orbench_harmful (655) with best models/renderers
-- Unified 3-class judge for clean TPR/FPR calibration plot
-- Bootstrap CIs on all pairwise comparisons (per Chouldechova methodology)
+**6 image eval + text eval tasks** — OR-Bench benign_hard images need rendering first (2 imaging tasks from 8a encoding already done).
 
-**Total: ~24 tasks** | Cost: ~$30-50
+### 12c: Defense baselines on benign (conditional, 2 tasks)
 
-**Decision signals from Stage 9:**
-- GPT-5.4-mini shows larger negative Δ → Direction D confirmed (safety improving over generations)
-- Gemini 2.5 Flash shifts from positive to negative Δ → convergence story (providers aligning)
-- Pattern unchanged → Direction C only (static architectural difference, not evolving)
-- Neither interesting → Directions C/D deprioritized; focus on B/E
+Only if SAGE/SemanticSmooth show defense effect in Stage 10 — measure their over-refusal for fair comparison.
 
-**Why this is fast:** All JBB images (plain + FigStep + FC-Typography) already rendered. Just evaluating with new models on existing directories. No sequential pipeline dependency.
+**Stage 12 total: ~22 tasks** | Cost: ~$10
 
 ---
 
-## Stage 10: Optional/Supplementary — depends on direction chosen
+## Stage 13: Dynamic Rendering Adaptation — FigStep + FC-Flowchart (SUPPLEMENTARY)
 
-| Sub-stage | What | Feeds Direction | When to include |
-|-----------|------|-----------------|-----------------|
-| 10a | HarmBench full eval (240 prompts, per-category) | All (benchmark diversity) | If reviewers will ask "only 100 prompts?" |
-| 10b | Pixtral-12B open-source comparison (cluster) | C (provider divergence) | If we need open-source vs. frontier contrast |
-| 10c | FC-Typography on OR-Bench (adds renderer axis) | A (resurrection) | If FigStep resurrection signal is weak but FC-Typo is strong |
-| 10d | Scale OR-Bench to 500+ rows | B, E (statistical power) | If 100-row CIs are too wide for claims |
+**Purpose (RQ4 — renderer generality):** Show IR defense works across different visual formats. Currently deferred due to rendering bugs with long text.
 
----
+**Problem:** FigStep and FC-Flowchart use fixed parameters for short prompts (79–140 chars). Encoded text (500–2500 chars) produces extreme aspect ratios.
 
-## Stage 11: Analysis + Direction Decision + Writing
+**Implementation needed:**
+- Scale canvas width / wrap_width by text length to maintain aspect ratio ≤ 3:1
+- FigStep: wider canvas for CJK (target 25 chars/line), font floor at 50pt
+- FC-Flowchart: adaptive wrap_width (scale with `sqrt(text_length)`), reduce DPI for long text
 
-### 11a: Decision Point (May 18)
+**After implementation:** Re-render + re-evaluate on JBB harmful + HarmBench.
 
-Based on Stage 8 + 9 results, evaluate each direction's viability:
+**Estimated: ~15 imaging + ~48 eval = ~63 tasks** | Cost: ~$20
 
-| Signal | Direction | Action |
-|--------|-----------|--------|
-| FigStep+encoding ASR >>40% where plain FigStep ≈ 0% | A (Resurrection) | Write attack paper |
-| Encoding reduces refusal AND increases ASR with CIs excluding 0 | B (Dual-Axis) | Write diagnostic paper |
-| Provider gap consistent across 2+ models per provider | C (Provider Divergence) | Write empirical analysis |
-| Clear temporal trend across generations | D (Generational) | Write longitudinal paper |
-| Everything modest but correct at scale | Combine or E | Combined empirical paper or benchmark contribution |
-| Nothing works | — | Workshop paper (SoLaR/TrustNLP) or ARR June fallback |
-
-### 11b: Analysis (direction-agnostic — run regardless)
-
-| Analysis | Tool | Feeds Direction |
-|----------|------|-----------------|
-| Modality gap Δ by encoding × model (with bootstrap 95% CIs) | scipy/numpy | All |
-| Dual-axis table: ASR change + refusal change per condition | pandas | B |
-| Renderer comparison (plain vs FigStep vs FC-Typography) | pandas | A |
-| Provider divergence heatmap | seaborn | C |
-| Generational trend plot (GPT-4o-mini → GPT-5-mini → GPT-5.4-mini) | matplotlib | D |
-| Safety calibration ROC (TPR vs FPR per condition) | matplotlib | B, E |
-| Per-category breakdown (if HarmBench included) | pandas | All |
-
-### 11c: Writing
-
-Paper structure adapts to chosen direction — see `proposal.md §8.2` for direction→framing mapping.
+**Priority:** Adds breadth but not required for core story (plain + fc_typography already cover renderer variation).
 
 ---
 
-## Timeline (updated May 4, for May 25 deadline)
+## Stage 14: Statistical Analysis + Comparison (can start once Stages 9–11 done)
+
+**Purpose:** Produce final numbers with proper statistical rigor.
+
+| Analysis | Method | Answers |
+|----------|--------|---------|
+| IR defense effect sizes on frontier models (with bootstrap 95% CIs) | Bootstrap 10K resamples | RQ1 |
+| Benign over-refusal comparison | Paired permutation test | RQ2 |
+| IR vs SAGE vs SemanticSmooth (pairwise on frontier models) | Permutation test on ASR | RQ3 |
+| Cross-model / cross-encoding interaction | Two-way ANOVA or CI overlap | RQ4 |
+| Diverging scissors (GPT-5.4-nano → mini → full) | CI trend plot + regression | RQ5 |
+
+**Output:** Tables + figures for paper.
+
+---
+
+## Stage 15: Writing
+
+**Core narrative: The Diverging Scissors**
+- Traditional defenses get WORSE on newer models (model understands attacks better → complies more)
+- IR defense gets STRONGER on newer models (image-safety improves with capability)
+- IR is the first defense whose effectiveness improves with model capability without modification
+
+**Paper structure:**
+1. Introduction: Text-encoding attacks achieve 24–57% ASR on frontier VLMs. Existing defenses degrade on newer models. We propose IR — the first self-improving defense.
+2. Background: Text-encoding attacks (CC-BOS, MathPrompt), VLM safety, existing defenses.
+3. Method: IR defense — one paragraph. Simplicity is the contribution.
+4. Experimental Setup: 3 frontier models, 4 encodings, HarmBench, 2 comparison defenses.
+5. Results:
+   - 5.1 IR reduces ASR on frontier models (GPT-5.4: 24→2%, 39→7%)
+   - 5.2 Existing defenses fail against encoding attacks (SAGE, SemanticSmooth)
+   - 5.3 The diverging scissors: IR strengthens with model capability (scaling table)
+   - 5.4 Generality across encodings (4) and providers (3)
+   - 5.5 Defense cost: benign over-refusal (modest)
+6. Analysis: Why trajectories diverge. Alliance with model providers. Failure cases. Deployment.
+7. Conclusion: First self-improving defense for encoding attacks. Zero cost, future-proof.
+
+---
+
+## Timeline (updated May 6)
 
 | Date | Stage | Milestone |
 |------|-------|-----------|
 | May 1–2 ✅ | Stages 1–4 | Data, encoding, JBB text+image, font fix, benign text, JBB re-eval |
 | May 2–3 ✅ | Stage 5 (12 tasks) | Benign image cc+sk + HarmBench re-imaging + Sanskrit height fix |
-| May 3 ✅ | Stage 6 (4 tasks) | GPT-5-mini validation — imaging-as-defense discovered (-15pp) |
-| May 3–4 ✅ | Stage 7 (52 tasks, 36 deleted + 1 killed) | Renderer exploration + GPT-5-mini full. FigStep truncation + FC-Typo bugs found. Renderers rewritten. |
-| May 4 ✅ | Stage 7d make-up R1 (12 img + 37 eval, 29 completed) | Re-render done. 29/37 eval completed, 8 killed by time limit. |
-| May 4–5 | Stage 7e + 8a (12 tasks) | FC-Typo benign make-up + OR-Bench encoding (parallel) |
-| May 5–6 | Stage 9a + 8b + 8c (24 + 8 + 36 tasks) | Generational eval + OR-Bench imaging + eval (max parallelism) |
-| May 6–7 | Stage 10 (conditional) | Scale OR-Bench / HarmBench / Pixtral — only if signal found |
-| May 7–8 | **PAUSE — review all results** | Which direction(s) show strongest signal? |
-| May 8–12 | Stage 11b | Analysis: bootstrap CIs, heatmaps, trend plots |
-| May 12–14 | Stage 11a **DECISION POINT** | Choose paper direction(s) based on quantitative evidence |
-| May 14–20 | — | Writing (direction determines structure) |
-| May 20–23 | — | Internal review, rewrite, polish |
-| May 23–25 | — | Final formatting, submit ARR May |
-| *Fallback* | — | *If not ready: ARR June (~Jun 15) or AAAI 2027 (~Aug)* |
+| May 3 ✅ | Stage 6 (4 tasks) | GPT-5-mini validation — imaging reduces ASR (−15pp) |
+| May 3–4 ✅ | Stage 7 (52 tasks, 36 deleted + 1 killed) | Renderer exploration + GPT-5-mini full. FigStep/FC-Typo bugs found. |
+| May 4 ✅ | Stage 7d make-up R1 | Re-render done. 29/37 eval completed. |
+| May 5 ✅ | Stage 7e + 8a + 9a | FC-Typo benign + OR-Bench encoding + newer model eval |
+| May 6 ✅ | **Stage 9c** (12 tasks) | **Frontier model results: GPT-5.4 (−22/−32pp), Claude Sonnet 4.6, Gemini 3 Flash. Scaling law CONFIRMED.** |
+| **May 6–7** | **Stage 9d + 9e + 10b/c** (17 tasks) | Gemini 3 Pro eval + CC encode + SAGE/SemanticSmooth baselines (set_theory, formal_logic) |
+| **May 7–8** | **Stage 9e cont + 10 cont** | CC imaging + CC frontier eval + SAGE/SemanticSmooth on CC |
+| **May 8–9** | **Stage 11** (6 tasks) | SemanticCamo encode + eval on frontier models |
+| **May 9–10** | Full HarmBench (240) | Re-run Table 1 on full dataset for paper |
+| **May 10–12** | **Stage 14** | Bootstrap CIs + statistical analysis + comparison tables |
+| May 12–16 | Stage 15 | Paper writing |
+| May 16–20 | Polish + advisor review | |
+| May 20–25 | Final revision + submit | |
+| **May 25** | **ARR May deadline** | |
 
-**Required for ANY direction:**
-- Stage 7e (complete renderer data) — fills gaps in tables
-- Stage 8 (OR-Bench) — statistical credibility, dual-axis evidence
-- Stage 9a (generational) — fast, uses existing images, confirms/refutes temporal trend
+Fallback: ARR June (~Jun 15) or EMNLP direct (Jun 2026).
 
-**Direction-specific requirements:**
-- Direction A: Need to confirm FigStep+encoding >> plain FigStep on OR-Bench (Stage 8)
-- Direction B: Need dual-axis CIs from OR-Bench (Stage 8c)
-- Direction C: Need 9a results to confirm pattern across model generations
-- Direction D: Need 9a + potentially 9b for trend significance
+**Priority order (defense story first):**
+1. Stage 9d — Gemini 3 Pro Preview (complete frontier trio)
+2. Stage 9e — Classical Chinese on HarmBench (3rd encoding for generality)
+3. Stage 10 — SAGE/SemanticSmooth baselines on frontier models (prove they fail → RQ3)
+4. Stage 11 — SemanticCamo (4th attack for generality → RQ4)
+5. Full HarmBench 240 — re-run Table 1 for paper robustness
+6. Stage 14 — statistical analysis + diverging scissors visualization
+7. Stage 12 — benign over-refusal (secondary)
+8. Stage 13 — dynamic rendering (supplementary, only if time)
+
+**Parallelism opportunities:**
+- Stage 8 (OR-Bench harmful) and Stage 9a Batch 2 — no dependency, run together
+- Stage 10 (defense baselines) and Stage 11 (SemanticCamo) — independent
+- Stage 13 (rendering fix) implementation can start anytime
 
 ---
 
 ## Compute Budget
 
-| Stage | Tasks | API Cost (est.) | GPU-hours |
-|-------|-------|-----------------|-----------|
-| 1: Encoding + Imaging ✅ | 20 | $5 | 0 |
-| 2: JBB text eval ✅ | 18 | $8 (actual) | 0 |
-| 3: JBB image eval ✅ | 18 | $12 (actual) | 0 |
-| 4: Font fix + benign text + JBB re-eval ✅ | 28 | $7 (actual) | 0 |
-| 5: Benign image completion + HB re-imaging ✅ | 12 | $4 (actual) | 0 |
-| 6: GPT-5-mini validation ✅ | 4 | $3 (actual) | 0 |
-| 7: Renderer exploration + GPT-5-mini full | 52 (16 valid, 36 deleted) | $12 (actual, valid only) | 0 |
-| 7d: Make-up (full re-render + re-eval) | 49 | $20 | 0 |
-| 8: OR-Bench calibration (100 rows) | 30 | $15 | 0 |
-| 9: Generational calibration | 40 | $50 | 0 |
-| 10: Optional (HarmBench / Pixtral) | 36 | $66 | ~8 |
-| 11: Analysis + writing | — | $0 | 0 |
-| **Total** | **~258** | **~$195** | **~8 GPU-hours** |
+### Actual spend to date (from `results.json` usage tracking, 170 tasks)
+
+| Category | Tasks | Cost |
+|----------|:-----:|-----:|
+| Evaluate (target: "unknown" — older runs) | 66 | $36.55 |
+| Evaluate (target: GPT-5-mini) | 28 | $24.39 |
+| Evaluate (target: Claude Sonnet 4) | 14 | $23.31 |
+| Evaluate (target: Gemini 2.0 Flash) | 13 | $1.41 |
+| Evaluate (target: GPT-4o-mini) | 2 | $0.91 |
+| Text encoding (GPT-4.1-mini) | 19 | $2.32 |
+| Imaging (local rendering) | 28 | $0.00 |
+| **Total spent** | **170** | **$88.90** |
+
+### Estimated remaining spend
+
+| Stage | Priority | Tasks | Est. cost |
+|-------|----------|:-----:|----------:|
+| 9a Batch 2 (newer models harmful) | HIGH — ✅ DONE | 6 | ~$3 |
+| 8c: OR-Bench harmful image eval | HIGH | 6 | ~$3 |
+| 9b: Budget model exploration (HarmBench) | HIGH | 12 | ~$3 |
+| 10: Defense baselines (SAGE + SemanticSmooth) | HIGH | ~19 | ~$30 |
+| 11: SemanticCamo attack baseline | HIGH | 6 | ~$5 |
+| 14: Statistical analysis | HIGH | — | $0 |
+| 12: Benign over-refusal (RQ2) | LOW | ~22 | ~$10 |
+| 13: Dynamic rendering (supplementary) | LOW | ~63 | ~$20 |
+| **Estimated remaining** | | **~134** | **~$74** |
+| **Estimated grand total** | | **~304** | **~$163** |
 
 ---
 
 ## Configuration Notes
 
 - Encoder LLM: `gpt-4.1-mini` (all encodings)
-- ASR Judge: `gpt-5-nano` with `max_tokens: 16384` (HarmBench/JBB classifier)
-- Refusal Judge: `gpt-5-nano` via `judge_method: refusal` (JBB RefusalEvaluator)
-- OR-Bench Judge: `gpt-5-nano` via `judge_method: orbench` (3-class: direct_answer / direct_refusal / indirect_refusal, adapted from Cui et al., 2024)
+- Judge model: `gpt-5-nano` (max_tokens: 16384) for all evaluation methods
+- **Judge method by dataset/purpose:**
+
+| Dataset | Purpose | `judge_method` | Output | Metric |
+|---------|---------|----------------|--------|--------|
+| JBB harmful | Attack ASR | `harmbench` | safe/unsafe | ASR % |
+| HarmBench harmful | Attack ASR | `harmbench` | safe/unsafe | ASR % |
+| OR-Bench harmful | Attack ASR | `harmbench` | safe/unsafe | ASR % |
+| JBB benign | Over-refusal | `jbb_refusal` | refused/answered | Refusal % |
+| OR-Bench benign_hard | Over-refusal | `orbench` | direct_answer/direct_refusal/indirect_refusal | Refusal % (direct+indirect) |
 - `text_original` / `image_original` evaluated only once per model × benchmark (not per encoding)
-- Image renderers: `plain` (baseline), `figstep` (auto-height, script-aware), `fc_typography` (Pacifico for Latin, Noto for CJK/Devanagari, auto-width + auto-height)
+- Image renderers (active): `plain` (baseline), `fc_typography` (Pacifico for Latin, Noto for CJK/Devanagari, auto-width + auto-height)
+- Image renderers (deferred — need dynamic adaptation): `figstep`, `fc_flowchart` — fixed params produce unreadable images for long encoded text
 - Font: script-aware selection (Noto Sans CJK + Devanagari) with max height cap (7680px) — shared via `src/imaging/font_utils.py` across ALL renderers
-- FC-Flowchart: Graphviz font set to Noto Sans CJK / Devanagari for non-Latin text
+- FC-Flowchart: Graphviz font set to Noto Sans CJK / Devanagari for non-Latin text; thread-based timeout (30s) for rendering
 - Directory collision fix: random suffix appended to output dir names
 - Tier 1 target models: GPT-5-mini (replaces GPT-4o-mini), Gemini 2.0 Flash, Claude Sonnet 4
 - Tier 2 (generational comparison): GPT-5.4-mini (2026), Gemini 2.5 Flash (2026)
+- Tier 3 (budget): GPT-5.4-nano, Gemini 2.5 Flash Lite — HarmBench only
+- Tier 4 (frontier — **primary results**): GPT-5.4, Claude Sonnet 4.6, Gemini 3 Flash Preview, Gemini 3 Pro Preview — HarmBench only
 - Legacy reference: GPT-4o-mini (2024) — already has full JBB data for generational comparison
 - Benign prompts: 100 from JailbreakBench + first 100 from OR-Bench benign hard
 - OR-Bench datasets downloaded via `scripts/extract_datasets.py` from HuggingFace `bench-llm/or-bench`
-- Defense: logically implied (if imaging increases ASR, OCR→text filter reverses it). No implementation needed.
+- Defense baselines: SAGE (`src/defense/defenders/sage_defender.py`) + SemanticSmooth SUMMARIZE N=5 (`src/defense/defenders/semantic_smooth_defender.py`). Run via `defense` task mode.
+- Attack baseline: SemanticCamo (`src/text_encoding/encoders/llm_semantic_camo_encoder.py`) — multi-step LLM camouflage attack.
 - GPT-5 family models do NOT support temperature parameter (fixed in MODELS_WITHOUT_TEMPERATURE_SUPPORT).
 - Image renderer factory filters kwargs to renderer-accepted params only (inspect.signature fix).

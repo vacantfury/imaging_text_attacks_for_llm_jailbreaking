@@ -45,8 +45,10 @@ class ModelConfig:
 class ClusterConfig:
     """Cluster/vLLM server parameters. Maps to conf/llm/*/cluster: section."""
     partition: str = MISSING
+    excluded_nodes: List[str] = MISSING
     gpu_types_excluded: List[str] = MISSING
     num_gpus: int = MISSING
+    num_instances: int = MISSING
     cpus_per_task: int = MISSING
     mem_gb: int = MISSING
     time_limit: str = MISSING
@@ -58,6 +60,9 @@ class ClusterConfig:
     server_start_timeout: int = MISSING
     endpoint_wait_timeout: int = MISSING
     cluster_server_endpoint_timeout: int = MISSING
+    monitor_poll_interval: int = MISSING
+    health_check_timeout: int = MISSING
+    slurm_cmd_timeout: int = MISSING
     conda_env: str = MISSING
     cuda_module: str = MISSING
     hf_home: str = MISSING

@@ -1,0 +1,5 @@
+# SAGE defense configuration
+# "Self-Aware Guard Enhancement" (Ding et al., ACL Findings 2025)
+#
+# Pure prompt-wrapping defense — no additional parameters needed.
+# The SAGE template is hardcoded in the defender (matches paper exactly).
