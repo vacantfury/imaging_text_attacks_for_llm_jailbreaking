@@ -31,20 +31,20 @@ No defense exists specifically targeting **semantic-encoding attacks** (math not
 
 ## 1. Core Idea
 
-**The Diverging Scissors:**
+**Defense Composition for Encoding Attacks on VLMs:**
 
-Traditional defenses (SAGE, SemanticSmooth) get *weaker* on newer models:
-- Newer models are better at understanding encoded text → comply more reliably → defense degrades
-- Paraphrasing doesn't decode math/logic notation → majority vote says "comply" → defense fails harder on capable models
+No single defense is robust across all conditions:
+- SAGE (text-level self-discrimination) is strong on GPT-5.4 (0% ASR) but may not generalize to all models/attacks
+- IR (image modality routing) is strong on GPT-5.4 (2-7% ASR) but fails on some provider/encoding combinations (Claude + formal_logic: +46pp)
+- SemanticSmooth (paraphrasing) can be actively harmful — decodes encoding back to plain harmful text
 
-IR defense gets *stronger* on newer models:
-- Newer models have stronger image-safety alignment (providers keep investing)
-- IR routes text through the improving image-safety pipeline → defense automatically strengthens
-- No maintenance, no re-engineering — the model vendor improves the defense for free
+**Our approach:** Combine SAGE and IR into hybrid defenses:
+- **SAGE+IR:** Wrap text with SAGE safety instructions, then render as image → VLM sees image of safety-wrapped text (double defense pipeline)
+- **IR+SAGE:** Render attack as image, send with SAGE instructions as system prompt → VLM receives safety instructions via text + attack via image
 
-**Defense:** Given any incoming text (potentially an encoded attack), render it as an image and submit to the VLM. The image-modality safety pipeline catches attacks that bypass text-only safety — without retraining, without model access, without understanding the specific encoding scheme.
+**Key insight:** SAGE and IR operate through orthogonal mechanisms (text-level discrimination vs. modality-level safety). Composing them may provide robustness where individual defenses have gaps.
 
-**Key claim:** IR is the first defense whose effectiveness *improves with model capability* without any modification — a fundamentally different trajectory from all existing defenses.
+**Scaling property (still valid):** IR defense improves with model capability (GPT-5.4-nano → mini → full: +12pp → −12pp → −27pp). Hybrid defenses inherit this property while adding SAGE's text-level protection.
 
 ---
 
@@ -84,11 +84,13 @@ Properties:
 
 ### 3.3 Comparison Defenses
 
-| Defense | Venue | Mechanism | Trajectory on newer models |
-|---------|-------|-----------|----------------------------|
-| SemanticSmooth | AACL-IJCNLP 2025 | LLM paraphrases input N times + majority vote | Degrades — paraphrasing doesn't decode encodings, model complies more reliably |
-| SAGE | ACL Findings 2025 | Self-discrimination prompt: model judges safety before answering | Degrades — encoded prompts don't pattern-match as harmful to the discriminator |
-| **IR (ours)** | — | Render text as image → VLM's own image-safety alignment filters it | **Strengthens** — image-safety improves with model capability |
+| Defense | Venue | Mechanism | Actual effectiveness |
+|---------|-------|-----------|---------------------|
+| SemanticSmooth | AACL-IJCNLP 2025 | LLM paraphrases input N times + majority vote | Mixed — reduces ASR on GPT-5.4, but **increases** ASR on Claude (decodes encoding to plain harmful text) |
+| SAGE | ACL Findings 2025 | Self-discrimination prompt: model judges safety before answering | **Strong** — achieves 0% ASR on GPT-5.4 (contra expectations) |
+| **IR** | — | Render text as image → VLM's image-safety alignment filters it | Strong on GPT-5.4 (2-7% ASR), inconsistent across providers |
+| **SAGE+IR (ours)** | — | SAGE wraps text → render as image → double modality safety | TBD — composing both defenses |
+| **IR+SAGE (ours)** | — | Render as image → SAGE safety instructions as system prompt | Running |
 
 Why only 2 baselines: All other published defenses require white-box model access. SemanticSmooth and SAGE are the only published, training-free, black-box defenses applicable to our threat model.
 
@@ -114,9 +116,9 @@ Why only 2 baselines: All other published defenses require white-box model acces
 
 | Model | Provider | Role |
 |-------|----------|------|
-| GPT-5.4 | OpenAI | Strongest defense signal (−22 to −32pp) |
-| Claude Sonnet 4.6 | Anthropic | Cross-provider (−5 to −13pp) |
-| Gemini 3 Pro Preview | Google | Google frontier (pending) |
+| GPT-5.4 | OpenAI | Strongest IR defense signal (−22 to −32pp) |
+| Claude Sonnet 4.6 | Anthropic | Cross-provider validation |
+| Gemini 2.5 Pro | Google | Google frontier |
 
 **Scaling evidence (Table 2):**
 
@@ -133,6 +135,7 @@ Why only 2 baselines: All other published defenses require white-box model acces
 | GPT-5-mini | OpenAI | Earlier generation |
 | Gemini 2.0 Flash | Google | Known failure case |
 | Gemini 2.5 Flash | Google | Improvement over 2.0 |
+| Gemini 3 Flash Preview | Google | Supplementary frontier |
 | Claude Sonnet 4 | Anthropic | Earlier Anthropic |
 
 ### 3.7 Benchmarks
@@ -152,21 +155,43 @@ Why only 2 baselines: All other published defenses require white-box model acces
 
 ---
 
-## 4. Results (as of May 6, 2026)
+## 4. Results (as of May 9, 2026)
 
-### 4.1 Frontier Model Defense (Primary Results)
+### 4.1 Frontier Model IR Defense
 
-| Model | Encoding | Text ASR | Image ASR | Δ (defense) |
+| Model | Encoding | Text ASR | Image ASR | Δ (IR defense) |
 |-------|----------|:--------:|:---------:|:-----------:|
 | **GPT-5.4** | set_theory | 24% | 2% | **−22pp** |
 | **GPT-5.4** | formal_logic | 39% | 7% | **−32pp** |
-| Claude Sonnet 4.6 | set_theory | 21% | 16% | −5pp |
-| Claude Sonnet 4.6 | formal_logic | 57% | 44% | −13pp |
-| Gemini 3 Pro Preview | — | — | — | pending |
+| Claude Sonnet 4.6 | set_theory | 3% | 0% | −3pp |
+| Claude Sonnet 4.6 | formal_logic | 5% | 51% | +46pp (FAILS) |
+| Gemini 2.5 Pro | — | — | — | running |
 
-GPT-5.4 image_encoded ASR (2%, 7%) is barely above image_original (1%, 1%) — the model's image safety is essentially encoding-agnostic.
+⚠️ Claude Sonnet 4.6 text ASR corrected (judge bug: empty refusals misclassified as harmful). IR amplifies formal_logic on Claude.
 
-### 4.2 The Diverging Scissors (GPT Family Scaling)
+### 4.2 SAGE Defense — Unexpectedly Strong
+
+| Model | Encoding | No defense | SAGE | IR |
+|-------|----------|:---:|:---:|:---:|
+| GPT-5.4 | set_theory | 24% | **0%** | 2% |
+| GPT-5.4 | formal_logic | 39% | **0%** | 7% |
+| Claude Sonnet 4.6 | set_theory | 3% | 0% | 0% |
+| Claude Sonnet 4.6 | formal_logic | 5% | 3% | 51% |
+
+SAGE achieves near-zero ASR. This challenges the "baselines fail" hypothesis — SAGE's self-discrimination prompt IS effective even against encoding attacks on frontier models.
+
+### 4.3 SemanticSmooth — Harmful on Claude
+
+| Model | Encoding | No defense | SemanticSmooth |
+|-------|----------|:---:|:---:|
+| GPT-5.4 | set_theory | 24% | 7% |
+| GPT-5.4 | formal_logic | 39% | 27% |
+| Claude Sonnet 4.6 | set_theory | 3% | 12% (WORSE) |
+| Claude Sonnet 4.6 | formal_logic | 5% | 42% (MUCH WORSE) |
+
+SemanticSmooth's paraphrasing decodes encoded text back to plain harmful English, which Claude then complies with.
+
+### 4.4 The Diverging Scissors (GPT Family Scaling)
 
 | Model tier | set_theory Δ | formal_logic Δ | Trajectory |
 |------------|:------------:|:--------------:|:----------:|
@@ -174,21 +199,21 @@ GPT-5.4 image_encoded ASR (2%, 7%) is barely above image_original (1%, 1%) — t
 | GPT-5.4-mini (mid) | −5pp | −19pp | Defense works |
 | GPT-5.4 (frontier) | −22pp | −32pp | Defense DOMINANT |
 
-As model capability increases: defense goes from failing → working → near-perfect. This is the opposite trajectory of traditional defenses.
+As model capability increases: IR defense goes from failing → working → near-perfect.
 
-### 4.3 Cross-Provider Summary
+### 4.5 Cross-Provider IR Summary
 
-| Model | Conditions where defense works | Average Δ |
+| Model | Conditions where IR works | Average Δ |
 |-------|:------------------------------:|:---------:|
 | GPT-5.4 | 2/2 (100%) | −27pp |
-| Claude Sonnet 4.6 | 2/2 (100%) | −9pp |
 | GPT-5.4-mini | 6/6 (100%) | −13pp |
 | Gemini 2.5 Flash Lite | 2/2 (100%) | −16pp |
 | Gemini 2.5 Flash | 4/6 (67%) | −7pp |
+| Claude Sonnet 4.6 | 1/2 (50%) | +22pp |
 | GPT-5.4-nano | 0/2 (0%) | +5pp |
 | Gemini 2.0 Flash | 1/5 (20%) | +4pp |
 
-### 4.4 Defense Cost (benign over-refusal)
+### 4.6 Defense Cost (benign over-refusal)
 
 | Model | text refusal | image refusal | Cost |
 |-------|:-:|:-:|:-:|
@@ -196,78 +221,99 @@ As model capability increases: defense goes from failing → working → near-pe
 | Gemini 2.0 Flash | 0-8% | 1-8% | ~0pp |
 | Claude Sonnet 4 | 8-33% | 6-28% | variable |
 
-Cost is modest on newer models. Frontier model cost TBD.
+Frontier model cost TBD.
 
 ---
 
 ## 5. What Remains
 
-### 5.1 Critical Path (this week)
+### 5.1 Critical Path (running now)
 
 | Experiment | Purpose | Status |
 |------------|---------|--------|
-| Gemini 3 Pro Preview eval | Complete frontier model trio | Running |
-| SAGE baseline on frontier models | Show it fails | Running |
-| SemanticSmooth baseline on frontier models | Show it fails | Running |
-| Classical Chinese on HarmBench | 3rd encoding for generality | Running |
+| IR+SAGE hybrid eval (6 tasks) | Does combining IR with SAGE system prompt outperform either alone? | Running |
+| Gemini 2.5 Pro eval (4 tasks) | Complete frontier model trio | Running |
+| Classical Chinese frontier eval (6 tasks) | 3rd encoding for generality | Running |
+| SemanticSmooth Gemini 2.5 Pro + CC (5 tasks) | Complete defense comparison | Running |
+| SAGE defense_transform (3 tasks) | Produce wrapped prompts for SAGE+IR hybrid | Running |
 
-### 5.2 After This Round
+### 5.2 Round 2 (depends on this round's output)
 
 | Experiment | Purpose | Effort |
 |------------|---------|--------|
-| Classical Chinese imaging + frontier eval | Complete 3-encoding coverage | 1 round |
+| SAGE+IR hybrid (imaging + eval) | Image of SAGE-wrapped text — does double defense work? | ~8 tasks |
+| SAGE evaluate on Gemini 2.5 Pro + CC | Complete SAGE comparison table | ~6 tasks |
 | SemanticCamo (encode + eval) | 4th attack for generality | 1 round |
+
+### 5.3 After Core Experiments
+
+| Experiment | Purpose | Effort |
+|------------|---------|--------|
 | Bootstrap CIs on all claims | Statistical rigor | Local computation |
 | Full HarmBench (240) on frontier models | Robustness check for paper | Low cost re-run |
+| Benign over-refusal on frontier models | Defense cost measurement | ~12 tasks |
 
-### 5.3 Nice-to-Have
+### 5.4 Nice-to-Have
 
-- Mechanism analysis: WHY image safety is stricter (attention probing on open-source models)
-- Stacked defense: IR + paraphrasing combined
-- Benign over-refusal on frontier models
+- Mechanism analysis: WHY image safety is stricter
+- Adaptive attack against SAGE (encoding that defeats self-discrimination)
+- Benign over-refusal comparison: SAGE vs IR on frontier models
 
 ---
 
 ## 6. Paper Positioning
 
-### Core Contribution
+### Core Contribution (revised May 9)
 
-**IR is the first defense with a positive scaling trajectory against encoding attacks.** Traditional defenses degrade as models improve (the model understands attacks better). IR strengthens as models improve (image-safety gets stricter). This diverging trajectory means IR is the only defense with a sustainable long-term outlook.
+**Original claim ("baselines fail") is DISPROVEN** — SAGE is effective (0% ASR on GPT-5.4). New strategy:
 
-### Evidence Structure
+**Option A (if hybrids work): Defense Composition Paper**
+- First study of defense composition against encoding attacks on frontier VLMs
+- Key finding: SAGE+IR or IR+SAGE achieves stronger/more robust protection than either alone
+- Novel observation: SemanticSmooth is HARMFUL on Claude (decodes encoding → increases ASR)
+- Scaling law: defense composition effectiveness improves with model capability
+
+**Option B (fallback): Empirical Study Paper**
+- First comprehensive evaluation of encoding attacks AND defenses on frontier VLMs (2026)
+- Novel findings: modality safety asymmetry, SAGE effectiveness, SemanticSmooth danger, scaling laws
+- Contribution is the evaluation framework and benchmark results, not a new method
+
+### Evidence Structure (updated)
 
 | Claim | Evidence |
 |-------|----------|
-| Encoding attacks are a real threat | 24–57% ASR on frontier VLMs |
-| Traditional defenses fail | SAGE/SemanticSmooth ASR ≈ undefended (testing) |
-| IR provides near-complete protection | 2–7% residual ASR on GPT-5.4 |
-| IR strengthens with model capability | GPT family scaling: +12pp → −12pp → −27pp |
-| IR works across providers | GPT, Claude, Gemini all show reduction |
-| IR works across encodings | set_theory, formal_logic, classical_chinese, SemanticCamo |
+| Encoding attacks are a real threat | 24–39% ASR on frontier VLMs (GPT-5.4) |
+| SAGE is effective (contra prior expectations) | 0% ASR on GPT-5.4 with set_theory and formal_logic |
+| SemanticSmooth can be harmful | +37pp ASR increase on Claude (decodes encoding) |
+| IR provides near-complete protection on GPT-5.4 | 2–7% residual ASR |
+| IR is inconsistent across providers | Fails on Claude formal_logic (+46pp) |
+| Hybrid defense is more robust | TBD (IR+SAGE running) |
+| Defense scales with model capability | GPT family: +12pp → −12pp → −27pp |
 
-### Probability Assessment (updated May 6)
+### Probability Assessment (updated May 9)
 
 | Scenario | Probability | Outcome | Paper level |
 |----------|:-:|----------|:-:|
-| Beat both baselines + strong scaling story | **60%** | "First self-improving defense against encoding attacks" | **Main conf** |
-| Baselines partially work, but IR still dominates | 25% | "Superior defense with unique scaling property" | **Main conf / Findings** |
-| Gemini 3 Pro doesn't show expected pattern | 10% | "Defense works on OpenAI/Anthropic, mixed on Google" | **Findings** |
-| Results don't replicate on full dataset | 5% | Need investigation | **Delayed** |
+| Hybrid defense clearly outperforms individual defenses | 30% | "Defense composition for encoding attacks" | **EMNLP Main / Findings** |
+| Hybrid is comparable to SAGE but more robust across conditions | 35% | "Robustness through defense composition" | **Findings** |
+| Hybrid shows no benefit over SAGE alone | 20% | Pivot to empirical study | **Findings / Workshop** |
+| Surprising new finding from experiments | 15% | Depends on what emerges | **Variable** |
 
 ---
 
-## 7. Timeline (updated May 6)
+## 7. Timeline (updated May 9)
 
 | Date | Milestone |
 |------|-----------|
-| May 6 ✅ | Frontier model results (GPT-5.4, Claude Sonnet 4.6). Scaling law confirmed. |
-| May 6–7 | Gemini 3 Pro + SAGE/SemanticSmooth baselines + classical Chinese encode |
-| May 7–8 | Classical Chinese imaging + frontier eval. SemanticCamo encode + eval |
-| May 8–9 | Full HarmBench (240) verification on frontier models |
-| May 9–11 | Bootstrap CIs + statistical analysis |
-| May 11–16 | Paper writing |
-| May 16–20 | Polish + advisor review |
-| May 20–25 | Final revision + submit |
+| May 6 ✅ | Frontier IR results (GPT-5.4, Claude Sonnet 4.6). Scaling law confirmed. |
+| May 7 ✅ | SAGE/SemanticSmooth baselines — SAGE unexpectedly strong (0% ASR). Judge bug discovered. |
+| May 8 ✅ | Judge bug fixed + results corrected. Pivot to hybrid defense strategy. Code refactored (defense_transform mode). |
+| May 9 | Round 1 running: Gemini 2.5 Pro + CC eval + IR+SAGE + SemanticSmooth + SAGE transform |
+| May 10 | Round 2: SAGE+IR imaging + eval. SAGE evaluate on new models. |
+| May 11–12 | SemanticCamo + remaining experiments |
+| May 12–14 | Bootstrap CIs + statistical analysis |
+| May 14–20 | Paper writing |
+| May 20–25 | Polish + advisor review + submit |
 | **May 25** | **ARR May deadline** |
 
 Fallback: ARR June (~Jun 15) or EMNLP direct (Jun 2026).
@@ -278,28 +324,30 @@ Fallback: ARR June (~Jun 15) or EMNLP direct (Jun 2026).
 
 | Risk | Likelihood | Mitigation |
 |------|:-:|-----------|
-| Baselines actually work (SemanticSmooth decodes encodings) | 20% | IR is still simpler (1 call vs 5N calls), zero-cost, encoding-agnostic. Propose stacked defense. |
-| Gemini 3 Pro doesn't show strong defense | 30% | 2/3 frontier models (GPT-5.4 + Claude) still show clear effect. Frame Gemini as provider-specific limitation. |
-| "Too simple" criticism | Medium | Simplicity IS the contribution — training-free, deployable today, self-improving. CC-BOS (attack) was similarly simple and got ICLR. |
-| Benign refusal cost deemed too high | Low | Frontier model cost likely low (GPT-5.4 original barely refuses). Propose threshold-based deployment. |
-| Scaling claim challenged (only 3 GPT tiers) | Medium | Cross-provider validation (Claude Sonnet 4 → 4.6, Gemini 2.0 → 2.5 → 3) supports the trend independently. |
+| Hybrid defense shows no benefit over SAGE alone | 30% | Pivot to empirical study framing — SAGE effectiveness is itself a novel finding worth reporting |
+| IR inconsistency across providers weakens claims | HIGH (confirmed) | Frame as provider-specific: IR is strongest on OpenAI (strongest safety investment). Hybrid compensates gaps. |
+| "Too simple" criticism (both SAGE and IR are trivial) | Medium | Contribution is the composition insight + empirical evaluation, not algorithmic novelty. CC-BOS was similarly simple (ICLR). |
+| Reviewers say "just use SAGE" | 30% | Show conditions where SAGE alone fails or hybrid is more robust (Claude formal_logic, or future adaptive attacks) |
+| SemanticSmooth danger finding is "expected" | Low | No prior work has shown paraphrasing INCREASES attack success. Novel and actionable. |
+| Scaling claim challenged (only 3 GPT tiers) | Medium | Cross-provider validation + multiple encodings. Hybrid inherits scaling property. |
 
 ---
 
-## 9. Paper Structure
+## 9. Paper Structure (revised May 9)
 
-1. **Introduction:** Text-encoding attacks bypass frontier VLM safety at 24–57% ASR. Existing defenses are not designed for this threat and degrade on newer models. We propose IR — the first defense that strengthens with model capability.
-2. **Background:** Text-encoding attacks (CC-BOS, MathPrompt), VLM safety alignment, existing defenses (SemanticSmooth, SAGE).
-3. **Method:** IR defense — one paragraph. Simplicity is the contribution.
-4. **Experimental Setup:** 3 frontier models, 4 encodings, HarmBench, 2 comparison defenses, evaluation protocol.
+1. **Introduction:** Text-encoding attacks achieve 24–39% ASR on frontier VLMs. We study defenses: individual (SAGE, IR) and composed (SAGE+IR, IR+SAGE). Key findings: SAGE is effective (contra prior expectations), SemanticSmooth is harmful on some providers, and defense composition provides robust cross-condition protection.
+2. **Background:** Text-encoding attacks (CC-BOS, MathPrompt, formal logic), VLM safety alignment, existing defenses (SemanticSmooth, SAGE), modality safety asymmetry.
+3. **Method:** Defense strategies — IR (modality switching), SAGE (self-discrimination), and two hybrid compositions. Implementation of defense_transform pipeline for composability.
+4. **Experimental Setup:** 3 frontier models, 3-4 encodings, HarmBench (100/240), 4 defense configurations, evaluation protocol.
 5. **Results:**
-   - 5.1 IR reduces ASR on frontier models (main table)
-   - 5.2 Existing defenses fail against encoding attacks (SAGE, SemanticSmooth)
-   - 5.3 The diverging scissors: IR strengthens with model capability (scaling table)
-   - 5.4 Generality across encodings and providers
-   - 5.5 Defense cost: benign over-refusal (modest)
-6. **Analysis:** Why trajectories diverge. The "alliance with model providers" framing. Failure cases. Deployment.
-7. **Conclusion:** First self-improving defense for encoding attacks. Zero cost, future-proof.
+   - 5.1 Encoding attacks on frontier VLMs (attack success table)
+   - 5.2 Individual defenses: SAGE strong, IR strong on OpenAI, SemanticSmooth dangerous
+   - 5.3 Defense composition: SAGE+IR and IR+SAGE results
+   - 5.4 Scaling with model capability (diverging scissors)
+   - 5.5 Generality across encodings and providers
+   - 5.6 Defense cost: benign over-refusal
+6. **Analysis:** Why SAGE works (self-discrimination effective even on encoded text). Why SemanticSmooth fails (decoding as attack amplifier). Why IR is provider-dependent. Deployment recommendations.
+7. **Conclusion:** First systematic evaluation of defense composition for encoding attacks. Practical recommendations for production VLM safety.
 
 ---
 
@@ -319,9 +367,9 @@ Fallback: ARR June (~Jun 15) or EMNLP direct (Jun 2026).
 
 ## 11. Future Work
 
-- **Stacked defenses:** IR + SemanticSmooth for maximum coverage
-- **Selective application:** Only apply IR when input matches encoding patterns (reduces benign cost)
-- **Mechanism analysis:** Attention probing on open-source VLMs to explain image safety gap
-- **Adaptive attacks:** Can an attacker craft encodings that survive image rendering?
-- **Formal analysis:** Theoretical model of why image-safety scales faster than text-understanding for encoded inputs
-- **Longitudinal study:** Track IR effectiveness across future model releases to validate the diverging scissors prediction
+- **Adaptive attacks against SAGE:** Can an encoding defeat SAGE's self-discrimination? (Potential separate attack paper)
+- **Three-way composition:** SAGE + IR + SemanticSmooth — does paraphrasing help when combined with other defenses?
+- **Selective application:** Route through IR only when encoding is detected (reduces benign cost)
+- **Mechanism analysis:** Attention probing on open-source VLMs to explain image safety gap and SAGE effectiveness
+- **Longitudinal study:** Track defense effectiveness across future model releases
+- **Broader attack evaluation:** Test defenses against newer attacks (MIDAS multi-image, Text-DJ decomposition)

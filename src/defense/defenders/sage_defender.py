@@ -4,6 +4,12 @@ SAGE defender — Self-Aware Guard Enhancement.
 Wraps each input with a two-stage security check prompt that guides the model
 to perform semantic analysis + task structure analysis before responding.
 
+Can operate in two modes:
+  1. Transform-only: wraps text and returns defended prompts (no model query).
+     Output is compatible with downstream imaging/evaluate stages.
+  2. Legacy combined mode: wraps text, queries model, returns responses.
+     (Used by the old _run_defense path for backward compatibility.)
+
 Reference:
   "Why Not Act on What You Know? Unleashing Safety Potential of LLMs via
    Self-Aware Guard Enhancement" (Ding et al., ACL Findings 2025)
@@ -44,8 +50,20 @@ class SAGEDefender(BaseDefender):
     by prepending/appending the SAGE security check instructions.
     """
 
+    is_transform_only = True
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    def transform(self, prompts: list[dict[str, str]]) -> list[dict[str, str]]:
+        """Apply SAGE wrapping to each prompt. Returns new prompt dicts
+        with 'encoded' replaced by the SAGE-wrapped version."""
+        transformed = []
+        for p in prompts:
+            wrapped = SAGE_TEMPLATE.format(content=p["encoded"])
+            transformed.append({"id": p["id"], "encoded": wrapped})
+        logger.info(f"SAGE transform: wrapped {len(transformed)} prompts")
+        return transformed
 
     def defend_and_query(
         self,
@@ -53,12 +71,12 @@ class SAGEDefender(BaseDefender):
         service: BaseLLMService,
         system_message: str | None = None,
     ) -> list[tuple[str, str]]:
-        """Wrap each prompt with SAGE template, then batch query."""
+        """Legacy combined mode: wrap + query. Kept for backward compat."""
+        transformed = self.transform(prompts)
         conversations = []
-        for p in prompts:
-            wrapped = SAGE_TEMPLATE.format(content=p["encoded"])
+        for p in transformed:
             conv_id = p["id"]
-            conversations.append((conv_id, [(wrapped, None)]))
+            conversations.append((conv_id, [(p["encoded"], None)]))
 
         logger.info(f"SAGE defense: querying {len(conversations)} prompts")
         results = service.batch_chat(

@@ -141,6 +141,26 @@ class EvaluateResult(BaseModel):
     upstream: Optional[dict] = None
 
 
+class DefenseTransformResult(BaseModel):
+    """Result of a transform-only defense (e.g., SAGE wrapping).
+
+    Output: prompts.jsonl in the same format as text_encode, where
+    'encoded' contains the defense-wrapped text. Can be piped into
+    imaging or evaluate stages directly.
+    """
+    mode: str = "defense_transform"
+    defense_method: str
+    defense_config: Optional[dict] = None
+    encoding: str
+    benchmark: str
+    prompt_range: Optional[list[int]] = None
+    source_dir: str
+    count: int
+    elapsed_seconds: float
+    output_dir: str
+    upstream: Optional[dict] = None
+
+
 class DefenseResult(BaseModel):
     """Complete record of a defense task run — written to results.json."""
     mode: str = "defense"

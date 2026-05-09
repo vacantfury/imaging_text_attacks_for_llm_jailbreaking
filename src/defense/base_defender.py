@@ -4,6 +4,12 @@ Base class for all defense strategies.
 Each defender takes encoded prompts and a target model service,
 applies its defense mechanism, and returns (id, response) pairs.
 The task runner handles judging and result persistence.
+
+Defenders can be:
+  - Transform-only (is_transform_only=True): only wraps/modifies text.
+    Used by 'defense_transform' mode. Must implement transform().
+  - Coupled (is_transform_only=False): wraps text AND queries model.
+    Used by 'defense' mode. Must implement defend_and_query().
 """
 from abc import ABC, abstractmethod
 from typing import Any
@@ -23,11 +29,23 @@ class BaseDefender(ABC):
       2. Queries the target model
       3. Returns (id, response) pairs
 
-    The caller (_run_defense in task.py) handles ASR judging.
+    Transform-only defenders additionally implement transform() and set
+    is_transform_only = True.
     """
+
+    is_transform_only: bool = False
 
     def __init__(self, **kwargs):
         self._extra_config = kwargs
+
+    def transform(self, prompts: list[dict[str, str]]) -> list[dict[str, str]]:
+        """Apply defense transformation without querying any model.
+
+        Only required for transform-only defenders (is_transform_only=True).
+        Returns list of dicts with 'id' and 'encoded' (the defended text).
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not implement transform()")
 
     @abstractmethod
     def defend_and_query(

@@ -2,7 +2,15 @@
 Task runner for Encoding × Modality jailbreaking experiments.
 
 Pipeline stages:
-  text_encode → imaging → evaluate
+  text_encode → [defense_transform] → [imaging] → evaluate
+                                    └→ evaluate (text-only)
+
+Modes:
+  text_encode       — encode harmful prompts (LLM-based or rule-based)
+  defense_transform — apply transform-only defense (e.g., SAGE wrapping)
+  imaging           — render text prompts as images
+  evaluate          — query target model + ASR judging
+  defense           — coupled defense+query+judge (e.g., SemanticSmooth)
 
 Prompt stages (2×2 grid):
               Text modality    Image modality
@@ -28,7 +36,8 @@ from .config import load_conf as _load_conf
 from .schemas import (
     RawPrompt, Prompt, EvaluationRow,
     TextEncodeResult, ImagingResult,
-    EvaluateResult, DefenseResult, TargetModelConfig, JudgeLLMConfig,
+    EvaluateResult, DefenseTransformResult, DefenseResult,
+    TargetModelConfig, JudgeLLMConfig,
 )
 
 logger = get_logger(__name__)
@@ -648,6 +657,94 @@ def _run_evaluate(config: dict) -> dict[str, Any]:
     }
 
 
+# ======================== defense_transform ========================
+
+def _run_defense_transform(config: dict) -> dict[str, Any]:
+    """
+    Mode: defense_transform
+
+    Applies a transform-only defense (e.g., SAGE wrapping) to encoded prompts.
+    No model querying or judging — just text transformation.
+
+    Input: text_encode output dir (prompts.jsonl with encoded field).
+    Output: new prompts.jsonl where 'encoded' = defense-wrapped text.
+            Compatible as source_dir for imaging or evaluate stages.
+    """
+    from src.defense import create_defender
+
+    t0 = time.time()
+
+    source_dir = config.get("source_dir")
+    defense_method = config.get("defense_method")
+
+    if not source_dir:
+        raise ValueError("defense_transform mode requires 'source_dir'")
+    if not defense_method:
+        raise ValueError("defense_transform mode requires 'defense_method'")
+
+    logger.info(f"Defense transform: method={defense_method}")
+
+    prompts = _load_and_slice_prompts(source_dir, config)
+    encoding = prompts[0].encoding if prompts else config.get("encoding", "unknown")
+    benchmark = config.get("benchmark", _infer_benchmark(source_dir))
+
+    defense_config = _load_conf(
+        "defense", override_name=defense_method,
+        task_overrides=config.get("defense_config"))
+    defense_config.pop("perturbation_model", None)
+
+    defender = create_defender(defense_method, **defense_config)
+
+    if not getattr(defender, "is_transform_only", False):
+        raise ValueError(
+            f"Defense '{defense_method}' does not support transform-only mode. "
+            f"Use 'defense' mode instead.")
+
+    prompt_dicts = [{"id": p.id, "encoded": p.encoded} for p in prompts]
+    transformed = defender.transform(prompt_dicts)
+
+    out_dir = Path(get_new_experiment_data_dir(
+        "outputs/defense_transform", dataset=benchmark,
+        model=f"{defense_method}_{encoding}"))
+
+    with open(out_dir / "prompts.jsonl", "w") as f:
+        for orig_prompt, t_dict in zip(prompts, transformed):
+            record = Prompt(
+                id=t_dict["id"],
+                encoding=encoding,
+                original=orig_prompt.original,
+                encoded=t_dict["encoded"],
+            )
+            f.write(record.model_dump_json() + "\n")
+
+    elapsed = round(time.time() - t0, 2)
+    logger.info(f"Defense transform complete: {len(prompts)} prompts → {out_dir} ({elapsed}s)")
+
+    prompt_range = config.get("prompt_range")
+    result = DefenseTransformResult(
+        defense_method=defense_method,
+        defense_config=defense_config if defense_config else None,
+        encoding=encoding,
+        benchmark=benchmark,
+        prompt_range=prompt_range if prompt_range else None,
+        source_dir=source_dir,
+        count=len(prompts),
+        elapsed_seconds=elapsed,
+        output_dir=str(out_dir),
+        upstream=_load_results(source_dir) or None,
+    )
+    _save_results(out_dir, result.model_dump(exclude_none=True))
+
+    return {
+        "status": "success",
+        "output_dir": str(out_dir),
+        "count": len(prompts),
+        "defense_method": defense_method,
+        "encoding": encoding,
+        "elapsed_seconds": elapsed,
+    }
+
+
 # ======================== defense ========================
 
 def _run_defense(config: dict) -> dict[str, Any]:
@@ -837,6 +934,7 @@ TASK_MODES = {
     "text_encode": _run_text_encode,
     "imaging": _run_imaging,
     "evaluate": _run_evaluate,
+    "defense_transform": _run_defense_transform,
     "defense": _run_defense,
 }
 

@@ -2,7 +2,7 @@
 
 **Direction (defense paper, May 6):** We PROPOSE Image Rendering (IR) as a training-free, zero-overhead defense against text-encoding attacks on production frontier VLMs. IR exploits frontier VLMs' stronger image-safety alignment: encoding attacks that achieve 24–57% ASR via text are neutralized to 2–16% when rendered as images. The defense automatically strengthens with model capability.
 
-**Primary evaluation models (frontier):** GPT-5.4, Claude Sonnet 4.6, Gemini 3 Pro Preview
+**Primary evaluation models (frontier):** GPT-5.4, Claude Sonnet 4.6, Gemini 2.5 Pro
 **Scaling/mechanism evidence:** GPT-5.4-nano → GPT-5.4-mini → GPT-5.4 (defense emerges with capability)
 **Older models:** context for why defense works on production models, not legacy ones
 
@@ -14,19 +14,28 @@
 - RQ5: Does defense effectiveness scale with model capability?
 
 **Key remaining work:**
-1. Gemini 3 Pro Preview evaluation (Stage 9d) — 4 tasks
-2. Run defense baselines (SAGE, SemanticSmooth) — prove they fail on encoding attacks
-3. Bootstrap CIs + statistical analysis
-4. Benign over-refusal (secondary)
+1. Gemini 2.5 Pro evaluation (Stage 9d) — 4 tasks
+2. Run defense baselines (SAGE, SemanticSmooth) — Stage 10b/10c
+3. Hybrid defense experiments (SAGE+IR, IR+SAGE) — Stage 10d
+4. Bootstrap CIs + statistical analysis
+5. Benign over-refusal (secondary)
 
 ---
 
 ## IMPORTANT: Dataset Row Limit
 
-**All datasets use only the first 100 rows for all current experiments.** Full dataset runs deferred to a late stage after core findings are confirmed.
+**Row limit applies ONLY to evaluation (querying target models + ASR judging).** All other stages use full datasets:
 
-| Dataset | Total rows | Rows used now |
-|---------|:----------:|:-------------:|
+| Stage | Rows used |
+|-------|-----------|
+| `text_encode` (attack/encoding) | **ALL rows** |
+| `imaging` (render text as image) | **ALL rows** |
+| `defense_transform` (SAGE wrapping) | **ALL rows** |
+| `evaluate` (query model + judge) | **First 100 rows** (`prompt_range: [0, 99]`) |
+| `defense` (coupled defense+query, e.g., SemanticSmooth) | **First 100 rows** (`prompt_range: [0, 99]`) |
+
+| Dataset | Total rows | Rows evaluated |
+|---------|:----------:|:--------------:|
 | JBB harmful | 100 | 100 (full) |
 | JBB benign | 100 | 100 (full) |
 | HarmBench | 240 | **100** |
@@ -34,7 +43,7 @@
 | OR-Bench benign hard | 1319 | **100** |
 | OR-Bench benign 1k | 1000 | **100** |
 
-This keeps per-task cost low, enables fast iteration, and ensures consistent sample sizes across datasets for fair comparison.
+Rationale: Encoding/imaging/wrapping are cheap (local compute or 1 LLM call each). Evaluation is expensive (target model API calls + judge calls). Keeping full upstream data means we can later evaluate on larger slices without re-encoding.
 
 ---
 
@@ -456,13 +465,13 @@ Output dirs:
 
 **CONFIRMED:** IR defense scales with model capability within GPT family (nano → mini → full: +12pp → −12pp → −27pp avg).
 
-#### 9d: Gemini 3 Pro Preview — HarmBench (100 rows)
+#### 9d: Gemini 2.5 Pro — HarmBench (100 rows)
 
-**Purpose:** Complete the Gemini scaling test. Gemini 3 Flash showed mixed results; Pro should have stronger safety alignment.
+**Purpose:** Complete the Gemini scaling test. Gemini 3 Flash showed mixed results; Gemini 2.5 Pro has stronger safety alignment. (Gemini 3 Pro Preview was discarded due to batch API timeouts.)
 
 | Model | Provider | Cost (in/out $/M) | Dataset | Encodings | Modalities | Tasks |
 |-------|----------|-------------------|---------|-----------|------------|:-----:|
-| Gemini 3 Pro Preview | Google | $1.25 / $10.00 | HarmBench (100) | set_theory, formal_logic | text + image | 4 |
+| Gemini 2.5 Pro | Google | $1.25 / $10.00 | HarmBench (100) | set_theory, formal_logic | text + image | 4 |
 
 **4 eval tasks.** Can run alongside next stage tasks.
 
@@ -472,12 +481,12 @@ Output dirs:
 
 | Step | Task type | Details | Tasks |
 |------|-----------|---------|:-----:|
-| Encode | text_encode | HarmBench (100), classical_chinese, GPT-4.1-mini | 1 |
-| Image | imaging | Render classical_chinese plain images | 1 |
-| Eval text | evaluate | GPT-5.4, Claude Sonnet 4.6, Gemini 3 Pro Preview × text | 3 |
-| Eval image | evaluate | GPT-5.4, Claude Sonnet 4.6, Gemini 3 Pro Preview × image | 3 |
+| Encode | text_encode | HarmBench (all rows), classical_chinese, GPT-4.1-mini | 1 |
+| Image | imaging | Render classical_chinese plain images (all rows) | 1 |
+| Eval text | evaluate | GPT-5.4, Claude Sonnet 4.6, Gemini 2.5 Pro × text (100 rows) | 3 |
+| Eval image | evaluate | GPT-5.4, Claude Sonnet 4.6, Gemini 2.5 Pro × image (100 rows) | 3 |
 
-**8 tasks total.** Encode + image are cheap (GPT-4.1-mini + local). Eval ~$3.
+**8 tasks total.** Encode + image are cheap (GPT-4.1-mini + local, full dataset). Eval ~$3 (100 rows).
 
 ---
 
@@ -485,7 +494,11 @@ Output dirs:
 
 **Purpose (RQ3):** Run existing defense baselines on the same encoded prompts to demonstrate that IR outperforms them against encoding attacks.
 
-**Implementation:** Already done in `src/defense/` — SAGE (prompt-wrapping) and SemanticSmooth (SUMMARIZE variant, N=5 copies + majority vote).
+**Implementation:** `src/defense/` — SAGE (prompt-wrapping, transform-only) and SemanticSmooth (SUMMARIZE variant, N=5 copies + majority vote, coupled).
+
+**Architecture (refactored May 8):**
+- SAGE uses the new `defense_transform` mode — produces `prompts.jsonl` with SAGE-wrapped text. No model query. Downstream `evaluate` or `imaging` consumes this output.
+- SemanticSmooth remains in `defense` mode (coupled: paraphrase + query + vote in one step).
 
 ### 10a: Quick Validation — Does SemanticSmooth decode our encodings?
 
@@ -496,19 +509,20 @@ Before committing compute: test whether paraphrasing decodes the encoding.
 
 **1 manual test** — determines how much to invest in SemanticSmooth runs.
 
-### 10b: SAGE baseline (low compute — 1 call per prompt)
+### 10b: SAGE baseline (transform + evaluate)
 
-Run SAGE on the same models × dataset × encodings as main IR defense results (Table 1).
+SAGE is now a two-step pipeline:
+1. `defense_transform` — wraps all prompts with SAGE template (fast, no API calls to target)
+2. `evaluate` — queries target model with SAGE-wrapped text, runs ASR judge
 
-| Model | Dataset | Encodings | Tasks |
-|-------|---------|-----------|:-----:|
-| GPT-5.4 | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
-| Claude Sonnet 4.6 | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
-| Gemini 3 Pro Preview | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
+| Step | Mode | Model | Dataset | Encodings | Tasks |
+|------|------|-------|---------|-----------|:-----:|
+| Transform | defense_transform | — | HarmBench | set_theory, formal_logic, classical_chinese | 3 |
+| Evaluate | evaluate | GPT-5.4 | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
+| Evaluate | evaluate | Claude Sonnet 4.6 | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
+| Evaluate | evaluate | Gemini 2.5 Pro | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
 
-**9 defense tasks** — wraps encoded prompt with SAGE template, evaluates with harmbench judge.
-
-**Expected outcome:** SAGE fails because discriminator sees formal logic / math / classical Chinese as "not harmful."
+**3 transform + 9 evaluate = 12 tasks.** Transform tasks use all rows; evaluate uses first 100.
 
 ### 10c: SemanticSmooth baseline (high compute — N=5 calls per prompt)
 
@@ -516,7 +530,7 @@ Run SAGE on the same models × dataset × encodings as main IR defense results (
 |-------|---------|-----------|:-----:|
 | GPT-5.4 | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
 | Claude Sonnet 4.6 | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
-| Gemini 3 Pro Preview | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
+| Gemini 2.5 Pro | HarmBench (100) | set_theory, formal_logic, classical_chinese | 3 |
 
 **9 defense tasks** — each generates 5 summarized copies, queries target 5 times, majority vote.
 
@@ -524,7 +538,38 @@ Run SAGE on the same models × dataset × encodings as main IR defense results (
 
 **Expected outcome:** Paraphrasing may fail to decode math notation / classical Chinese → SemanticSmooth's majority vote sees 5 harmful responses → defense fails.
 
-**Stage 10 total: 1 manual test + 18 defense tasks = ~19 tasks** | Cost: ~$35
+### 10d: Hybrid Defenses — SAGE+IR and IR+SAGE
+
+**Purpose:** Investigate whether combining SAGE and IR yields a stronger defense than either alone.
+
+**Two hybrid strategies:**
+
+| Hybrid | Pipeline | Rationale |
+|--------|----------|-----------|
+| **SAGE+IR** | text_encode → defense_transform(SAGE) → imaging → evaluate(image) | SAGE wraps text first, then IR renders the wrapped text as image. Model sees image of SAGE instructions + attack. |
+| **IR+SAGE** | text_encode → imaging → evaluate(image + SAGE system message) | IR renders attack as image first, then SAGE instruction is sent as text alongside the image. Model sees SAGE text + attack image. |
+
+**SAGE+IR pipeline:**
+1. `defense_transform` — SAGE wraps encoded prompts (reuse from 10b)
+2. `imaging` — render SAGE-wrapped text as images
+3. `evaluate` — send images to target model, judge ASR
+
+**IR+SAGE pipeline:**
+1. `imaging` — render encoded prompts as images (reuse existing imaging output)
+2. `evaluate` — send image with SAGE template as `system_message`, judge ASR
+
+| Hybrid | Model | Encodings | New tasks needed |
+|--------|-------|-----------|:----------------:|
+| SAGE+IR | GPT-5.4 | set_theory, formal_logic | 2 eval (imaging reuse transform output) |
+| SAGE+IR | Claude Sonnet 4.6 | set_theory, formal_logic | 2 eval |
+| SAGE+IR | Gemini 2.5 Pro | set_theory, formal_logic | 2 eval |
+| IR+SAGE | GPT-5.4 | set_theory, formal_logic | 2 eval |
+| IR+SAGE | Claude Sonnet 4.6 | set_theory, formal_logic | 2 eval |
+| IR+SAGE | Gemini 2.5 Pro | set_theory, formal_logic | 2 eval |
+
+**~2 imaging + 12 evaluate = ~14 tasks** (plus transform tasks from 10b).
+
+**Stage 10 total: 1 manual test + 12 SAGE + 9 SemanticSmooth + 14 hybrid = ~36 tasks** | Cost: ~$50
 
 *Benign false-positive test for baselines deferred to Stage 12c.*
 
@@ -538,11 +583,11 @@ Run SAGE on the same models × dataset × encodings as main IR defense results (
 
 | Dataset | Encoder | LLM | Task |
 |---------|---------|-----|:----:|
-| HarmBench (100) | llm_semantic_camo | GPT-4.1-mini | 1 |
+| HarmBench (all rows) | llm_semantic_camo | GPT-4.1-mini | 1 |
 
 ### 11b: Image SemanticCamo (1 task)
 
-Render SemanticCamo output as plain image.
+Render SemanticCamo output as plain image (all rows).
 
 ### 11c: Evaluate SemanticCamo (text + image) on frontier models
 
@@ -550,10 +595,11 @@ Render SemanticCamo output as plain image.
 |-------|---------|--------|:-----:|
 | GPT-5.4 | HarmBench (100) | [text_encoded, image_encoded] | 2 |
 | Claude Sonnet 4.6 | HarmBench (100) | [text_encoded, image_encoded] | 2 |
+| Gemini 2.5 Pro | HarmBench (100) | [text_encoded, image_encoded] | 2 |
 
-**4 eval tasks** — shows IR defense reduces ASR even for SemanticCamo on frontier models.
+**6 eval tasks** — shows IR defense reduces ASR even for SemanticCamo on frontier models.
 
-**Stage 11 total: 6 tasks** | Cost: ~$5
+**Stage 11 total: 8 tasks** | Cost: ~$8
 
 ---
 
@@ -668,14 +714,16 @@ Only if SAGE/SemanticSmooth show defense effect in Stage 10 — measure their ov
 Fallback: ARR June (~Jun 15) or EMNLP direct (Jun 2026).
 
 **Priority order (defense story first):**
-1. Stage 9d — Gemini 3 Pro Preview (complete frontier trio)
+1. Stage 9d — Gemini 2.5 Pro (complete frontier trio)
 2. Stage 9e — Classical Chinese on HarmBench (3rd encoding for generality)
-3. Stage 10 — SAGE/SemanticSmooth baselines on frontier models (prove they fail → RQ3)
-4. Stage 11 — SemanticCamo (4th attack for generality → RQ4)
-5. Full HarmBench 240 — re-run Table 1 for paper robustness
-6. Stage 14 — statistical analysis + diverging scissors visualization
-7. Stage 12 — benign over-refusal (secondary)
-8. Stage 13 — dynamic rendering (supplementary, only if time)
+3. Stage 10b — SAGE baseline (defense_transform + evaluate)
+4. Stage 10d — Hybrid defenses (SAGE+IR, IR+SAGE) — **key method contribution**
+5. Stage 10c — SemanticSmooth baseline
+6. Stage 11 — SemanticCamo (4th attack for generality → RQ4)
+7. Full HarmBench 240 — re-run Table 1 for paper robustness
+8. Stage 14 — statistical analysis + diverging scissors visualization
+9. Stage 12 — benign over-refusal (secondary)
+10. Stage 13 — dynamic rendering (supplementary, only if time)
 
 **Parallelism opportunities:**
 - Stage 8 (OR-Bench harmful) and Stage 9a Batch 2 — no dependency, run together
@@ -738,11 +786,13 @@ Fallback: ARR June (~Jun 15) or EMNLP direct (Jun 2026).
 - Tier 1 target models: GPT-5-mini (replaces GPT-4o-mini), Gemini 2.0 Flash, Claude Sonnet 4
 - Tier 2 (generational comparison): GPT-5.4-mini (2026), Gemini 2.5 Flash (2026)
 - Tier 3 (budget): GPT-5.4-nano, Gemini 2.5 Flash Lite — HarmBench only
-- Tier 4 (frontier — **primary results**): GPT-5.4, Claude Sonnet 4.6, Gemini 3 Flash Preview, Gemini 3 Pro Preview — HarmBench only
+- Tier 4 (frontier — **primary results**): GPT-5.4, Claude Sonnet 4.6, Gemini 2.5 Pro — HarmBench only
+- Tier 4 (supplementary): Gemini 3 Flash Preview — HarmBench only (Gemini 3 Pro Preview discarded due to batch API timeouts)
 - Legacy reference: GPT-4o-mini (2024) — already has full JBB data for generational comparison
 - Benign prompts: 100 from JailbreakBench + first 100 from OR-Bench benign hard
 - OR-Bench datasets downloaded via `scripts/extract_datasets.py` from HuggingFace `bench-llm/or-bench`
-- Defense baselines: SAGE (`src/defense/defenders/sage_defender.py`) + SemanticSmooth SUMMARIZE N=5 (`src/defense/defenders/semantic_smooth_defender.py`). Run via `defense` task mode.
+- Defense baselines: SAGE (`src/defense/defenders/sage_defender.py`) — transform-only, run via `defense_transform` mode then `evaluate`. SemanticSmooth SUMMARIZE N=5 (`src/defense/defenders/semantic_smooth_defender.py`) — coupled, run via `defense` mode.
+- Hybrid defenses: SAGE+IR (defense_transform → imaging → evaluate), IR+SAGE (imaging → evaluate with SAGE system_message).
 - Attack baseline: SemanticCamo (`src/text_encoding/encoders/llm_semantic_camo_encoder.py`) — multi-step LLM camouflage attack.
 - GPT-5 family models do NOT support temperature parameter (fixed in MODELS_WITHOUT_TEMPERATURE_SUPPORT).
 - Image renderer factory filters kwargs to renderer-accepted params only (inspect.signature fix).
