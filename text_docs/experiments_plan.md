@@ -1,24 +1,36 @@
-# Experiment Plan: Image Rendering as Defense Against Text-Encoding Attacks
+# Experiment Plan: Black-Box Defenses Against Text-Encoding Attacks
 
-**Direction (defense paper, May 6):** We PROPOSE Image Rendering (IR) as a training-free, zero-overhead defense against text-encoding attacks on production frontier VLMs. IR exploits frontier VLMs' stronger image-safety alignment: encoding attacks that achieve 24–57% ASR via text are neutralized to 2–16% when rendered as images. The defense automatically strengthens with model capability.
+**Direction (updated May 16):** We study black-box defenses against text-encoding attacks on VLMs. The paper direction depends on experimental outcomes across four ordered branches:
 
-**Primary evaluation models (frontier):** GPT-5.4, Claude Sonnet 4.6, Gemini 2.5 Pro
-**Scaling/mechanism evidence:** GPT-5.4-nano → GPT-5.4-mini → GPT-5.4 (defense emerges with capability)
-**Older models:** context for why defense works on production models, not legacy ones
+- **Direction 1 (highest upside):** SAGE degrades on weaker/older models, and IR+SAGE or SAGE+IR beats SAGE there → defense-composition method paper.
+- **Direction 2 (supporting):** SAGE over-refuses benign queries vs IR → safety-utility tradeoff story as a supporting section.
+- **Direction 3 (strong fallback):** IR flips from attack amplifier on weaker/open-source models to defense on frontier → modality-regime empirical paper.
+- **Direction 4 (floor):** SAGE wins everywhere → comprehensive empirical study only.
+
+**Experiment order (scientific priority, API constraints assumed resolvable):**
+1. Stage 10e — SAGE on older/budget models (tests Direction 1, the binary decision point)
+2. Stage 10e hybrid — IR+SAGE + SAGE+IR on models where SAGE fails (only if Direction 1 shows gaps)
+3. Stage 16 — Open-source VLM pilot: Qwen2.5-VL-7B + Pixtral-12B text vs image (confirms Direction 3, $0 cluster cost)
+4. Stage 12 — SAGE benign refusal on OR-Bench (Direction 2 supporting evidence)
+
+**Primary evidence:** GPT-5.4, Claude Sonnet 4.6, Gemini 3 Flash Preview / Gemini 2.5 Pro partial
+**Scaling/mechanism evidence:** GPT-5.4-nano → GPT-5.4-mini → GPT-5.4 (IR improves within GPT family, with nano failing = amplification)
+**Open-source VLMs:** Qwen2.5-VL-7B downloaded to cluster ✅. Pixtral-12B already available.
 
 **Research questions:**
-- RQ1: Does IR reduce ASR of encoding attacks on frontier VLMs? (defense effectiveness)
-- RQ2: What is the benign over-refusal cost?
-- RQ3: Does IR outperform SemanticSmooth + SAGE?
+- RQ1: When does IR reduce ASR of encoding attacks on VLMs? (defense effectiveness)
+- RQ2: What is the benign over-refusal cost of each defense?
+- RQ3: How do IR, SAGE, SemanticSmooth, and hybrid defenses compare?
 - RQ4: Generality across models, encodings, renderers?
-- RQ5: Does defense effectiveness scale with model capability?
+- RQ5: Does defense effectiveness change with model capability — including open-source VLMs?
 
 **Key remaining work:**
-1. Gemini 2.5 Pro evaluation (Stage 9d) — 4 tasks
-2. Run defense baselines (SAGE, SemanticSmooth) — Stage 10b/10c
-3. Hybrid defense experiments (SAGE+IR, IR+SAGE) — Stage 10d
-4. Bootstrap CIs + statistical analysis
-5. Benign over-refusal (secondary)
+1. **Stage 10e:** SAGE on older/budget models (GPT-5.4-nano, Gemini 2.5 Flash Lite, GPT-5-mini, Claude Sonnet 4) — **Direction 1 decision point**
+2. **Stage 10e hybrid:** IR+SAGE + SAGE+IR on models where SAGE shows gaps (conditional on Step 1)
+3. **Stage 16:** Qwen2.5-VL-7B + Pixtral-12B pilot — text vs image on HarmBench 100 rows
+4. **Stage 12:** SAGE benign refusal on OR-Bench (safety-utility tradeoff)
+5. Bootstrap CIs + statistical analysis
+6. SemanticCamo / full HarmBench only if the paper story is confirmed
 
 ---
 
@@ -44,6 +56,19 @@
 | OR-Bench benign 1k | 1000 | **100** |
 
 Rationale: Encoding/imaging/wrapping are cheap (local compute or 1 LLM call each). Evaluation is expensive (target model API calls + judge calls). Keeping full upstream data means we can later evaluate on larger slices without re-encoding.
+
+---
+
+## ⚠️ Known Batch API Issues
+
+| Model | Issue | Resolution |
+|-------|-------|------------|
+| **Claude 4.5 Haiku** | Batch API never processes image requests — stuck at 3600s timeout | **Discarded** from all experiments |
+| **Gemini 3 Pro Preview** | Batch API timeout after 3600s on ~60% of tasks | Avoid for new experiments |
+| **Gemini 2.5 Pro** | Batch API also timed out on multiple HarmBench tasks | Use smaller batches only if Google access is restored |
+| **OpenAI / Google API accounts** | Harmful benchmark submissions triggered trust & safety warnings | New accounts being obtained; resume once available |
+
+Claude 4.5 Haiku and Gemini 3 Pro Preview should NOT be used as `target_model` in new experiment configs. Gemini 2.5 Pro is usable only if batch reliability and account access are resolved.
 
 ---
 
@@ -108,9 +133,15 @@ Rationale: Encoding/imaging/wrapping are cheap (local compute or 1 LLM call each
 | Max jobs submitted | 8 | Master + 7 workers |
 | Max concurrent running | 4 | Effective parallelism |
 | Max wall time (gpu) | 8 hours | Enough for vLLM serving |
-| Available GPUs | V100-SXM2 (16GB), A100 (80GB), H200 | Pixtral-12B fits on 1× A100 |
+| Available GPUs | V100-SXM2 (16GB), A100 (80GB), H200 | Pixtral-12B fits on 1× A100; Qwen2.5-VL-7B fits on 1× A100 |
 
-**Cluster relevance:** Only Pixtral-12B requires the cluster (open-source, needs GPU). All other models are API calls.
+**Open-source VLMs available on cluster:**
+| Model | HF ID | Size | Status |
+|-------|-------|------|--------|
+| Pixtral-12B | `mistralai/Pixtral-12B-2409` | ~24GB | ✅ Downloaded |
+| Qwen2.5-VL-7B | `Qwen/Qwen2.5-VL-7B-Instruct` | ~16GB | ✅ Downloaded (May 16) |
+
+**Cluster relevance:** Pixtral-12B and Qwen2.5-VL-7B require the cluster (open-source, need GPU). All API models use standard API calls.
 
 ---
 
@@ -465,7 +496,7 @@ Output dirs:
 
 **CONFIRMED:** IR defense scales with model capability within GPT family (nano → mini → full: +12pp → −12pp → −27pp avg).
 
-#### 9d: Gemini 2.5 Pro — HarmBench (100 rows)
+#### 9d: Gemini 2.5 Pro — HarmBench (100 rows) ⚠️ PARTIAL (2/4 done, others timeout)
 
 **Purpose:** Complete the Gemini scaling test. Gemini 3 Flash showed mixed results; Gemini 2.5 Pro has stronger safety alignment. (Gemini 3 Pro Preview was discarded due to batch API timeouts.)
 
@@ -475,7 +506,7 @@ Output dirs:
 
 **4 eval tasks.** Can run alongside next stage tasks.
 
-#### 9e: Classical Chinese on HarmBench — encode + image + frontier eval
+#### 9e: Classical Chinese on HarmBench — encode + image + frontier eval ✅ DONE (GPT-5.4 + Claude done, Gemini failed)
 
 **Purpose:** Add classical_chinese encoding to HarmBench so all 3 encodings are available for frontier model comparison and defense baselines.
 
@@ -492,7 +523,7 @@ Output dirs:
 
 ## Stage 10: Defense Baselines — SAGE + SemanticSmooth
 
-**Purpose (RQ3):** Run existing defense baselines on the same encoded prompts to demonstrate that IR outperforms them against encoding attacks.
+**Purpose (RQ3):** Run existing black-box defense baselines on the same encoded prompts to compare transfer behavior across defenses. Current results show SAGE is strongest on frontier models, while IR and SemanticSmooth are provider/encoding-dependent.
 
 **Implementation:** `src/defense/` — SAGE (prompt-wrapping, transform-only) and SemanticSmooth (SUMMARIZE variant, N=5 copies + majority vote, coupled).
 
@@ -500,7 +531,7 @@ Output dirs:
 - SAGE uses the new `defense_transform` mode — produces `prompts.jsonl` with SAGE-wrapped text. No model query. Downstream `evaluate` or `imaging` consumes this output.
 - SemanticSmooth remains in `defense` mode (coupled: paraphrase + query + vote in one step).
 
-### 10a: Quick Validation — Does SemanticSmooth decode our encodings?
+### 10a: Quick Validation — Does SemanticSmooth decode our encodings? ✅ DONE
 
 Before committing compute: test whether paraphrasing decodes the encoding.
 - Give GPT-4.1-mini: "Paraphrase the following: [set_theory encoded prompt]"
@@ -509,7 +540,7 @@ Before committing compute: test whether paraphrasing decodes the encoding.
 
 **1 manual test** — determines how much to invest in SemanticSmooth runs.
 
-### 10b: SAGE baseline (transform + evaluate)
+### 10b: SAGE baseline (transform + evaluate) ✅ DONE (frontier: 0-3% ASR — too strong)
 
 SAGE is now a two-step pipeline:
 1. `defense_transform` — wraps all prompts with SAGE template (fast, no API calls to target)
@@ -524,7 +555,7 @@ SAGE is now a two-step pipeline:
 
 **3 transform + 9 evaluate = 12 tasks.** Transform tasks use all rows; evaluate uses first 100.
 
-### 10c: SemanticSmooth baseline (high compute — N=5 calls per prompt)
+### 10c: SemanticSmooth baseline (high compute — N=5 calls per prompt) ⚠️ PARTIAL (CC works, Claude formal_logic harmful)
 
 | Model | Dataset | Encodings | Tasks |
 |-------|---------|-----------|:-----:|
@@ -538,7 +569,7 @@ SAGE is now a two-step pipeline:
 
 **Expected outcome:** Paraphrasing may fail to decode math notation / classical Chinese → SemanticSmooth's majority vote sees 5 harmful responses → defense fails.
 
-### 10d: Hybrid Defenses — SAGE+IR and IR+SAGE
+### 10d: Hybrid Defenses — SAGE+IR and IR+SAGE ⚠️ PARTIAL (IR+SAGE on frontier done: 6-10%, does NOT beat SAGE; SAGE+IR pending)
 
 **Purpose:** Investigate whether combining SAGE and IR yields a stronger defense than either alone.
 
@@ -573,6 +604,81 @@ SAGE is now a two-step pipeline:
 
 *Benign false-positive test for baselines deferred to Stage 12c.*
 
+### 10e: Defense Scaling — SAGE vs Hybrids on Older/Weaker Models (CRITICAL) 🔜 NEXT
+
+**Purpose:** Test whether SAGE degrades on older/budget models that cannot self-diagnose encoded attacks. If SAGE fails but IR+SAGE or SAGE+IR succeeds, the paper has a method contribution: defense composition improves robustness where a single defense breaks.
+
+**Hypothesis:** SAGE requires strong reasoning to self-diagnose. Weaker models may see `∀x ∈ S, P(x)` and think "math," not "harmful." SAGE self-check may pass and the model may comply. IR is also imperfect on weak models, so the key question is whether IR+SAGE or SAGE+IR is more robust than either defense alone.
+
+**Models (chosen for high vulnerability + varying IR effectiveness):**
+
+| Model | Provider | text_encoded ASR | IR effect | Why this model |
+|-------|----------|:---:|:---:|---|
+| GPT-5.4-nano | OpenAI | 26-39% | IR FAILS (+12pp set_theory) | Best case: SAGE fails + IR fails → only hybrid works |
+| GPT-5-mini | OpenAI | 40-51% (JBB) | IR works for set_theory (−15pp) | Moderate: SAGE might partially work |
+| Claude Sonnet 4 | Anthropic | 19-59% (JBB) | IR FAILS on set_theory (+13pp JBB) | Claude API accessible; older Claude |
+| Gemini 2.5 Flash Lite | Google | 57-59% | IR works (−22pp set_theory) | Highest vulnerability; cheap |
+
+**Existing data we already have (No Defense + IR only):**
+- GPT-5.4-nano: HarmBench text + image baselines (DONE)
+- Gemini 2.5 Flash Lite: HarmBench text + image baselines (DONE)
+- GPT-5-mini: JBB baselines only (need HarmBench text + image)
+- Claude Sonnet 4: JBB baselines only (need HarmBench text + image)
+
+**5 defense conditions to compare:**
+
+| # | Defense | Pipeline | What it tests |
+|---|---------|----------|---------------|
+| 1 | No Defense | text_encoded → target model | Baseline vulnerability |
+| 2 | SAGE | defense_transform → target model (text) | Does self-diagnosis work on weaker models? |
+| 3 | IR only | imaging → target model (image) | Does modality switching help? |
+| 4 | IR+SAGE | imaging → target model (image + SAGE system_msg) | Image safety + text-level safety check |
+| 5 | SAGE+IR | defense_transform → imaging → target model (image of SAGE-wrapped text) | Render safety instructions as image too |
+
+**Execution rounds (sequential dependency: imaging must complete before SAGE+IR evaluate):**
+
+**Round 1a — SAGE+IR imaging (instant, local rendering):**
+Run imaging on defense_transform output to create SAGE+IR image directories.
+
+| Mode | Source | Encodings | Tasks |
+|------|--------|-----------|:-----:|
+| imaging | `outputs/defense_transform/harmbench/sage_set_theory_*` | set_theory | 1 |
+| imaging | `outputs/defense_transform/harmbench/sage_formal_logic_*` | formal_logic | 1 |
+
+**Round 1b — All evaluate tasks (single job, after imaging dirs exist):**
+
+| Step | Mode | Models | Encodings | Tasks |
+|------|------|--------|-----------|:-----:|
+| SAGE evaluate | evaluate | GPT-5.4-nano, Gemini 2.5 Flash Lite | set_theory, formal_logic | 4 |
+| IR+SAGE evaluate | evaluate | GPT-5.4-nano, Gemini 2.5 Flash Lite | set_theory, formal_logic | 4 |
+| SAGE+IR evaluate | evaluate | GPT-5.4-nano, Gemini 2.5 Flash Lite | set_theory, formal_logic | 4 |
+
+**Priority: 2 imaging + 12 evaluate = 14 tasks** (HarmBench models with existing baselines)
+
+**Round 2 — GPT-5-mini + Claude Sonnet 4 (need HarmBench baselines first):**
+
+| Step | Mode | Models | Encodings | Tasks |
+|------|------|--------|-----------|:-----:|
+| Baseline text | evaluate | GPT-5-mini, Claude Sonnet 4 | set_theory, formal_logic | 4 |
+| Baseline image (IR) | evaluate | GPT-5-mini, Claude Sonnet 4 | set_theory, formal_logic | 4 |
+| SAGE evaluate | evaluate | GPT-5-mini, Claude Sonnet 4 | set_theory, formal_logic | 4 |
+| IR+SAGE evaluate | evaluate | GPT-5-mini, Claude Sonnet 4 | set_theory, formal_logic | 4 |
+| SAGE+IR evaluate | evaluate | GPT-5-mini, Claude Sonnet 4 | set_theory, formal_logic | 4 |
+
+**Round 2: 20 evaluate tasks**
+
+**Total: 2 imaging + 32 evaluate = 34 tasks** | Estimated cost: ~$25
+
+**Dream result (makes the paper):**
+
+| Model | No Defense | SAGE | IR | IR+SAGE | SAGE+IR |
+|-------|:---:|:---:|:---:|:---:|:---:|
+| GPT-5.4 (frontier) | 24-39% | **0%** | 2-7% | 0-2% | TBD |
+| GPT-5.4-nano (budget) | 26-39% | ~25-35%? | 38% (FAILS) | **~10-15%?** | **~10-15%?** |
+| GPT-5-mini (older) | 40-51% | ~20-35%? | 25-51% | **~10-20%?** | **~10-20%?** |
+
+Story if successful: "SAGE is excellent on frontier models, but degrades on weaker models. IR alone is also unreliable. Hybrid composition provides a more reliable black-box defense across model tiers."
+
 ---
 
 ## Stage 11: SemanticCamo Attack Baseline
@@ -603,32 +709,55 @@ Render SemanticCamo output as plain image (all rows).
 
 ---
 
-## Stage 12: Benign Over-Refusal Measurement (RQ2) — LOWER PRIORITY
+## Stage 12: Safety-Utility Tradeoff on OR-Bench (HIGH PRIORITY)
 
-**Purpose:** Quantify the defense cost (over-refusal on benign inputs). Needed for full paper but not decision-critical.
+**Purpose:** If SAGE is too strong on harmful inputs, the paper may still have a strong story through the safety-utility tradeoff. A defense should reduce harmful ASR **and** avoid refusing benign encoded requests. OR-Bench is the best benchmark for this because it contains both harmful prompts and benign hard prompts from the same benchmark family, enabling a consistent harmful/benign comparison.
 
-### 12a: Newer models benign (12 tasks)
+**Core metric:** Plot each defense as a point:
+- x-axis: harmful ASR on OR-Bench harmful (lower is better)
+- y-axis: benign refusal on OR-Bench benign_hard (lower is better)
 
-| Model | Encodings | Renderers | Stages | Tasks |
-|-------|-----------|-----------|--------|:-----:|
-| GPT-5.4-mini | set_theory, formal_logic, classical_chinese | plain, fc_typography | [image_original, image_encoded] benign (refusal) | 6 |
-| Gemini 2.5 Flash | set_theory, formal_logic, classical_chinese | plain, fc_typography | [image_original, image_encoded] benign (refusal) | 6 |
+This produces a Pareto frontier:
+- If SAGE has lowest harmful ASR but high benign refusal, IR may still be useful as a lower-refusal defense.
+- If IR+SAGE or SAGE+IR improves harmful ASR without increasing benign refusal too much, composition has a tradeoff story.
+- If SAGE dominates both harmful ASR and benign refusal, then the paper becomes primarily a SAGE validation / empirical study.
 
-### 12b: OR-Bench benign_hard eval (8 tasks)
+### 12a: Complete OR-Bench benign_hard IR baseline
 
-| Model | Dataset | Stages | Judge | Tasks |
-|-------|---------|--------|-------|:-----:|
-| GPT-5-mini | benign_hard × 2 enc × plain | [image_original, image_encoded] | refusal | 2 |
-| Gemini 2.0 Flash | benign_hard × 2 enc × plain | [image_original, image_encoded] | refusal | 2 |
-| Claude Sonnet 4 | benign_hard × 2 enc × plain | [image_original, image_encoded] | refusal | 2 |
+Existing OR-Bench harmful text+image eval is done for GPT-5-mini, Gemini 2.0 Flash, and Claude Sonnet 4. OR-Bench benign_hard encoding already exists from Stage 8a; benign_hard image rendering/eval should be completed for the same models and encodings.
 
-**6 image eval + text eval tasks** — OR-Bench benign_hard images need rendering first (2 imaging tasks from 8a encoding already done).
+| Model | Dataset | Encodings | Stages | Judge | Tasks |
+|-------|---------|-----------|--------|-------|:-----:|
+| GPT-5-mini | OR-Bench benign_hard | set_theory, formal_logic | text_encoded + image_encoded | `orbench` | 4 |
+| Gemini 2.0 Flash | OR-Bench benign_hard | set_theory, formal_logic | text_encoded + image_encoded | `orbench` | 4 |
+| Claude Sonnet 4 | OR-Bench benign_hard | set_theory, formal_logic | text_encoded + image_encoded | `orbench` | 4 |
 
-### 12c: Defense baselines on benign (conditional, 2 tasks)
+**Plus:** 2 imaging tasks if benign_hard images do not already exist.
 
-Only if SAGE/SemanticSmooth show defense effect in Stage 10 — measure their over-refusal for fair comparison.
+### 12b: Defense tradeoff comparison on OR-Bench
 
-**Stage 12 total: ~22 tasks** | Cost: ~$10
+Run the same defense conditions on OR-Bench harmful and OR-Bench benign_hard. Start with the model/encoding pairs that already show high harmful ASR, because they provide the most headroom.
+
+| Defense | Harmful input | Benign input | Why |
+|---------|---------------|--------------|-----|
+| No defense | text_encoded | text_encoded | Baseline harmful ASR + benign refusal |
+| IR | image_encoded | image_encoded | Modality safety tradeoff |
+| SAGE | defense_transform text | defense_transform text | Strong harmful defense; may over-refuse benign |
+| IR+SAGE | image_encoded + SAGE system message | image_encoded + SAGE system message | Dual-channel defense tradeoff |
+| SAGE+IR | image of SAGE-wrapped text | image of SAGE-wrapped text | Full composition tradeoff |
+
+**Suggested first slice:** OR-Bench, set_theory + formal_logic, GPT-5-mini and Claude Sonnet 4. Add Gemini only if Google access is restored.
+
+### 12c: Interpretation Rules
+
+| Result | Paper implication |
+|--------|-------------------|
+| Hybrid beats SAGE on harmful ASR | Defense composition method paper |
+| SAGE wins harmful but over-refuses benign | Safety-utility tradeoff paper; IR/hybrid may be Pareto-useful |
+| SAGE wins harmful and benign | Empirical study / SAGE validation; weaker EMNLP story, stronger AIES story |
+| SemanticSmooth has unstable benign/harmful tradeoff | Support for "defenses do not transfer cleanly" story |
+
+**Stage 12 priority:** Run after or alongside Stage 10e. It is no longer secondary; it is the main fallback if hybrids do not beat SAGE on harmful ASR alone.
 
 ---
 
@@ -669,66 +798,72 @@ Only if SAGE/SemanticSmooth show defense effect in Stage 10 — measure their ov
 
 ## Stage 15: Writing
 
-**Core narrative: The Diverging Scissors**
-- Traditional defenses get WORSE on newer models (model understands attacks better → complies more)
-- IR defense gets STRONGER on newer models (image-safety improves with capability)
-- IR is the first defense whose effectiveness improves with model capability without modification
+**Core narrative: Capability-Dependent Defense Transfer**
+- Text-encoding attacks remain effective across model tiers.
+- IR gets stronger within the GPT family, but is not reliable across all providers.
+- SAGE is unexpectedly strong on frontier models; the key open question is whether it degrades on weaker models.
+- SemanticSmooth is unstable across encodings and providers.
 
 **Paper structure:**
-1. Introduction: Text-encoding attacks achieve 24–57% ASR on frontier VLMs. Existing defenses degrade on newer models. We propose IR — the first self-improving defense.
-2. Background: Text-encoding attacks (CC-BOS, MathPrompt), VLM safety, existing defenses.
-3. Method: IR defense — one paragraph. Simplicity is the contribution.
-4. Experimental Setup: 3 frontier models, 4 encodings, HarmBench, 2 comparison defenses.
+1. Introduction: Text-encoding attacks achieve high ASR on modern VLMs. We systematically evaluate black-box defenses and show defense behavior is capability-, modality-, and provider-dependent.
+2. Background: Text-encoding attacks (CC-BOS, MathPrompt), VLM safety, existing black-box defenses.
+3. Method: IR, SAGE, SemanticSmooth, and hybrid compositions (IR+SAGE, SAGE+IR).
+4. Experimental Setup: model capability tiers, 3-4 encodings, HarmBench/JBB/OR-Bench, defense comparison.
 5. Results:
-   - 5.1 IR reduces ASR on frontier models (GPT-5.4: 24→2%, 39→7%)
-   - 5.2 Existing defenses fail against encoding attacks (SAGE, SemanticSmooth)
-   - 5.3 The diverging scissors: IR strengthens with model capability (scaling table)
-   - 5.4 Generality across encodings (4) and providers (3)
-   - 5.5 Defense cost: benign over-refusal (modest)
-6. Analysis: Why trajectories diverge. Alliance with model providers. Failure cases. Deployment.
-7. Conclusion: First self-improving defense for encoding attacks. Zero cost, future-proof.
+   - 5.1 IR is strong on GPT-5.4 but provider-dependent
+   - 5.2 SAGE is unexpectedly strong on frontier models
+   - 5.3 SemanticSmooth is unstable across encodings/providers
+   - 5.4 GPT-family scaling: IR improves with capability
+   - 5.5 Hybrid defense results and remaining SAGE weakness test
+   - 5.6 Safety-utility tradeoff: harmful ASR vs benign refusal on OR-Bench
+6. Analysis: Why defense transfer differs by modality, provider, and model capability. Failure cases and deployment recommendations.
+7. Conclusion: Systematic evidence that black-box defense effectiveness cannot be assumed to transfer across model tiers or modalities.
 
 ---
 
-## Timeline (updated May 6)
+## Stage 16: Open-Source VLM Pilot — Qwen2.5-VL-7B + Pixtral-12B 🔜 NEXT (after Stage 10e)
 
-| Date | Stage | Milestone |
-|------|-------|-----------|
-| May 1–2 ✅ | Stages 1–4 | Data, encoding, JBB text+image, font fix, benign text, JBB re-eval |
-| May 2–3 ✅ | Stage 5 (12 tasks) | Benign image cc+sk + HarmBench re-imaging + Sanskrit height fix |
-| May 3 ✅ | Stage 6 (4 tasks) | GPT-5-mini validation — imaging reduces ASR (−15pp) |
-| May 3–4 ✅ | Stage 7 (52 tasks, 36 deleted + 1 killed) | Renderer exploration + GPT-5-mini full. FigStep/FC-Typo bugs found. |
-| May 4 ✅ | Stage 7d make-up R1 | Re-render done. 29/37 eval completed. |
-| May 5 ✅ | Stage 7e + 8a + 9a | FC-Typo benign + OR-Bench encoding + newer model eval |
-| May 6 ✅ | **Stage 9c** (12 tasks) | **Frontier model results: GPT-5.4 (−22/−32pp), Claude Sonnet 4.6, Gemini 3 Flash. Scaling law CONFIRMED.** |
-| **May 6–7** | **Stage 9d + 9e + 10b/c** (17 tasks) | Gemini 3 Pro eval + CC encode + SAGE/SemanticSmooth baselines (set_theory, formal_logic) |
-| **May 7–8** | **Stage 9e cont + 10 cont** | CC imaging + CC frontier eval + SAGE/SemanticSmooth on CC |
-| **May 8–9** | **Stage 11** (6 tasks) | SemanticCamo encode + eval on frontier models |
-| **May 9–10** | Full HarmBench (240) | Re-run Table 1 on full dataset for paper |
-| **May 10–12** | **Stage 14** | Bootstrap CIs + statistical analysis + comparison tables |
-| May 12–16 | Stage 15 | Paper writing |
-| May 16–20 | Polish + advisor review | |
-| May 20–25 | Final revision + submit | |
-| **May 25** | **ARR May deadline** | |
+**Purpose (Direction 3):** Test whether IR flips from attack amplifier to defense as model capability increases. Open-source VLMs with no special safety alignment are expected to show amplification (IR increases ASR), matching the pattern seen on weaker API models (GPT-5.4-nano +12pp, Gemini 2.0 Flash +5-7pp, Claude Sonnet 4 set_theory +13pp).
 
-Fallback: ARR June (~Jun 15) or EMNLP direct (Jun 2026).
+**Models:**
+| Model | HF ID | Provider | Expected behavior |
+|-------|-------|----------|-------------------|
+| Qwen2.5-VL-7B-Instruct | `Qwen/Qwen2.5-VL-7B-Instruct` | NURC cluster | IR amplifies attacks (hypothesis) |
+| Pixtral-12B | `mistralai/Pixtral-12B-2409` | NURC cluster | IR amplifies attacks (hypothesis) |
 
-**Priority order (defense story first):**
-1. Stage 9d — Gemini 2.5 Pro (complete frontier trio)
-2. Stage 9e — Classical Chinese on HarmBench (3rd encoding for generality)
-3. Stage 10b — SAGE baseline (defense_transform + evaluate)
-4. Stage 10d — Hybrid defenses (SAGE+IR, IR+SAGE) — **key method contribution**
-5. Stage 10c — SemanticSmooth baseline
-6. Stage 11 — SemanticCamo (4th attack for generality → RQ4)
-7. Full HarmBench 240 — re-run Table 1 for paper robustness
-8. Stage 14 — statistical analysis + diverging scissors visualization
-9. Stage 12 — benign over-refusal (secondary)
-10. Stage 13 — dynamic rendering (supplementary, only if time)
+**Tasks (pilot — 8 evaluate tasks):**
 
-**Parallelism opportunities:**
-- Stage 8 (OR-Bench harmful) and Stage 9a Batch 2 — no dependency, run together
-- Stage 10 (defense baselines) and Stage 11 (SemanticCamo) — independent
-- Stage 13 (rendering fix) implementation can start anytime
+| Mode | Model | Encodings | Prompt stages | Dataset | Judge | Tasks |
+|------|-------|-----------|---------------|---------|-------|:-----:|
+| evaluate | Qwen2.5-VL-7B | set_theory, formal_logic | [text_original, text_encoded, image_original, image_encoded] | HarmBench (100) | harmbench | 4 |
+| evaluate | Pixtral-12B | set_theory, formal_logic | [text_original, text_encoded, image_original, image_encoded] | HarmBench (100) | harmbench | 4 |
+
+**Cost:** $0 (cluster only)
+**Dependency:** Existing HarmBench imaging outputs (already done). No new encoding/imaging needed.
+
+**Decision point:**
+- If both models show IR amplification (+Δ) → Direction 3 story confirmed across API and open-source
+- If models show IR defense (−Δ) → modality-flip story weakens; rely on API tier comparison only
+
+---
+
+## Priority (updated May 16)
+
+1. **Stage 10e** — SAGE on older/budget models (CRITICAL — Direction 1 decision point)
+2. **Stage 10e hybrid** — IR+SAGE + SAGE+IR on models where SAGE shows gaps (conditional on Stage 10e results)
+3. **Stage 16** — Open-source VLM pilot: Qwen2.5-VL-7B + Pixtral-12B ($0 cluster, Direction 3 confirmation)
+4. **Stage 12** — SAGE benign refusal on OR-Bench (Direction 2 supporting evidence)
+5. Stage 14 — statistical analysis + comparison tables
+6. Stage 11 — SemanticCamo (4th attack for generality; only after main story is stable)
+7. Full HarmBench 240 — robustness check (only after story confirmed)
+8. Stage 13 — dynamic rendering (supplementary, only if time)
+
+**API status:**
+- **OpenAI API**: Account warned, appeal failed. New account being obtained.
+- **Google API**: Account warned. New account being obtained.
+- **Claude API**: Still working.
+
+Fallback deadlines: ARR June (~Jun 15) or EMNLP direct (Jun 2026).
 
 ---
 
@@ -751,16 +886,14 @@ Fallback: ARR June (~Jun 15) or EMNLP direct (Jun 2026).
 
 | Stage | Priority | Tasks | Est. cost |
 |-------|----------|:-----:|----------:|
-| 9a Batch 2 (newer models harmful) | HIGH — ✅ DONE | 6 | ~$3 |
-| 8c: OR-Bench harmful image eval | HIGH | 6 | ~$3 |
-| 9b: Budget model exploration (HarmBench) | HIGH | 12 | ~$3 |
-| 10: Defense baselines (SAGE + SemanticSmooth) | HIGH | ~19 | ~$30 |
-| 11: SemanticCamo attack baseline | HIGH | 6 | ~$5 |
+| 10e: SAGE + hybrids on HarmBench budget models | CRITICAL | ~14 | ~$5 |
+| 12: OR-Bench safety-utility tradeoff | CRITICAL fallback | ~14-30 | ~$10-20 |
+| 10d: SAGE+IR on frontier | HIGH | ~6 | ~$5 |
 | 14: Statistical analysis | HIGH | — | $0 |
-| 12: Benign over-refusal (RQ2) | LOW | ~22 | ~$10 |
+| 11: SemanticCamo attack baseline | CONDITIONAL | 6 | ~$5 |
+| Full HarmBench 240 robustness | CONDITIONAL | TBD | TBD |
 | 13: Dynamic rendering (supplementary) | LOW | ~63 | ~$20 |
-| **Estimated remaining** | | **~134** | **~$74** |
-| **Estimated grand total** | | **~304** | **~$163** |
+| **Estimated decision-critical remaining** | | **~34-50** | **~$20-30** |
 
 ---
 

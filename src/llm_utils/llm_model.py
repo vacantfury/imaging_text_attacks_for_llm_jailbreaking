@@ -91,6 +91,7 @@ class LLMModel(Enum):
     VICUNA_13B_CLUSTER = ("lmsys/vicuna-13b-v1.5", Provider.NU_CLUSTER, 0.0, 0.0)
     PIXTRAL_12B = ("mistralai/Pixtral-12B-2409", Provider.NU_CLUSTER, 0.0, 0.0)
     LLAVA_7B = ("llava-hf/llava-1.5-7b-hf", Provider.NU_CLUSTER, 0.0, 0.0)
+    QWEN2_5_VL_7B = ("Qwen/Qwen2.5-VL-7B-Instruct", Provider.NU_CLUSTER, 0.0, 0.0)
     
     @property
     def model_id(self) -> str:

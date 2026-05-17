@@ -14,6 +14,7 @@ from openai import AsyncOpenAI
 
 from ..base_llm_service import BaseLLMService
 from ..llm_model import LLMModel
+from ..media_utils import encode_image_to_b64
 from ...utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -54,18 +55,30 @@ class NURCClusterService(BaseLLMService):
         )
 
     # ------------------------------------------------------------------
-    # Message formatting (text-only for vLLM)
+    # Message formatting (text + optional images for VLMs via vLLM)
     # ------------------------------------------------------------------
 
     @staticmethod
     def _format_conversation(
         messages: List[Tuple[str, Optional[Any]]], system_message: Optional[str],
-    ) -> List[Dict[str, str]]:
-        openai_msgs: List[Dict[str, str]] = []
+    ) -> List[Dict[str, Any]]:
+        openai_msgs: List[Dict[str, Any]] = []
         if system_message:
             openai_msgs.append({"role": "system", "content": system_message})
-        for text, _image in messages:
-            openai_msgs.append({"role": "user", "content": text})
+        for text, image in messages:
+            if image is None:
+                openai_msgs.append({"role": "user", "content": text})
+            else:
+                images = image if isinstance(image, list) else [image]
+                content: list = [{"type": "text", "text": text}]
+                for img in images:
+                    if img is not None:
+                        b64, mime = encode_image_to_b64(img)
+                        content.append({
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{mime};base64,{b64}"},
+                        })
+                openai_msgs.append({"role": "user", "content": content})
         return openai_msgs
 
     # ------------------------------------------------------------------
