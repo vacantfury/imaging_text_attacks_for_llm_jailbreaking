@@ -59,6 +59,9 @@ class ClusterModelServerManager:
 
         self._sbatch_dir = Path(tempfile.mkdtemp(prefix="vllm_sbatch_"))
 
+        # Cache: (partition, frozenset(excluded_types)) -> [node names with excluded GPU]
+        self._gpu_type_exclude_cache: Dict[tuple, List[str]] = {}
+
     # ==================== Public API ====================
 
     def start_server(self, model: LLMModel, config: ClusterConfigDict) -> None:
@@ -340,10 +343,17 @@ class ClusterModelServerManager:
         model_safe_name = model.name.lower()
         instance_suffix = f"_i{instance_id}" if instance_id > 0 else ""
 
-        excluded_nodes = config.get("excluded_nodes", [])
+        # Combine explicit node exclusions with GPU-type-based exclusions.
+        # gpu_types_excluded is resolved to a node list by querying sinfo
+        # (the cluster GRES strings carry the GPU type, but not all GPU types
+        # are exposed as SLURM features, so `--constraint` can't express this).
+        explicit_excluded = list(config.get("excluded_nodes", []))
+        type_excluded_nodes = self._resolve_gpu_type_excludes(
+            config["partition"], config.get("gpu_types_excluded", []))
+        all_excluded = sorted(set(explicit_excluded) | set(type_excluded_nodes))
         exclude_directive = (
-            f"#SBATCH --exclude={','.join(excluded_nodes)}"
-            if excluded_nodes else ""
+            f"#SBATCH --exclude={','.join(all_excluded)}"
+            if all_excluded else ""
         )
 
         time_limit = config["time_limit"]
@@ -478,6 +488,69 @@ class ClusterModelServerManager:
         except FileNotFoundError:
             logger.warning("scontrol command not found")
             return None
+
+    def _resolve_gpu_type_excludes(
+        self, partition: str, excluded_types: List[str]
+    ) -> List[str]:
+        """
+        Resolve `gpu_types_excluded` to a concrete node-name list by querying sinfo.
+
+        The cluster encodes GPU type in the GRES string (`gpu:<type>:N`) but not
+        always as a SLURM feature, so SBATCH --constraint can't filter by type.
+        Instead we expand each excluded GPU type to the set of nodes carrying it
+        and merge into --exclude=.
+
+        Result is cached per (partition, frozenset(excluded_types)).
+        """
+        if not excluded_types:
+            return []
+
+        cache_key = (partition, frozenset(excluded_types))
+        if cache_key in self._gpu_type_exclude_cache:
+            return self._gpu_type_exclude_cache[cache_key]
+
+        config = next(iter(self.model_configs.values()), {})
+        cmd_timeout = config.get("slurm_cmd_timeout", 15)
+
+        try:
+            result = subprocess.run(
+                ["sinfo", "--partition", partition,
+                 "--noheader", "-o", "%n %G"],
+                capture_output=True, text=True, timeout=cmd_timeout)
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            logger.warning(
+                f"sinfo failed while resolving gpu_types_excluded: {e}. "
+                f"GPU-type filter will be a no-op for this run.")
+            return []
+
+        if result.returncode != 0:
+            logger.warning(
+                f"sinfo returncode={result.returncode} resolving "
+                f"gpu_types_excluded: {result.stderr.strip()}")
+            return []
+
+        excluded_set = set(excluded_types)
+        nodes: List[str] = []
+        seen: set = set()
+        for line in result.stdout.strip().splitlines():
+            parts = line.split(None, 1)
+            if len(parts) < 2:
+                continue
+            node, gres = parts[0], parts[1]
+            # GRES form: "gpu:v100-pcie:2(S:0-1)" or "gpu:a100:4" or "(null)"
+            m = re.match(r"gpu:([^:()]+):", gres)
+            if not m:
+                continue
+            gpu_type = m.group(1)
+            if gpu_type in excluded_set and node not in seen:
+                nodes.append(node)
+                seen.add(node)
+
+        logger.info(
+            f"gpu_types_excluded={excluded_types} resolved to "
+            f"{len(nodes)} node(s) on partition '{partition}'")
+        self._gpu_type_exclude_cache[cache_key] = nodes
+        return nodes
 
     def _get_job_state(self, job_id: str) -> Optional[str]:
         """Get the current SLURM state of a job (RUNNING, PENDING, etc.)."""

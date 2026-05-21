@@ -1,0 +1,30 @@
+# @package _global_
+# Llama-3.3-70B-Instruct — judge for `jailbreakbench`, `refusal`, and `orbench`
+# evaluators.
+#
+# Note: model-request params (temperature, max_tokens, system message) are
+# canonical and hard-bound per-evaluator in:
+#   - src/evaluation/jailbreakbench_evaluation/constants.py
+#   - src/evaluation/jailbreakbench_refusal_evaluation/constants.py
+#   - src/evaluation/orbench_evaluation/constants.py
+# The `model:` block below is purely informational. This file exists only to
+# drive cluster job parameters consumed by ClusterModelServerManager.
+
+defaults:
+  - default
+
+model:
+  model: meta-llama/Llama-3.3-70B-Instruct
+  max_tokens: 512
+
+# 70B weights ≈ 140 GB at FP16. Default to 4× A100-40GB (TP=4) — targets the
+# more common a100:3 / a100:4 nodes; ~160 GB combined VRAM leaves headroom for
+# KV cache. Excluding small GPUs is essential: 4× V100-SXM2-32GB = 128 GB, too
+# little for FP16 weights and will OOM at vLLM startup.
+cluster:
+  num_gpus: 4
+  mem_gb: 128
+  max_model_len: 8192
+  gpu_memory_utilization: 0.92
+  dtype: bfloat16
+  gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]

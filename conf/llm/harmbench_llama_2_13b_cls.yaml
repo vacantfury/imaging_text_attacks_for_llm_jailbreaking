@@ -1,0 +1,25 @@
+# @package _global_
+# HarmBench Llama-2-13B classifier (judge for the `harmbench` evaluator).
+#
+# Note: model-request params (temperature, max_tokens, prompt) are canonical
+# and hard-bound in src/evaluation/harmbench_evaluation/constants.py — the
+# `model:` block below is purely informational; HarmBenchEvaluator passes its
+# own constants directly to LLMServiceFactory.create() and ignores YAML.
+# This file exists only to drive cluster job parameters consumed by
+# ClusterModelServerManager._generate_sbatch().
+
+defaults:
+  - default
+
+model:
+  model: cais/HarmBench-Llama-2-13b-cls
+  max_tokens: 32
+
+# 13B weights ≈ 26 GB at FP16 — comfortably fits on a single A100 (40 or 80 GB).
+# Inputs are short (behavior + generation + LLAMA2_CLS_PROMPT template), so
+# max_model_len can stay small.
+cluster:
+  num_gpus: 1
+  mem_gb: 64
+  max_model_len: 4096
+  gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]
