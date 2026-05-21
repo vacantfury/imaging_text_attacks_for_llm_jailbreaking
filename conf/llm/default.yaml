@@ -1,4 +1,3 @@
-# @package _global_
 # Shared LLM defaults — all presets inherit these
 
 # Model request params (maps to ModelConfig)

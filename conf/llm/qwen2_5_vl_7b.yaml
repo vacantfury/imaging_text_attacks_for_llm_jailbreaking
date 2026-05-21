@@ -1,8 +1,4 @@
-# @package _global_
 # Qwen2.5-VL-7B-Instruct — open-source multimodal (vision-language)
-
-defaults:
-  - default
 
 model:
   model: Qwen/Qwen2.5-VL-7B-Instruct

@@ -1,4 +1,3 @@
-# @package _global_
 # HarmBench Llama-2-13B classifier (judge for the `harmbench` evaluator).
 #
 # Note: model-request params (temperature, max_tokens, prompt) are canonical
@@ -7,9 +6,6 @@
 # own constants directly to LLMServiceFactory.create() and ignores YAML.
 # This file exists only to drive cluster job parameters consumed by
 # ClusterModelServerManager._generate_sbatch().
-
-defaults:
-  - default
 
 model:
   model: cais/HarmBench-Llama-2-13b-cls

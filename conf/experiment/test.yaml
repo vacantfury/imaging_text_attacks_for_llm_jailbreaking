@@ -38,7 +38,7 @@ tasks:
   # ── Step 4: Evaluate (cheap API model, text-only stages) ──
   # Uses existing text_encode output to avoid dependency on step ordering
   - mode: evaluate
-    model: gpt-4.1-nano
+    target_model: gpt-4.1-nano
     source_dir: outputs/text_encode/harmbench/set_theory_20260429_182521
     prompt_stages: [text_original, text_encoded]
     prompt_range: [0, 1]

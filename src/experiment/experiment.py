@@ -43,10 +43,14 @@ logger = get_logger(__name__)
 
 # ==================== Config Loading ====================
 
-def load_preset(name: str, conf_dir: Optional[Path] = None) -> dict[str, Any]:
+def load_preset(name: str, conf_dir: Optional[Path] = None) -> "ExperimentPreset":
+    """Load and validate an experiment preset from conf/experiment/<name>.yaml.
+
+    Returns a typed ExperimentPreset; pydantic validation fails loud at this
+    boundary so YAML typos surface with field paths, not deep in a runner.
     """
-    Load an experiment preset from conf/experiment/<name>.yaml.
-    """
+    from .schemas import ExperimentPreset
+
     if conf_dir is None:
         conf_dir = Path(__file__).resolve().parent.parent.parent / "conf"
 
@@ -60,7 +64,8 @@ def load_preset(name: str, conf_dir: Optional[Path] = None) -> dict[str, Any]:
             f"Available presets: {', '.join(available)}"
         )
     with open(path) as f:
-        return yaml.safe_load(f) or {}
+        data = yaml.safe_load(f) or {}
+    return ExperimentPreset.model_validate(data)
 
 
 # ==================== Task Classification ====================
@@ -72,29 +77,37 @@ class TaskType(str, Enum):
     NO_MODEL = "no_model"            # no model query (imaging)
 
 
-def _infer_task_type(task_config: dict) -> TaskType:
-    """Infer task type from config. YAML 'type' field takes priority."""
-    # Explicit override from YAML
-    explicit = task_config.get("type")
-    if explicit:
-        return TaskType(explicit)
-    
-    # imaging never needs a model
-    if task_config.get("mode") == "imaging":
+def _target_model_for_task(task) -> Optional[str]:
+    """Return the model-string this task targets (None if the mode doesn't have one).
+
+    Only evaluate / defense tasks have a top-level target model. text_encode
+    and defense_transform may use LLMs internally (via encoder.model /
+    defense_config.perturbation_model) but those don't drive orchestrator-level
+    cluster-server discovery.
+    """
+    from .schemas import EvaluateTask, DefenseTask
+    if isinstance(task, (EvaluateTask, DefenseTask)):
+        return task.target_model
+    return None
+
+
+def _infer_task_type(task) -> TaskType:
+    """Infer task type from a typed TaskConfig variant."""
+    from .schemas import ImagingTask
+    if isinstance(task, ImagingTask):
         return TaskType.NO_MODEL
-    
-    # Check model parameter
-    model_str = task_config.get("model", "")
+
+    model_str = _target_model_for_task(task)
     if model_str:
         from src.llm_utils import LLMModel, Provider
         try:
-            model = LLMModel.from_string(model_str)
-            if model.provider == Provider.NU_CLUSTER:
+            m = LLMModel.from_string(model_str)
+            if m.provider == Provider.NU_CLUSTER:
                 return TaskType.CLUSTER_MODEL
         except ValueError:
             pass
         return TaskType.API_MODEL
-    
+
     return TaskType.NO_MODEL
 
 
@@ -136,59 +149,88 @@ def _judge_model_for_method(judge_method: str) -> Optional[Any]:
     return getattr(constants, "JUDGE_MODEL", None)
 
 
-def _required_cluster_models_for_task(task: "TaskInfo") -> set:
+def _required_cluster_models_for_task(info: "TaskInfo") -> set:
     """Return the set of cluster-hosted LLMModels this task needs.
 
-    Includes the target model (if cluster-hosted) AND the judge model implied
-    by judge_method (if cluster-hosted). Modes that don't query a model
-    (imaging) return empty.
+    Covers BOTH the target model (if cluster-hosted) AND the judge model(s)
+    for the evaluator(s) that will run. Judge discovery has two paths:
+
+      1. Explicit override: task.judge_method set in YAML.
+      2. Canonical inference: derive judge_method list from the benchmark
+         slug (via EvaluatorFactory.judge_methods_for_benchmark). The
+         benchmark itself comes from task.benchmark or source_dir path.
+
+    Without path (2), removing `judge_method` from task YAMLs (recent
+    refactor) would silently bypass cluster judge discovery — tasks would
+    hang on acquire_endpoint() because no server was started for the judge.
     """
     from src.llm_utils import Provider
+    from .schemas import EvaluateTask, DefenseTask
+    from .task import _infer_benchmark
+    from src.evaluation.evaluator_factory import judge_methods_for_benchmark
+
+    task = info.task
     required: set = set()
 
-    # Target model
-    if task.task_type == TaskType.CLUSTER_MODEL:
-        m = _resolve_model(task.config.get("model", ""))
-        if m is not None:
+    # Target model (only meaningful for evaluate / defense)
+    target = _target_model_for_task(task)
+    if target:
+        m = _resolve_model(target)
+        if m is not None and m.provider == Provider.NU_CLUSTER:
             required.add(m)
 
-    # Judge model (any mode that runs an evaluator)
-    if task.mode in ("evaluate", "defense"):
-        judge_method = (
-            task.config.get("judge_method")
-            or task.config.get("evaluation", {}).get("judge_method")
-        )
-        if judge_method:
-            judge = _judge_model_for_method(judge_method)
+    # Judge model(s) for evaluate / defense
+    if isinstance(task, (EvaluateTask, DefenseTask)):
+        if task.judge_method:
+            judge = _judge_model_for_method(task.judge_method)
             if judge is not None and judge.provider == Provider.NU_CLUSTER:
                 required.add(judge)
+        else:
+            # Canonical inference from benchmark.
+            try:
+                benchmark = task.benchmark or _infer_benchmark(task.source_dir)
+                methods = judge_methods_for_benchmark(benchmark)
+            except ValueError:
+                methods = []
+            for method in methods:
+                judge = _judge_model_for_method(method)
+                if judge is not None and judge.provider == Provider.NU_CLUSTER:
+                    required.add(judge)
 
     return required
 
 
 @dataclass
 class TaskInfo:
-    """Task metadata for scheduling."""
+    """Task metadata for scheduling. Holds a typed TaskConfig."""
     index: int
-    config: dict[str, Any]
-    mode: str
-    task_type: TaskType
+    task: Any            # TaskConfig (discriminated union); kept as Any to avoid forward-ref
     name: str
 
+    @property
+    def mode(self) -> str:
+        return self.task.mode
 
-def _get_task_name(task_config: dict, index: int) -> str:
-    """Generate a descriptive name for a task."""
-    mode = task_config.get("mode", "unknown")
-    encoding = task_config.get("encoding", "")
-    model = task_config.get("model", "")
-    modality = task_config.get("modality", "")
-    parts = [mode]
+    @property
+    def task_type(self) -> TaskType:
+        return _infer_task_type(self.task)
+
+    @property
+    def config(self) -> dict:
+        """Plain dict view of the task (for code paths that still want it)."""
+        return self.task.model_dump()
+
+
+def _get_task_name(task, index: int) -> str:
+    """Generate a descriptive name for a typed TaskConfig."""
+    from .schemas import EvaluateTask, DefenseTask
+    parts = [task.mode]
+    encoding = getattr(task, "encoding", None)
     if encoding:
         parts.append(encoding)
-    if model:
-        parts.append(model)
-    if modality:
-        parts.append(modality)
+    # Use target_model where it exists (evaluate / defense); otherwise nothing
+    if isinstance(task, (EvaluateTask, DefenseTask)):
+        parts.append(task.target_model)
     parts.append(str(index))
     return "_".join(parts)
 
@@ -238,21 +280,39 @@ class Experiment:
         # vLLM servers as soon as the last task needing it completes.
         self._model_remaining: dict = {}
 
-    def add_task(self, task_def: dict[str, Any]) -> None:
-        """Add a task definition (from experiment YAML) to the queue."""
-        task_type = _infer_task_type(task_def)
-        task_info = TaskInfo(
-            index=self._task_counter,
-            config=task_def,
-            mode=task_def.get("mode", "unknown"),
-            task_type=task_type,
-            name=_get_task_name(task_def, self._task_counter),
-        )
-        self.tasks.append(task_info)
-        self._task_counter += 1
-        logger.debug(f"Added task '{task_info.name}' (type={task_type.value}, total: {len(self.tasks)})")
+    def add_task(self, task_def) -> None:
+        """Add a task to the queue.
 
-    def add_tasks(self, task_defs: list[dict[str, Any]]) -> None:
+        Accepts either a plain dict (validated via the Pydantic TaskConfig
+        discriminated union) or an already-validated TaskConfig instance.
+        Typed validation fails loud at this boundary — typos in YAML fields
+        raise ValidationError with field paths, instead of failing deep
+        inside a runner.
+        """
+        from .schemas import TextEncodeTask, ImagingTask, EvaluateTask
+        from .schemas import DefenseTransformTask, DefenseTask
+        from pydantic import TypeAdapter
+        from .schemas import TaskConfig as _TaskConfigAlias
+
+        if isinstance(task_def, (TextEncodeTask, ImagingTask, EvaluateTask,
+                                 DefenseTransformTask, DefenseTask)):
+            task = task_def
+        else:
+            # TypeAdapter handles the Annotated[Union[...], Discriminator(...)]
+            task = TypeAdapter(_TaskConfigAlias).validate_python(task_def)
+
+        info = TaskInfo(
+            index=self._task_counter,
+            task=task,
+            name=_get_task_name(task, self._task_counter),
+        )
+        self.tasks.append(info)
+        self._task_counter += 1
+        logger.debug(
+            f"Added task '{info.name}' (type={info.task_type.value}, "
+            f"total: {len(self.tasks)})")
+
+    def add_tasks(self, task_defs: list) -> None:
         """Add multiple task definitions to the queue."""
         for task_def in task_defs:
             self.add_task(task_def)
@@ -511,7 +571,7 @@ class Experiment:
             t0 = time.time()
             try:
                 # Run synchronous task in thread pool
-                result = await asyncio.to_thread(run_task, task.config)
+                result = await asyncio.to_thread(run_task, task.task)
                 elapsed = time.time() - t0
                 result["task_name"] = task.name
                 result["original_index"] = task.index
@@ -655,17 +715,11 @@ def run_experiment_from_preset(preset_name: str, conf_dir: Optional[Path] = None
     if conf_dir is None:
         conf_dir = Path(__file__).resolve().parent.parent.parent / "conf"
     preset = load_preset(preset_name, conf_dir)
-    tasks = preset.get("tasks", [])
 
-    # Support both new and legacy key names
-    num_threads = preset.get(
-        "num_main_job_threads",
-        preset.get("num_parallel_workers", 5),
+    exp = Experiment(
+        conf_dir,
+        num_main_job_threads=preset.num_main_job_threads,
+        num_cluster_jobs=preset.num_cluster_jobs,
     )
-    num_cluster_jobs = preset.get("num_cluster_jobs", MAX_SUBMIT_JOBS_PER_USER)
-
-    exp = Experiment(conf_dir,
-                     num_main_job_threads=num_threads,
-                     num_cluster_jobs=num_cluster_jobs)
-    exp.add_tasks(tasks)
+    exp.add_tasks(preset.tasks)
     return exp.run()

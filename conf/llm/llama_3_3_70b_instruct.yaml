@@ -1,4 +1,3 @@
-# @package _global_
 # Llama-3.3-70B-Instruct — judge for `jailbreakbench`, `refusal`, and `orbench`
 # evaluators.
 #
@@ -9,9 +8,6 @@
 #   - src/evaluation/orbench_evaluation/constants.py
 # The `model:` block below is purely informational. This file exists only to
 # drive cluster job parameters consumed by ClusterModelServerManager.
-
-defaults:
-  - default
 
 model:
   model: meta-llama/Llama-3.3-70B-Instruct

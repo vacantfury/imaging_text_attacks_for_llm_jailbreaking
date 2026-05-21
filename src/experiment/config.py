@@ -1,143 +1,71 @@
 """
-Configuration loading and schema definitions.
+Configuration loading.
 
-Structured dataclasses define the YAML schema — OmegaConf validates types
-at load time (e.g. max_tokens: "abc" → immediate ValidationError).
+Pydantic models for typed configs live in `src/experiment/schemas.py`
+(LLMConfig, ModelConfig, ClusterConfig, TaskConfig union, ExperimentPreset).
+This module is just the YAML loading machinery — no schemas defined here.
 
-load_conf() implements 3-layer YAML merge: default → override → task-level.
-Used by task runners, the experiment orchestrator, and the LLM service factory.
+`load_conf` returns a merged plain dict from the 3-layer YAML composition
+(default → override → task_overrides). Call sites that want typed access do
+`ModelConfig.model_validate(load_conf("llm", section="model", ...))`.
 """
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Optional
 
-from omegaconf import MISSING, OmegaConf, DictConfig
+import yaml
 
-
-# ====================================================================
-# Structured config schemas — TYPE ONLY, no defaults.
-# All default values live in conf/*.yaml (single source of truth).
-# If YAML doesn't provide a field, OmegaConf raises immediately.
-# ====================================================================
-
-
-@dataclass
-class ModelConfig:
-    """LLM request parameters. Maps to conf/llm/*/model: section."""
-    model: str = MISSING
-    max_tokens: int = MISSING
-    temperature: float = MISSING
-    top_p: float = MISSING
-    top_k: int = MISSING
-    frequency_penalty: float = MISSING
-    presence_penalty: float = MISSING
-    stop_sequences: List[str] = MISSING
-    seed: int = MISSING
-    n_completions: int = MISSING
-    stream: bool = MISSING
-    max_concurrency: int = MISSING
-    max_retries: int = MISSING
-    batch_poll_interval: int = MISSING
-    batch_timeout: int = MISSING
-
-
-@dataclass
-class ClusterConfig:
-    """Cluster/vLLM server parameters. Maps to conf/llm/*/cluster: section."""
-    partition: str = MISSING
-    excluded_nodes: List[str] = MISSING
-    gpu_types_excluded: List[str] = MISSING
-    num_gpus: int = MISSING
-    num_instances: int = MISSING
-    cpus_per_task: int = MISSING
-    mem_gb: int = MISSING
-    time_limit: str = MISSING
-    port: int = MISSING
-    gpu_memory_utilization: float = MISSING
-    max_model_len: int = MISSING
-    dtype: Optional[str] = MISSING
-    chat_template: Optional[str] = MISSING
-    server_start_timeout: int = MISSING
-    endpoint_wait_timeout: int = MISSING
-    cluster_server_endpoint_timeout: int = MISSING
-    monitor_poll_interval: int = MISSING
-    health_check_timeout: int = MISSING
-    slurm_cmd_timeout: int = MISSING
-    conda_env: str = MISSING
-    cuda_module: str = MISSING
-    hf_home: str = MISSING
-
-
-@dataclass
-class LLMConf:
-    """Top-level LLM config. Maps to conf/llm/*.yaml."""
-    model: ModelConfig = field(default_factory=ModelConfig)
-    cluster: ClusterConfig = field(default_factory=ClusterConfig)
-
-
-@dataclass
-class EvaluationConf:
-    """Top-level evaluation config. Maps to conf/evaluation/*.yaml.
-
-    Note: judge model, temperature, and max_tokens are NOT YAML-configurable —
-    each evaluator hard-binds its canonical judge via its own constants.py.
-
-    judge_method is also normally NOT used — evaluator selection is derived
-    from the benchmark slug in source_dir (see _infer_benchmark and
-    EvaluatorFactory.create_from_benchmark). It exists here as an optional
-    field for the rare ad-hoc override case.
-    """
-    judge_method: Optional[str] = None
-
-
-# ====================================================================
-# Config loading
-# ====================================================================
 
 CONF_DIR = Path(__file__).resolve().parent.parent.parent / "conf"
 
-# Map subdirectory names to their structured config schemas.
-_SCHEMAS = {
-    "llm": LLMConf,
-    "evaluation": EvaluationConf,
-}
 
-# Hydra directives to strip before OmegaConf merge.
-_HYDRA_DIRECTIVES = {"defaults"}
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Recursive dict merge: override wins, nested dicts merge per-key.
 
-
-def _strip_hydra(cfg: DictConfig) -> DictConfig:
-    """Remove Hydra-only directives from a loaded config.
-    
-    Note: Mutates cfg in place and returns it. Safe because callers always
-    pass freshly loaded DictConfig objects from OmegaConf.load().
+    Used as the OmegaConf.merge replacement. List/scalar values are
+    replaced wholesale (matches OmegaConf default semantics).
     """
-    for key in _HYDRA_DIRECTIVES:
-        if key in cfg:
-            del cfg[key]
-    return cfg
+    out = dict(base)
+    for k, v in override.items():
+        if k in out and isinstance(out[k], dict) and isinstance(v, dict):
+            out[k] = _deep_merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+
+def _load_yaml(path: Path) -> dict:
+    """Load a YAML file → dict. Returns {} for empty files."""
+    with open(path) as f:
+        data = yaml.safe_load(f) or {}
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"Expected a YAML mapping at top level of {path}, got "
+            f"{type(data).__name__}.")
+    # Strip dead Hydra directives; they have no effect here.
+    data.pop("defaults", None)
+    return data
 
 
 def load_conf(subdir: str, override_name: Optional[str] = None, *,
               section: Optional[str] = None, match_field: Optional[str] = None,
               match_value: Optional[str] = None,
               task_overrides: Optional[dict[str, Any]] = None) -> dict[str, Any]:
-    """3-layer YAML config merge: default → override → task-level.
-
-    Works for any conf/ subdirectory (llm, text_encoding, imaging, evaluation).
+    """3-layer YAML merge: default.yaml → override → task_overrides.
 
     Args:
-        subdir: Config subdirectory under conf/ (e.g. "llm", "imaging")
-        override_name: Specific config file stem to overlay (e.g. "plain", "gpt_4o").
-                       If None, searches by match_field/match_value.
-        section: If set, return only this top-level key from the merged config.
-        match_field: Field name to match when searching for the right override file
-                     (e.g. "model.model" to match by nested key)
-        match_value: Value to match against match_field.
-        task_overrides: Additional overrides from the task config dict (highest priority).
+        subdir: Config subdirectory under conf/ (e.g. "llm", "imaging",
+                "text_encoding", "defense").
+        override_name: File stem to overlay (e.g. "plain", "gpt_4o"). If
+                       None, falls back to match_field/match_value search.
+        section: If set, returns only that top-level key from the merged dict.
+        match_field: Dotted-path field to match when searching by content
+                     (e.g. "model.model" → check candidate.model.model).
+        match_value: Value the matched field must equal.
+        task_overrides: Highest-priority overrides from the task YAML's
+                        nested sub-config (e.g. an `encoder:` block).
 
     Returns:
-        Merged config as a plain dict.
+        Merged plain dict. Validate via Pydantic at the call site.
 
     Examples:
         load_conf("llm", section="model", match_field="model.model", match_value="gpt-4o")
@@ -146,43 +74,41 @@ def load_conf(subdir: str, override_name: Optional[str] = None, *,
     """
     conf_path = CONF_DIR / subdir
 
-    # Base: structured schema (if available) provides typed defaults
-    schema_cls = _SCHEMAS.get(subdir)
-    if schema_cls is not None:
-        config = OmegaConf.structured(schema_cls)
-    else:
-        config = OmegaConf.create({})
+    config: dict[str, Any] = {}
 
     # Layer 1: default.yaml
     default_path = conf_path / "default.yaml"
     if default_path.exists():
-        loaded = _strip_hydra(OmegaConf.load(default_path))
-        config = OmegaConf.merge(config, loaded)
+        config = _deep_merge(config, _load_yaml(default_path))
 
-    # Layer 2: named override file OR search by match_field
+    # Layer 2: named override OR search by match_field
     if override_name:
         override_path = conf_path / f"{override_name}.yaml"
         if override_path.exists():
-            loaded = _strip_hydra(OmegaConf.load(override_path))
-            config = OmegaConf.merge(config, loaded)
-    elif match_field and match_value:
+            config = _deep_merge(config, _load_yaml(override_path))
+    elif match_field and match_value is not None:
         for yaml_file in sorted(conf_path.glob("*.yaml")):
             if yaml_file.stem == "default":
                 continue
-            candidate = _strip_hydra(OmegaConf.load(yaml_file))
-            # Support nested match: "model.model" → check candidate.model.model
-            val = OmegaConf.select(candidate, match_field, default=None)
-            if val == match_value:
-                config = OmegaConf.merge(config, candidate)
+            candidate = _load_yaml(yaml_file)
+            if _select(candidate, match_field) == match_value:
+                config = _deep_merge(config, candidate)
                 break
 
     # Layer 3: task-level overrides (highest priority)
     if task_overrides:
-        config = OmegaConf.merge(config, task_overrides)
-
-    # Convert to plain dict for downstream use
-    result = OmegaConf.to_container(config, resolve=True)
+        config = _deep_merge(config, task_overrides)
 
     if section:
-        return result.get(section, {})
-    return result
+        return config.get(section, {})
+    return config
+
+
+def _select(d: dict, dotted_path: str) -> Any:
+    """Walk a dotted path through nested dicts; None if any segment missing."""
+    cur: Any = d
+    for part in dotted_path.split("."):
+        if not isinstance(cur, dict) or part not in cur:
+            return None
+        cur = cur[part]
+    return cur

@@ -1,8 +1,4 @@
-# @package _global_
 # GPT-5-nano (OpenAI)
-
-defaults:
-  - default
 
 model:
   model: gpt-5-nano

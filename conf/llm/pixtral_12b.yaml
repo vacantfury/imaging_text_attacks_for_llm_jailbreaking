@@ -1,8 +1,4 @@
-# @package _global_
 # Pixtral-12B (Mistral) — open-source multimodal
-
-defaults:
-  - default
 
 model:
   model: mistralai/Pixtral-12B-2409

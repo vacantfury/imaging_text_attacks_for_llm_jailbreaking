@@ -122,3 +122,34 @@ class EvaluatorFactory:
 # Used by task.py to pick the right metric key after an evaluator is resolved,
 # instead of string-matching on judge_method.
 REFUSAL_RATE_EVALUATORS = (JailbreakBenchRefusalEvaluator, ORBenchEvaluator)
+
+
+# Benchmark → list of judge_method strings (the inverse of how task.py looks
+# up canonical evaluators). Each method name maps via the evaluator package's
+# constants module to an LLMModel. Used by the orchestrator to pre-discover
+# cluster-hosted judges *without* instantiating evaluators (instantiation
+# would touch the LLMServiceFactory and require a server_manager).
+_BENCHMARK_TO_JUDGE_METHODS = {
+    "harmbench": ["harmbench"],
+    "jailbreakbench": ["jailbreakbench", "refusal"],   # dual judges
+    "jailbreakbench_benign": ["refusal"],
+}
+
+
+def judge_methods_for_benchmark(benchmark: str) -> list[str]:
+    """List the canonical judge_method names a given benchmark uses.
+
+    Returns names compatible with `_judge_model_for_method` in experiment.py
+    (which maps them to LLMModel instances via each evaluator's
+    constants.JUDGE_MODEL).
+
+    Raises:
+        ValueError: If the benchmark is unknown.
+    """
+    bench = benchmark.lower().strip()
+    if bench in _BENCHMARK_TO_JUDGE_METHODS:
+        return list(_BENCHMARK_TO_JUDGE_METHODS[bench])
+    if bench.startswith("orbench"):
+        return ["orbench"]
+    raise ValueError(
+        f"No canonical judge mapping for benchmark={benchmark!r}.")

@@ -1,8 +1,4 @@
-# @package _global_
 # GPT-4o (OpenAI) — primary target model + judge
-
-defaults:
-  - default
 
 model:
   model: gpt-4o
