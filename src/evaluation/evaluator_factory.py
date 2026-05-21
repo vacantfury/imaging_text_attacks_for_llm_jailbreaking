@@ -1,8 +1,25 @@
+from typing import List
+
 from .base_evaluator import BaseEvaluator
 from .harmbench_evaluation.evaluator import HarmBenchEvaluator
 from .jailbreakbench_evaluation.evaluator import JailbreakBenchEvaluator
 from .jailbreakbench_refusal_evaluation.evaluator import JailbreakBenchRefusalEvaluator
 from .orbench_evaluation.evaluator import ORBenchEvaluator
+
+
+# Benchmark → canonical evaluator(s). For most benchmarks this is a single
+# evaluator; `jailbreakbench` (harmful split) gets BOTH the harmful judge
+# (→ ASR) and the refusal judge (→ refusal_rate) so a single evaluate task
+# produces both metrics in one results.json. Other JBB-style data does not
+# need both: jailbreakbench_benign only meaningfully supports refusal_rate
+# (ASR on benign prompts is methodologically vacuous), and harmbench /
+# orbench each have a single canonical judge.
+#
+# Why a benchmark-keyed entry point exists alongside the older method-keyed one:
+# Dataset name is canonical — it lives in the `source_dir` path component and
+# in `_infer_benchmark()`. Letting callers pass a free-form `judge_method`
+# invites mismatches (e.g. running HarmBench's classifier on JBB prompts
+# because a YAML wasn't updated). `create_from_benchmark` removes that footgun.
 
 
 class EvaluatorFactory:
@@ -15,12 +32,63 @@ class EvaluatorFactory:
     prompts). Extra kwargs flow through to the LLM service for non-canonical
     settings (timeouts, retries) but `model`, `temperature`, and `max_tokens` are
     stripped inside each evaluator.
+
+    Prefer `create_from_benchmark(benchmark)` — it returns the full canonical
+    set of evaluators for that dataset (one or two), driven by `_infer_benchmark`
+    on the source_dir path. `create(method=...)` is retained as an explicit
+    single-evaluator override (legacy/ad-hoc use only).
     """
 
     @staticmethod
-    def create(method: str = "harmbench", **kwargs) -> BaseEvaluator:
+    def create_from_benchmark(benchmark: str, **kwargs) -> List[BaseEvaluator]:
+        """Resolve a benchmark name to its canonical evaluator list.
+
+        Returns a list because `jailbreakbench` runs two judges in one task
+        (harmful → ASR, refusal → refusal_rate). Both verdicts land in the
+        same raw_results.jsonl as parallel columns, and both metrics in the
+        same results.json. Every other benchmark returns a single-element
+        list.
+
+        Args:
+            benchmark: Dataset slug as returned by `_infer_benchmark` (e.g.
+                'harmbench', 'jailbreakbench', 'jailbreakbench_benign',
+                'orbench_harmful'). Case-insensitive; whitespace trimmed.
+            **kwargs: Forwarded to each evaluator's constructor.
+
+        Returns:
+            List of BaseEvaluator subclass instances.
+
+        Raises:
+            ValueError: If `benchmark` is not in the supported set.
         """
-        Create an evaluator instance.
+        bench = benchmark.lower().strip()
+
+        if bench == "harmbench":
+            return [HarmBenchEvaluator(**kwargs)]
+
+        if bench == "jailbreakbench":
+            return [
+                JailbreakBenchEvaluator(**kwargs),
+                JailbreakBenchRefusalEvaluator(**kwargs),
+            ]
+
+        if bench == "jailbreakbench_benign":
+            return [JailbreakBenchRefusalEvaluator(**kwargs)]
+
+        if bench.startswith("orbench"):
+            return [ORBenchEvaluator(**kwargs)]
+
+        raise ValueError(
+            f"No canonical evaluator for benchmark={benchmark!r}. "
+            f"Supported: 'harmbench', 'jailbreakbench', "
+            f"'jailbreakbench_benign', 'orbench_*'.")
+
+    @staticmethod
+    def create(method: str = "harmbench", **kwargs) -> BaseEvaluator:
+        """Explicit method-based factory (emergency override / ad-hoc use).
+
+        Prefer `create_from_benchmark` — it derives the evaluator from the
+        canonical source_dir path and prevents dataset/judge mismatches.
 
         Args:
             method: Evaluation method ('harmbench', 'jailbreakbench', 'jbb_refusal', 'orbench').
@@ -48,3 +116,9 @@ class EvaluatorFactory:
             f"Unknown evaluation method: {method}. "
             "Supported: 'harmbench', 'jailbreakbench', 'jbb_refusal', 'orbench'"
         )
+
+
+# Evaluator classes that report refusal_rate (rather than attack_success_rate).
+# Used by task.py to pick the right metric key after an evaluator is resolved,
+# instead of string-matching on judge_method.
+REFUSAL_RATE_EVALUATORS = (JailbreakBenchRefusalEvaluator, ORBenchEvaluator)

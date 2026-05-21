@@ -20,7 +20,7 @@ Prompt stages (2×2 grid):
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from PIL import Image
 
@@ -124,26 +124,40 @@ BENCHMARK_ALIASES = {
 }
 
 
+KNOWN_BENCHMARKS = frozenset({
+    "harmbench", "jailbreakbench", "jailbreakbench_benign",
+    "orbench_harmful", "orbench_benign_hard", "orbench_benign_1k",
+})
+
+
 def _infer_benchmark(source_path: str) -> str:
     """Infer benchmark name from a source file or directory path.
 
     For directory paths (outputs/text_encode/harmbench/...),
     extracts the benchmark directly from the path components.
     For file paths (data/jbb_prompts.jsonl), checks known aliases.
+
+    Strict: raises ValueError if no benchmark can be identified, rather
+    than silently defaulting. The benchmark drives evaluator selection
+    downstream — a silent wrong guess would send harmful prompts to the
+    wrong classifier. Fail loud at config time instead.
     """
     parts = Path(source_path).parts
-    known = {"harmbench", "jailbreakbench", "jailbreakbench_benign",
-             "orbench_harmful", "orbench_benign_hard", "orbench_benign_1k"}
     for part in parts:
-        if part in known:
+        if part in KNOWN_BENCHMARKS:
             return part
-    # File-based fallback: check aliases in the filename/path
-    # Check longer aliases first to avoid partial matches
+    # File-based fallback: check aliases in the filename/path.
+    # Longer aliases first so 'jbb_benign' matches before 'jbb'.
     name = str(source_path).lower()
     for alias, bench in sorted(BENCHMARK_ALIASES.items(), key=lambda x: -len(x[0])):
         if alias in name:
             return bench
-    return "harmbench"
+    raise ValueError(
+        f"Could not infer benchmark from path: {source_path!r}. "
+        f"Expected one of {sorted(KNOWN_BENCHMARKS)} as a path component, "
+        f"or a matching alias from {sorted(BENCHMARK_ALIASES)}. "
+        f"If this is a non-standard source, set `benchmark:` explicitly "
+        f"in the task config.")
 
 
 # Valid prompt stages
@@ -419,98 +433,140 @@ def _build_conversations_for_stage(
     return conversations, prompt_lookup
 
 
+def _resolve_evaluators(config: dict, benchmark: str) -> list:
+    """Resolve the evaluator list for an evaluate/defense task.
+
+    Canonical path (default): the dataset (benchmark) determines which
+    judge(s) run. jailbreakbench → [harmful, refusal]; everything else
+    → single canonical evaluator. The list is returned in stable order
+    (harmful first, refusal second when both apply) so columns are
+    populated consistently.
+
+    Emergency override: if `judge_method` is set in the task config, only
+    that single evaluator runs — useful for ad-hoc sanity checks (e.g.,
+    running the HarmBench classifier on JBB data) but bypasses the
+    canonical mapping.
+    """
+    override = config.get("judge_method")
+    if override:
+        logger.warning(
+            f"judge_method override active: '{override}' "
+            f"(bypassing canonical benchmark→evaluator mapping for {benchmark!r})")
+        return [EvaluatorFactory.create(method=override)]
+    return EvaluatorFactory.create_from_benchmark(benchmark)
+
+
+def _is_refusal_evaluator(evaluator) -> bool:
+    """Whether this evaluator reports refusal_rate (vs attack_success_rate)."""
+    from src.evaluation.evaluator_factory import REFUSAL_RATE_EVALUATORS
+    return isinstance(evaluator, REFUSAL_RATE_EVALUATORS)
+
+
+def _apply_verdict_columns(
+    stage_rows: list, detailed_df, is_refusal: bool,
+) -> None:
+    """Copy a judge's per-row verdict into the right column group on rows.
+
+    The harmful judge writes to (asr, judge_output, judge_reasoning,
+    judge_raw_response). The refusal judge writes to (refusal,
+    refusal_judge_output, refusal_judge_reasoning, refusal_judge_raw_response).
+    For benchmarks that run both (jailbreakbench), both column groups end
+    up populated on every row.
+    """
+    if detailed_df is None:
+        return
+
+    def _col(df, name) -> dict:
+        if name not in df.columns:
+            return {}
+        return dict(zip(df["id"].astype(str), df[name].astype(str)))
+
+    verdict_col = "is_refused" if is_refusal else "is_jailbroken"
+    if verdict_col not in detailed_df.columns:
+        return
+    verdict_by_id = dict(
+        zip(detailed_df["id"].astype(str), detailed_df[verdict_col]))
+    output_by_id = _col(detailed_df, "judge_output")
+    reasoning_by_id = _col(detailed_df, "judge_reasoning")
+    raw_by_id = _col(detailed_df, "judge_raw_response")
+
+    if is_refusal:
+        for row in stage_rows:
+            row.refusal = verdict_by_id.get(row.id)
+            row.refusal_judge_output = output_by_id.get(row.id)
+            row.refusal_judge_reasoning = reasoning_by_id.get(row.id)
+            row.refusal_judge_raw_response = raw_by_id.get(row.id)
+    else:
+        for row in stage_rows:
+            row.asr = verdict_by_id.get(row.id)
+            row.judge_output = output_by_id.get(row.id)
+            row.judge_reasoning = reasoning_by_id.get(row.id)
+            row.judge_raw_response = raw_by_id.get(row.id)
+
+
 def _run_asr_judging(
     config: dict[str, Any], prompts: list[Prompt],
-    all_rows: list[EvaluationRow], prompt_stages: list[str]
-) -> dict[str, Any]:
-    """Run judging across all stages. Returns {stage: metric_score_or_None}.
+    all_rows: list[EvaluationRow], prompt_stages: list[str],
+    benchmark: str,
+) -> tuple[dict[str, Optional[float]], dict[str, Optional[float]]]:
+    """Run every canonical judge for the benchmark across all stages.
 
-    The metric extracted depends on judge_method:
-      - 'refusal' -> stats['refusal_rate']
-      - otherwise -> stats['attack_success_rate']
+    Returns (asr_per_stage, refusal_per_stage). A stage that no judge of
+    a given type ran for is `None` in the corresponding dict — distinguishes
+    "not applicable" (canonical mapping has no refusal judge here) from
+    "0%".
 
-    Side-effect: updates each EvaluationRow.asr in *all_rows* with the
-    per-row boolean judgment so that raw_results.jsonl contains per-row
-    judge verdicts.
+    Side effect: writes verdict columns onto each EvaluationRow in `all_rows`.
     """
-    def _column_by_id(detailed_df, column: str) -> dict[str, str]:
-        if column not in detailed_df.columns:
-            return {}
-        return dict(zip(detailed_df["id"].astype(str), detailed_df[column].astype(str)))
+    evaluators = _resolve_evaluators(config, benchmark)
+    asr_per_stage: dict[str, Optional[float]] = {s: None for s in prompt_stages}
+    refusal_per_stage: dict[str, Optional[float]] = {s: None for s in prompt_stages}
 
-    metrics_per_stage: dict[str, Any] = {}
-    try:
-        eval_config = _load_conf("evaluation")
-        judge_method = config.get("judge_method",
-                                  eval_config.get("judge_method", "harmbench"))
-        # Evaluators hard-bind their own canonical judge model via constants.py.
-        evaluator = EvaluatorFactory.create(method=judge_method)
+    original_lookup = {p.id: p.original for p in prompts}
 
-        if judge_method in ("refusal", "orbench"):
-            stat_key = "refusal_rate"
-            metric_label = "Refusal rate"
-        else:
-            stat_key = "attack_success_rate"
-            metric_label = "ASR"
+    for evaluator in evaluators:
+        is_refusal = _is_refusal_evaluator(evaluator)
+        stat_key = "refusal_rate" if is_refusal else "attack_success_rate"
+        metric_label = "Refusal rate" if is_refusal else "ASR"
+        target_per_stage = refusal_per_stage if is_refusal else asr_per_stage
 
-        original_lookup = {p.id: p.original for p in prompts}
+        logger.info(
+            f"Judging with {evaluator.__class__.__name__} "
+            f"(metric: {metric_label})")
 
-        for stage in prompt_stages:
-            stage_rows = [r for r in all_rows if r.prompt_stage == stage]
-            if not stage_rows:
-                continue
+        try:
+            for stage in prompt_stages:
+                stage_rows = [r for r in all_rows if r.prompt_stage == stage]
+                if not stage_rows:
+                    continue
 
-            judge_prompts = []
-            judge_processed = []
-            judge_responses = {}
+                judge_prompts = [
+                    {"id": r.id, "prompt": original_lookup[r.id]} for r in stage_rows
+                ]
+                judge_processed = [original_lookup[r.id] for r in stage_rows]
+                judge_responses = {r.id: r.response for r in stage_rows}
 
-            for row in stage_rows:
-                judge_prompts.append({"id": row.id, "prompt": original_lookup[row.id]})
-                judge_processed.append(original_lookup[row.id])
-                judge_responses[row.id] = row.response
+                detailed_df, stats = evaluator.evaluate(
+                    prompts=judge_prompts,
+                    processed_prompts=judge_processed,
+                    responses=judge_responses,
+                )
 
-            detailed_df, stats = evaluator.evaluate(
-                prompts=judge_prompts,
-                processed_prompts=judge_processed,
-                responses=judge_responses,
-            )
+                _apply_verdict_columns(stage_rows, detailed_df, is_refusal)
+                target_per_stage[stage] = stats.get(stat_key, 0.0)
+                logger.info(
+                    f"  {metric_label} for {stage}: {target_per_stage[stage]:.2f}%")
 
-            if detailed_df is not None and "is_jailbroken" in detailed_df.columns:
-                verdict_by_id = dict(
-                    zip(detailed_df["id"].astype(str), detailed_df["is_jailbroken"]))
-                judge_output_by_id = _column_by_id(detailed_df, "judge_output")
-                judge_reasoning_by_id = _column_by_id(detailed_df, "judge_reasoning")
-                judge_raw_by_id = _column_by_id(detailed_df, "judge_raw_response")
-                for row in stage_rows:
-                    row.asr = verdict_by_id.get(row.id)
-                    row.judge_output = judge_output_by_id.get(row.id)
-                    row.judge_reasoning = judge_reasoning_by_id.get(row.id)
-                    row.judge_raw_response = judge_raw_by_id.get(row.id)
-            elif detailed_df is not None and "is_refused" in detailed_df.columns:
-                verdict_by_id = dict(
-                    zip(detailed_df["id"].astype(str), detailed_df["is_refused"]))
-                judge_output_by_id = _column_by_id(detailed_df, "judge_output")
-                judge_reasoning_by_id = _column_by_id(detailed_df, "judge_reasoning")
-                judge_raw_by_id = _column_by_id(detailed_df, "judge_raw_response")
-                for row in stage_rows:
-                    row.asr = verdict_by_id.get(row.id)
-                    row.judge_output = judge_output_by_id.get(row.id)
-                    row.judge_reasoning = judge_reasoning_by_id.get(row.id)
-                    row.judge_raw_response = judge_raw_by_id.get(row.id)
+        except (ValueError, KeyError, FileNotFoundError) as e:
+            logger.warning(
+                f"Judging skipped for {evaluator.__class__.__name__} — "
+                f"config/data issue: {e}")
+        except Exception as e:
+            logger.warning(
+                f"Judging failed for {evaluator.__class__.__name__}: {e}",
+                exc_info=True)
 
-            metrics_per_stage[stage] = stats.get(stat_key, 0.0)
-            logger.info(f"  {metric_label} for {stage}: {metrics_per_stage[stage]:.2f}%")
-
-    except (ValueError, KeyError, FileNotFoundError) as e:
-        logger.warning(f"Judging skipped — config/data issue: {e}")
-        for stage in prompt_stages:
-            metrics_per_stage[stage] = None
-    except Exception as e:
-        logger.warning(f"Judging failed: {e}", exc_info=True)
-        for stage in prompt_stages:
-            metrics_per_stage[stage] = None
-
-    return metrics_per_stage
+    return asr_per_stage, refusal_per_stage
 
 
 # ======================== evaluate ========================
@@ -611,11 +667,21 @@ def _run_evaluate(config: dict) -> dict[str, Any]:
         stage_counts[stage] = len(results)
         logger.info(f"  Stage {stage}: {len(results)} responses")
     
-    # Judging (ASR or refusal depending on judge_method)
-    eval_config = _load_conf("evaluation")
-    judge_method = config.get("judge_method",
-                              eval_config.get("judge_method", "harmbench"))
-    metrics_per_stage = _run_asr_judging(config, prompts, all_rows, prompt_stages)
+    # Judging: every canonical judge for the benchmark runs in one task.
+    # jailbreakbench → both harmful (→ asr) and refusal (→ refusal_rate).
+    # Others → single canonical judge. The two dicts are populated in
+    # parallel; a stage missing from a dict means that judge didn't apply.
+    asr_per_stage, refusal_per_stage = _run_asr_judging(
+        config, prompts, all_rows, prompt_stages, benchmark)
+    asr_per_stage = {k: v for k, v in asr_per_stage.items() if v is not None} or None
+    refusal_per_stage = {
+        k: v for k, v in refusal_per_stage.items() if v is not None
+    } or None
+
+    # judge_method provenance: the explicit override if set, otherwise the
+    # benchmark slug (which uniquely identifies the canonical evaluator set
+    # via EvaluatorFactory.create_from_benchmark).
+    judge_method_provenance = config.get("judge_method") or benchmark
 
     # Write raw_results.jsonl
     results_path = out_dir / "raw_results.jsonl"
@@ -639,22 +705,19 @@ def _run_evaluate(config: dict) -> dict[str, Any]:
         source_dir=source_dir,
         system_message=system_message,
         image_instruction=image_instruction,
-        judge_method=judge_method,
+        judge_method=judge_method_provenance,
         count=len(all_rows),
         count_per_stage=stage_counts,
+        asr=asr_per_stage,
+        refusal_rate=refusal_per_stage,
         usage=service.get_usage(),
         elapsed_seconds=elapsed,
         output_dir=str(out_dir),
         upstream=_load_results(source_dir),
     )
-    if judge_method in ("refusal", "orbench"):
-        result.refusal_rate = metrics_per_stage
-    else:
-        result.asr = metrics_per_stage
 
     _save_results(out_dir, result.model_dump(exclude_none=True))
 
-    metric_key = "asr" if result.asr is not None else "refusal_rate"
     return {
         "status": "success",
         "output_dir": str(out_dir),
@@ -662,9 +725,9 @@ def _run_evaluate(config: dict) -> dict[str, Any]:
         "prompt_stages": prompt_stages,
         "target_model": model_str,
         "encoding": encoding,
-        "judge_method": judge_method,
-        "judge_model": judge_llm_raw.get("model", "gpt-5-nano"),
-        metric_key: metrics_per_stage,
+        "judge_method": judge_method_provenance,
+        "asr": asr_per_stage,
+        "refusal_rate": refusal_per_stage,
         "usage": result.usage,
         "elapsed_seconds": elapsed,
     }
@@ -839,50 +902,16 @@ def _run_defense(config: dict) -> dict[str, Any]:
         "outputs/defense", dataset=benchmark,
         model=f"{model_str}_{defense_method}_{encoding}"))
 
-    # ASR judging
-    eval_config = _load_conf("evaluation")
-    judge_method = config.get("judge_method",
-                              eval_config.get("judge_method", "harmbench"))
-
-    if judge_method in ("refusal", "orbench"):
-        stat_key = "refusal_rate"
-        metric_label = "Refusal rate"
-    else:
-        stat_key = "attack_success_rate"
-        metric_label = "ASR"
-
-    metric_value = None
-    try:
-        from src.evaluation.evaluator_factory import EvaluatorFactory
-        evaluator = EvaluatorFactory.create(method=judge_method)
-
-        original_lookup = {p.id: p.original for p in prompts}
-        judge_prompts = [{"id": r.id, "prompt": original_lookup[r.id]} for r in all_rows]
-        judge_processed = [original_lookup[r.id] for r in all_rows]
-        judge_responses = {r.id: r.response for r in all_rows}
-
-        detailed_df, stats = evaluator.evaluate(
-            prompts=judge_prompts,
-            processed_prompts=judge_processed,
-            responses=judge_responses,
-        )
-
-        if detailed_df is not None and "is_jailbroken" in detailed_df.columns:
-            verdict_by_id = dict(
-                zip(detailed_df["id"].astype(str), detailed_df["is_jailbroken"]))
-            for row in all_rows:
-                row.asr = verdict_by_id.get(row.id)
-        elif detailed_df is not None and "is_refused" in detailed_df.columns:
-            verdict_by_id = dict(
-                zip(detailed_df["id"].astype(str), detailed_df["is_refused"]))
-            for row in all_rows:
-                row.asr = verdict_by_id.get(row.id)
-
-        metric_value = stats.get(stat_key, 0.0)
-        logger.info(f"  {metric_label}: {metric_value:.2f}%")
-
-    except Exception as e:
-        logger.warning(f"Judging failed: {e}", exc_info=True)
+    # Judging: defense mode has a single prompt_stage (text_encoded__<defense>).
+    # Reuse _run_asr_judging — same dual-judge logic as _run_evaluate, just
+    # one stage. asr_per_stage / refusal_per_stage are 1-entry dicts; we
+    # collapse to scalars for the DefenseResult schema.
+    defense_stage = f"text_encoded__{defense_method}"
+    asr_per_stage, refusal_per_stage = _run_asr_judging(
+        config, prompts, all_rows, [defense_stage], benchmark)
+    asr_value = asr_per_stage.get(defense_stage)
+    refusal_value = refusal_per_stage.get(defense_stage)
+    judge_method_provenance = config.get("judge_method") or benchmark
 
     # Write raw_results.jsonl
     results_path = out_dir / "raw_results.jsonl"
@@ -904,8 +933,10 @@ def _run_defense(config: dict) -> dict[str, Any]:
         prompt_range=prompt_range if prompt_range else None,
         source_dir=source_dir,
         system_message=system_message,
-        judge_method=judge_method,
+        judge_method=judge_method_provenance,
         count=len(all_rows),
+        asr=asr_value,
+        refusal_rate=refusal_value,
         usage=service.get_usage(),
         defense_usage=defender.get_usage(),
         elapsed_seconds=elapsed,
@@ -913,14 +944,8 @@ def _run_defense(config: dict) -> dict[str, Any]:
         upstream=_load_results(source_dir) or None,
     )
 
-    if judge_method in ("refusal", "orbench"):
-        result.refusal_rate = metric_value
-    else:
-        result.asr = metric_value
-
     _save_results(out_dir, result.model_dump(exclude_none=True))
 
-    metric_key = "asr" if result.asr is not None else "refusal_rate"
     return {
         "status": "success",
         "output_dir": str(out_dir),
@@ -928,8 +953,9 @@ def _run_defense(config: dict) -> dict[str, Any]:
         "defense_method": defense_method,
         "target_model": model_str,
         "encoding": encoding,
-        "judge_method": judge_method,
-        metric_key: metric_value,
+        "judge_method": judge_method_provenance,
+        "asr": asr_value,
+        "refusal_rate": refusal_value,
         "usage": service.get_usage(),
         "elapsed_seconds": elapsed,
     }

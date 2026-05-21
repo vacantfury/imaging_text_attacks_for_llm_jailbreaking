@@ -79,10 +79,15 @@ class LLMConf:
 class EvaluationConf:
     """Top-level evaluation config. Maps to conf/evaluation/*.yaml.
 
-    Note: judge model, temperature, and max_tokens are no longer YAML-configurable —
+    Note: judge model, temperature, and max_tokens are NOT YAML-configurable —
     each evaluator hard-binds its canonical judge via its own constants.py.
+
+    judge_method is also normally NOT used — evaluator selection is derived
+    from the benchmark slug in source_dir (see _infer_benchmark and
+    EvaluatorFactory.create_from_benchmark). It exists here as an optional
+    field for the rare ad-hoc override case.
     """
-    judge_method: str = MISSING
+    judge_method: Optional[str] = None
 
 
 # ====================================================================

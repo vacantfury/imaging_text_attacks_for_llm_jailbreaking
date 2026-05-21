@@ -4,5 +4,14 @@
 # evaluator hard-binds its canonical judge via src/evaluation/<bench>/constants.py
 # (HarmBench → cais/HarmBench-Llama-2-13b-cls;
 #  JBB / JBB-Refusal / OR-Bench → meta-llama/Llama-3.3-70B-Instruct).
+#
+# judge_method is also NOT configurable by default — evaluator selection is
+# derived from the benchmark slug in source_dir (see _infer_benchmark and
+# EvaluatorFactory.create_from_benchmark). For jailbreakbench, both the
+# harmful and refusal judges run in one task (dual columns in raw_results).
+#
+# Task-level `judge_method:` remains supported as a single-judge emergency
+# override for ad-hoc sanity checks; set it on the task config, not here.
 
-judge_method: harmbench          # "harmbench", "jailbreakbench", "refusal", or "orbench"
+# (intentionally empty — no required evaluation defaults at this layer)
+{}

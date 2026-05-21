@@ -36,16 +36,28 @@ class Prompt(BaseModel):
 
 class EvaluationRow(BaseModel):
     """One row in raw_results.jsonl (long format).
-    
+
     One row per (prompt × prompt_stage).
+
+    Holds verdicts from up to two parallel judges: the harmful judge
+    (populates asr + judge_*) and the refusal judge (populates refusal +
+    refusal_judge_*). For benchmarks with a single canonical evaluator only
+    one side is populated; for jailbreakbench both run on the same response
+    so both sides are filled in.
     """
     id: str
     prompt_stage: str     # text_original | text_encoded | image_original | image_encoded
     response: str         # model response
-    asr: Optional[bool] = None  # ASR judgment (null if judging not yet run)
+    # Harmful judge (HarmBench classifier, JBB harmful judge) → is_jailbroken
+    asr: Optional[bool] = None  # ASR judgment (null if harmful judge didn't run)
     judge_output: Optional[str] = None
     judge_reasoning: Optional[str] = None
     judge_raw_response: Optional[str] = None
+    # Refusal judge (JBB refusal judge, OR-Bench 3-class) → is_refused
+    refusal: Optional[bool] = None  # refusal verdict (null if refusal judge didn't run)
+    refusal_judge_output: Optional[str] = None
+    refusal_judge_reasoning: Optional[str] = None
+    refusal_judge_raw_response: Optional[str] = None
 
 
 class Judgment(BaseModel):
