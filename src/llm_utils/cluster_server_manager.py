@@ -264,6 +264,29 @@ class ClusterModelServerManager:
         self._pool_changed.set()
         logger.info("All vLLM servers shut down")
 
+    def shutdown_model(self, model: LLMModel) -> None:
+        """Cancel all SLURM jobs for a single model and clear its pool entries.
+
+        Mid-run teardown: lets the orchestrator free a heavy model's GPU
+        allocation as soon as the last task needing it completes, instead of
+        holding 4× A100s pinned for the entire experiment lifetime.
+
+        Safe to call on a model that's already been torn down (no-op).
+        """
+        jobs = self._jobs.pop(model, [])
+        for job_info in jobs:
+            job_id = job_info["job_id"]
+            logger.info(
+                f"Cancelling SLURM job {job_id} ({model.model_id}) [mid-run]")
+            try:
+                subprocess.run(
+                    ["scancel", job_id], capture_output=True, timeout=10)
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                logger.warning(f"Could not cancel job {job_id}")
+        with self._pool_lock:
+            self._pool.pop(model, None)
+        self._pool_changed.set()
+
     def __del__(self):
         if self._jobs:
             self.shutdown_all()
@@ -271,22 +294,33 @@ class ClusterModelServerManager:
     # ==================== Background Monitor ====================
 
     def _monitor_loop(self) -> None:
-        """
-        Background thread: polls SLURM jobs and adds healthy endpoints to the pool.
-        Runs until _stop_monitor is set or all jobs are discovered/failed.
+        """Background thread: discover new servers AND keep checking pool health.
+
+        Phase 1 (discovery): poll SLURM jobs and add healthy endpoints to the
+        pool as they become reachable. Each job is "discovered" exactly once.
+
+        Phase 2 (maintenance): periodically re-ping every pool entry's /health.
+        If a previously-discovered server stops responding (vLLM OOM'd, GPU
+        ECC'd, etc.), evict it from the pool. Without this, acquire_endpoint()
+        would hand out a stale dead endpoint and the task would hang on the
+        first request rather than waiting for a fresh one.
+
+        Runs until _stop_monitor is set (i.e. until shutdown_all()).
         """
         config = next(iter(self.model_configs.values()), {})
         poll_interval = config.get("monitor_poll_interval", 10)
+        # Cadence at which discovered endpoints get re-health-checked.
+        # 60s default keeps overhead near zero for typical pool sizes.
+        recheck_interval = config.get("health_recheck_interval", 60)
+        last_recheck = 0.0
 
         while not self._stop_monitor.is_set():
-            all_done = True
-
+            # ---- Phase 1: discovery ----
             for model, jobs in list(self._jobs.items()):
                 for job_info in jobs:
                     if job_info["discovered"]:
                         continue
 
-                    all_done = False
                     job_id = job_info["job_id"]
                     port = job_info["port"]
                     instance_id = job_info["instance_id"]
@@ -325,11 +359,47 @@ class ClusterModelServerManager:
                             f"(pool size: {len(self._pool[model])})")
                         self._pool_changed.set()
 
-            if all_done:
-                logger.info("All server jobs resolved, monitor stopping")
-                break
+            # ---- Phase 2: re-health-check discovered endpoints ----
+            now = time.time()
+            if now - last_recheck >= recheck_interval:
+                last_recheck = now
+                self._recheck_pool_health()
 
             self._stop_monitor.wait(timeout=poll_interval)
+
+    def _recheck_pool_health(self) -> None:
+        """Re-ping every pool entry's /health; evict any that fail.
+
+        Catches mid-run vLLM crashes (OOM, GPU error, network blip) so that
+        acquire_endpoint() doesn't hand out a dead URL. Eviction does NOT
+        scancel the SLURM job — the job is presumed already dying or done,
+        and a future shutdown_all/_model will clean it up.
+
+        Single-failure eviction is intentional: /health is a constant-time
+        endpoint, so a 5s timeout failing means the server really is gone.
+        """
+        with self._pool_lock:
+            snapshot = {m: list(entries) for m, entries in self._pool.items()}
+
+        evicted_any = False
+        for model, entries in snapshot.items():
+            for entry in entries:
+                healthy, err = self._health_check(entry["endpoint"])
+                if healthy:
+                    continue
+                with self._pool_lock:
+                    pool = self._pool.get(model, [])
+                    self._pool[model] = [
+                        e for e in pool if e["endpoint"] != entry["endpoint"]
+                    ]
+                logger.warning(
+                    f"Mid-run health check failed for {entry['endpoint']} "
+                    f"({model.model_id}): {err}. Evicted from pool "
+                    f"(remaining: {len(self._pool.get(model, []))}).")
+                evicted_any = True
+
+        if evicted_any:
+            self._pool_changed.set()
 
     # ==================== SLURM Helpers ====================
 

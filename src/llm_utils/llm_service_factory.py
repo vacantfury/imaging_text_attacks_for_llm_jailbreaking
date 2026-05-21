@@ -38,14 +38,26 @@ class LLMServiceFactory:
     def set_server_manager(cls, manager) -> None:
         """
         Register the ClusterModelServerManager.
-        
+
         Called by Experiment.run_experiment() after starting servers,
         so factory can auto-fetch endpoint URLs for cluster models.
-        
+
         Args:
             manager: ClusterModelServerManager instance with running servers.
         """
         cls._server_manager = manager
+
+    @classmethod
+    def clear_server_manager(cls) -> None:
+        """Clear the registered manager (call on Experiment teardown).
+
+        The manager lives as class-level singleton state; without an explicit
+        clear, a subsequent Experiment in the same process inherits the
+        previous run's (now shut-down) manager and tasks calling cluster
+        models will fail with stale-reference errors instead of a clean
+        ``RuntimeError: no manager registered``.
+        """
+        cls._server_manager = None
     
     @classmethod
     def get_registered_providers(cls) -> list[Provider]:

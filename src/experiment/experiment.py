@@ -107,6 +107,65 @@ def _resolve_model(model_str: str) -> Optional[Any]:
         return None
 
 
+# Map judge_method → evaluator package. We read constants.JUDGE_MODEL from each
+# package directly so the orchestrator stays in sync with whatever the
+# evaluator actually uses (canonical hard-binding lives there).
+_JUDGE_METHOD_TO_PACKAGE: dict[str, str] = {
+    "harmbench": "src.evaluation.harmbench_evaluation",
+    "jailbreakbench": "src.evaluation.jailbreakbench_evaluation",
+    "refusal": "src.evaluation.jailbreakbench_refusal_evaluation",
+    "orbench": "src.evaluation.orbench_evaluation",
+}
+
+
+def _judge_model_for_method(judge_method: str) -> Optional[Any]:
+    """Resolve a judge_method string to the LLMModel its evaluator hard-binds.
+
+    Returns None if the method is unknown or its constants module can't be
+    imported. Used by the orchestrator to pre-start vLLM servers for cluster
+    judges, so evaluator calls don't hang on acquire_endpoint().
+    """
+    pkg = _JUDGE_METHOD_TO_PACKAGE.get(judge_method)
+    if not pkg:
+        return None
+    try:
+        import importlib
+        constants = importlib.import_module(f"{pkg}.constants")
+    except ImportError:
+        return None
+    return getattr(constants, "JUDGE_MODEL", None)
+
+
+def _required_cluster_models_for_task(task: "TaskInfo") -> set:
+    """Return the set of cluster-hosted LLMModels this task needs.
+
+    Includes the target model (if cluster-hosted) AND the judge model implied
+    by judge_method (if cluster-hosted). Modes that don't query a model
+    (imaging) return empty.
+    """
+    from src.llm_utils import Provider
+    required: set = set()
+
+    # Target model
+    if task.task_type == TaskType.CLUSTER_MODEL:
+        m = _resolve_model(task.config.get("model", ""))
+        if m is not None:
+            required.add(m)
+
+    # Judge model (any mode that runs an evaluator)
+    if task.mode in ("evaluate", "defense"):
+        judge_method = (
+            task.config.get("judge_method")
+            or task.config.get("evaluation", {}).get("judge_method")
+        )
+        if judge_method:
+            judge = _judge_model_for_method(judge_method)
+            if judge is not None and judge.provider == Provider.NU_CLUSTER:
+                required.add(judge)
+
+    return required
+
+
 @dataclass
 class TaskInfo:
     """Task metadata for scheduling."""
@@ -174,6 +233,10 @@ class Experiment:
         self.num_cluster_jobs = min(num_cluster_jobs, MAX_SUBMIT_JOBS_PER_USER)
         self._task_counter = 0
         self._server_manager = None
+        # Per-model remaining-task counter; populated in _run_async() and
+        # decremented in _run_task_safe() so we can mid-run-teardown a model's
+        # vLLM servers as soon as the last task needing it completes.
+        self._model_remaining: dict = {}
 
     def add_task(self, task_def: dict[str, Any]) -> None:
         """Add a task definition (from experiment YAML) to the queue."""
@@ -197,13 +260,17 @@ class Experiment:
     # ==================== Cluster Server Management ====================
 
     def _find_cluster_models(self, tasks: list[TaskInfo]) -> set:
-        """Scan tasks for unique cluster models that need vLLM servers."""
-        cluster_models = set()
+        """Scan tasks for unique cluster models that need vLLM servers.
+
+        Covers BOTH the task's target model AND the judge model implied by
+        judge_method (each evaluator hard-binds its canonical judge via its
+        own constants.JUDGE_MODEL). Without judge inclusion, an `evaluate`
+        task with an API target + cluster-hosted judge silently hangs on
+        acquire_endpoint() because the judge's vLLM server was never started.
+        """
+        cluster_models: set = set()
         for task in tasks:
-            if task.task_type == TaskType.CLUSTER_MODEL:
-                model = _resolve_model(task.config.get("model", ""))
-                if model:
-                    cluster_models.add(model)
+            cluster_models |= _required_cluster_models_for_task(task)
         return cluster_models
 
     def _load_cluster_config(self, model):
@@ -219,81 +286,223 @@ class Experiment:
             "llm", section="cluster",
             match_field="model.model", match_value=model.model_id)
 
-    def _setup_cluster_servers(self, cluster_models: set) -> None:
+    def _count_existing_slurm_jobs(self) -> int:
+        """Count this user's existing SLURM jobs that count against the QOS budget.
+
+        Used as a pre-flight check before submitting vLLM server jobs, so we
+        don't over-submit when the user already has unrelated jobs queued
+        (HF downloads, prior experiments, etc.).
+
+        Excludes the orchestrator's own job (if running under SLURM, identified
+        via SLURM_JOB_ID) — that one is what we're sitting in.
+        """
+        import os
+        import subprocess
+
+        user = os.environ.get("USER")
+        if not user:
+            return 0
+        try:
+            result = subprocess.run(
+                ["squeue", "-u", user, "-h", "-o", "%i"],
+                capture_output=True, text=True, timeout=15)
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            logger.debug("squeue unavailable; skipping pre-flight budget check.")
+            return 0
+        if result.returncode != 0:
+            return 0
+        own_job = os.environ.get("SLURM_JOB_ID")
+        job_ids = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        if own_job:
+            job_ids = [j for j in job_ids if j != own_job]
+        return len(job_ids)
+
+    def _wait_for_servers_parallel(self, models: list) -> set:
+        """Wait for the first server of each model to come up, in parallel.
+
+        Returns the set of models whose first server failed to start —
+        the caller skips tasks for those models upfront so they don't hang
+        waiting for an endpoint that will never exist.
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        failed: set = set()
+        if not models:
+            return failed
+        with ThreadPoolExecutor(
+            max_workers=len(models), thread_name_prefix="server-wait"
+        ) as ex:
+            futures = {
+                ex.submit(self._server_manager.wait_for_first_server, m): m
+                for m in models
+            }
+            for fut in as_completed(futures):
+                model = futures[fut]
+                try:
+                    endpoint = fut.result()
+                    logger.info(f"  → {model.model_id}: first server ready at {endpoint}")
+                except RuntimeError as e:
+                    logger.error(f"  ✗ {model.model_id}: server failed — {e}")
+                    failed.add(model)
+        return failed
+
+    def _setup_cluster_servers(self, cluster_models: set) -> set:
         """Start vLLM servers for all cluster models.
-        
-        Enforces num_cluster_jobs budget: total vLLM server instances across
-        all models cannot exceed (num_cluster_jobs - 1), since the orchestrator
-        itself occupies one SLURM slot.
-        
-        Fault-tolerant: if a server fails, tasks using that model will fail
-        individually without blocking other tasks.
+
+        Returns the set of models whose first server failed to come up, so
+        the caller can skip tasks that depend on them rather than letting
+        them hang on acquire_endpoint() until timeout.
+
+        Budget enforcement is two-layered:
+          1. Pre-flight against MAX_SUBMIT_JOBS_PER_USER minus the user's
+             existing SLURM jobs (so we don't over-submit when there are
+             other jobs queued in the background).
+          2. Cap num_instances per model to never exceed each model's YAML
+             request — capping never *promotes* a model's count.
+
+        Port assignment uses a cumulative offset over a stable model order
+        (sorted by model_id) — prevents collisions with mixed num_instances
+        and keeps assignments reproducible across runs.
         """
         from src.llm_utils.cluster_server_manager import ClusterModelServerManager
         from src.llm_utils import LLMServiceFactory
 
         self._server_manager = ClusterModelServerManager()
 
-        # Load configs and enforce SLURM job budget
-        model_configs = {}
-        for model in cluster_models:
-            model_configs[model] = self._load_cluster_config(model)
+        # Stable order: sort by model_id so port assignment is reproducible
+        # and `enumerate(set)`'s non-determinism doesn't bite us.
+        cluster_models_sorted = sorted(cluster_models, key=lambda m: m.model_id)
+        model_configs = {m: self._load_cluster_config(m) for m in cluster_models_sorted}
 
-        available_slots = self.num_cluster_jobs - 1  # 1 reserved for orchestrator
-        total_requested = sum(
-            cfg.get("num_instances", 1) for cfg in model_configs.values()
-        )
-
-        if total_requested > available_slots:
+        # Pre-flight: account for any existing user SLURM jobs against QOS budget.
+        existing = self._count_existing_slurm_jobs()
+        if existing:
+            effective_budget = min(
+                self.num_cluster_jobs, MAX_SUBMIT_JOBS_PER_USER - existing
+            )
             logger.warning(
-                f"Requested {total_requested} vLLM server instances but only "
-                f"{available_slots} SLURM slots available (num_cluster_jobs="
-                f"{self.num_cluster_jobs}, 1 for orchestrator). "
-                f"Capping instances proportionally.")
+                f"Pre-flight: user has {existing} existing SLURM job(s). "
+                f"Effective budget = min(num_cluster_jobs={self.num_cluster_jobs}, "
+                f"MAX={MAX_SUBMIT_JOBS_PER_USER} - existing={existing}) "
+                f"= {effective_budget}")
+        else:
+            effective_budget = self.num_cluster_jobs
+
+        available_slots = effective_budget - 1  # 1 reserved for orchestrator
+        if available_slots < 1:
+            raise RuntimeError(
+                f"No SLURM slots available after pre-flight: existing={existing}, "
+                f"num_cluster_jobs={self.num_cluster_jobs}, "
+                f"effective_budget={effective_budget}. Aborting before submission.")
+
+        # Cap num_instances proportionally if over budget — but never promote.
+        requested = {m: cfg.get("num_instances", 1) for m, cfg in model_configs.items()}
+        total_requested = sum(requested.values())
+        if total_requested > available_slots:
             n_models = len(model_configs)
-            per_model = max(available_slots // n_models, 1)
-            for cfg in model_configs.values():
-                cfg["num_instances"] = per_model
-            logger.info(f"Adjusted to {per_model} instance(s) per model "
-                        f"({per_model * n_models} total)")
+            per_model_cap = max(available_slots // n_models, 1)
+            logger.warning(
+                f"Requested {total_requested} vLLM instances exceeds "
+                f"{available_slots} slots; capping each model to "
+                f"<= {per_model_cap} (never promotes above YAML request).")
+            for m, cfg in model_configs.items():
+                new = min(requested[m], per_model_cap)
+                if new != requested[m]:
+                    logger.info(f"  {m.model_id}: {requested[m]} -> {new} instance(s)")
+                cfg["num_instances"] = new
 
-        for i, model in enumerate(cluster_models):
-            config = model_configs[model]
-            num_instances = config.get("num_instances", 1)
-            config["port"] = config["port"] + i * num_instances
-            logger.info(f"Starting vLLM server(s) for {model.model_id} "
-                        f"({config['num_instances']} instance(s), port {config['port']})...")
-            self._server_manager.start_server(model, config)
+        # Cumulative port assignment over the sorted model list.
+        # Base port comes from the YAML default (typically 8000); each model's
+        # port range is contiguous and non-overlapping.
+        base_port = next(iter(model_configs.values()))["port"]
+        next_port = base_port
+        for m in cluster_models_sorted:
+            cfg = model_configs[m]
+            cfg["port"] = next_port
+            next_port += cfg["num_instances"]
+            logger.info(
+                f"Starting {cfg['num_instances']} vLLM server(s) for "
+                f"{m.model_id} on port(s) {cfg['port']}-"
+                f"{cfg['port'] + cfg['num_instances'] - 1}")
+            self._server_manager.start_server(m, cfg)
 
-        # Wait for at least one server per model to be ready
-        failed_models = []
-        for model in cluster_models:
-            try:
-                first_endpoint = self._server_manager.wait_for_first_server(model)
-                logger.info(f"  → {model.model_id}: first server ready at {first_endpoint}")
-            except RuntimeError as e:
-                logger.error(f"  ✗ {model.model_id}: server failed — {e}")
-                failed_models.append(model.model_id)
+        # Wait for the first server of each model in parallel (no serial blocking).
+        failed_models = self._wait_for_servers_parallel(cluster_models_sorted)
 
         if failed_models:
-            logger.warning(f"Failed servers: {failed_models}. "
-                           f"Tasks using these models will fail individually.")
+            failed_ids = [m.model_id for m in failed_models]
+            logger.warning(
+                f"Failed servers: {failed_ids}. Tasks depending on these "
+                f"models will be skipped upfront (not hang on acquire).")
 
         # Register with factory so tasks auto-get endpoints
         LLMServiceFactory.set_server_manager(self._server_manager)
+        return failed_models
 
     def _teardown_cluster_servers(self) -> None:
-        """Shut down all vLLM servers."""
+        """Shut down all vLLM servers and clear factory-side singleton state."""
         if self._server_manager:
             logger.info("Shutting down cluster vLLM servers...")
             self._server_manager.shutdown_all()
             self._server_manager = None
+        # Clear the factory's class-level singleton so subsequent Experiment
+        # runs in the same process don't see a stale (shut-down) manager.
+        from src.llm_utils import LLMServiceFactory
+        LLMServiceFactory.clear_server_manager()
+
+    def _maybe_release_model(self, model) -> None:
+        """Decrement remaining-task count for a model; scancel its servers when 0.
+
+        Lets the orchestrator free a heavy model's GPU allocation mid-experiment
+        as soon as the last task needing it finishes — instead of holding
+        4× A100s pinned for the entire experiment.
+        """
+        if not self._model_remaining or model not in self._model_remaining:
+            return
+        remaining = self._model_remaining[model] - 1
+        self._model_remaining[model] = remaining
+        if remaining <= 0 and self._server_manager is not None:
+            logger.info(
+                f"All tasks for {model.model_id} complete; "
+                f"shutting down its vLLM servers to free GPUs.")
+            try:
+                self._server_manager.shutdown_model(model)
+            except Exception as e:
+                logger.warning(f"shutdown_model({model.model_id}) failed: {e}")
 
     # ==================== Async Execution ====================
 
-    async def _run_task_safe(self, task: TaskInfo, semaphore: asyncio.Semaphore,
-                             queue_name: str, total: int) -> dict[str, Any]:
-        """Execute a single task with semaphore-based concurrency control."""
+    async def _run_task_safe(
+        self, task: TaskInfo, semaphore: asyncio.Semaphore,
+        queue_name: str, total: int,
+        failed_models: Optional[set] = None,
+    ) -> dict[str, Any]:
+        """Execute a single task with semaphore-based concurrency control.
+
+        Skips the task upfront (without acquiring a semaphore slot) if any of
+        the cluster models it needs is in `failed_models` — there's no point
+        running the task only for it to hang on acquire_endpoint().
+        """
+        # Resolve cluster-model dependencies once so we can both pre-skip on
+        # setup failure and decrement remaining counts on completion.
+        required_cluster = _required_cluster_models_for_task(task)
+
+        if failed_models and (required_cluster & failed_models):
+            blocked = sorted(m.model_id for m in (required_cluster & failed_models))
+            err = (
+                f"Skipped — depends on cluster model(s) whose server failed "
+                f"during setup: {blocked}")
+            logger.error(f"[{queue_name}] {err}: {task.name}")
+            # Still decrement so mid-run teardown doesn't wait forever.
+            for m in required_cluster:
+                self._maybe_release_model(m)
+            return {
+                "task_name": task.name,
+                "original_index": task.index,
+                "status": "failed",
+                "error": err,
+                "elapsed_seconds": 0.0,
+            }
+
         async with semaphore:
             logger.info(f"\n{'~'*70}")
             logger.info(f"[{queue_name}] Executing Task {task.index+1}/{total}: {task.name}")
@@ -328,6 +537,11 @@ class Experiment:
                     "traceback": tb_short,
                     "elapsed_seconds": round(elapsed, 1),
                 }
+            finally:
+                # Mid-run teardown: decrement remaining count and shut down
+                # this model's servers if it was the last task needing them.
+                for m in required_cluster:
+                    self._maybe_release_model(m)
 
     async def _run_async(self) -> list[dict[str, Any]]:
         """
@@ -346,23 +560,36 @@ class Experiment:
         self.tasks.clear()
         total = len(tasks_to_run)
 
+        # Build per-model remaining-task counts (covers target AND judge).
+        # Used by _maybe_release_model() for mid-run server teardown.
+        self._model_remaining = {}
+        for task in tasks_to_run:
+            for m in _required_cluster_models_for_task(task):
+                self._model_remaining[m] = self._model_remaining.get(m, 0) + 1
+
+        failed_models: set = set()
+
         try:
             # Start vLLM servers for cluster models if needed
             cluster_models = self._find_cluster_models(tasks_to_run)
             if cluster_models:
-                model_names = [m.model_id for m in cluster_models]
+                model_names = sorted(m.model_id for m in cluster_models)
                 logger.info(f"Cluster models detected: {model_names}")
-                self._setup_cluster_servers(cluster_models)
+                failed_models = self._setup_cluster_servers(cluster_models)
 
             logger.info(f"\n{'='*70}")
             logger.info(f"EXPERIMENT: {total} tasks (thread pool: {self.num_main_job_threads}, "
                         f"cluster jobs: {self.num_cluster_jobs})")
             logger.info(f"{'='*70}\n")
 
-            # Thread pool: tasks acquire a slot in order, run, release
+            # Thread pool: tasks acquire a slot in order, run, release.
+            # failed_models pre-skips tasks whose cluster dependency never came up.
             sem = asyncio.Semaphore(self.num_main_job_threads)
             coroutines = [
-                self._run_task_safe(task, sem, task.mode.upper(), total)
+                self._run_task_safe(
+                    task, sem, task.mode.upper(), total,
+                    failed_models=failed_models,
+                )
                 for task in tasks_to_run
             ]
 
@@ -371,6 +598,7 @@ class Experiment:
         finally:
             # Always shut down cluster servers, even on error
             self._teardown_cluster_servers()
+            self._model_remaining = {}
 
         self._print_summary()
         return self.results
