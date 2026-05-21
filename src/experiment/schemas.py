@@ -43,6 +43,9 @@ class EvaluationRow(BaseModel):
     prompt_stage: str     # text_original | text_encoded | image_original | image_encoded
     response: str         # model response
     asr: Optional[bool] = None  # ASR judgment (null if judging not yet run)
+    judge_output: Optional[str] = None
+    judge_reasoning: Optional[str] = None
+    judge_raw_response: Optional[str] = None
 
 
 class Judgment(BaseModel):
@@ -106,13 +109,6 @@ class TargetModelConfig(BaseModel):
     stream: bool
 
 
-class JudgeLLMConfig(BaseModel):
-    """Resolved parameters for the judge model."""
-    model: str
-    max_tokens: int
-    temperature: float
-
-
 class EvaluateResult(BaseModel):
     """Complete record of an evaluate task run — written to results.json.
 
@@ -130,7 +126,6 @@ class EvaluateResult(BaseModel):
     system_message: Optional[str] = None
     image_instruction: str
     judge_method: str
-    judge_llm_config: JudgeLLMConfig
     count: int
     count_per_stage: dict[str, int]
     asr: Optional[dict[str, float]] = None
@@ -173,7 +168,6 @@ class DefenseResult(BaseModel):
     source_dir: str
     system_message: Optional[str] = None
     judge_method: str
-    judge_llm_config: JudgeLLMConfig
     count: int
     asr: Optional[float] = None
     refusal_rate: Optional[float] = None

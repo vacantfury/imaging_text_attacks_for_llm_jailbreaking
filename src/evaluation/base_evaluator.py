@@ -7,20 +7,25 @@ from src.llm_utils import LLMModel
 class BaseEvaluator(ABC):
     """
     Abstract base class for evaluators.
-    
-    Evaluators receive pre-generated target model responses and classify them.
-    They do NOT generate responses themselves — that is the Task's responsibility.
+
+    Concrete evaluators (HarmBench, JailbreakBench, ORBench, JBB-Refusal) hard-bind
+    their canonical judge model in their own `constants.py` and do NOT accept a
+    `model` argument from the caller. This prevents methodologically incorrect
+    judge substitutions (e.g. using a generic GPT model as the HarmBench judge).
+
+    The base accepts a `model` parameter only for the abstract API; subclasses
+    ignore it and assign their own model in `__init__`.
     """
-    
+
     def __init__(self, model: Optional[LLMModel] = None, **kwargs):
         self.model = model
         self.kwargs = kwargs
 
     @abstractmethod
     def evaluate(
-        self, 
-        prompts: List[Dict[str, Any]], 
-        processed_prompts: List[str], 
+        self,
+        prompts: List[Dict[str, Any]],
+        processed_prompts: List[str],
         responses: Dict[str, str],
         baseline_responses: Optional[Dict[str, str]] = None,
         verbose: bool = False,
@@ -37,8 +42,7 @@ class BaseEvaluator(ABC):
 
         Returns:
             Tuple of:
-                - detailed_df: DataFrame with per-prompt results (id, original_prompt, 
-                  processed_prompt, response, judge_output, is_jailbroken, label, category)
-                - statistics: Dict with aggregate metrics (attack_success_rate, success_count, total_evaluated)
+                - detailed_df: DataFrame with per-prompt results
+                - statistics: Dict with aggregate metrics
         """
         pass

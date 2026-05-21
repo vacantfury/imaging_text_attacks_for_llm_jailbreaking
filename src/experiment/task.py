@@ -37,7 +37,7 @@ from .schemas import (
     RawPrompt, Prompt, EvaluationRow,
     TextEncodeResult, ImagingResult,
     EvaluateResult, DefenseTransformResult, DefenseResult,
-    TargetModelConfig, JudgeLLMConfig,
+    TargetModelConfig,
 )
 
 logger = get_logger(__name__)
@@ -433,15 +433,18 @@ def _run_asr_judging(
     per-row boolean judgment so that raw_results.jsonl contains per-row
     judge verdicts.
     """
+    def _column_by_id(detailed_df, column: str) -> dict[str, str]:
+        if column not in detailed_df.columns:
+            return {}
+        return dict(zip(detailed_df["id"].astype(str), detailed_df[column].astype(str)))
+
     metrics_per_stage: dict[str, Any] = {}
     try:
         eval_config = _load_conf("evaluation")
         judge_method = config.get("judge_method",
                                   eval_config.get("judge_method", "harmbench"))
-        judge_llm_config = eval_config.get("judge_llm_config", {}).copy()
-        judge_model = judge_llm_config.pop("model", "gpt-5-nano")
-        evaluator = EvaluatorFactory.create(
-            method=judge_method, model=judge_model, **judge_llm_config)
+        # Evaluators hard-bind their own canonical judge model via constants.py.
+        evaluator = EvaluatorFactory.create(method=judge_method)
 
         if judge_method in ("refusal", "orbench"):
             stat_key = "refusal_rate"
@@ -475,13 +478,25 @@ def _run_asr_judging(
             if detailed_df is not None and "is_jailbroken" in detailed_df.columns:
                 verdict_by_id = dict(
                     zip(detailed_df["id"].astype(str), detailed_df["is_jailbroken"]))
+                judge_output_by_id = _column_by_id(detailed_df, "judge_output")
+                judge_reasoning_by_id = _column_by_id(detailed_df, "judge_reasoning")
+                judge_raw_by_id = _column_by_id(detailed_df, "judge_raw_response")
                 for row in stage_rows:
                     row.asr = verdict_by_id.get(row.id)
+                    row.judge_output = judge_output_by_id.get(row.id)
+                    row.judge_reasoning = judge_reasoning_by_id.get(row.id)
+                    row.judge_raw_response = judge_raw_by_id.get(row.id)
             elif detailed_df is not None and "is_refused" in detailed_df.columns:
                 verdict_by_id = dict(
                     zip(detailed_df["id"].astype(str), detailed_df["is_refused"]))
+                judge_output_by_id = _column_by_id(detailed_df, "judge_output")
+                judge_reasoning_by_id = _column_by_id(detailed_df, "judge_reasoning")
+                judge_raw_by_id = _column_by_id(detailed_df, "judge_raw_response")
                 for row in stage_rows:
                     row.asr = verdict_by_id.get(row.id)
+                    row.judge_output = judge_output_by_id.get(row.id)
+                    row.judge_reasoning = judge_reasoning_by_id.get(row.id)
+                    row.judge_raw_response = judge_raw_by_id.get(row.id)
 
             metrics_per_stage[stage] = stats.get(stat_key, 0.0)
             logger.info(f"  {metric_label} for {stage}: {metrics_per_stage[stage]:.2f}%")
@@ -613,7 +628,6 @@ def _run_evaluate(config: dict) -> dict[str, Any]:
     elapsed = round(time.time() - t0, 2)
 
     # Build structured result with all resolved parameters
-    judge_llm_raw = eval_config.get("judge_llm_config", {})
     prompt_range = config.get("prompt_range")
     result = EvaluateResult(
         target_model=model_str,
@@ -626,7 +640,6 @@ def _run_evaluate(config: dict) -> dict[str, Any]:
         system_message=system_message,
         image_instruction=image_instruction,
         judge_method=judge_method,
-        judge_llm_config=JudgeLLMConfig(**judge_llm_raw),
         count=len(all_rows),
         count_per_stage=stage_counts,
         usage=service.get_usage(),
@@ -840,12 +853,8 @@ def _run_defense(config: dict) -> dict[str, Any]:
 
     metric_value = None
     try:
-        judge_llm_config = eval_config.get("judge_llm_config", {}).copy()
-        judge_model = judge_llm_config.pop("model", "gpt-5-nano")
-
         from src.evaluation.evaluator_factory import EvaluatorFactory
-        evaluator = EvaluatorFactory.create(
-            method=judge_method, model=judge_model, **judge_llm_config)
+        evaluator = EvaluatorFactory.create(method=judge_method)
 
         original_lookup = {p.id: p.original for p in prompts}
         judge_prompts = [{"id": r.id, "prompt": original_lookup[r.id]} for r in all_rows]
@@ -885,7 +894,6 @@ def _run_defense(config: dict) -> dict[str, Any]:
     logger.info(f"Defense complete: {len(all_rows)} prompts, {elapsed}s")
 
     # Build result
-    judge_llm_raw = eval_config.get("judge_llm_config", {})
     prompt_range = config.get("prompt_range")
     result = DefenseResult(
         defense_method=defense_method,
@@ -897,7 +905,6 @@ def _run_defense(config: dict) -> dict[str, Any]:
         source_dir=source_dir,
         system_message=system_message,
         judge_method=judge_method,
-        judge_llm_config=JudgeLLMConfig(**judge_llm_raw),
         count=len(all_rows),
         usage=service.get_usage(),
         defense_usage=defender.get_usage(),

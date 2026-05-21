@@ -76,18 +76,13 @@ class LLMConf:
 
 
 @dataclass
-class JudgeLLMConfig:
-    """Judge model parameters. Maps to conf/evaluation/*/judge_llm_config:"""
-    model: str = MISSING
-    max_tokens: int = MISSING
-    temperature: float = MISSING
-
-
-@dataclass
 class EvaluationConf:
-    """Top-level evaluation config. Maps to conf/evaluation/*.yaml."""
+    """Top-level evaluation config. Maps to conf/evaluation/*.yaml.
+
+    Note: judge model, temperature, and max_tokens are no longer YAML-configurable —
+    each evaluator hard-binds its canonical judge via its own constants.py.
+    """
     judge_method: str = MISSING
-    judge_llm_config: JudgeLLMConfig = field(default_factory=JudgeLLMConfig)
 
 
 # ====================================================================

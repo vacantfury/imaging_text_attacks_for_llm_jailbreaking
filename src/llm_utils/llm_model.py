@@ -92,6 +92,10 @@ class LLMModel(Enum):
     PIXTRAL_12B = ("mistralai/Pixtral-12B-2409", Provider.NU_CLUSTER, 0.0, 0.0)
     LLAVA_7B = ("llava-hf/llava-1.5-7b-hf", Provider.NU_CLUSTER, 0.0, 0.0)
     QWEN2_5_VL_7B = ("Qwen/Qwen2.5-VL-7B-Instruct", Provider.NU_CLUSTER, 0.0, 0.0)
+
+    # Judge models for canonical benchmark evaluators (NU Cluster vLLM)
+    HARMBENCH_LLAMA_2_13B_CLS = ("cais/HarmBench-Llama-2-13b-cls", Provider.NU_CLUSTER, 0.0, 0.0)
+    LLAMA_3_3_70B_INSTRUCT = ("meta-llama/Llama-3.3-70B-Instruct", Provider.NU_CLUSTER, 0.0, 0.0)
     
     @property
     def model_id(self) -> str:

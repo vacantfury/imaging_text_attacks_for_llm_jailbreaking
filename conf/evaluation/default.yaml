@@ -1,9 +1,8 @@
-# Evaluation defaults for Encoding × Modality project
-# Dual-judge: GPT-5-nano (HarmBench protocol) + Llama Guard 3
+# Evaluation defaults.
+#
+# Judge model + temperature + max_tokens are NOT configurable here — each
+# evaluator hard-binds its canonical judge via src/evaluation/<bench>/constants.py
+# (HarmBench → cais/HarmBench-Llama-2-13b-cls;
+#  JBB / JBB-Refusal / OR-Bench → meta-llama/Llama-3.3-70B-Instruct).
 
 judge_method: harmbench          # "harmbench", "jailbreakbench", "refusal", or "orbench"
-
-judge_llm_config:
-  model: gpt-5-nano
-  max_tokens: 16384
-  temperature: 0.0
