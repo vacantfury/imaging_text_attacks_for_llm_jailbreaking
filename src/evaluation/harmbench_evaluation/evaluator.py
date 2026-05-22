@@ -53,6 +53,12 @@ class HarmBenchEvaluator(BaseEvaluator):
     def _build_prompt(self, prompt_data: Dict[str, Any], generation: str) -> str:
         """Use prompt_contextual when prompt_data carries a context string, else prompt."""
         behavior = prompt_data.get('prompt') or prompt_data.get('text') or ""
+        # Truncate the model's response to fit the classifier's 2048-token
+        # context. Long responses (encoded-attack experiments routinely
+        # produce 50k+ chars) blow vLLM's input limit and 400 every request.
+        # See JUDGE_MAX_GENERATION_CHARS docstring in constants.py.
+        if len(generation) > constants.JUDGE_MAX_GENERATION_CHARS:
+            generation = generation[:constants.JUDGE_MAX_GENERATION_CHARS]
         context = prompt_data.get('context') or prompt_data.get('ContextString')
         if context:
             return constants.LLAMA2_CLS_PROMPT['prompt_contextual'].format(
@@ -78,11 +84,19 @@ class HarmBenchEvaluator(BaseEvaluator):
         prompt_ids = [str(p.get('id', i)) for i, p in enumerate(prompts)]
 
         classification_inputs = []
+        truncated_count = 0
         for i, prompt_data in enumerate(prompts):
             pid = prompt_ids[i]
             generation = responses.get(pid, "")
+            if len(generation) > constants.JUDGE_MAX_GENERATION_CHARS:
+                truncated_count += 1
             cls_prompt = self._build_prompt(prompt_data, generation)
             classification_inputs.append((pid, cls_prompt))
+        if truncated_count:
+            logger.info(
+                f"Truncated generation for {truncated_count}/{len(prompts)} "
+                f"prompts to {constants.JUDGE_MAX_GENERATION_CHARS} chars "
+                f"(Llama-2 classifier's 2048-token context limit)")
 
         conversations = [(pid, [(text, None)]) for pid, text in classification_inputs]
         judge_results = self.service.batch_chat(
