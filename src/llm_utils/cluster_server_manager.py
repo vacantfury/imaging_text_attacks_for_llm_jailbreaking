@@ -195,7 +195,11 @@ class ClusterModelServerManager:
         if timeout is None:
             timeout = config.get("server_start_timeout", 3600)
         deadline = time.time() + timeout
+        start = time.time()
         logger.info(f"Waiting for first server for {model.model_id} (timeout: {timeout}s)...")
+
+        last_progress_log = start
+        progress_interval = 60.0  # emit a "still waiting" status every 60s
 
         while time.time() < deadline:
             with self._pool_lock:
@@ -217,6 +221,24 @@ class ClusterModelServerManager:
                         f"{model.model_id} failed during discovery. "
                         f"Check logs/vllm_{model.name.lower()}_*.err for "
                         f"startup errors (config mismatch, OOM, etc.).")
+
+            # Periodic progress log so an extended wait isn't silent (the
+            # monitor only logs successes/failures; PENDING + slow-server
+            # would otherwise produce no orchestrator-side output for many
+            # minutes).
+            now = time.time()
+            if now - last_progress_log >= progress_interval:
+                with self._pool_lock:
+                    pool_size = len(self._pool.get(model, []))
+                jobs_now = self._jobs.get(model, [])
+                discovered = sum(1 for j in jobs_now if j["discovered"])
+                elapsed = int(now - start)
+                logger.info(
+                    f"Still waiting for {model.model_id}: elapsed={elapsed}s, "
+                    f"jobs_submitted={len(jobs_now)}, jobs_discovered="
+                    f"{discovered}, pool_size={pool_size}. "
+                    f"(See per-job monitor lines above for what's blocking.)")
+                last_progress_log = now
 
             remaining = deadline - time.time()
             if remaining <= 0:
@@ -357,14 +379,44 @@ class ClusterModelServerManager:
                         continue
 
                     if state == "PENDING":
+                        # Log first observation only, then quietly poll.
+                        if not job_info.get("_logged_pending"):
+                            logger.info(
+                                f"Server{instance_suffix} (job {job_id}) "
+                                f"still PENDING in SLURM queue; will keep polling.")
+                            job_info["_logged_pending"] = True
                         continue
 
                     node = self._resolve_job_node(job_id)
                     if not node:
+                        # Log first N occurrences so we know SLURM isn't surfacing
+                        # the node assignment yet — silent-forever before this fix.
+                        attempts = job_info.get("_node_resolve_attempts", 0) + 1
+                        job_info["_node_resolve_attempts"] = attempts
+                        if attempts <= 3 or attempts % 30 == 0:
+                            logger.info(
+                                f"Server{instance_suffix} (job {job_id}) state="
+                                f"{state} but scontrol hasn't returned a NodeList/"
+                                f"NodeAddr yet (attempt {attempts}). Retrying.")
                         continue
 
                     endpoint = f"http://{node}:{port}/v1"
                     healthy, err = self._health_check(endpoint)
+
+                    if not healthy:
+                        # The previously-silent failure mode. Could be:
+                        #   - vLLM still loading weights / compiling graphs
+                        #   - inter-partition network unreachable (firewall, etc.)
+                        #   - wrong NodeAddr resolved
+                        #   - vLLM crashed but SLURM hasn't noticed
+                        # Log first few + every Nth so user sees something.
+                        attempts = job_info.get("_health_check_attempts", 0) + 1
+                        job_info["_health_check_attempts"] = attempts
+                        if attempts <= 3 or attempts % 12 == 0:  # first 3, then ~every 2min
+                            logger.info(
+                                f"Server{instance_suffix} (job {job_id}) at "
+                                f"{endpoint} not yet healthy "
+                                f"(attempt {attempts}, err={err}). Retrying.")
 
                     if healthy:
                         with self._pool_lock:
