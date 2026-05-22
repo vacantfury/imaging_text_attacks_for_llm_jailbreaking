@@ -153,6 +153,7 @@ class EvaluateResult(BaseModel):
     system_message: Optional[str] = None
     image_instruction: str
     judge_method: str
+    judge_model: Optional[str] = None   # actual LLM model used as judge (e.g., "gpt-5-nano")
     count: int
     count_per_stage: dict[str, int]
     asr: Optional[dict[str, float]] = None
@@ -195,6 +196,7 @@ class DefenseResult(BaseModel):
     source_dir: str
     system_message: Optional[str] = None
     judge_method: str
+    judge_model: Optional[str] = None
     count: int
     asr: Optional[float] = None
     refusal_rate: Optional[float] = None
@@ -424,3 +426,36 @@ class LLMConfig(BaseModel):
                 f"Available templates: "
                 f"{sorted(p.stem for p in templates_dir.glob('*.jinja'))}")
         return self
+
+
+# ====================================================================
+# Evaluation config — judge LLM settings shared by every evaluator.
+# Maps to conf/evaluation/*.yaml.
+# ====================================================================
+
+
+class JudgeLLMConfig(BaseModel):
+    """Judge LLM service config — model + sampling params passed to every
+    evaluator's underlying LLM service via LLMServiceFactory.create.
+
+    Defaults match the historical pre-canonical-refactor configuration so
+    re-eval reproduces the same numbers as old results when given the same
+    target-model responses.
+    """
+    model: str = "gpt-5-nano"
+    max_tokens: int = 16384
+    temperature: float = 0.0
+
+
+class EvaluationConfig(BaseModel):
+    """Top-level evaluation config. Maps to conf/evaluation/*.yaml.
+
+    Evaluator class(es) for each benchmark are NOT configurable here —
+    they're derived from the benchmark slug via
+    EvaluatorFactory.create_from_benchmark. This file controls the JUDGE
+    MODEL the evaluator(s) use.
+    """
+    judge_llm_config: JudgeLLMConfig = Field(default_factory=JudgeLLMConfig)
+    # Optional task-level evaluator override. When set, bypasses
+    # benchmark-derived dispatch (rare; ad-hoc sanity checks only).
+    judge_method: Optional[str] = None

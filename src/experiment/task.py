@@ -408,24 +408,36 @@ def _build_conversations_for_stage(
 
 
 def _resolve_evaluators(judge_method_override: Optional[str], benchmark: str) -> list:
-    """Resolve the evaluator list for an evaluate/defense task.
+    """Resolve the evaluator list + configure each one's judge LLM.
 
-    Canonical path (default): the dataset (benchmark) determines which
-    judge(s) run. jailbreakbench → [harmful, refusal]; everything else
-    → single canonical evaluator. Stable order: harmful first, refusal
-    second when both apply, so column population is consistent.
+    Reads `judge_llm_config` from conf/evaluation/default.yaml — model,
+    max_tokens, temperature — and passes them to every evaluator
+    constructor. Same judge model for all evaluators in a run.
 
-    Emergency override: if `judge_method_override` is set (from the task
-    YAML), only that single evaluator runs — useful for ad-hoc sanity
-    checks (e.g. running HarmBench classifier on JBB data) but bypasses
-    the canonical mapping.
+    Canonical path (default): the benchmark slug picks the evaluator
+    class(es). jailbreakbench → [harmful, refusal]; everything else →
+    single evaluator.
+
+    Emergency override: `judge_method_override` (set in task YAML)
+    bypasses the canonical benchmark→evaluator mapping and runs only
+    the explicitly-named evaluator. Rare; ad-hoc sanity checks only.
     """
+    from src.llm_utils import LLMModel
+
+    eval_config = _load_conf("evaluation")
+    judge_cfg = eval_config.get("judge_llm_config", {})
+    judge_kwargs = dict(judge_cfg)
+    judge_model_str = judge_kwargs.pop("model", "gpt-5-nano")
+    judge_model = LLMModel.from_string(judge_model_str)
+
     if judge_method_override:
         logger.warning(
             f"judge_method override active: '{judge_method_override}' "
             f"(bypassing canonical benchmark→evaluator mapping for {benchmark!r})")
-        return [EvaluatorFactory.create(method=judge_method_override)]
-    return EvaluatorFactory.create_from_benchmark(benchmark)
+        return [EvaluatorFactory.create(
+            method=judge_method_override, model=judge_model, **judge_kwargs)]
+    return EvaluatorFactory.create_from_benchmark(
+        benchmark, model=judge_model, **judge_kwargs)
 
 
 def _is_refusal_evaluator(evaluator) -> bool:
@@ -629,6 +641,9 @@ def _run_evaluate(task) -> dict[str, Any]:
     # Provenance: explicit override if set, otherwise the benchmark slug
     # (which uniquely identifies the canonical evaluator set).
     judge_method_provenance = task.judge_method or benchmark
+    # Actual judge LLM used (from conf/evaluation/default.yaml::judge_llm_config.model)
+    judge_model_used = _load_conf("evaluation").get(
+        "judge_llm_config", {}).get("model")
 
     # Write raw_results.jsonl
     results_path = out_dir / "raw_results.jsonl"
@@ -650,6 +665,7 @@ def _run_evaluate(task) -> dict[str, Any]:
         system_message=task.system_message,
         image_instruction=task.image_instruction,
         judge_method=judge_method_provenance,
+        judge_model=judge_model_used,
         count=len(all_rows),
         count_per_stage=stage_counts,
         asr=asr_per_stage,
@@ -824,6 +840,8 @@ def _run_defense(task) -> dict[str, Any]:
     asr_value = asr_per_stage.get(defense_stage)
     refusal_value = refusal_per_stage.get(defense_stage)
     judge_method_provenance = task.judge_method or benchmark
+    judge_model_used = _load_conf("evaluation").get(
+        "judge_llm_config", {}).get("model")
 
     results_path = out_dir / "raw_results.jsonl"
     with open(results_path, "w") as f:
@@ -843,6 +861,7 @@ def _run_defense(task) -> dict[str, Any]:
         source_dir=task.source_dir,
         system_message=task.system_message,
         judge_method=judge_method_provenance,
+        judge_model=judge_model_used,
         count=len(all_rows),
         asr=asr_value,
         refusal_rate=refusal_value,

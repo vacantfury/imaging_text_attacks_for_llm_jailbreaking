@@ -120,33 +120,36 @@ def _resolve_model(model_str: str) -> Optional[Any]:
         return None
 
 
-# Map judge_method → evaluator package. We read constants.JUDGE_MODEL from each
-# package directly so the orchestrator stays in sync with whatever the
-# evaluator actually uses (canonical hard-binding lives there).
-_JUDGE_METHOD_TO_PACKAGE: dict[str, str] = {
-    "harmbench": "src.evaluation.harmbench_evaluation",
-    "jailbreakbench": "src.evaluation.jailbreakbench_evaluation",
-    "refusal": "src.evaluation.jailbreakbench_refusal_evaluation",
-    "orbench": "src.evaluation.orbench_evaluation",
-}
+# Pre-canonical-refactor design: ALL evaluators share one judge LLM config,
+# read from conf/evaluation/default.yaml::judge_llm_config.model. So
+# "judge_method" → judge model is constant across methods at any point in
+# time — they all use whatever's in the YAML.
+_KNOWN_JUDGE_METHODS = {"harmbench", "jailbreakbench", "refusal", "orbench"}
 
 
 def _judge_model_for_method(judge_method: str) -> Optional[Any]:
-    """Resolve a judge_method string to the LLMModel its evaluator hard-binds.
+    """Resolve a judge_method slug to the LLMModel currently configured to
+    judge it (from conf/evaluation/default.yaml::judge_llm_config.model).
 
-    Returns None if the method is unknown or its constants module can't be
-    imported. Used by the orchestrator to pre-start vLLM servers for cluster
-    judges, so evaluator calls don't hang on acquire_endpoint().
+    Returns None for unknown methods or if the YAML can't be loaded. Used
+    by the orchestrator to pre-discover cluster-hosted judges so vLLM
+    servers can be started before tasks run. When the configured judge is
+    an API model (e.g. gpt-5-nano), discovery correctly returns a
+    Provider.OPENAI model → orchestrator skips cluster setup for judges.
     """
-    pkg = _JUDGE_METHOD_TO_PACKAGE.get(judge_method)
-    if not pkg:
+    if judge_method not in _KNOWN_JUDGE_METHODS:
         return None
     try:
-        import importlib
-        constants = importlib.import_module(f"{pkg}.constants")
-    except ImportError:
+        from .config import load_conf
+        from src.llm_utils import LLMModel
+        eval_config = load_conf("evaluation")
+        judge_cfg = eval_config.get("judge_llm_config", {})
+        model_str = judge_cfg.get("model")
+        if not model_str:
+            return None
+        return LLMModel.from_string(model_str)
+    except Exception:
         return None
-    return getattr(constants, "JUDGE_MODEL", None)
 
 
 def _required_cluster_models_for_task(info: "TaskInfo") -> set:

@@ -1,13 +1,11 @@
 """
 Constants for evaluation module.
-"""
-from src.llm_utils import LLMModel
 
-# =============================================================================
-# Default Evaluation Model
-# =============================================================================
-DEFAULT_EVALUATION_MODEL = LLMModel.GPT_4O  # Default model for evaluation (HarmBench Standard)
-# Note: Temperature is handled by llm_utils defaults (DEFAULT_TEMPERATURE = 0.0)
+NOTE: The default judge model lives in conf/evaluation/default.yaml
+(judge_llm_config.model). Each evaluator accepts an explicit model in its
+constructor — caller (factory / re_evaluate_all) reads the YAML and passes
+it through. No DEFAULT_EVALUATION_MODEL constant here.
+"""
 
 # =============================================================================
 # Prompt Data Field Names
