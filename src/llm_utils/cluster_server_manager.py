@@ -601,7 +601,12 @@ class ClusterModelServerManager:
             if result.returncode != 0:
                 return None
 
-            match = re.search(r"NodeList=(\S+)", result.stdout)
+            # `\b` so "NodeList=" doesn't match as a suffix of "ReqNodeList="
+            # or "ExcNodeList=" (which scontrol also emits on every job, e.g.
+            # "ReqNodeList=(null) ExcNodeList=c[2204-2207],d[...] NodeList=d4055").
+            # Without the boundary, re.search hits ReqNodeList first and
+            # captures "(null)", short-circuiting node resolution forever.
+            match = re.search(r"\bNodeList=(\S+)", result.stdout)
             if not match:
                 return None
             node = match.group(1)
@@ -615,7 +620,7 @@ class ClusterModelServerManager:
             if result.returncode != 0:
                 return node
 
-            addr_match = re.search(r"NodeAddr=(\S+)", result.stdout)
+            addr_match = re.search(r"\bNodeAddr=(\S+)", result.stdout)
             if addr_match:
                 addr = addr_match.group(1)
                 if addr and addr != node:
