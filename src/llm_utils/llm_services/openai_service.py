@@ -9,12 +9,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from openai import AsyncOpenAI
 
 from ..base_llm_service import BaseLLMService
-from ..llm_model import LLMModel
-from ..constants import (
-    OPENAI_API_KEY,
-    MODELS_USING_MAX_COMPLETION_TOKENS,
-    MODELS_WITHOUT_TEMPERATURE_SUPPORT,
-)
+from ..llm_model import LLMModel, ModelQuirk
+from ..constants import OPENAI_API_KEY
 from ..media_utils import encode_image_to_b64
 from ...utils.logger import get_logger
 
@@ -52,10 +48,10 @@ class OpenAIService(BaseLLMService):
     ) -> Dict[str, Any]:
         params: Dict[str, Any] = {"model": self.model.model_id, "messages": messages}
 
-        if self.model not in MODELS_WITHOUT_TEMPERATURE_SUPPORT:
+        if not self.model.has_quirk(ModelQuirk.NO_CUSTOM_TEMPERATURE):
             params["temperature"] = temperature
 
-        if self.model in MODELS_USING_MAX_COMPLETION_TOKENS:
+        if self.model.has_quirk(ModelQuirk.USES_MAX_COMPLETION_TOKENS):
             params["max_completion_tokens"] = max_tokens
         else:
             params["max_tokens"] = max_tokens

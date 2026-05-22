@@ -31,87 +31,19 @@ DEFAULT_SYSTEM_MESSAGE: Final[str] = "You are a helpful assistant."
 
 
 # =============================================================================
-# OpenAI Model-Specific Parameters
+# Per-model facts have moved to llm_model.py
 # =============================================================================
-# OpenAI changed parameter naming in newer models for clarity:
+# What used to be two scattered sets here:
 #
-# max_tokens (older models):
-#   - Used by: GPT-3.5-Turbo, GPT-4, GPT-4-Turbo, GPT-4o
-#   - Limits the number of tokens in the completion (response only)
-#   - Despite the generic name, it doesn't include prompt tokens
+#   MODELS_USING_MAX_COMPLETION_TOKENS  → ModelQuirk.USES_MAX_COMPLETION_TOKENS
+#   MODELS_WITHOUT_TEMPERATURE_SUPPORT  → ModelQuirk.NO_CUSTOM_TEMPERATURE
 #
-# max_completion_tokens (newer models):
-#   - Used by: GPT-4.1+, GPT-5, O-series
-#   - Same functionality but more explicit naming
-#   - Makes it clearer it's just the completion length, not total tokens
+# Both are now per-model `quirks` on each `ModelSpec`. Check via
+# `model.has_quirk(ModelQuirk.X)`. See llm_model.py for the registry.
 #
-# Functionally equivalent, just different parameter names for API compatibility.
-
-# Models that use max_completion_tokens (newer models)
-# All other OpenAI models use max_tokens (older models)
-
-# Import at runtime to avoid circular dependency issues
-from .llm_model import LLMModel  # noqa: E402
-
-MODELS_USING_MAX_COMPLETION_TOKENS: Final[set[LLMModel]] = {
-    # GPT-4.1 series
-    LLMModel.GPT_4_1,
-    LLMModel.GPT_4_1_MINI,
-    LLMModel.GPT_4_1_NANO,
-
-    # GPT-5 series
-    LLMModel.GPT_5,
-    LLMModel.GPT_5_MINI,
-    LLMModel.GPT_5_NANO,
-    LLMModel.GPT_5_PRO,
-    LLMModel.GPT_5_1,
-    LLMModel.GPT_5_2,
-    LLMModel.GPT_5_2_PRO,
-    LLMModel.GPT_5_4,
-    LLMModel.GPT_5_4_MINI,
-    LLMModel.GPT_5_4_NANO,
-    LLMModel.GPT_5_4_PRO,
-    LLMModel.GPT_5_5,
-    LLMModel.GPT_5_5_PRO,
-
-    # O-series models
-    LLMModel.O1,
-    LLMModel.O3,
-    LLMModel.O3_MINI,
-    LLMModel.O4_MINI,
-}
-
-# Note: GPT-3.5-Turbo, GPT-4, GPT-4-Turbo, and GPT-4o use 'max_tokens'
-
-
-# =============================================================================
-# OpenAI Temperature Support
-# =============================================================================
-# Some newer models don't support custom temperature values
-# They only accept the default (temperature=1.0) and will error if you try to set it
-
-MODELS_WITHOUT_TEMPERATURE_SUPPORT: Final[set[LLMModel]] = {
-    # GPT-5 series — only support temperature=1 (default)
-    LLMModel.GPT_5,
-    LLMModel.GPT_5_MINI,
-    LLMModel.GPT_5_NANO,
-    LLMModel.GPT_5_PRO,
-    LLMModel.GPT_5_1,
-    LLMModel.GPT_5_2,
-    LLMModel.GPT_5_2_PRO,
-    LLMModel.GPT_5_4,
-    LLMModel.GPT_5_4_MINI,
-    LLMModel.GPT_5_4_NANO,
-    LLMModel.GPT_5_4_PRO,
-    LLMModel.GPT_5_5,
-    LLMModel.GPT_5_5_PRO,
-
-    # O-series reasoning models
-    LLMModel.O1,
-    LLMModel.O3,
-    LLMModel.O3_MINI,
-    LLMModel.O4_MINI,
-}
+# Why moved: every static fact about a model now lives in one row of the
+# enum, so adding a new fact = touching ModelSpec + selected rows, not
+# scattering more sets across this file.
 
 
 # =============================================================================

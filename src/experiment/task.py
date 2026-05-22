@@ -30,7 +30,7 @@ from src.text_encoding import create_encoder
 from src.text_encoding.encoder_factory import resolve_encoding_name
 from src.imaging import create_renderer
 from src.llm_utils import LLMServiceFactory
-from src.llm_utils.constants import LLMModel
+from src.llm_utils.llm_model import LLMModel
 from src.evaluation.evaluator_factory import EvaluatorFactory
 from .config import load_conf as _load_conf
 from .schemas import (

@@ -24,7 +24,7 @@ Pipeline: text_encode → imaging → evaluate
   Encoded     text_encoded     image_encoded
 """
 from typing import Annotated, Any, Literal, Optional, Union
-from pydantic import BaseModel, Discriminator, Field
+from pydantic import BaseModel, Discriminator, Field, model_validator
 
 
 class RawPrompt(BaseModel):
@@ -353,3 +353,33 @@ class LLMConfig(BaseModel):
     """Top-level LLM config. Maps to conf/llm/*.yaml."""
     model: ModelConfig
     cluster: ClusterConfig
+
+    @model_validator(mode="after")
+    def _check_max_model_len_against_arch_ceiling(self) -> "LLMConfig":
+        """Reject `cluster.max_model_len` values that exceed the model's
+        architectural ceiling (from upstream config.json, surfaced as
+        `LLMModel.max_context_len`).
+
+        Without this check, vLLM rejects at server startup — wasting SLURM
+        queue time and producing the misleading "server failed" message
+        instead of a config-time ValueError. (This is exactly what bit the
+        first re-eval run: `max_model_len: 4096` on HarmBench-Llama-2-13b
+        which has a 2048-token positional embedding limit.)
+
+        Skipped silently when the model isn't in our registry (unknown
+        cluster model) or doesn't have a known ceiling.
+        """
+        from src.llm_utils.llm_model import LLMModel
+        try:
+            m = LLMModel.from_string(self.model.model)
+        except ValueError:
+            return self
+        ceiling = m.max_context_len
+        if ceiling is not None and self.cluster.max_model_len > ceiling:
+            raise ValueError(
+                f"cluster.max_model_len={self.cluster.max_model_len} exceeds "
+                f"{m.model_id}'s architectural ceiling of {ceiling} "
+                f"(from upstream config.json max_position_embeddings). vLLM "
+                f"would refuse to serve this at startup. Lower `max_model_len` "
+                f"in conf/llm/{m.name.lower()}.yaml.")
+        return self

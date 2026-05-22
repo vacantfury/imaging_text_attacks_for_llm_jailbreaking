@@ -176,14 +176,20 @@ class ClusterModelServerManager:
             return len(self._pool.get(model, []))
 
     def wait_for_first_server(self, model: LLMModel, timeout: Optional[int] = None) -> str:
-        """
-        Block until at least one server for the model is in the pool.
+        """Block until at least one server for `model` enters the pool.
+
+        Short-circuits if all submitted server jobs for this model have
+        already been resolved by the monitor and none added to the pool —
+        i.e., every job failed. Without this, we'd keep polling an empty
+        pool until full timeout (1h default), even though the manager
+        already knows the model has no live servers.
 
         Returns:
             The first available endpoint URL.
 
         Raises:
-            RuntimeError: If no server comes up within timeout.
+            RuntimeError: If no server comes up within timeout, OR if the
+                monitor has confirmed every job for this model failed.
         """
         config = self.model_configs.get(model, {})
         if timeout is None:
@@ -197,6 +203,20 @@ class ClusterModelServerManager:
                     first_endpoint = self._pool[model][0]["endpoint"]
                     logger.info(f"First server ready: {first_endpoint}")
                     return first_endpoint
+
+            # Short-circuit on all-failed: if every submitted job for this
+            # model is already discovered (resolved by monitor) and the pool
+            # is still empty, every one of them failed — no point waiting.
+            jobs = self._jobs.get(model, [])
+            if jobs and all(j["discovered"] for j in jobs):
+                with self._pool_lock:
+                    pool_empty = not self._pool.get(model)
+                if pool_empty:
+                    raise RuntimeError(
+                        f"All {len(jobs)} server job(s) for "
+                        f"{model.model_id} failed during discovery. "
+                        f"Check logs/vllm_{model.name.lower()}_*.err for "
+                        f"startup errors (config mismatch, OOM, etc.).")
 
             remaining = deadline - time.time()
             if remaining <= 0:
