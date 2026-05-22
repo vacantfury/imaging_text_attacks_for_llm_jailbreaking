@@ -20,4 +20,12 @@ cluster:
   num_gpus: 1
   mem_gb: 64
   max_model_len: 2048
+  # HarmBench-Llama-2-13b-cls is a fine-tuned classifier, not a chat model —
+  # its training prompts are already wrapped in Llama-2 `[INST] <<SYS>>...`
+  # syntax verbatim. We send those over vLLM's /v1/chat/completions endpoint
+  # in a single user message; the passthrough template emits that content
+  # without applying any further chat-template formatting. (Llama-2's
+  # tokenizer doesn't ship a chat template; transformers v4.44+ refuses to
+  # fall back to a default, so requests would 400 without this.)
+  chat_template: passthrough
   gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]
