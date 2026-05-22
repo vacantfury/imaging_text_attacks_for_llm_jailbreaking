@@ -541,6 +541,21 @@ def _run_asr_judging(
                 logger.info(
                     f"  {metric_label} for {stage}: {target_per_stage[stage]:.2f}%")
 
+                # ORBench returns BOTH direct_answer_rate and refusal_rate in
+                # its stats. Expose direct_answer_rate as the `asr` metric so
+                # results.json has both:
+                #   asr           = direct_answer_rate (= jailbreak success on
+                #                   harmful prompts; compliance on benign)
+                #   refusal_rate  = direct_refusal + indirect_refusal
+                # Preserves historical "asr" field semantics for ORBench dirs.
+                # JBB/HarmBench evaluators don't return direct_answer_rate so
+                # this branch is a no-op for them.
+                if "direct_answer_rate" in stats and is_refusal:
+                    asr_per_stage[stage] = stats["direct_answer_rate"]
+                    logger.info(
+                        f"  ASR (direct_answer_rate) for {stage}: "
+                        f"{stats['direct_answer_rate']:.2f}%")
+
         except (ValueError, KeyError, FileNotFoundError) as e:
             logger.warning(
                 f"Judging skipped for {evaluator.__class__.__name__} — "
