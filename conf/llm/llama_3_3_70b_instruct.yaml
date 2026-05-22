@@ -13,12 +13,20 @@ model:
   model: meta-llama/Llama-3.3-70B-Instruct
   max_tokens: 512
 
-# 70B weights ≈ 140 GB at FP16. Default to 4× A100-40GB (TP=4) — targets the
-# more common a100:3 / a100:4 nodes; ~160 GB combined VRAM leaves headroom for
-# KV cache. Excluding small GPUs is essential: 4× V100-SXM2-32GB = 128 GB, too
-# little for FP16 weights and will OOM at vLLM startup.
+# 70B weights ≈ 140 GB at FP16. Originally targeted 4× A100-40GB (TP=4)
+# but the cluster QoS limits GRES-per-job (QOSMaxGRESPerJob) which blocks
+# 4-GPU requests for this user. So we target 2× 80GB cards instead:
+# 2 × 80GB = 160GB → fits weights with KV-cache headroom.
+#
+# `gpu_constraint: a100@80g` forces SLURM to schedule on the 80GB A100
+# nodes specifically (cluster has 2 such nodes). Without this constraint
+# a num_gpus=2 request could land on the a100:3 (40GB) node and OOM at
+# weight loading. SLURM constraint syntax also supports `|` for OR
+# (e.g., "a100@80g|h200") if you want to fall back to H200 nodes when
+# 80GB A100s are contended.
 cluster:
-  num_gpus: 4
+  num_gpus: 2
+  gpu_constraint: "a100@80g"
   mem_gb: 128
   max_model_len: 8192
   gpu_memory_utilization: 0.92

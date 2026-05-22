@@ -324,6 +324,11 @@ class ClusterConfig(BaseModel):
     partition: str
     excluded_nodes: list[str]
     gpu_types_excluded: list[str]
+    # Positive SLURM feature constraint, e.g. "a100@80g" or "a100@80g|h200".
+    # Emitted verbatim as `#SBATCH --constraint=<value>`. Used to require
+    # 80GB GPUs for memory-tight models (Llama-3.3-70B at FP16 needs 80GB+
+    # per GPU). Defaulted to None — most models don't need it.
+    gpu_constraint: Optional[str] = None
     num_gpus: int
     num_instances: int
     cpus_per_task: int

@@ -144,6 +144,23 @@ class ClusterModelServerManager:
                         logger.debug(f"Acquired endpoint {entry['endpoint']}")
                         return entry["endpoint"]
 
+            # Short-circuit on all-failed: if every submitted job for this
+            # model is already discovered (resolved by monitor) and the pool
+            # is still empty, every one of them failed — no point waiting.
+            # Mirrors wait_for_first_server's check; lets tasks fail fast
+            # when their judge can't start (e.g. QoS-blocked) instead of
+            # hanging up to cluster_server_endpoint_timeout (10000s default).
+            jobs = self._jobs.get(model, [])
+            if jobs and all(j["discovered"] for j in jobs):
+                with self._pool_lock:
+                    pool_empty = not self._pool.get(model)
+                if pool_empty:
+                    raise RuntimeError(
+                        f"All {len(jobs)} server job(s) for "
+                        f"{model.model_id} failed during discovery. "
+                        f"Check logs/vllm_{model.name.lower()}_*.err for "
+                        f"startup errors (config mismatch, QoS-blocked, OOM, etc.).")
+
             remaining = deadline - time.time()
             wait_time = min(wait_interval, max(remaining, 0))
             if wait_time <= 0:
@@ -537,6 +554,13 @@ class ClusterModelServerManager:
         ]
         if exclude_directive:
             sbatch_lines.append(exclude_directive)
+        # Positive feature constraint — e.g. force `a100@80g` when a model
+        # needs 80GB cards specifically (Llama-3.3-70B at FP16 = 140GB
+        # weights, won't fit on 2× 40GB). SLURM constraint syntax supports
+        # AND (`&`), OR (`|`), and feature names directly.
+        gpu_constraint = config.get("gpu_constraint")
+        if gpu_constraint:
+            sbatch_lines.append(f"#SBATCH --constraint={gpu_constraint}")
         sbatch_lines.extend([
             "#SBATCH --nodes=1",
             f"#SBATCH --gres=gpu:{config['num_gpus']}",

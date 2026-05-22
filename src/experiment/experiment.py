@@ -405,17 +405,27 @@ class Experiment:
                     failed.add(model)
         return failed
 
-    def _setup_cluster_servers(self, cluster_models: set) -> set:
-        """Start vLLM servers for all cluster models.
+    def _setup_cluster_servers(self, cluster_models: set) -> None:
+        """Submit vLLM servers for all cluster models and return immediately.
 
-        Returns the set of models whose first server failed to come up, so
-        the caller can skip tasks that depend on them rather than letting
-        them hang on acquire_endpoint() until timeout.
+        Fire-and-forget: this method does NOT wait for any server to become
+        healthy. Tasks block on `acquire_endpoint(model)` when they need a
+        not-yet-ready model, and the manager's monitor thread populates
+        the pool as servers come up.
 
-        Budget enforcement is two-layered:
+        This is what gives us "dispatch as servers come up" behavior: fast
+        judges' tasks run as soon as that judge is ready, without being
+        gated by slow/queued judges. A slow judge (e.g. queue-blocked on
+        QoS) only delays the tasks that depend on it, not the whole run.
+
+        `acquire_endpoint` has its own short-circuit: if all submitted jobs
+        for a model are marked failed by the monitor, the next acquire
+        immediately raises RuntimeError instead of waiting through the full
+        endpoint timeout.
+
+        Budget enforcement is two-layered (still done synchronously here):
           1. Pre-flight against MAX_SUBMIT_JOBS_PER_USER minus the user's
-             existing SLURM jobs (so we don't over-submit when there are
-             other jobs queued in the background).
+             existing SLURM jobs.
           2. Cap num_instances per model to never exceed each model's YAML
              request — capping never *promotes* a model's count.
 
@@ -485,18 +495,13 @@ class Experiment:
                 f"{cfg['port'] + cfg['num_instances'] - 1}")
             self._server_manager.start_server(m, cfg)
 
-        # Wait for the first server of each model in parallel (no serial blocking).
-        failed_models = self._wait_for_servers_parallel(cluster_models_sorted)
-
-        if failed_models:
-            failed_ids = [m.model_id for m in failed_models]
-            logger.warning(
-                f"Failed servers: {failed_ids}. Tasks depending on these "
-                f"models will be skipped upfront (not hang on acquire).")
-
-        # Register with factory so tasks auto-get endpoints
+        # Register with factory so tasks auto-get endpoints when they call
+        # acquire_endpoint(). No upfront blocking wait — tasks dispatch
+        # immediately; slow servers only block their own dependent tasks.
         LLMServiceFactory.set_server_manager(self._server_manager)
-        return failed_models
+        logger.info(
+            "Server submission complete. Tasks will start dispatching "
+            "immediately; per-task acquire_endpoint() will wait per-server.")
 
     def _teardown_cluster_servers(self) -> None:
         """Shut down all vLLM servers and clear factory-side singleton state."""
@@ -534,34 +539,22 @@ class Experiment:
     async def _run_task_safe(
         self, task: TaskInfo, semaphore: asyncio.Semaphore,
         queue_name: str, total: int,
-        failed_models: Optional[set] = None,
     ) -> dict[str, Any]:
         """Execute a single task with semaphore-based concurrency control.
 
-        Skips the task upfront (without acquiring a semaphore slot) if any of
-        the cluster models it needs is in `failed_models` — there's no point
-        running the task only for it to hang on acquire_endpoint().
-        """
-        # Resolve cluster-model dependencies once so we can both pre-skip on
-        # setup failure and decrement remaining counts on completion.
-        required_cluster = _required_cluster_models_for_task(task)
+        No upfront skip — if the task's required cluster model failed to
+        start, the failure surfaces inside the runner when it calls
+        acquire_endpoint(), which short-circuits on all-jobs-failed. The
+        runner's try/except catches and reports the failure cleanly.
 
-        if failed_models and (required_cluster & failed_models):
-            blocked = sorted(m.model_id for m in (required_cluster & failed_models))
-            err = (
-                f"Skipped — depends on cluster model(s) whose server failed "
-                f"during setup: {blocked}")
-            logger.error(f"[{queue_name}] {err}: {task.name}")
-            # Still decrement so mid-run teardown doesn't wait forever.
-            for m in required_cluster:
-                self._maybe_release_model(m)
-            return {
-                "task_name": task.name,
-                "original_index": task.index,
-                "status": "failed",
-                "error": err,
-                "elapsed_seconds": 0.0,
-            }
+        Equivalent outcome to the old upfront-skip, but doesn't require
+        the orchestrator to know about failed models in advance — which is
+        what unblocks "dispatch as servers come up" (some tasks dispatch
+        before slow servers are even known to have failed or succeeded).
+        """
+        # Resolve cluster-model dependencies once so we can decrement
+        # remaining counts on completion (mid-run teardown).
+        required_cluster = _required_cluster_models_for_task(task)
 
         async with semaphore:
             logger.info(f"\n{'~'*70}")
@@ -627,15 +620,15 @@ class Experiment:
             for m in _required_cluster_models_for_task(task):
                 self._model_remaining[m] = self._model_remaining.get(m, 0) + 1
 
-        failed_models: set = set()
-
         try:
-            # Start vLLM servers for cluster models if needed
+            # Submit vLLM servers for cluster models. Non-blocking: tasks
+            # dispatch immediately and per-task acquire_endpoint() handles
+            # the wait for each model independently.
             cluster_models = self._find_cluster_models(tasks_to_run)
             if cluster_models:
                 model_names = sorted(m.model_id for m in cluster_models)
                 logger.info(f"Cluster models detected: {model_names}")
-                failed_models = self._setup_cluster_servers(cluster_models)
+                self._setup_cluster_servers(cluster_models)
 
             logger.info(f"\n{'='*70}")
             logger.info(f"EXPERIMENT: {total} tasks (thread pool: {self.num_main_job_threads}, "
@@ -643,13 +636,12 @@ class Experiment:
             logger.info(f"{'='*70}\n")
 
             # Thread pool: tasks acquire a slot in order, run, release.
-            # failed_models pre-skips tasks whose cluster dependency never came up.
+            # Tasks needing a slow/failed cluster model will block per-task
+            # on acquire_endpoint() (or fail-fast on its all-failed short-
+            # circuit), while tasks needing already-ready models proceed.
             sem = asyncio.Semaphore(self.num_main_job_threads)
             coroutines = [
-                self._run_task_safe(
-                    task, sem, task.mode.upper(), total,
-                    failed_models=failed_models,
-                )
+                self._run_task_safe(task, sem, task.mode.upper(), total)
                 for task in tasks_to_run
             ]
 
