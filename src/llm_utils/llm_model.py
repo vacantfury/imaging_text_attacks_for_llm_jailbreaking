@@ -59,6 +59,13 @@ class ModelSpec:
     output_price: float = 0.0         # $/1M output tokens
     max_context_len: Optional[int] = None   # arch ceiling; None when unknown
     quirks: frozenset = field(default_factory=frozenset)
+    # Chat template name → src/llm_utils/chat_templates/<name>.jinja, passed to
+    # vLLM as --chat-template. None means "use the tokenizer's baked-in template"
+    # (correct for modern chat-tuned checkpoints; their tokenizer.json ships one).
+    # Set explicitly for: (a) classifiers / non-chat fine-tunes whose training
+    # prompts are pre-formatted (HarmBench-Llama-2-13b-cls → "passthrough"),
+    # (b) legacy chat models whose tokenizer doesn't ship a template.
+    chat_template: Optional[str] = None
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -160,7 +167,11 @@ class LLMModel(Enum):
     # Judge models for canonical benchmark evaluators
     HARMBENCH_LLAMA_2_13B_CLS = ModelSpec(
         "cais/HarmBench-Llama-2-13b-cls", Provider.NU_CLUSTER,
-        max_context_len=2_048)                 # Llama-2 architecture (HARD)
+        max_context_len=2_048,                 # Llama-2 architecture (HARD)
+        # Fine-tuned classifier — training prompts are pre-wrapped in
+        # Llama-2's [INST] <<SYS>>...[/INST] syntax verbatim. Llama-2's
+        # tokenizer doesn't ship a chat template, so we emit content as-is.
+        chat_template="passthrough")
     LLAMA_3_3_70B_INSTRUCT = ModelSpec(
         "meta-llama/Llama-3.3-70B-Instruct", Provider.NU_CLUSTER,
         max_context_len=131_072)               # Llama-3.3 long-context
@@ -194,6 +205,18 @@ class LLMModel(Enum):
         Llama-2's RoPE positional encoding is undefined beyond 2048).
         """
         return self.value.max_context_len
+
+    @property
+    def chat_template(self) -> Optional[str]:
+        """Chat-template name → src/llm_utils/chat_templates/<name>.jinja.
+
+        None means "use the tokenizer's baked-in chat template" (vLLM
+        derives it automatically — correct for modern chat-tuned models).
+        Set explicitly for classifiers and legacy models whose tokenizer
+        doesn't ship a template. YAML can override per-deployment via
+        `cluster.chat_template` but the source of truth is this field.
+        """
+        return self.value.chat_template
 
     def has_quirk(self, q: ModelQuirk) -> bool:
         """Whether this model has an API-side behavior quirk."""

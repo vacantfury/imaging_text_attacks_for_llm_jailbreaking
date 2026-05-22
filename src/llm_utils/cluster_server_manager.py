@@ -533,16 +533,28 @@ class ClusterModelServerManager:
             vllm_args.append(f"--dtype {config['dtype']}")
         if config["num_gpus"] > 1:
             vllm_args.append(f"--tensor-parallel-size {config['num_gpus']}")
-        if config.get("chat_template"):
+        # Chat template resolution: YAML override → ModelSpec → None.
+        # ModelSpec is the source of truth (a model's chat template is an
+        # architectural fact, not a deployment choice). YAML can override
+        # for ad-hoc experiments. None lets vLLM use the tokenizer's
+        # baked-in chat template, which is correct for modern chat-tuned
+        # checkpoints (Llama-3+, Qwen, Mistral chat, etc.).
+        chat_template_name = config.get("chat_template") or model.chat_template
+        if chat_template_name:
             chat_template_dir = Path(__file__).parent / "chat_templates"
-            template_file = chat_template_dir / f"{config['chat_template']}.jinja"
-            if template_file.exists():
-                vllm_args.append(f"--chat-template {template_file.resolve()}")
-                logger.info(f"Using chat template: {template_file.resolve()}")
-            else:
-                logger.warning(
-                    f"Chat template not found: {template_file}. "
-                    f"vLLM will use model default.")
+            template_file = chat_template_dir / f"{chat_template_name}.jinja"
+            # Existence is also validated at config-load time by
+            # LLMConfig._check_chat_template_exists; if we get here with a
+            # missing file, that validator was bypassed (e.g., ad-hoc
+            # callers). Raise loudly — silent fallback to vLLM's default
+            # is how the HarmBench 400-on-every-request bug stayed hidden.
+            if not template_file.exists():
+                raise FileNotFoundError(
+                    f"chat_template={chat_template_name!r} for {model.model_id} "
+                    f"but {template_file} does not exist. Either add the .jinja "
+                    f"file or correct the name on ModelSpec / cluster.chat_template.")
+            vllm_args.append(f"--chat-template {template_file.resolve()}")
+            logger.info(f"Using chat template: {template_file.resolve()}")
 
         vllm_cmd = "python -m vllm.entrypoints.openai.api_server \\\n    " + \
                    " \\\n    ".join(vllm_args)

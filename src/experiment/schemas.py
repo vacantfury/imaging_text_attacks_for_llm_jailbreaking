@@ -388,3 +388,39 @@ class LLMConfig(BaseModel):
                 f"would refuse to serve this at startup. Lower `max_model_len` "
                 f"in conf/llm/{m.name.lower()}.yaml.")
         return self
+
+    @model_validator(mode="after")
+    def _check_chat_template_file_exists(self) -> "LLMConfig":
+        """Reject configs whose chat template name doesn't resolve to a file.
+
+        Resolution: YAML `cluster.chat_template` override → ModelSpec
+        `chat_template` → None. If a name is set, the .jinja file must
+        exist in src/llm_utils/chat_templates/.
+
+        Catches typos at config-load time instead of letting them
+        silently fall back to vLLM's tokenizer default, which for
+        classifier-style fine-tunes (HarmBench-Llama-2-13b-cls) produces
+        HTTP 400 on every request via the transformers v4.44+ "no
+        default chat template" guard. We learned this the expensive way.
+        """
+        from pathlib import Path
+        from src.llm_utils.llm_model import LLMModel
+        try:
+            m = LLMModel.from_string(self.model.model)
+        except ValueError:
+            return self
+        chat_template = self.cluster.chat_template or m.chat_template
+        if not chat_template:
+            return self
+        # Templates live in src/llm_utils/chat_templates/<name>.jinja
+        templates_dir = (
+            Path(__file__).resolve().parent.parent
+            / "llm_utils" / "chat_templates")
+        template_file = templates_dir / f"{chat_template}.jinja"
+        if not template_file.exists():
+            raise ValueError(
+                f"chat_template={chat_template!r} for {m.model_id} "
+                f"does not resolve to a file at {template_file}. "
+                f"Available templates: "
+                f"{sorted(p.stem for p in templates_dir.glob('*.jinja'))}")
+        return self
