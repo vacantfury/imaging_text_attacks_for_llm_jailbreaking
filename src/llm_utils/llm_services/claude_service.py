@@ -106,7 +106,10 @@ class ClaudeService(BaseLLMService):
             requests.append({"custom_id": item_id, "params": params})
 
         logger.info(f"Submitting Claude batch with {len(requests)} requests")
-        return self.client.messages.batches.create(requests=requests)
+        return self._retry_rate_limit_sync(
+            lambda: self.client.messages.batches.create(requests=requests),
+            label=f"Anthropic batches.create ({self.model.model_id})",
+        )
 
     def _poll_until_done(self, batch):
         elapsed = 0
@@ -117,7 +120,10 @@ class ClaudeService(BaseLLMService):
                 )
             time.sleep(self.batch_poll_interval)
             elapsed += self.batch_poll_interval
-            batch = self.client.messages.batches.retrieve(batch.id)
+            batch = self._retry_rate_limit_sync(
+                lambda: self.client.messages.batches.retrieve(batch.id),
+                label=f"Anthropic batches.retrieve ({batch.id})",
+            )
 
             counts = batch.request_counts
             logger.info(

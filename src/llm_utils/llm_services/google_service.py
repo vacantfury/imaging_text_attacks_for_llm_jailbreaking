@@ -113,10 +113,13 @@ class GoogleService(BaseLLMService):
 
     def _submit_batch(self, inline_requests: list):
         logger.info(f"Submitting Google batch with {len(inline_requests)} inline requests")
-        return self.client.batches.create(
-            model=self.model.model_id,
-            src=inline_requests,
-            config={"display_name": f"batch-{self.model.model_id}"},
+        return self._retry_rate_limit_sync(
+            lambda: self.client.batches.create(
+                model=self.model.model_id,
+                src=inline_requests,
+                config={"display_name": f"batch-{self.model.model_id}"},
+            ),
+            label=f"Google batches.create ({self.model.model_id})",
         )
 
     def _poll_until_done(self, batch_job):
@@ -128,7 +131,10 @@ class GoogleService(BaseLLMService):
                 )
             time.sleep(self.batch_poll_interval)
             elapsed += self.batch_poll_interval
-            batch_job = self.client.batches.get(name=batch_job.name)
+            batch_job = self._retry_rate_limit_sync(
+                lambda: self.client.batches.get(name=batch_job.name),
+                label=f"Google batches.get ({batch_job.name})",
+            )
             logger.info(f"Batch {batch_job.name}: {batch_job.state.name}")
 
         if batch_job.state.name != "JOB_STATE_SUCCEEDED":

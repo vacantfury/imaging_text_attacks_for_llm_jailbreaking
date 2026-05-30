@@ -4,9 +4,49 @@ Base abstract class for LLM services with usage tracking.
 All services implement a single public method: ``batch_chat``.
 """
 
+import asyncio
+import random
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, asdict
-from typing import Any, List, Tuple, Optional
+from typing import Any, Awaitable, Callable, List, Optional, Tuple, TypeVar
+
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+_T = TypeVar("_T")
+
+
+# Substrings we treat as rate-limit / quota errors (case-insensitive).
+# Covers OpenAI 429s, Google RESOURCE_EXHAUSTED, Anthropic 429s, and
+# vLLM rate-limit responses. Extend here if a new provider surfaces a
+# different message format.
+_RATE_LIMIT_PATTERNS = (
+    "429",
+    "rate limit",
+    "rate_limit",
+    "ratelimit",
+    "rate-limit",
+    "too many requests",
+    "resource_exhausted",
+    "resource exhausted",
+    "quota exceeded",
+    "quota_exceeded",
+    "overloaded",
+    "throttle",
+)
+
+
+def is_rate_limit_error(exc: BaseException) -> bool:
+    """Heuristic: does the exception look like a rate-limit / quota error?"""
+    err = str(exc).lower()
+    return any(p in err for p in _RATE_LIMIT_PATTERNS)
+
+
+def _backoff_seconds(attempt: int, base: float = 2.0, max_wait: float = 60.0) -> float:
+    """Exponential backoff with jitter, capped at `max_wait`."""
+    return min(base ** attempt + random.random() * 2, max_wait)
 
 
 @dataclass
@@ -72,6 +112,64 @@ class BaseLLMService(ABC):
     def reset_usage(self) -> None:
         self.algorithm_usage = UsageStats()
         self.total_usage = UsageStats()
+
+    # ------------------------------------------------------------------
+    # Rate-limit retry helpers (shared across all services).
+    # ------------------------------------------------------------------
+
+    def _retry_rate_limit_sync(
+        self,
+        fn: Callable[[], _T],
+        label: str,
+        *,
+        max_retries: Optional[int] = None,
+        max_wait_seconds: float = 60.0,
+    ) -> _T:
+        """Call `fn()`; on rate-limit error, sleep + retry up to max_retries.
+
+        Used by batch-API services (Google, Anthropic) whose `client.batches.*`
+        calls are blocking. Non-rate-limit exceptions propagate immediately.
+        """
+        retries = self.max_retries if max_retries is None else max_retries
+        for attempt in range(retries + 1):
+            try:
+                return fn()
+            except Exception as e:
+                if is_rate_limit_error(e) and attempt < retries:
+                    wait = _backoff_seconds(attempt, max_wait=max_wait_seconds)
+                    logger.warning(
+                        f"{label}: rate-limit, retry {attempt + 1}/{retries} "
+                        f"after {wait:.1f}s — {str(e)[:120]}")
+                    time.sleep(wait)
+                    continue
+                raise
+        # Unreachable — loop either returns or raises.
+        raise RuntimeError(f"{label}: exhausted retries")
+
+    async def _retry_rate_limit_async(
+        self,
+        fn: Callable[[], Awaitable[_T]],
+        label: str,
+        *,
+        max_retries: Optional[int] = None,
+        max_wait_seconds: float = 60.0,
+    ) -> _T:
+        """Async variant of `_retry_rate_limit_sync` for per-call async services
+        (OpenAI, vLLM/NU_CLUSTER)."""
+        retries = self.max_retries if max_retries is None else max_retries
+        for attempt in range(retries + 1):
+            try:
+                return await fn()
+            except Exception as e:
+                if is_rate_limit_error(e) and attempt < retries:
+                    wait = _backoff_seconds(attempt, max_wait=max_wait_seconds)
+                    logger.warning(
+                        f"{label}: rate-limit, retry {attempt + 1}/{retries} "
+                        f"after {wait:.1f}s — {str(e)[:120]}")
+                    await asyncio.sleep(wait)
+                    continue
+                raise
+        raise RuntimeError(f"{label}: exhausted retries")
 
     @abstractmethod
     def batch_chat(

@@ -71,12 +71,16 @@ test/
 private_files/
 paper/
 backup_codes/
+backup_files/
 test.py
 poetry.lock
 TODO.md
 other_repos/
 keys/
 fonts/
+AI_agent/
+temporary_scripts/
+text_docs/
 
 # Hydra
 multirun/

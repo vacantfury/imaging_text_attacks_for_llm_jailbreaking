@@ -80,21 +80,23 @@ class TaskType(str, Enum):
 def _target_model_for_task(task) -> Optional[str]:
     """Return the model-string this task targets (None if the mode doesn't have one).
 
-    Only evaluate / defense tasks have a top-level target model. text_encode
-    and defense_transform may use LLMs internally (via encoder.model /
-    defense_config.perturbation_model) but those don't drive orchestrator-level
-    cluster-server discovery.
+    Only defense+evaluate tasks have a top-level target model. prompt_transform
+    chains may invoke an encoder LLM (via merged conf/text_encoding YAML) but
+    those don't drive orchestrator-level cluster-server discovery — the
+    factory handles them inline.
     """
-    from .schemas import EvaluateTask, DefenseTask
-    if isinstance(task, (EvaluateTask, DefenseTask)):
+    from .schemas import DefenseEvaluateTask
+    if isinstance(task, DefenseEvaluateTask):
         return task.target_model
     return None
 
 
 def _infer_task_type(task) -> TaskType:
     """Infer task type from a typed TaskConfig variant."""
-    from .schemas import ImagingTask
-    if isinstance(task, ImagingTask):
+    from .schemas import PromptTransformTask
+    if isinstance(task, PromptTransformTask):
+        # prompt_transform may make LLM calls inside encoders, but those go
+        # through API-based encoder LLMs (gpt-4.1-mini etc.) — not cluster.
         return TaskType.NO_MODEL
 
     model_str = _target_model_for_task(task)
@@ -161,37 +163,37 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
       1. Explicit override: task.judge_method set in YAML.
       2. Canonical inference: derive judge_method list from the benchmark
          slug (via EvaluatorFactory.judge_methods_for_benchmark). The
-         benchmark itself comes from task.benchmark or source_dir path.
+         benchmark itself comes from task.benchmark or the upstream
+         source_transform_subdir path.
 
-    Without path (2), removing `judge_method` from task YAMLs (recent
-    refactor) would silently bypass cluster judge discovery — tasks would
-    hang on acquire_endpoint() because no server was started for the judge.
+    Without path (2), removing `judge_method` from task YAMLs would silently
+    bypass cluster judge discovery — tasks would hang on acquire_endpoint().
     """
     from src.llm_utils import Provider
-    from .schemas import EvaluateTask, DefenseTask
+    from .schemas import DefenseEvaluateTask
     from .task import _infer_benchmark
     from src.evaluation.evaluator_factory import judge_methods_for_benchmark
 
     task = info.task
     required: set = set()
 
-    # Target model (only meaningful for evaluate / defense)
+    # Target model (only meaningful for defense+evaluate)
     target = _target_model_for_task(task)
     if target:
         m = _resolve_model(target)
         if m is not None and m.provider == Provider.NU_CLUSTER:
             required.add(m)
 
-    # Judge model(s) for evaluate / defense
-    if isinstance(task, (EvaluateTask, DefenseTask)):
+    # Judge model(s) for defense+evaluate
+    if isinstance(task, DefenseEvaluateTask):
         if task.judge_method:
             judge = _judge_model_for_method(task.judge_method)
             if judge is not None and judge.provider == Provider.NU_CLUSTER:
                 required.add(judge)
         else:
-            # Canonical inference from benchmark.
             try:
-                benchmark = task.benchmark or _infer_benchmark(task.source_dir)
+                benchmark = task.benchmark or _infer_benchmark(
+                    task.source_transform_subdir)
                 methods = judge_methods_for_benchmark(benchmark)
             except ValueError:
                 methods = []
@@ -226,13 +228,16 @@ class TaskInfo:
 
 def _get_task_name(task, index: int) -> str:
     """Generate a descriptive name for a typed TaskConfig."""
-    from .schemas import EvaluateTask, DefenseTask
+    from .schemas import DefenseEvaluateTask, PromptTransformTask, TransformationSpec
     parts = [task.mode]
-    encoding = getattr(task, "encoding", None)
-    if encoding:
-        parts.append(encoding)
-    # Use target_model where it exists (evaluate / defense); otherwise nothing
-    if isinstance(task, (EvaluateTask, DefenseTask)):
+    if isinstance(task, PromptTransformTask):
+        chain = [
+            s.type if isinstance(s, TransformationSpec) else s.get("type", "?")
+            for s in task.transformation_list
+        ]
+        parts.append("+".join(chain))
+    elif isinstance(task, DefenseEvaluateTask):
+        parts.append(task.defense)
         parts.append(task.target_model)
     parts.append(str(index))
     return "_".join(parts)
@@ -292,13 +297,13 @@ class Experiment:
         raise ValidationError with field paths, instead of failing deep
         inside a runner.
         """
-        from .schemas import TextEncodeTask, ImagingTask, EvaluateTask
-        from .schemas import DefenseTransformTask, DefenseTask
+        from .schemas import (
+            DefenseEvaluateTask, PromptTransformTask,
+        )
         from pydantic import TypeAdapter
         from .schemas import TaskConfig as _TaskConfigAlias
 
-        if isinstance(task_def, (TextEncodeTask, ImagingTask, EvaluateTask,
-                                 DefenseTransformTask, DefenseTask)):
+        if isinstance(task_def, (PromptTransformTask, DefenseEvaluateTask)):
             task = task_def
         else:
             # TypeAdapter handles the Annotated[Union[...], Discriminator(...)]
