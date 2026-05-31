@@ -71,11 +71,16 @@ echo "  OUT_ROOT : $OUT_ROOT"
 echo "  Started  : $(date -Is)"
 echo "===================================================================="
 
+# A checkpoint is "complete" only if it has real WEIGHTS, not just a config.json
+# (a crashed save leaves a 1KB config that must NOT be mistaken for done).
+has_weights() { ls "$1"/*.safetensors "$1"/*.bin >/dev/null 2>&1; }
+
 echo
 echo ">>> [1/2] detector  (open_llama_3b_v2 + protector_detector_3b_lora, SEQ_CLS)"
-if [ -f "$OUT_ROOT/detector/config.json" ]; then
-    echo "    already present -> skip"
+if has_weights "$OUT_ROOT/detector"; then
+    echo "    weights present -> skip"
 else
+    rm -rf "$OUT_ROOT/detector"   # clear any incomplete remnant
     python "$MERGE" \
         --base_model_name openlm-research/open_llama_3b_v2 \
         --adapter_model_name renjiepi/protector_detector_3b_lora \
@@ -85,9 +90,10 @@ echo "<<< detector -> $OUT_ROOT/detector"
 
 echo
 echo ">>> [2/2] detoxifier (vicuna-7b-v1.5 + mllm_protector_detoxifier, CausalLM)"
-if [ -f "$OUT_ROOT/detoxifier/config.json" ]; then
-    echo "    already present -> skip"
+if has_weights "$OUT_ROOT/detoxifier"; then
+    echo "    weights present -> skip"
 else
+    rm -rf "$OUT_ROOT/detoxifier"   # clear the crashed 1KB-config remnant
     python "$MERGE" \
         --base_model_name lmsys/vicuna-7b-v1.5 \
         --adapter_model_name renjiepi/mllm_protector_detoxifier \
