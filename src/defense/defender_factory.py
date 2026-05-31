@@ -60,3 +60,6 @@ from . import ecso  # noqa: E402,F401
 # Paper C defenses (import after sage/ecso — they reuse those primitives).
 from . import modality_complete  # noqa: E402,F401
 from . import joint_verify  # noqa: E402,F401
+# Paper C SOTA baselines (load HF aux models lazily — see each module).
+from . import eta  # noqa: E402,F401
+from . import mllm_protector  # noqa: E402,F401
