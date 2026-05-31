@@ -1,0 +1,25 @@
+# MLLM-Protector (EMNLP 2024) — output-side baseline for Paper C.
+# Loaded when a defense+evaluate task sets `defense: mllm_protector`.
+# The defender (src/defense/mllm_protector.py) loads these two MERGED checkpoints
+# locally on GPU (so the orchestrator job needs a GPU for these cells).
+#
+# ── INSTALL (one-time, on the cluster — merged weights live on scratch) ───────
+# Bases:    detector = openlm-research/open_llama_3b_v2 ; detoxifier = lmsys/vicuna-7b-v1.5
+# LoRAs:    renjiepi/protector_detector_3b_lora ; renjiepi/mllm_protector_detoxifier
+# Merge with the repo's script (handles SEQ_CLS for the detector automatically):
+#
+#   M=other_repos/MLLM-protector/scripts/merge_peft_adapter.py
+#   python $M --base_model_name openlm-research/open_llama_3b_v2 \
+#            --adapter_model_name renjiepi/protector_detector_3b_lora \
+#            --output_name /scratch/zhang.haoyu6/mllm_protector/detector
+#   python $M --base_model_name lmsys/vicuna-7b-v1.5 \
+#            --adapter_model_name renjiepi/mllm_protector_detoxifier \
+#            --output_name /scratch/zhang.haoyu6/mllm_protector/detoxifier
+#
+# (HF_TOKEN may be needed; re-validate the renjiepi/* repos are still live.)
+# ─────────────────────────────────────────────────────────────────────────────
+
+harm_detector_path: /scratch/zhang.haoyu6/mllm_protector/detector
+detoxifier_path: /scratch/zhang.haoyu6/mllm_protector/detoxifier
+harm_threshold: 0.5      # sigmoid(detector logit) < 0.5 → unsafe (low = unsafe, per repo)
+max_new_tokens: 512      # detoxifier rewrite budget
