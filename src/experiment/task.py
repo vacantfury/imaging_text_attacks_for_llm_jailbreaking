@@ -34,7 +34,8 @@ from src.prompt_transformations import (
 from src.utils.experiment import get_new_experiment_data_dir
 from src.utils.logger import get_logger
 from src.utils.provenance import (
-    judge_config_hash, provenance_fields, write_json_atomic, write_jsonl_atomic,
+    judge_config_hash, provenance_fields, sha256_file, write_json_atomic,
+    write_jsonl_atomic,
 )
 
 logger = get_logger(__name__)
@@ -88,6 +89,21 @@ def _extract_companion_image_path(upstream: dict) -> Optional[str]:
         if isinstance(node.get("upstream"), dict):
             stack.append(node["upstream"])
     return None
+
+
+def _upstream_ref(source_dir) -> dict:
+    """Lightweight provenance pointer to a consumed results.json.
+
+    Replaces embedding the whole upstream dict (O(chain-depth) bloat + the
+    embedded copy could drift from its source). Follow `source_dir` to
+    reconstruct full provenance; `results_sha256` detects drift.
+    """
+    src = Path(source_dir)
+    ref: dict = {"source_dir": str(src)}
+    rp = src / "results.json"
+    if rp.exists():
+        ref["results_sha256"] = sha256_file(rp)
+    return ref
 
 
 def _apply_prompt_range(items: list, prompt_range: Optional[list[int]]) -> list:
@@ -484,7 +500,9 @@ def _run_prompt_transform(task) -> dict[str, Any]:
             count=len(prompts),
             transformation_list=upstream_chain_names + transformation_list_names,
             results_history=results_history,
-            upstream=upstream or None,
+            upstream_ref=(
+                _upstream_ref(task.source_transform_subdir)
+                if task.source_transform_subdir else None),
             **provenance_fields(),
         )
         write_json_atomic(
@@ -607,7 +625,7 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
 
     result = DefenseEvaluateResult(
         source_transform_subdir=str(source_dir),
-        upstream=upstream,
+        upstream_ref=_upstream_ref(source_dir),
         is_multimodal=is_multimodal,
         defense=task.defense,
         defense_config=task.defense_config or {},

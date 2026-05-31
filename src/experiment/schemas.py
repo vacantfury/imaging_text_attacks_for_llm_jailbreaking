@@ -130,9 +130,13 @@ class PromptTransformResult(BaseModel):
     # (when source_transform_subdir was set) live in `upstream` instead.
     results_history: list[dict[str, PromptTransformStepResult]]
 
-    # Source prompt_transform step this task was chained from, if any.
-    # Mirrors the field on DefenseEvaluateResult — its full results.json.
+    # Provenance to the step this task chained from, if any. `upstream_ref`
+    # ({source_dir, results_sha256}) is the current form — a pointer, not an
+    # embedded copy (embedding bloated O(chain-depth) and could drift from its
+    # source). `upstream` is legacy (old data embedded the full dict); new
+    # writes leave it None and set `upstream_ref`.
     upstream: Optional[dict] = None
+    upstream_ref: Optional[dict] = None
 
 
 # ====================================================================
@@ -160,7 +164,8 @@ class DefenseEvaluateResult(BaseModel):
 
     # Provenance — which prompt_transform step subfolder this consumed.
     source_transform_subdir: str
-    upstream: Optional[dict] = None  # the source step's full results.json
+    upstream: Optional[dict] = None      # legacy embedded copy (old data only)
+    upstream_ref: Optional[dict] = None  # {source_dir, results_sha256} pointer — current form
     is_multimodal: bool              # copied from upstream's PromptTransformResult
 
     # Defense.

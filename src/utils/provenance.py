@@ -108,6 +108,16 @@ def provenance_fields(
 # ---------------------------------------------------------------------------
 
 
+def sha256_file(path: str | Path) -> str:
+    """SHA-256 of a file's bytes (used to fingerprint a referenced results.json
+    so a stored pointer can detect later drift of its source)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def atomic_write_text(path: str | Path, text: str) -> None:
     path = Path(path)
     tmp = path.with_name(path.name + ".tmp")
