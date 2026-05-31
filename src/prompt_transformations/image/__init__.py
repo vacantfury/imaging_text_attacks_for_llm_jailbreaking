@@ -18,3 +18,4 @@ Param convention shared by all:
   - renderer-specific kwargs forwarded by the wrapper (font_size, image_path, etc.)
 """
 from . import wrappers       # noqa: F401  — all ir_* transformations registered here
+from . import cross_modal_split  # noqa: F401  — Paper C RQ-D split attack

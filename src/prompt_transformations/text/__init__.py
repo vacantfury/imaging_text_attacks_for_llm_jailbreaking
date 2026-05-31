@@ -8,4 +8,5 @@ Each submodule's @register_transformation calls fire on import here.
 """
 from . import wrappers  # noqa: F401  — 9 legacy encoders
 from . import deep_inception  # noqa: F401
+from . import ecso_evade  # noqa: F401  — Paper C adaptive attack
 from .encoders import code_attack  # noqa: F401
