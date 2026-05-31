@@ -5,30 +5,31 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=48G
-#SBATCH --time=02:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=logs/ocr_probe_%j.out
 #SBATCH --error=logs/ocr_probe_%j.err
 
 set -uo pipefail
 
-# Self-contained OCR-fidelity probe (Round-0 gate). Serves ONE VLM on this GPU
-# node with the SAME flags the real experiment uses (resolved from conf/llm),
-# probes localhost with temporary_scripts/ocr_probe.py over the ir_plain images,
-# then tears the server down. You just submit it.
+# Self-contained OCR-fidelity probe (Round-0 gate). ONE job, ONE command, ALL
+# models: on a single GPU it serves each VLM in turn (same flags the real
+# experiment uses, resolved from conf/llm), probes localhost over the ir_plain
+# images with temporary_scripts/ocr_probe.py, tears it down, moves to the next.
 #
 # Usage:
-#   sbatch temporary_scripts/ocr_probe.sbatch                 # default qwen2_5_vl_7b
-#   sbatch temporary_scripts/ocr_probe.sbatch internvl3_8b
-#   sbatch temporary_scripts/ocr_probe.sbatch pixtral_12b
-#   sbatch temporary_scripts/ocr_probe.sbatch llama3_2_11b_vision
-# Read results in logs/ocr_probe_<jobid>.out (per-image fidelity + SUMMARY).
-# Extra vllm flags (e.g. mllama): VLLM_EXTRA="--enforce-eager" sbatch ... llama3_2_11b_vision
+#   sbatch temporary_scripts/ocr_probe.sbatch                       # all 4 models
+#   sbatch temporary_scripts/ocr_probe.sbatch qwen2_5_vl_7b pixtral_12b   # a subset
+# Read results in logs/ocr_probe_<jobid>.out — one fidelity SUMMARY per model.
 
 cd ~/projects/imaging_text_attacks_for_llm_jailbreaking
 mkdir -p logs
 
-MODEL=${1:-qwen2_5_vl_7b}
-PORT=$((8000 + SLURM_JOB_ID % 1000))   # avoid clashes with real server jobs
+# Default: every Paper-C cluster VLM, serially.
+if [ "$#" -ge 1 ]; then
+    MODELS=("$@")
+else
+    MODELS=(qwen2_5_vl_7b internvl3_8b pixtral_12b llama3_2_11b_vision)
+fi
 
 module load anaconda3/2024.06 cuda/12.1.1
 source activate AI_security
@@ -38,8 +39,20 @@ export HF_HOME="${HF_HOME:-/scratch/zhang.haoyu6/huggingface_cache}"
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 
-# Resolve vLLM serve args from conf/llm exactly like ClusterModelServerManager.
-SERVE_ARGS=$(python - "$MODEL" "$PORT" <<'PY'
+IR_DIRS=(outputs/prompt_transform/harmbench/*ir_plain*/ir_plain)
+
+# Serve one model, probe it, tear it down. Never aborts the whole job on a
+# single model's failure — logs it and moves on (so one bad model ≠ no results).
+run_one() {
+    local MODEL="$1"
+    local PORT=$((8000 + (SLURM_JOB_ID + RANDOM) % 1000))
+    echo
+    echo "############################################################"
+    echo "# MODEL: $MODEL   (port $PORT, node $(hostname))"
+    echo "############################################################"
+
+    local SERVE_ARGS
+    SERVE_ARGS=$(python - "$MODEL" "$PORT" <<'PY'
 import sys
 from pathlib import Path
 from src.experiment.config import load_conf
@@ -60,39 +73,51 @@ if ct:
 print(" ".join(args))
 PY
 )
-if [ -z "$SERVE_ARGS" ]; then echo "ERROR: failed to resolve serve args for '$MODEL'." >&2; exit 1; fi
+    if [ -z "$SERVE_ARGS" ]; then echo "  ERROR: could not resolve serve args for '$MODEL' — skipping." >&2; return 1; fi
 
-SERVE_LOG="logs/ocr_probe_vllm_${MODEL}_${SLURM_JOB_ID}.log"
-echo "=================================================================="
-echo "OCR probe — model=$MODEL  port=$PORT  node=$(hostname)"
-echo "  vllm args : $SERVE_ARGS ${VLLM_EXTRA:-}"
-echo "  serve log : $SERVE_LOG"
-echo "=================================================================="
+    # mllama needs eager on some vLLM versions; harmless elsewhere via per-model map.
+    local EXTRA="${VLLM_EXTRA:-}"
+    case "$MODEL" in llama3_2_11b_vision) EXTRA="$EXTRA --enforce-eager" ;; esac
 
-# Start vLLM in the background; ensure it's killed however we exit.
-python -m vllm.entrypoints.openai.api_server $SERVE_ARGS ${VLLM_EXTRA:-} > "$SERVE_LOG" 2>&1 &
-SERVE_PID=$!
-trap 'echo "Tearing down vLLM (pid $SERVE_PID)"; kill $SERVE_PID 2>/dev/null; wait $SERVE_PID 2>/dev/null' EXIT
+    local SERVE_LOG="logs/ocr_probe_vllm_${MODEL}_${SLURM_JOB_ID}.log"
+    echo "  vllm args : $SERVE_ARGS $EXTRA"
+    echo "  serve log : $SERVE_LOG"
 
-# Wait for health (up to ~20 min for cold weight load).
-echo "Waiting for server health on :$PORT ..."
-READY=0
-for i in $(seq 1 120); do
-    if ! kill -0 $SERVE_PID 2>/dev/null; then
-        echo "ERROR: vLLM died during startup — see $SERVE_LOG" >&2; tail -30 "$SERVE_LOG" >&2; exit 1
+    python -m vllm.entrypoints.openai.api_server $SERVE_ARGS $EXTRA > "$SERVE_LOG" 2>&1 &
+    local PID=$!
+
+    # Wait for health (up to ~20 min cold load); bail this model if it dies.
+    local READY=0
+    for _ in $(seq 1 120); do
+        if ! kill -0 "$PID" 2>/dev/null; then
+            echo "  ERROR: vLLM died during startup for $MODEL — tail:" >&2; tail -20 "$SERVE_LOG" >&2; break
+        fi
+        if curl -sf "http://localhost:$PORT/health" >/dev/null 2>&1; then READY=1; break; fi
+        sleep 10
+    done
+
+    if [ "$READY" -eq 1 ]; then
+        echo "  server healthy — probing"
+        python temporary_scripts/ocr_probe.py \
+            --endpoint "http://localhost:$PORT/v1" \
+            --model "$(python -c "from src.llm_utils.llm_model import LLMModel; print(LLMModel.from_string('$MODEL').model_id)")" \
+            "${IR_DIRS[@]}" || echo "  WARN: probe errored for $MODEL (see above)"
+    else
+        echo "  ERROR: $MODEL never became healthy — see $SERVE_LOG" >&2
     fi
-    if curl -sf "http://localhost:$PORT/health" >/dev/null 2>&1; then READY=1; break; fi
-    sleep 10
+
+    # Tear down this model before the next one.
+    kill "$PID" 2>/dev/null
+    wait "$PID" 2>/dev/null
+    echo "  torn down $MODEL"
+}
+
+echo "=================================================================="
+echo "OCR probe — models: ${MODELS[*]}"
+echo "  ir_plain dirs: ${IR_DIRS[*]}"
+echo "=================================================================="
+for MODEL in "${MODELS[@]}"; do
+    run_one "$MODEL"
 done
-if [ "$READY" -ne 1 ]; then echo "ERROR: server not healthy in time — see $SERVE_LOG" >&2; tail -30 "$SERVE_LOG" >&2; exit 1; fi
-echo "Server healthy. Running probe ..."
 echo
-
-# Probe all rendered ir_plain chains on HarmBench.
-python temporary_scripts/ocr_probe.py \
-    --endpoint "http://localhost:$PORT/v1" \
-    --model "$(python -c "from src.llm_utils.llm_model import LLMModel; print(LLMModel.from_string('$MODEL').model_id)")" \
-    outputs/prompt_transform/harmbench/*ir_plain*/ir_plain
-
-echo
-echo "Probe done for $MODEL."
+echo "ALL MODELS DONE — scroll up for per-model SUMMARY lines."
