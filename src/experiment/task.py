@@ -735,10 +735,9 @@ def run_task(task) -> dict[str, Any]:
                 data["mlflow_run_id"] = tracker.run_id
                 write_json_atomic(results_file, data)
 
-            for art in ("results.json", "prompts.jsonl", "raw_results.jsonl"):
-                p = out_path / art
-                if p.exists():
-                    tracker.log_artifact(str(p))
+            # MLflow is an index, not a second copy of the data: point at the
+            # canonical output dir on disk instead of mirroring artifacts.
+            tracker.log_output_dir(out_dir)
 
         return result
     except Exception:

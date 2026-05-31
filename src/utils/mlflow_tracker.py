@@ -4,12 +4,17 @@ MLflow experiment tracking for Encoding × Modality jailbreaking.
 Thin wrapper around MLflow that handles run lifecycle, param/metric logging,
 and artifact storage. All data is stored locally in mlruns/ (no server needed).
 
+MLflow is an INDEX over runs, not a second copy of the data: results.json on
+disk is the system of record. We log tags + scalar metrics + a pointer to the
+output dir — we do NOT mirror results/prompts/raw_results into mlruns/.
+
 Usage (called by task.py — not directly):
     tracker = MLflowTracker()
-    run_id = tracker.start_run(mode="evaluate", encoding="math", model="gpt-4o", modality="image")
+    run_id = tracker.start_run(mode="defense+evaluate", encoding="set_theory",
+                               model="Qwen2.5-VL-7B-Instruct", modality="image")
     tracker.log_params(task_config)
-    tracker.log_metrics({"attack_success_rate": 45.2, "success_count": 108})
-    tracker.log_artifact("/path/to/results.jsonl")
+    tracker.log_metrics({"attack_success_rate": 45.2})
+    tracker.log_output_dir("outputs/defense+evaluate/harmbench/...")  # pointer, not a copy
     tracker.end_run()
 """
 import os
@@ -53,9 +58,9 @@ class MLflowTracker:
         """Start an MLflow run.
         
         Args:
-            mode: Task mode ("text_encode", "imaging", "evaluate")
-            encoding: Encoding strategy ("plain", "math", "classical_chinese")
-            model: Target model ("gpt-4o", "llava-next", etc.)
+            mode: Task mode ("prompt_transform", "defense+evaluate")
+            encoding: Encoding / chain label ("set_theory", "formal_logic", ...)
+            model: Target model ("Qwen2.5-VL-7B-Instruct", etc.)
             modality: Input modality ("text", "image")
         
         Returns:
@@ -99,15 +104,18 @@ class MLflowTracker:
             return
         
         try:
+            def _cap(v):  # MLflow rejects >250-char param values — cap, don't fail
+                s = str(v)
+                return s if len(s) <= 250 else s[:247] + "..."
             params = {}
             for key, value in task_config.items():
                 if isinstance(value, dict):
                     # Flatten one level: renderer.font_size, etc.
                     for sub_key, sub_val in value.items():
-                        params[f"{key}.{sub_key}"] = str(sub_val)
+                        params[f"{key}.{sub_key}"] = _cap(sub_val)
                 else:
-                    params[key] = str(value)
-            
+                    params[key] = _cap(value)
+
             mlflow.log_params(params)
             logger.debug(f"Logged {len(params)} params to MLflow")
         except Exception as e:
@@ -148,7 +156,20 @@ class MLflowTracker:
                 logger.debug(f"Logged artifact to MLflow: {os.path.basename(file_path)}")
         except Exception as e:
             logger.warning(f"MLflow artifact logging failed (non-fatal): {e}")
-    
+
+    def log_output_dir(self, output_dir: str) -> None:
+        """Record the canonical output dir as a pointer (param + tag) instead of
+        copying results/prompts/raw_results into mlruns/. results.json on disk is
+        the system of record; MLflow is just a searchable index over runs.
+        """
+        if not self._active:
+            return
+        try:
+            mlflow.log_param("output_dir", str(output_dir))
+            mlflow.set_tags({"output_dir": str(output_dir)})
+        except Exception as e:
+            logger.warning(f"MLflow output_dir logging failed (non-fatal): {e}")
+
     def end_run(self) -> None:
         """End the current MLflow run."""
         if not self._active:
