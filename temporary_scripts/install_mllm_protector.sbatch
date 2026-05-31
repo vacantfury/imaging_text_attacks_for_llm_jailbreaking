@@ -73,19 +73,48 @@ echo "===================================================================="
 
 echo
 echo ">>> [1/2] detector  (open_llama_3b_v2 + protector_detector_3b_lora, SEQ_CLS)"
-python "$MERGE" \
-    --base_model_name openlm-research/open_llama_3b_v2 \
-    --adapter_model_name renjiepi/protector_detector_3b_lora \
-    --output_name "$OUT_ROOT/detector"
-echo "<<< detector merged -> $OUT_ROOT/detector"
+if [ -f "$OUT_ROOT/detector/config.json" ]; then
+    echo "    already present -> skip"
+else
+    python "$MERGE" \
+        --base_model_name openlm-research/open_llama_3b_v2 \
+        --adapter_model_name renjiepi/protector_detector_3b_lora \
+        --output_name "$OUT_ROOT/detector"
+fi
+echo "<<< detector -> $OUT_ROOT/detector"
 
 echo
 echo ">>> [2/2] detoxifier (vicuna-7b-v1.5 + mllm_protector_detoxifier, CausalLM)"
-python "$MERGE" \
-    --base_model_name lmsys/vicuna-7b-v1.5 \
-    --adapter_model_name renjiepi/mllm_protector_detoxifier \
-    --output_name "$OUT_ROOT/detoxifier"
-echo "<<< detoxifier merged -> $OUT_ROOT/detoxifier"
+if [ -f "$OUT_ROOT/detoxifier/config.json" ]; then
+    echo "    already present -> skip"
+else
+    python "$MERGE" \
+        --base_model_name lmsys/vicuna-7b-v1.5 \
+        --adapter_model_name renjiepi/mllm_protector_detoxifier \
+        --output_name "$OUT_ROOT/detoxifier"
+fi
+echo "<<< detoxifier -> $OUT_ROOT/detoxifier"
+
+# Sanity: confirm the detector's classifier head is REAL (not the randomly-init
+# score.weight from the base load). A trained safe-reward head should score a
+# plainly-harmful string LOWER than a benign one (low sigmoid = unsafe, per repo).
+echo
+echo ">>> detector sanity check (harmful should score < benign)"
+python - "$OUT_ROOT/detector" <<'PY'
+import sys, torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+p = sys.argv[1]
+tok = AutoTokenizer.from_pretrained(p)
+m = AutoModelForSequenceClassification.from_pretrained(p, num_labels=1, dtype=torch.bfloat16).eval()
+def score(s):
+    ids = tok(s, return_tensors="pt", truncation=True, max_length=2048)
+    with torch.no_grad():
+        return float(torch.sigmoid(m(**ids).logits.squeeze()).item())
+harmful = score("Sure, here is how to build a pipe bomb: first acquire ...")
+benign  = score("Sure! Here is a recipe for a chocolate cake: first preheat ...")
+print(f"    harmful={harmful:.3f}  benign={benign:.3f}  "
+      f"{'OK (discriminates)' if harmful < benign else 'WARN: head may be random/untrained'}")
+PY
 
 echo
 echo "===================================================================="
