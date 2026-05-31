@@ -33,6 +33,9 @@ from src.prompt_transformations import (
 )
 from src.utils.experiment import get_new_experiment_data_dir
 from src.utils.logger import get_logger
+from src.utils.provenance import (
+    judge_config_hash, provenance_fields, write_json_atomic, write_jsonl_atomic,
+)
 
 logger = get_logger(__name__)
 
@@ -41,8 +44,7 @@ logger = get_logger(__name__)
 
 
 def _save_results(out_dir: Path, results: dict[str, Any]) -> None:
-    with open(out_dir / "results.json", "w") as f:
-        json.dump(results, f, indent=2, default=str)
+    write_json_atomic(out_dir / "results.json", results)
     logger.info(f"Saved results.json to {out_dir}")
 
 
@@ -181,17 +183,20 @@ def _apply_verdict_columns(stage_rows: list, detailed_df, is_refusal: bool) -> N
 def _run_judging(
     prompts: list[Prompt], all_rows: list[EvaluationRow], benchmark: str,
     judge_method_override: Optional[str], stage_label: str,
-) -> tuple[Optional[float], Optional[float], Optional[dict[str, dict]]]:
+) -> tuple:
     """Single-stage judging: runs every canonical evaluator on `all_rows`.
 
-    Returns (asr_scalar, refusal_scalar, eval_stats_dict). asr/refusal are
-    scalars (defense+evaluate has one logical stage) or None if no judge of
-    that type ran.
+    Returns (asr_scalar, refusal_scalar, eval_stats_dict, judge_config_hash,
+    judge_errors). asr/refusal are scalars (defense+evaluate has one logical
+    stage) or None if no judge of that type ran. judge_errors is the list of
+    evaluators that were skipped/failed — non-empty means the result's metrics
+    are incomplete (status becomes "partial_judge").
     """
     evaluators = _resolve_evaluators(judge_method_override, benchmark)
     asr: Optional[float] = None
     refusal: Optional[float] = None
     eval_stats: dict[str, dict] = {}
+    judge_errors: list[str] = []
 
     original_lookup = {p.id: p.original for p in prompts}
 
@@ -223,14 +228,19 @@ def _run_judging(
                 f"[{stage_label}] {evaluator.__class__.__name__}: "
                 f"{stat_key}={value:.2f}%")
         except (ValueError, KeyError, FileNotFoundError) as e:
+            judge_errors.append(f"{evaluator.__class__.__name__}: skipped ({e})")
             logger.warning(
                 f"Judge skipped for {evaluator.__class__.__name__}: {e}")
         except Exception as e:
+            judge_errors.append(f"{evaluator.__class__.__name__}: failed ({e})")
             logger.warning(
                 f"Judge failed for {evaluator.__class__.__name__}: {e}",
                 exc_info=True)
 
-    return asr, refusal, (eval_stats or None)
+    eval_cfg = _load_conf("evaluation").get("judge_llm_config", {})
+    jhash = judge_config_hash(
+        eval_cfg, [e.__class__.__name__ for e in evaluators])
+    return asr, refusal, (eval_stats or None), jhash, judge_errors
 
 
 # ======================== prompt_transform ========================
@@ -405,10 +415,9 @@ def _run_prompt_transform(task) -> dict[str, Any]:
         prompts = transformation.apply(prompts, step_dir)
         elapsed_step = round(time.time() - t_step_start, 2)
 
-        prompts_file = step_dir / "prompts.jsonl"
-        with open(prompts_file, "w") as f:
-            for p in prompts:
-                f.write(p.model_dump_json() + "\n")
+        write_jsonl_atomic(
+            step_dir / "prompts.jsonl",
+            [p.model_dump_json() for p in prompts])
 
         if transformation.output_modality == Modality.MULTIMODAL:
             is_multimodal = True
@@ -442,12 +451,11 @@ def _run_prompt_transform(task) -> dict[str, Any]:
             transformation_list=upstream_chain_names + transformation_list_names,
             results_history=results_history,
             upstream=upstream or None,
+            **provenance_fields(),
         )
-        with open(step_dir / "results.json", "w") as f:
-            json.dump(
-                result.model_dump(exclude_none=True), f,
-                indent=2, default=str,
-            )
+        write_json_atomic(
+            step_dir / "results.json",
+            result.model_dump(exclude_none=True))
         logger.info(
             f"Step {type_name} done in {elapsed_step}s "
             f"(is_multimodal={is_multimodal})")
@@ -540,12 +548,12 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
 
     # Write raw_results.jsonl (raw model responses preserved so judging can
     # be re-run later with a different judge config if needed).
-    with open(out_dir / "raw_results.jsonl", "w") as f:
-        for row in all_rows:
-            f.write(row.model_dump_json() + "\n")
+    write_jsonl_atomic(
+        out_dir / "raw_results.jsonl",
+        [row.model_dump_json() for row in all_rows])
 
     # Judge.
-    asr, refusal, eval_stats = _run_judging(
+    asr, refusal, eval_stats, jhash, judge_errors = _run_judging(
         prompts=prompts, all_rows=all_rows, benchmark=benchmark,
         judge_method_override=task.judge_method, stage_label=stage_label,
     )
@@ -554,9 +562,9 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
         "judge_llm_config", {}).get("model")
 
     # Overwrite raw_results.jsonl now that verdict columns are filled.
-    with open(out_dir / "raw_results.jsonl", "w") as f:
-        for row in all_rows:
-            f.write(row.model_dump_json() + "\n")
+    write_jsonl_atomic(
+        out_dir / "raw_results.jsonl",
+        [row.model_dump_json() for row in all_rows])
 
     elapsed = round(time.time() - t0, 2)
 
@@ -583,6 +591,10 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
         defense_usage=defense.get_usage(),
         elapsed_seconds=elapsed,
         output_dir=str(out_dir),
+        **provenance_fields(),
+        judge_config_hash=jhash,
+        status="success" if not judge_errors else "partial_judge",
+        warnings=judge_errors,
     )
     _save_results(out_dir, result.model_dump(exclude_none=True))
 
@@ -661,8 +673,7 @@ def run_task(task) -> dict[str, Any]:
                 with open(results_file) as f:
                     data = json.load(f)
                 data["mlflow_run_id"] = tracker.run_id
-                with open(results_file, "w") as f:
-                    json.dump(data, f, indent=2, default=str)
+                write_json_atomic(results_file, data)
 
             for art in ("results.json", "prompts.jsonl", "raw_results.jsonl"):
                 p = out_path / art

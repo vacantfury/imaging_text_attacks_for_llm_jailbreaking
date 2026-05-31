@@ -17,6 +17,8 @@ Two modes only:
 from typing import Annotated, Any, Literal, Optional, Union
 from pydantic import BaseModel, Discriminator, Field, model_validator
 
+from src.utils.provenance import SCHEMA_VERSION
+
 
 # ====================================================================
 # Inter-stage Prompt records
@@ -115,6 +117,12 @@ class PromptTransformResult(BaseModel):
     count: int
     mlflow_run_id: Optional[str] = None
 
+    # Provenance — see src/utils/provenance.py.
+    schema_version: int = SCHEMA_VERSION
+    git_sha: str = ""
+    git_dirty: bool = False
+    status: str = "success"
+
     # Configured plan — full chain including any upstream steps, in order.
     transformation_list: list[str]
 
@@ -187,6 +195,14 @@ class DefenseEvaluateResult(BaseModel):
     elapsed_seconds: float
     output_dir: str
     mlflow_run_id: Optional[str] = None
+
+    # Provenance — see src/utils/provenance.py.
+    schema_version: int = SCHEMA_VERSION
+    git_sha: str = ""
+    git_dirty: bool = False
+    judge_config_hash: Optional[str] = None
+    status: str = "success"
+    warnings: list[str] = Field(default_factory=list)
 
 
 # ====================================================================
