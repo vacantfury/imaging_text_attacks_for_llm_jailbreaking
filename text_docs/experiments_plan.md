@@ -1,504 +1,118 @@
-# Experiment Plan — Defense Destroyer (post-refactor, May 23 2026)
+# Experiments Plan — Paper C (AAAI-27)
 
-## Story
+Companion to `proposal.md`. **Cluster/open-weight VLMs are primary this time**; closed API models (Gemini / GPT-4o-mini / Claude, from Paper B) are a *generalization layer* run late, not the spine. All data collection freezes **~June 20** (see proposal §7).
 
-IR (image rendering) is a **defense destroyer**, not a defense and not an
-attack: a wrapper applied on top of an existing text-encoded attack that
-defeats advanced black-box defenses (SAGE, ECSO, SemanticSmooth) which
-successfully block the bare encoded attack. No published defense-destroyer
-method exists to compete with — the contribution is to establish the
-category and demonstrate cross-defense generality.
+## 0. Strategy
 
-**Core empirical claim (per defense D and encoded attack A):**
+**Why cluster-first (changed from B):**
+- **White-box access.** The deep result (cross-modal splitting, RQ-D) hinges on *whether and where the model reassembles split content internally*. Only open weights let us probe hidden states / attention to answer that — the closed-API black box can't.
+- **Free, fast iteration** for the risky parts — we can run hundreds of attack variants while tuning.
+- **No API-filter confound.** B had to discard cells (e.g. Claude `code_attack`, 82–93% empty) because provider filters fired upstream. Open targets remove that confound — every refusal is in-band model behavior.
+- **Reproducibility / artifact.** Open target models + a full per-prompt judge audit trail = a re-runnable release. (Judge stays `gpt-5-nano`, B parity — see §1.)
 
-- `ASR(A | no defense)` is moderate-to-high.
-- `ASR(A | D)` is low (D defends against the bare attack).
-- `ASR(IR(A) | D) ≫ ASR(A | D)` (IR wrapping destroys D).
-- `ASR(IR(A) | no defense) ≈ ASR(A | no defense)` (destroyer effect is
-  *defense-specific*, not a generic ASR boost).
-
-See `proposal.md` and `old_experiments_plan.md` for the full pivot rationale.
+**Why Phase 0 gates everything (the honest part):** the paper's *strength* lives in cross-modal splitting, which is both schedule-risky and conceptually uncertain (truly "joint-only" harm may be hard to construct). We therefore **test the ceiling in week 1**, before building the rest. Phase 0's outcome decides whether the spine is splitting (strong paper) or the modality-placement floor + over-refusal core (modest paper). We do **not** commit eight weeks to a direction whose upside is untested.
 
 ---
 
-## Past-data destroyer-gap ranking (basis for model prioritization)
+## 1. Models (4 total — trimmed)
 
-From the Stage 10b SAGE-on-frontier + Stage 10e Round 1 destroyer probes
-already in the bag. **Destroyer gap = `ASR(ir_plain-wrapped + SAGE) − ASR(text + SAGE)`** (larger = easier to destroy):
+Selection criteria: (i) **strong OCR** (read rendered/encoded text in the image channel); (ii) **compositional cross-modal reasoning** (split-attack reassembly); (iii) a **safety-alignment spread** so the intrinsic-image-safety pathway (B's pathway 2) can be studied across strong→weak alignment; (iv) **family diversity** — a robustness claim must not be one model's quirk; (v) open weights, vLLM-servable + HF-loadable for activation probing. Capability *scale* is deprioritized: family diversity matters more than size for a robustness result, and 7–12B targets keep iteration fast within the SLURM budget.
 
-| Model | set_theory gap | formal_logic gap | Tier |
-|---|---:|---:|---|
-| **Gemini 2.5 Flash Lite** | **+29pp** | **+14pp** | **A (proven strong destroyer)** |
-| **Gemini 2.5 Flash** | **+11pp** | **+18pp** | **A (proven strong destroyer)** |
-| Claude Sonnet 4.6 | +2pp | +5pp | B (modest) |
-| GPT-5-mini | −1pp | +4pp | C (essentially zero) |
-| GPT-5.4 | 0pp | +2pp | C (essentially zero) |
-| GPT-5.4-mini | 0pp | 0pp | C (essentially zero) |
-| GPT-5.4-nano | +1pp | 0pp | C (essentially zero) |
+| # | Model | Family | Params | Role | Alignment | Status |
+|---|---|---|---|---|---|---|
+| 1 | **Qwen2.5-VL-7B-Instruct** | Alibaba | 7B | Workhorse (iterate here); best OCR; B anchor | mid | ✅ in registry |
+| 2 | **Pixtral-12B** (`mistralai/Pixtral-12B-2409`) | Mistral | 12B | Breadth; weakly-aligned contrast | weak | ✅ in registry |
+| 3 | **Llama-3.2-11B-Vision-Instruct** | Meta | 11B | Strongly safety-aligned target | strong | ⛔ **get** (gated repo) |
+| 4 | **InternVL3-8B** (`OpenGVLab/InternVL3-8B`) | OpenGVLab | 8B | Cross-family generality; strong OCR | mid | ⛔ **get** |
 
-**Pattern: destroyer fires hard on Gemini-flash family, modestly on Claude,
-essentially never on GPT family.** Likely mechanism: GPT has strong
-image-safety alignment (Stage 9c shows IR alone reduces ASR −22 to −32pp on
-GPT-5.4 — the model refuses images harder than text); when image safety is
-strong, IR triggers refusal regardless of upstream defense, so the destroyer
-can't fire. When image safety is weak (Gemini-flash), the encoded text
-passes through and bypasses the text-side terminal defense check.
+**To acquire: only #3 and #4** — `meta-llama/Llama-3.2-11B-Vision-Instruct` (accept Meta's license on HF first) and `OpenGVLab/InternVL3-8B`. All four serve on 1–2 GPUs. Four distinct families, alignment spread strong→weak (Llama → Qwen/InternVL → Pixtral).
 
-**Cost-first prioritization (cheaper models first; Claude deferred):**
-The expensive frontier-tier models (GPT-5.4 $2.50/$15.00, Claude Sonnet 4.6
-$3.00/$15.00, Gemini 2.5 Pro $1.25/$10.00) are *deferred* to a later round.
-Round 1 runs on cheap models only:
+**Judge:** **`gpt-5-nano` (API), unchanged from B** — both the HarmBench ASR evaluator and the JailbreakBench refusal evaluator use it as backbone. Targets are open; the judge stays API for parity with B's recorded numbers. No classifier serving needed.
 
-- **Gemini 2.5 Flash Lite** ($0.075/$0.30) — cheapest AND biggest destroyer signal.
-- **Gemini 2.5 Flash** ($0.30/$2.50) — cheap, also strong destroyer signal.
-- **GPT-5.4-nano** ($0.20/$1.25) — cheap, GPT-family scope-bound check.
-- **GPT-5-mini** ($0.25/$2.00) — cheap, GPT-family extra coverage.
+### 1.1 Getting a new model before experiments (onboarding checklist)
 
-Both GPT and Gemini families covered, no model > $0.30/M input. Claude is
-deferred to future rounds when budget permits.
+Do this once per new model (#3, #4) before it can be a task target:
+
+1. **Weights.** Confirm it downloads on the cluster. Llama-3.2-11B-Vision is a **gated** HF repo — accept the license with the HF account, set `HF_TOKEN`, then `huggingface-cli download <id>`. InternVL3 is ungated.
+2. **Registry row.** Add `LLMModel.<NAME> = ModelSpec("<hf_id>", Provider.NU_CLUSTER, max_context_len=<from config.json>)` in `src/llm_utils/llm_model.py`. Leave `chat_template=None` (modern VL checkpoints ship their own); set one only if vLLM can't derive it.
+3. **Deploy config.** Add `conf/llm/<name>.yaml`: `num_gpus`, `max_model_len` (≤ `max_context_len`), `gpu_types_excluded`, and `trust_remote_code` if needed (**InternVL3 requires `trust_remote_code`**).
+4. **Serve + smoke-test.** Bring the server up via `ClusterModelServerManager`; run a 4-row preset hitting the model with one text and one image prompt; confirm a non-empty response.
+5. **OCR fidelity check (VL-specific, gating).** Render one encoded prompt as an image and ask the model to transcribe it. If it can't read rendered text, the image-channel attacks are unrealizable on that model → drop it, or restrict it to text-channel cells.
+
+Models #1–#2 are already onboarded.
 
 ---
 
-## Pipeline (post-refactor)
+## 2. Fixed pieces (reused from B's harness)
 
-Two modes only.
-
-| Mode | What | Output |
-|---|---|---|
-| `prompt_transform` | chain of transformations one-by-one, one subfolder per step with cumulative results.json | `outputs/prompt_transform/<benchmark>/<chain>_<ts>_<rand>/<step_name>/` |
-| `defense+evaluate` | reads a `prompt_transform` subfolder, runs Defense+model+judge | `outputs/defense+evaluate/<benchmark>/<model>_<defense>_<chain>_<ts>_<rand>/` |
-
-Defenses: `no_defense`, `sage`, `ecso`, `semantic_smooth`.
-Transformations: 9 legacy encoders, 2 new attacks (`deep_inception`,
-`code_attack`), 4 image renderers (`ir_plain`, `ir_fc_typo`, `ir_figstep`,
-`ir_fc_flowchart`), 2 companion-image transforms (`blank_image`,
-`constant_image`).
+- **Defenses:** `no_defense`, `sage` (system-message), `ecso`, **decoy-lever** (B's baseline: encoded text + fixed decoy image), and **`modality_complete` (NEW** — unconditionally caption/OCR the image *and* read text, run one unified safety check over the union; built from ECSO's caption + SAGE's discrimination primitives). *(Stretch: `joint_verify` — one safety judgment over the joint (text,image) input.)*
+- **Attacks (transforms):** `modality_relocate` (payload → uncovered modality), `ecso_evade` (obfuscated output that passes ECSO's TELL self-judge), **`cross_modal_split` (NEW, stretch** — payload distributed across text+image). Encoders reused: `set_theory`, `formal_logic`, `code_attack`.
+- **Benchmarks:** HarmBench-harmful (100) for ASR; JailbreakBench-benign (100) for utility. Rows 0–99.
+- **Metrics:** ASR (HarmBench evaluator, lower=safer; empty→refusal) and benign-refusal (JBB-refusal evaluator, lower=better), both judged by **`gpt-5-nano`** (B parity); safety–utility plane per (model, defense, attack) cell. Bootstrap 95% CIs; paired permutation tests for attack-vs-baseline and guard-vs-decoy.
+- **Decoding:** deterministic, temp 0, seed 42 (B parity).
 
 ---
 
-## Prerequisites — one-time migration of past data (USER-RUN before any experiment)
+## 3. Phased plan
 
-Old `outputs/text_encode/...` + `outputs/imaging/...` dirs are reusable as
-`prompt_transform` chain inputs after a one-off conversion. The script
+### Phase 0 — Ceiling test + baseline (GATING, week 1, cluster)
 
-    temporary_scripts/migrate_old_to_prompt_transform.py
+**0a — Reproduce B's image-presence effect on open models.** Run `{no_defense, sage, ecso, decoy}` × `{set_theory, formal_logic, code_attack}` on all 4 models. *Purpose:* confirm the harness works open-weight and that B's "image lowers ASR" / "ECSO+decoy is strong" effect exists on cluster models (the thing C refutes). 4 models × 4 defenses × 3 encoders ≈ **48 cells**. **If B's effect doesn't even appear open-weight, the premise needs rework — surface immediately.**
 
-does this. Run it ONCE up front; chains that are migrated then count as
-"already done" for any Round X.1 below.
+**0b — Cross-modal splitting feasibility probe (THE CEILING TEST).** On Qwen2.5-VL-7B (+ InternVL3-8B), hand-construct ~10–20 candidate split attacks per encoder where the harmful instruction is distributed across text+image. For each, measure: (i) does **each channel individually** pass SAGE/ECSO/captioning as benign? (ii) does the model **reassemble harmful output** in its answer (ASR)? A "clean" split = both true.
+> **Gate G0 (~Jun 6):** ≥ a handful of clean joint-only splits reproducing across 2 models → **splitting becomes the spine (Phase 3 promoted, strong-paper track).** If splits collapse to "payload mostly in one channel" (caught by per-channel checks) → **drop RQ-D; spine = floor (Phase 1–2) + over-refusal core (Phase 2b); modest-paper track.** Decided here, with ~2 weeks of slack.
 
-**Recommended migration commands (run all before any experiment):**
+### Phase 1 — Modality-placement attacks (floor, RQ-A/B, weeks 1–2)
 
-```bash
-# Harmful benchmarks (set_theory + formal_logic + classical-language family,
-# plain renderer → ir_plain chain).
-python temporary_scripts/migrate_old_to_prompt_transform.py \
-    --benchmark harmbench --renderer plain
-python temporary_scripts/migrate_old_to_prompt_transform.py \
-    --benchmark jailbreakbench --renderer plain
-python temporary_scripts/migrate_old_to_prompt_transform.py \
-    --benchmark orbench_harmful --renderer plain
+Build `modality_relocate` + `ecso_evade`. Matrix: `{relocate, ecso_evade}` × `{sage, ecso, decoy}` × encoders × all 4 models + no-defense controls (specificity: attack must ≈ baseline ASR with no defense, large gap with defense). **RQ-A headline:** does `ecso_evade` recover ASR under **ECSO+decoy** (refuting B's Pareto-optimal claim)? ~ (2 attacks × 3 defenses + controls) × 3 encoders × 4 models ≈ **110–130 cells**. Iterate on the 7–8B subset, then complete the matrix.
 
-# Benign benchmarks (for Block 6 over-refusal — uses pure-text chains only,
-# but the migrator still produces both encoder + renderer subfolders; defense+
-# evaluate just consumes the encoder subfolder).
-python temporary_scripts/migrate_old_to_prompt_transform.py \
-    --benchmark jailbreakbench_benign --renderer plain
-python temporary_scripts/migrate_old_to_prompt_transform.py \
-    --benchmark orbench_benign_hard --renderer plain
+### Phase 2 — The modality-complete guard + cost (RQ-C, weeks 2–3)
 
-# Optional: fc_typography pairs where they exist (Block 4 renderer-variant).
-python temporary_scripts/migrate_old_to_prompt_transform.py \
-    --benchmark harmbench --renderer fc_typography
-```
+**2a:** run `modality_complete` guard vs Phase-1 attacks (does it restore protection?) + benign-refusal on JBB-benign (cost). Plot the safety–utility plane vs B's decoy lever — headline = does the guard dominate (lower refusal at equal/lower ASR)?
+**2b (over-refusal core — the modest-track backbone if G0 is red):** systematic safety–utility audit of all defenses incl. the trivial-reject regime (B saw 76–100% benign refusal under SAGE+decoy on Gemini — does it recur open-weight?), plus a simple utility-recovery tweak. ~ all defenses × {harmful, benign} × 4 models.
 
-After migration, each Round X.1 below only schedules **chains that have NO
-past-data counterpart** (new encoders like `semantic_camo`, new attacks
-like `deep_inception` / `code_attack`, new companion-image transforms like
-`blank_image` / `constant_image`, new renderer variants like `ir_fc_typo`
-if no past fc_typography dir exists for that encoding).
+### Phase 3 — Cross-modal splitting (deep result, RQ-D, CONDITIONAL on G0 green)
+
+Full `cross_modal_split` matrix vs **all** defenses incl. `modality_complete`; show per-channel completeness is necessary-but-insufficient. Add `joint_verify` and characterize the per-channel-vs-joint boundary + cost. **Mechanism (white-box):** HF-load Qwen2.5-VL-7B / InternVL3-8B (not vLLM), probe whether/where split content is reassembled (hidden-state / attention analysis on a small prompt set). Validate the confirmed splits across all 4 models.
+
+### Phase 4 — Generalization to API models (breadth, late, budget-permitting)
+
+Port the *confirmed* attacks + guard to B's closed VLMs (gemini-2.x-flash, gpt-4o-mini, claude-sonnet-4-6). Shows the principle isn't open-model-specific. Run only after Phases 1–3 are locked; degrade gracefully if API access is restricted.
+
+### Phase 5 — Statistics & figures
+
+Bootstrap CIs on every headline cell; permutation tests on paired per-prompt verdicts; the safety–utility plane; mechanism figures; cross-family consistency + the alignment-spread (strong→weak) comparison.
 
 ---
 
-## Datasets / Row Limits
+## 4. Cluster execution (NURC)
 
-Eval-stage row limit: first 100 rows (`prompt_range: [0, 99]`). Upstream
-uses full datasets.
-
-Primary harmful: **HarmBench (100 rows)**. Supporting: JailbreakBench
-harmful (100). Over-refusal: JBB benign + OR-Bench benign_hard (100 each).
+- vLLM servers submitted as separate SLURM jobs via `ClusterModelServerManager`; orchestrator + servers count against `MAX_SUBMIT_JOBS_PER_USER = 8`. All four targets are 7–12B (1–2 GPUs each), so they co-serve comfortably within the cap.
+- Judge is `gpt-5-nano` (API) — no classifier serving. VL target inputs go as base64 `image_url` on the vLLM OpenAI-compatible path (already supported).
+- GPU budget: every target is 7–12B → 1–2 GPUs each; the full 4-model matrix fits without large-model staging.
+- Mechanism work (Phase 3) uses HF `transformers` directly (activation hooks), separate from vLLM serving, on the 7–8B models for tractability.
 
 ---
 
-## Experimental Blocks
+## 5. Decision gates & calendar
 
-### Block 1 — Headline destroyer matrix [CRITICAL, gating]
-
-The centerpiece. Encoders: `set_theory`, `formal_logic` (primary).
-Defenses: `no_defense`, `sage`, `ecso`, `semantic_smooth`. Multimodal:
-`(none)` vs `ir_plain` (`keep_text=false`). Models per the **Target
-Models** table below.
-
-**Past-data reuse:** SAGE and no_defense cells on R1 models are already in
-P2 (`experiment_results.md`). Block 1 only schedules NEW runs (ECSO + SS
-on R1 models, plus all cells for untested models). SemanticSmooth on
-`ir_plain` is N/A — multimodal SS is undefined; documented out-of-scope.
-
-#### Round 1.1 — Stage 1 (`prompt_transform`)
-
-**No new chains.** T1–T4 (`[set_theory]`, `[set_theory, ir_plain]`,
-`[formal_logic]`, `[formal_logic, ir_plain]`) come from the one-time
-migration (see Prerequisites). After migration they sit at
-`outputs/prompt_transform/harmbench/migrated_llm_set_theory_ir_plain_*/`
-and `outputs/prompt_transform/harmbench/migrated_llm_formal_logic_ir_plain_*/`,
-each with `llm_set_theory/` and `ir_plain/` subfolders.
-
-When Round 1.2 below refers to T1 / T2 / T3 / T4, those are the migrated
-subfolders.
-
-#### Round 1.2 — Stage 2 (`defense+evaluate`), R1 cheap models [GATING]
-
-Consumes Round 1.1 chains. Models: Gemini 2.5 Flash Lite, Gemini 2.5
-Flash, GPT-5.4-nano, GPT-5-mini (4 models). Tasks:
-
-| Group | Defense | Chains used | Models | Count |
-|---|---|---|---|---|
-| ECSO (NEW) | `ecso` | T1, T2, T3, T4 | 4 R1 models | 16 |
-| SS-text (NEW) | `semantic_smooth` | T1, T3 (pure-text only) | 4 R1 models | 8 |
-| Backfill | `no_defense` | T1, T2, T3, T4 | GPT-5-mini only (P2 missing) | 4 |
-
-**Total Round 1.2: 28 tasks**. Estimated cost: **~$10–18**.
-
-SAGE + no_defense for the other 3 R1 models reused from P2 — no new runs.
-
-**Gating decisions at end of Round 1.2** (before Round 1.3 / 1.4 / 1.5):
-- If destroyer gap fires on **ECSO across both Gemini models on ≥1 encoding**: cross-family destroyer is the centerpiece. Proceed to all later rounds.
-- If only SAGE shows the gap (ECSO + SS resist): narrow to a SAGE-specific finding (publishable; Findings tier). Skip Round 1.6 (expensive frontier).
-- If only Gemini 2.5 Flash Lite fires (Gemini 2.5 Flash collapses): model-specific finding (AIES). Replicate on 1 more mid-tier Gemini-family model before final scoping.
-- If GPT-family models also show ECSO destroyer gap (they shrugged off SAGE in past data): MAJOR upgrade — paper becomes "destroyer breaks multimodal-aware defenses." Re-prioritize.
-
-#### Round 1.3 — Stage 1, encoding expansion [conditional on 1.2 passing]
-
-Mixed: classical_chinese is migrated; semantic_camo is NEW.
-
-| Task | Chain | Source |
-|---|---|---|
-| T5 | `[classical_chinese_simplified_literary]` | migrated (Prerequisites) |
-| T6 | `[classical_chinese_simplified_literary, ir_plain]` | migrated (Prerequisites) |
-| T7 | `[llm_semantic_camo]` | **NEW** — run prompt_transform |
-| T8 | `[llm_semantic_camo, ir_plain]` | **NEW** — run prompt_transform |
-
-NEW work: 2 prompt_transform tasks (~$1–2 for semantic_camo encoder LLM
-calls + local rendering).
-
-#### Round 1.4 — Stage 2, R2 cluster (Qwen + Pixtral) [free; depends on Round 1.1]
-
-Consumes Round 1.1 chains. These models are completely untested under any
-defense, so the full matrix is new:
-
-4 defenses × 4 chains (T1–T4) × 2 cluster models = **32 tasks**. Cost: **$0** (NURC cluster).
-
-#### Round 1.5 — Stage 2, R2 mid-cost + encoding expansion [conditional]
-
-Two sub-groups, both consume earlier Stage-1 chains:
-
-| Sub-group | Defense | Chains | Models | Count |
-|---|---|---|---|---|
-| Mid-cost models, primary encodings (new cells only) | ecso, ss-text | T1–T4 (ecso), T1+T3 (ss) | GPT-5.4-mini, Gemini 3 Flash Preview | (8+4) × 2 = 24 |
-| R1 models, expansion encodings (full matrix — no past data) | all 4 | T5–T8 | 4 R1 models | 4 × 4 × 4 = 64 |
-
-**Total Round 1.5: ~88 tasks**. Estimated cost: **~$25–40**.
-
-#### Round 1.6 — Stage 2, R3 expensive frontier [deferred; budget-gated]
-
-Consumes Round 1.1 chains. Only new cells (P2 covers SAGE + no_defense
-for these models already):
-
-4 defenses × 4 chains × 2 models (GPT-5.4, Claude Sonnet 4.6), minus
-past-data cells = **~20 tasks**. Cost: **~$20–35**.
-
-Only run after Round 1.2 + Round 1.4 + Round 1.5 results are in and
-justify the spend.
-
-### Block 2 — Specificity ablation [SUPPORTING, runs in parallel with Block 1.2]
-
-Rules out "destruction is just from any image input." Swap `ir_plain` for
-`blank_image` (true blank PNG) or `constant_image` (rabit.jpeg) — both
-default `keep_text=true` (text+companion-image ablations).
-
-**Expected if destroyer is IR-specific:**
-`ASR(blank_image + encoded text | D)` ≈ `ASR(constant_image + encoded text | D)` ≈ `ASR(A | D)` — defenses still hold for blank/constant.
-
-#### Round 2.1 — Stage 1 (`prompt_transform`), cheap setup
-
-Run 2 `prompt_transform` tasks on HarmBench (~$1):
-
-| Task | Chain |
-|---|---|
-| T9  | `[set_theory, blank_image]` |
-| T10 | `[set_theory, constant_image]` |
-
-(Re-uses encoded set_theory text — only the companion image is new.)
-
-#### Round 2.2 — Stage 2 (`defense+evaluate`), cheap Gemini models
-
-Consumes Round 2.1 chains. Models: Gemini 2.5 Flash Lite + Gemini 2.5
-Flash.
-
-4 defenses × 2 chains (T9, T10) × 2 models = **16 tasks**. Cost: **~$5–10**.
-
-If Block 1 Round 1.2 shows GPT-family ECSO destroyer signal, optionally
-extend to GPT-5.4-nano (+8 tasks).
-
-### Block 3 — Cross-attack-family probe [STRENGTHENS GENERALITY; after Block 1.2 passes]
-
-Show destroyer also breaks defenses for non-symbolic attacks. Replace
-the encoder (set_theory / formal_logic) with `deep_inception` (prose
-template) or `code_attack` (Python-stack code template).
-
-#### Round 3.1 — Stage 1 (`prompt_transform`), template-attack chains
-
-Run 4 `prompt_transform` tasks on HarmBench (~$0 — pure templates, no
-encoder LLM):
-
-| Task | Chain |
-|---|---|
-| T11 | `[deep_inception]` |
-| T12 | `[deep_inception, ir_plain]` |
-| T13 | `[code_attack]` |
-| T14 | `[code_attack, ir_plain]` |
-
-#### Round 3.2 — Stage 2 (`defense+evaluate`), cheap Gemini models
-
-Consumes Round 3.1 chains. Models: Gemini 2.5 Flash Lite + Gemini 2.5
-Flash. SS-text only on pure-text chains (T11, T13).
-
-| Defense | Chains | Models | Count |
+| Gate | When | Test | Branch |
 |---|---|---|---|
-| no_defense | T11–T14 | 2 | 8 |
-| sage | T11–T14 | 2 | 8 |
-| ecso | T11–T14 | 2 | 8 |
-| semantic_smooth | T11, T13 (pure-text only) | 2 | 4 |
+| **G0** | ~Jun 6 | Phase 0b: clean joint-only splits exist on ≥2 models? | yes → splitting spine (strong) · no → floor + over-refusal (modest) |
+| **G0′** | ~Jun 6 | Phase 0a: B's image-presence effect reproduces open-weight? | no → premise rework, surface immediately |
+| **G1** | ~Jun 13 | Phase 1: `ecso_evade` refutes ECSO+decoy; placement is defense-specific (not generic ASR boost)? | weak → narrow claim; lean on guard + over-refusal |
+| **Freeze** | **~Jun 20** | all data collection done | writing begins (job started Jun 22) |
 
-**Total Round 3.2: 28 tasks**. Cost: **~$10–15**.
+Calendar: **Now→Jun 6** Phase 0 + start Phase 1 (full-time). **Jun 6→Jun 20** Phases 1–2 always; Phase 3 if G0 green; pilot Phase 4 if ahead. **Jun 22→Jul 21** write (part-time); freeze governs.
 
-### Block 4 — Renderer variant [LIGHT ABLATION; after Block 1.2 passes]
+---
 
-Confirm destroyer survives different rendering styles. Swap `ir_plain`
-for `ir_fc_typo` on one cheap Gemini model + 1 encoding.
+## 6. Risks (cluster-specific)
 
-#### Round 4.1 — Stage 1 (`prompt_transform`), new renderer chain
-
-Run 1 `prompt_transform` task on HarmBench (~$0.5):
-
-| Task | Chain |
+| Risk | Mitigation |
 |---|---|
-| T15 | `[set_theory, ir_fc_typo]` |
-
-Pure-text baseline (T1) reused from Block 1 Round 1.1.
-
-#### Round 4.2 — Stage 2 (`defense+evaluate`), one cheap Gemini model
-
-Consumes T1 + T15. Model: Gemini 2.5 Flash Lite.
-
-| Defense | Chains | Count |
-|---|---|---|
-| no_defense | T1, T15 | 2 |
-| sage | T1, T15 | 2 |
-| ecso | T1, T15 | 2 |
-| semantic_smooth | T1 only (text) | 1 |
-
-**Total Round 4.2: 7 tasks** (no_defense T1 reused from P2 — drops to
-**6 new tasks**). Cost: **~$1–2**.
-
-### Block 5 — Mechanism analysis on open-source VLMs [QUALITATIVE; after Block 1.4]
-
-Hidden-state PCA on Qwen2.5-VL-7B / Pixtral-12B for (pure encoded text,
-ir_plain-wrapped image-only) under each defense. Probes WHERE in each
-defense pipeline the destroyer slips through.
-
-#### Round 5.1 — no new Stage 1
-
-Reuses Block 1 Round 1.1 chains (T1–T4) — already consumed by Block 1
-Round 1.4. Hidden states extracted directly from those `defense+evaluate`
-runs (Qwen + Pixtral).
-
-#### Round 5.2 — analysis only (not a new `defense+evaluate`)
-
-Hidden-state PCA + attention probing on saved activations from Block 1
-Round 1.4. Output: figures for the paper's mechanism section.
-
-**Cost:** $0 (cluster + local computation only; no API calls).
-
-### Block 6 — Over-refusal cost [SUPPORTING; parallel with Block 1.2, independent infra]
-
-Each defense's benign refusal on JBB-benign + OR-Bench benign_hard
-(100 rows each). Pair with destroyer-matrix harmful ASR for the
-safety-utility Pareto frontier.
-
-#### Round 6.1 — Stage 1 (`prompt_transform`), benign encoding
-
-**No new chains.** T16–T19 (set_theory + formal_logic on JBB-benign and
-OR-Bench benign_hard) come from the one-time migration. After running
-the Prerequisites commands for `jailbreakbench_benign` and
-`orbench_benign_hard`, the migrated `llm_set_theory/` and `llm_formal_logic/`
-subfolders are what Round 6.2 consumes.
-
-(No `ir_plain` destroyer needed here — over-refusal is about defenses,
-not the destroyer. Only the pure-text encoder subfolders are used.)
-
-#### Round 6.2 — Stage 2 (`defense+evaluate`), cheap models × benign
-
-Consumes Round 6.1 chains. Models: Gemini 2.5 Flash Lite, GPT-5.4-nano,
-GPT-5-mini (3 cheap models — drop Gemini 2.5 Flash to halve cost).
-
-4 defenses × 4 chains (T16–T19) × 3 models = **48 tasks**. Cost: **~$5–10**.
-
-Judge: `jbb_refusal` for JBB-benign chains, `orbench` for OR-Bench
-chains (canonical per-benchmark dispatch).
-
----
-
-## Target Models (consolidated, cost-tiered)
-
-| Round | Model | Provider | Cost ($/M in/out) | Past destroyer signal |
-|---|---|---|---|---|
-| **R1 (cheap)** | Gemini 2.5 Flash Lite | Google | 0.075 / 0.30 | **+29pp / +14pp** (anchor) |
-| **R1 (cheap)** | Gemini 2.5 Flash | Google | 0.30 / 2.50 | +11pp / +18pp |
-| **R1 (cheap)** | GPT-5.4-nano | OpenAI | 0.20 / 1.25 | ~0pp (scope bound) |
-| **R1 (cheap)** | GPT-5-mini | OpenAI | 0.25 / 2.00 | ~0pp / +4pp (borderline) |
-| **R2 (cluster, free)** | Qwen2.5-VL-7B | NURC | $0 | untested (mechanism) |
-| **R2 (cluster, free)** | Pixtral-12B | NURC | $0 | untested (mechanism) |
-| **R2 (mid-cost)** | GPT-5.4-mini | OpenAI | 0.75 / 4.50 | ~0pp (more GPT data) |
-| **R2 (mid-cost)** | Gemini 3 Flash Preview | Google | 0.50 / 3.00 | unknown (Google frontier fallback) |
-| **R3 (expensive, deferred)** | GPT-5.4 | OpenAI | 2.50 / 15.00 | 0pp / +2pp |
-| **R3 (expensive, deferred)** | Claude Sonnet 4.6 | Anthropic | 3.00 / 15.00 | +2pp / +5pp |
-| **R3 (expensive, deferred)** | Gemini 2.5 Pro | Google | 1.25 / 10.00 | unknown (batch API access pending) |
-
-**Round 1 model set covers both GPT and Gemini families with no model
-above $0.30/M input.** Claude entirely deferred (most expensive provider).
-
-**Excluded:** Claude 4.5 Haiku (batch API timeout), Gemini 3 Pro Preview
-(batch API timeout).
-
----
-
-## Execution Order — cross-block round sequencing
-
-Per-block rounds are listed inside each block. The cross-block sequence
-respects the Stage 1 → Stage 2 dependencies between blocks and the
-gating decision at the end of Block 1 Round 1.2.
-
-```
-Wave A (cheap setup, no API budget):
-  Block 1 R1.1   → produces T1–T4
-  Block 2 R2.1   → produces T9–T10   (parallel with R1.1)
-  Block 6 R6.1   → produces T16–T19  (parallel; benign benchmarks)
-
-Wave B (Stage 2 gating, cheap models only):
-  Block 1 R1.2   ← consumes T1–T4               [~$10–18, GATING]
-  Block 2 R2.2   ← consumes T9–T10              [~$5–10, parallel]
-  Block 6 R6.2   ← consumes T16–T19             [~$5–10, parallel infra]
-
-  >>> Gating decision <<< — see Block 1 R1.2 rules.
-
-Wave C (Stage 1 expansion, cheap; conditional on Wave B):
-  Block 1 R1.3   → produces T5–T8
-  Block 3 R3.1   → produces T11–T14
-  Block 4 R4.1   → produces T15
-
-Wave D (Stage 2 expansion):
-  Block 1 R1.4   ← consumes T1–T4 on Qwen + Pixtral  [free cluster]
-  Block 1 R1.5   ← consumes T1–T8 on mid-cost + R1   [~$25–40]
-  Block 3 R3.2   ← consumes T11–T14                  [~$10–15]
-  Block 4 R4.2   ← consumes T1, T15                  [~$1–2]
-
-Wave E (mechanism, free):
-  Block 5 R5.1+5.2  ← hidden-state PCA on Block 1 R1.4 saved activations
-
-Wave F (expensive frontier, deferred):
-  Block 1 R1.6   ← consumes T1–T4 on GPT-5.4 + Claude 4.6  [~$20–35]
-
-Wave G (analysis + writing):
-  Statistical analysis (bootstrap CIs, permutation tests)
-  Paper writing per `proposal.md` §9
-```
-
-Total expected spend if all waves run: ~$80–130. Gating spend (Wave A + B
-only): ~$20–40.
-
----
-
-## Statistical Analysis
-
-| Analysis | Method | Answers |
-|---|---|---|
-| Destroyer gap CIs per (encoding, defense, model) cell | Bootstrap 10K resamples on ASR rate | "is the +Xpp gap real?" |
-| Pure-attack vs ir_plain-wrapped paired comparison | Permutation test on per-prompt verdicts | sharper than independent-sample comparison |
-| Destroyer specificity (IR vs blank vs constant) | 3-way comparison with multiple-test correction | "is the destroyer specific to IR-rendered encoded text?" |
-| Cross-defense generality | Per-defense gap × {SAGE, ECSO, SemSmooth} ranked overlap | "does destroyer break all three?" |
-| Capability-tier vs destroyer-gap | Regress gap on (text-ASR, IR-defense-effect) | tests the "weak image safety → destroyer fires" hypothesis |
-
----
-
-## Compute Budget (estimated, cost-first — accounting for past data)
-
-| Block | Round | New tasks | Cost |
-|---|---|---|---|
-| Block 1 Round 1 (ECSO + SS-text on R1 set; SAGE/NoDef reused from past data) | R1 | ~40 new + 4 backfill + ~8 prompt_transform | **$8–15** |
-| Block 2 specificity ablation (2 cheap Gemini) | R1 | ~16 | $5–10 |
-| Block 6 over-refusal (cheap × benign) | R1 | ~24 | $5–10 |
-| Block 1 Round 2 cluster (Qwen + Pixtral, full matrix — untested) | R2 | ~32 | $0 (cluster) |
-| Block 1 Round 2 mid-cost (GPT-5.4-mini + Gemini 3 Flash Preview, new cells) | R2 | ~24 | $10–20 |
-| Block 1 Round 2 encoding expansion (CC + semantic_camo, full matrix on R1) | R2 | ~64 | $15–25 |
-| Block 3 cross-attack-family (cheap Gemini, full matrix — untested) | R2 | ~32 | $5–10 |
-| Block 4 renderer variant | R2 | 8 | $1–3 |
-| Block 5 mechanism (cluster) | R2 | small | $0 |
-| Block 1 Round 3 expensive frontier (GPT-5.4 + Claude 4.6, new cells only) | R3 | ~20 | **$20–35** |
-| **Round 1 only (gating cost)** | | **~95 new tasks** | **~$18–35** |
-| **Round 1 + 2 (full minus expensive frontier)** | | **~220 new tasks** | **~$45–90** |
-| **All rounds including expensive frontier** | | **~240 new tasks** | **~$65–125** |
-
-Round 1 gating spend dropped from ~$25–45 to ~$18–35 by reusing past P2
-data for the SAGE and no_defense cells (already-collected destroyer
-anchor data). Only ECSO + SemanticSmooth-on-cheap-R1-models are new.
-
----
-
-## Configuration Notes
-
-- Encoder LLM (for set_theory / formal_logic / classical_chinese /
-  semantic_camo): `gpt-4.1-mini`.
-- Judge model: `gpt-5-nano` (`max_tokens: 16384`), set in
-  `conf/evaluation/default.yaml::judge_llm_config`.
-- Canonical evaluator dispatch is benchmark-driven
-  (`EvaluatorFactory.create_from_benchmark`).
-- Image transformations (new chain syntax):
-  - `ir_plain` — defaults: `keep_text=false`, `image_content=current_text`
-    (image-only delivery; text channel replaced with stock "check the image"
-    instruction).
-  - `ir_plain` with `keep_text=true` — text+ir multimodal ablation.
-  - `blank_image` — true blank PNG; default `keep_text=true`.
-  - `constant_image` — fixed image (default: bundled `rabit.jpeg`);
-    default `keep_text=true`.
-- Defenses: `no_defense`, `sage`, `ecso` (3-call response-coupled,
-  reimplemented on `LLMService` so it works with any VLM),
-  `semantic_smooth` (N=5 paraphrase + vote; text-only).
-- All new experiments write to `outputs/prompt_transform/` and
-  `outputs/defense+evaluate/`. Old `outputs/text_encode/`, `outputs/imaging/`,
-  `outputs/defense/`, `outputs/defense_transform/`, `outputs/evaluate/`
-  preserved unchanged — `experiment_results.md` still references them by
-  basename.
-
----
-
-## Known Risks / Mitigations
-
-| Risk | Likelihood | Mitigation |
-|---|---|---|
-| ECSO destroyer gap is much smaller than SAGE's (caption captures encoded text differently than OCR-then-text) | Medium | Cross-family generality story still holds with SAGE + SemanticSmooth alone; ECSO becomes "third defense" support rather than centerpiece. |
-| Block 2 specificity ablation shows blank/constant_image ALSO destroys defenses | Medium | Reframe contribution as "image-input modality is a structural weakness for text-side-terminal defenses." Smaller but still novel. |
-| SemanticSmooth multimodal undefined (paraphrasing an image is not well-defined) | Confirmed limitation | Run SemanticSmooth on text-only inputs; document multimodal as out-of-scope. |
-| Destroyer effect concentrates only on Gemini family (GPT confirms scope bound but Claude doesn't replicate) | Medium-High | Bound the claim to "image-safety-weak VLMs"; add capability correlation to make the bound informative. |
-| Frontier API accounts blocked again | Medium | Tier A + cluster slice gives independent evidence; degrade gracefully. |
-| Reviewers say "all three defenses share a text-side terminal check, so destruction is a single-mechanism finding" | High | Lean in: structural finding about the entire deployable black-box defense surface, not a single-defense bug. See `proposal.md` §6 mechanism narrative. |
-| ReNeLLM expected but not implemented | Already excused | Documented in proposal as deferred per scope decision. |
+| Splitting yields no clean joint-only attack (G0 red) | Pre-planned: fall back to floor + over-refusal core (Phase 2b) → modest but solid paper (EACL-Findings tier). Decided Jun 6 with slack. |
+| Open models' OCR too weak to read rendered encoded text → image-channel attacks unrealizable | Qwen/InternVL are OCR-strong by design; run the §1.1 OCR check per model before relying on image-channel cells; drop or text-restrict weak-OCR models. |
+| Weakly-aligned base model has no intrinsic image-safety → pathway-2 effects absent | Expected for Pixtral; that's the point of the alignment spread. Report intrinsic-safety results on Llama-3.2-Vision / Qwen / InternVL; use Pixtral for defense-wrapper cells + the weak-alignment contrast. |
+| New-model onboarding blocks: InternVL3 `trust_remote_code` / vLLM version, or gated Llama-3.2-Vision access | Run §1.1 (incl. OCR check) before Phase 1; Qwen2.5-VL-7B (already serving) carries Phase 0 alone if either slips. |
+| Judge (`gpt-5-nano`) cost on a large cell count | Targets are free; only judging costs, and it's modest (4 models × matrix × 100 rows). Batch judge calls; raw verdicts are stored (B parity) so re-judging never re-queries targets. |

@@ -1,0 +1,10 @@
+# InternVL3-8B (OpenGVLab) — cross-family open multimodal
+# Paper C target #4. Requires trust_remote_code (custom modeling code in the HF repo).
+
+model:
+  model: OpenGVLab/InternVL3-8B
+  max_tokens: 4096
+
+cluster:
+  gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4"]
+  trust_remote_code: true

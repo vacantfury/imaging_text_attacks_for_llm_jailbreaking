@@ -307,6 +307,7 @@ class ClusterConfig(BaseModel):
     max_model_len: int
     dtype: Optional[str] = None
     chat_template: Optional[str] = None
+    trust_remote_code: bool = False
     server_start_timeout: int
     endpoint_wait_timeout: int
     cluster_server_endpoint_timeout: int

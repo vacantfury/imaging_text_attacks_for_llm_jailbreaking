@@ -1,0 +1,11 @@
+# Llama-3.2-11B-Vision-Instruct (Meta) — safety-aligned open multimodal
+# Paper C target #3. Gated HF repo — accept the Meta license before downloading.
+
+model:
+  model: meta-llama/Llama-3.2-11B-Vision-Instruct
+  max_tokens: 4096
+
+# ~11B + vision encoder ≈ needs a 40GB+ card — exclude small GPUs.
+# (mllama on some vLLM versions also needs --enforce-eager; add if the smoke-test fails.)
+cluster:
+  gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4"]

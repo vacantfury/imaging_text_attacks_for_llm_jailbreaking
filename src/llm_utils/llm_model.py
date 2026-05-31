@@ -163,6 +163,11 @@ class LLMModel(Enum):
     PIXTRAL_12B  = ModelSpec("mistralai/Pixtral-12B-2409",      Provider.NU_CLUSTER)
     LLAVA_7B     = ModelSpec("llava-hf/llava-1.5-7b-hf",        Provider.NU_CLUSTER)
     QWEN2_5_VL_7B = ModelSpec("Qwen/Qwen2.5-VL-7B-Instruct",    Provider.NU_CLUSTER)
+    # Paper C cluster VLMs: safety-aligned (Meta) + cross-family (OpenGVLab).
+    LLAMA3_2_11B_VISION = ModelSpec(
+        "meta-llama/Llama-3.2-11B-Vision-Instruct", Provider.NU_CLUSTER)
+    INTERNVL3_8B = ModelSpec(
+        "OpenGVLab/InternVL3-8B", Provider.NU_CLUSTER)   # needs trust_remote_code (set in conf/llm)
 
     # Judge models for canonical benchmark evaluators
     HARMBENCH_LLAMA_2_13B_CLS = ModelSpec(

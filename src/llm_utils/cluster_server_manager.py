@@ -533,6 +533,10 @@ class ClusterModelServerManager:
             vllm_args.append(f"--dtype {config['dtype']}")
         if config["num_gpus"] > 1:
             vllm_args.append(f"--tensor-parallel-size {config['num_gpus']}")
+        # Some checkpoints (e.g. InternVL) ship custom modeling code in their HF
+        # repo and require vLLM to trust it. Per-model flag in conf/llm, default off.
+        if config.get("trust_remote_code"):
+            vllm_args.append("--trust-remote-code")
         # Chat template resolution: YAML override → ModelSpec → None.
         # ModelSpec is the source of truth (a model's chat template is an
         # architectural fact, not a deployment choice). YAML can override
