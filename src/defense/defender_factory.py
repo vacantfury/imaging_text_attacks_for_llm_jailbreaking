@@ -57,3 +57,6 @@ from . import no_defense  # noqa: E402,F401
 from . import sage  # noqa: E402,F401
 from . import semantic_smooth  # noqa: E402,F401
 from . import ecso  # noqa: E402,F401
+# Paper C defenses (import after sage/ecso — they reuse those primitives).
+from . import modality_complete  # noqa: E402,F401
+from . import joint_verify  # noqa: E402,F401
