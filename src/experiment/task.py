@@ -66,6 +66,30 @@ def _load_prompts(source_dir: str) -> list[Prompt]:
     return out
 
 
+def _extract_companion_image_path(upstream: dict) -> Optional[str]:
+    """First companion/decoy `image_path` anywhere in the upstream chain.
+
+    Done once at write time so the decoy variant becomes a first-class field
+    on results.json, instead of every reader walking
+    `upstream.results_history[i].<step>.config.image_path`.
+    """
+    stack = [upstream]
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, dict):
+            continue
+        for rec in node.get("results_history", []) or []:
+            if not isinstance(rec, dict):
+                continue
+            for step in rec.values():
+                cfg = step.get("config", {}) if isinstance(step, dict) else {}
+                if isinstance(cfg, dict) and cfg.get("image_path"):
+                    return cfg["image_path"]
+        if isinstance(node.get("upstream"), dict):
+            stack.append(node["upstream"])
+    return None
+
+
 def _apply_prompt_range(items: list, prompt_range: Optional[list[int]]) -> list:
     if not prompt_range or len(prompt_range) != 2:
         return items
@@ -183,19 +207,19 @@ def _apply_verdict_columns(stage_rows: list, detailed_df, is_refusal: bool) -> N
 def _run_judging(
     prompts: list[Prompt], all_rows: list[EvaluationRow], benchmark: str,
     judge_method_override: Optional[str], stage_label: str,
-) -> tuple:
+) -> dict:
     """Single-stage judging: runs every canonical evaluator on `all_rows`.
 
-    Returns (asr_scalar, refusal_scalar, eval_stats_dict, judge_config_hash,
-    judge_errors). asr/refusal are scalars (defense+evaluate has one logical
-    stage) or None if no judge of that type ran. judge_errors is the list of
-    evaluators that were skipped/failed — non-empty means the result's metrics
-    are incomplete (status becomes "partial_judge").
+    Returns a dict: asr, refusal, eval_stats, judge_config_hash, judge_errors,
+    metrics (every named scalar metric), primary_metric (the headline metric's
+    name). asr/refusal are scalars or None if no judge of that type ran;
+    non-empty judge_errors means metrics are incomplete (status "partial_judge").
     """
     evaluators = _resolve_evaluators(judge_method_override, benchmark)
     asr: Optional[float] = None
     refusal: Optional[float] = None
     eval_stats: dict[str, dict] = {}
+    metrics: dict[str, float] = {}
     judge_errors: list[str] = []
 
     original_lookup = {p.id: p.original for p in prompts}
@@ -221,9 +245,10 @@ def _run_judging(
             else:
                 asr = value
             eval_stats[evaluator.__class__.__name__] = stats
-            # OR-Bench exposes direct_answer_rate as asr.
-            if "direct_answer_rate" in stats and is_refusal:
-                asr = stats["direct_answer_rate"]
+            # Record every scalar stat under its real name — no overloading.
+            for k, v in stats.items():
+                if isinstance(v, (int, float)):
+                    metrics[k] = float(v)
             logger.info(
                 f"[{stage_label}] {evaluator.__class__.__name__}: "
                 f"{stat_key}={value:.2f}%")
@@ -240,7 +265,16 @@ def _run_judging(
     eval_cfg = _load_conf("evaluation").get("judge_llm_config", {})
     jhash = judge_config_hash(
         eval_cfg, [e.__class__.__name__ for e in evaluators])
-    return asr, refusal, (eval_stats or None), jhash, judge_errors
+    # Headline metric, named honestly (no benchmark-specific overloading):
+    # direct_answer_rate (OR-Bench) > attack_success_rate > refusal_rate.
+    primary_metric = next(
+        (m for m in ("direct_answer_rate", "attack_success_rate", "refusal_rate")
+         if m in metrics), None)
+    return {
+        "asr": asr, "refusal": refusal, "eval_stats": (eval_stats or None),
+        "judge_config_hash": jhash, "judge_errors": judge_errors,
+        "metrics": metrics, "primary_metric": primary_metric,
+    }
 
 
 # ======================== prompt_transform ========================
@@ -527,8 +561,8 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
         merged_defense_config = dict(task.defense_config or {})
     defense = create_defense(task.defense, **merged_defense_config)
     target_service = LLMServiceFactory.create(task.target_model)
-    target_model_config = LLMServiceFactory._load_model_defaults(
-        LLMModel.from_string(task.target_model))
+    target_llm = LLMModel.from_string(task.target_model)
+    target_model_config = LLMServiceFactory._load_model_defaults(target_llm)
 
     # Run defense — owns the target-model interaction loop.
     pairs = defense.query(
@@ -553,10 +587,13 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
         [row.model_dump_json() for row in all_rows])
 
     # Judge.
-    asr, refusal, eval_stats, jhash, judge_errors = _run_judging(
+    judged = _run_judging(
         prompts=prompts, all_rows=all_rows, benchmark=benchmark,
         judge_method_override=task.judge_method, stage_label=stage_label,
     )
+    asr, refusal = judged["asr"], judged["refusal"]
+    eval_stats, jhash, judge_errors = (
+        judged["eval_stats"], judged["judge_config_hash"], judged["judge_errors"])
     judge_method_provenance = task.judge_method or benchmark
     judge_model_used = _load_conf("evaluation").get(
         "judge_llm_config", {}).get("model")
@@ -576,16 +613,21 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
         defense_config=task.defense_config or {},
         target_model=task.target_model,
         target_model_config=TargetModelConfig(**target_model_config),
+        model_family=target_llm.family,
+        alignment_tier=target_llm.alignment_tier,
         system_message=task.system_message,
         benchmark=benchmark,
         encoding=encoding,
         transformation_list=transformation_list,
+        companion_image_path=_extract_companion_image_path(upstream),
         prompt_range=task.prompt_range,
         judge_method=judge_method_provenance,
         judge_model=judge_model_used,
         count=len(all_rows),
         asr=asr,
         refusal_rate=refusal,
+        metrics=judged["metrics"],
+        primary_metric=judged["primary_metric"],
         eval_stats=eval_stats,
         target_usage=target_service.get_usage(),
         defense_usage=defense.get_usage(),

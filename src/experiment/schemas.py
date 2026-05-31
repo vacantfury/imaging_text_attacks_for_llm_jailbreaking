@@ -170,12 +170,17 @@ class DefenseEvaluateResult(BaseModel):
     # Target model.
     target_model: str
     target_model_config: TargetModelConfig
+    model_family: Optional[str] = None        # first-class, from the registry
+    alignment_tier: Optional[str] = None      # first-class, from the registry
     system_message: Optional[str] = None
 
     # Benchmark + encoding (inferred or override).
     benchmark: str
     encoding: Optional[str] = None
     transformation_list: list[str] = Field(default_factory=list)
+    # First-class decoy/companion image path — no more digging into
+    # upstream.results_history[i].<step>.config.image_path to recover it.
+    companion_image_path: Optional[str] = None
     prompt_range: Optional[list[int]] = None
 
     # Judging.
@@ -184,8 +189,14 @@ class DefenseEvaluateResult(BaseModel):
 
     # Results.
     count: int
-    asr: Optional[float] = None
+    asr: Optional[float] = None          # HarmBench-style ASR only — never overloaded
     refusal_rate: Optional[float] = None
+    # Metric contract: every named scalar metric lives in `metrics`, and
+    # `primary_metric` names which key is this benchmark's headline number
+    # (e.g. "attack_success_rate", "refusal_rate", "direct_answer_rate") — so a
+    # reader never has to know that, say, OR-Bench's headline hides in `asr`.
+    metrics: dict[str, float] = Field(default_factory=dict)
+    primary_metric: Optional[str] = None
     eval_stats: Optional[dict[str, dict]] = None
 
     # Usage.

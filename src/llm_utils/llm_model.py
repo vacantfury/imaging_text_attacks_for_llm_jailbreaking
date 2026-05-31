@@ -59,6 +59,11 @@ class ModelSpec:
     output_price: float = 0.0         # $/1M output tokens
     max_context_len: Optional[int] = None   # arch ceiling; None when unknown
     quirks: frozenset = field(default_factory=frozenset)
+    # Research-facing labels, stamped as first-class fields into results.json so
+    # readers never recover them by archaeology. `family` is a static fact;
+    # `alignment_tier` is a coarse safety-alignment label (strong/mid/weak).
+    family: Optional[str] = None
+    alignment_tier: Optional[str] = None
     # Chat template name → src/llm_utils/chat_templates/<name>.jinja, passed to
     # vLLM as --chat-template. None means "use the tokenizer's baked-in template"
     # (correct for modern chat-tuned checkpoints; their tokenizer.json ships one).
@@ -160,14 +165,18 @@ class LLMModel(Enum):
     VICUNA_13B_CLUSTER = ModelSpec(
         "lmsys/vicuna-13b-v1.5", Provider.NU_CLUSTER,
         max_context_len=4_096)                 # Vicuna v1.5 (4K)
-    PIXTRAL_12B  = ModelSpec("mistralai/Pixtral-12B-2409",      Provider.NU_CLUSTER)
+    PIXTRAL_12B  = ModelSpec("mistralai/Pixtral-12B-2409",      Provider.NU_CLUSTER,
+        family="mistral", alignment_tier="weak")
     LLAVA_7B     = ModelSpec("llava-hf/llava-1.5-7b-hf",        Provider.NU_CLUSTER)
-    QWEN2_5_VL_7B = ModelSpec("Qwen/Qwen2.5-VL-7B-Instruct",    Provider.NU_CLUSTER)
+    QWEN2_5_VL_7B = ModelSpec("Qwen/Qwen2.5-VL-7B-Instruct",    Provider.NU_CLUSTER,
+        family="qwen", alignment_tier="mid")
     # Paper C cluster VLMs: safety-aligned (Meta) + cross-family (OpenGVLab).
     LLAMA3_2_11B_VISION = ModelSpec(
-        "meta-llama/Llama-3.2-11B-Vision-Instruct", Provider.NU_CLUSTER)
-    INTERNVL3_8B = ModelSpec(
-        "OpenGVLab/InternVL3-8B", Provider.NU_CLUSTER)   # needs trust_remote_code (set in conf/llm)
+        "meta-llama/Llama-3.2-11B-Vision-Instruct", Provider.NU_CLUSTER,
+        family="llama", alignment_tier="strong")
+    INTERNVL3_8B = ModelSpec(   # needs trust_remote_code (set in conf/llm)
+        "OpenGVLab/InternVL3-8B", Provider.NU_CLUSTER,
+        family="internvl", alignment_tier="mid")
 
     # Judge models for canonical benchmark evaluators
     HARMBENCH_LLAMA_2_13B_CLS = ModelSpec(
@@ -222,6 +231,16 @@ class LLMModel(Enum):
         `cluster.chat_template` but the source of truth is this field.
         """
         return self.value.chat_template
+
+    @property
+    def family(self) -> Optional[str]:
+        """Model family label (e.g. 'qwen', 'llama') — stamped into results.json."""
+        return self.value.family
+
+    @property
+    def alignment_tier(self) -> Optional[str]:
+        """Coarse safety-alignment label ('strong'/'mid'/'weak'), or None."""
+        return self.value.alignment_tier
 
     def has_quirk(self, q: ModelQuirk) -> bool:
         """Whether this model has an API-side behavior quirk."""
