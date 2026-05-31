@@ -31,13 +31,24 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 def get_git_sha() -> str:
     """Commit SHA of the code that ran.
 
-    Order: GIT_SHA env var (set by the submitting side, so cluster jobs whose
-    compute node lacks .git still get a real SHA) → `git rev-parse HEAD` →
-    "unknown". Cached: the code can't change mid-process.
+    Order: GIT_SHA env var → `<repo>/.git_sha` file (written by the mac's
+    post-commit hook; survives rsync to a cluster node that has no .git) →
+    live `git rev-parse HEAD` → "unknown". Cached: code can't change mid-process.
+
+    A literal "unknown" env value is skipped (the sbatch exports GIT_SHA=unknown
+    when its own `git` fails on the cluster) so we fall through to the file.
     """
-    env = os.environ.get("GIT_SHA")
-    if env:
-        return env.strip()
+    env = (os.environ.get("GIT_SHA") or "").strip()
+    if env and env != "unknown":
+        return env
+    sha_file = _REPO_ROOT / ".git_sha"
+    try:
+        if sha_file.exists():
+            val = sha_file.read_text().strip()
+            if val:
+                return val
+    except Exception:
+        pass
     try:
         out = subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=_REPO_ROOT,
