@@ -1,118 +1,147 @@
-# Experiments Plan — Paper C (AAAI-27)
+# Experiments Plan — Paper C (AAAI-27) · execution playbook
 
-Companion to `proposal.md`. **Cluster/open-weight VLMs are primary this time**; closed API models (Gemini / GPT-4o-mini / Claude, from Paper B) are a *generalization layer* run late, not the spine. All data collection freezes **~June 20** (see proposal §7).
-
-## 0. Strategy
-
-**Why cluster-first (changed from B):**
-- **White-box access.** The deep result (cross-modal splitting, RQ-D) hinges on *whether and where the model reassembles split content internally*. Only open weights let us probe hidden states / attention to answer that — the closed-API black box can't.
-- **Free, fast iteration** for the risky parts — we can run hundreds of attack variants while tuning.
-- **No API-filter confound.** B had to discard cells (e.g. Claude `code_attack`, 82–93% empty) because provider filters fired upstream. Open targets remove that confound — every refusal is in-band model behavior.
-- **Reproducibility / artifact.** Open target models + a full per-prompt judge audit trail = a re-runnable release. (Judge stays `gpt-5-nano`, B parity — see §1.)
-
-**Why Phase 0 gates everything (the honest part):** the paper's *strength* lives in cross-modal splitting, which is both schedule-risky and conceptually uncertain (truly "joint-only" harm may be hard to construct). We therefore **test the ceiling in week 1**, before building the rest. Phase 0's outcome decides whether the spine is splitting (strong paper) or the modality-placement floor + over-refusal core (modest paper). We do **not** commit eight weeks to a direction whose upside is untested.
+Companion to `proposal.md`. Cluster/open-weight VLMs are primary; closed API models are a late generalization layer. **Data collection freezes before the writing phase.** Run rounds in order; each round has a **gate** that decides whether/how to proceed.
 
 ---
 
-## 1. Models (4 total — trimmed)
+## 0. Status — where we are (done ✓ / next ▶)
 
-Selection criteria: (i) **strong OCR** (read rendered/encoded text in the image channel); (ii) **compositional cross-modal reasoning** (split-attack reassembly); (iii) a **safety-alignment spread** so the intrinsic-image-safety pathway (B's pathway 2) can be studied across strong→weak alignment; (iv) **family diversity** — a robustness claim must not be one model's quirk; (v) open weights, vLLM-servable + HF-loadable for activation probing. Capability *scale* is deprioritized: family diversity matters more than size for a robustness result, and 7–12B targets keep iteration fast within the SLURM budget.
+**Done — do NOT redo:**
+- ✓ 4 target models chosen; **all weights downloaded** to `/scratch/$USER/huggingface_cache` (job 7307844).
+- ✓ Llama-3.2-11B-Vision + InternVL3-8B **wired** into `llm_model.py` (+ `family`/`alignment_tier`) and `conf/llm/{llama3_2_11b_vision,internvl3_8b}.yaml` (InternVL3 has `trust_remote_code: true`). Commit `5f283e3`.
+- ✓ Experiment-infra refactor (commits `944f7b9`→`6bf960d`): every `results.json` now carries `git_sha`/`git_dirty`/`schema_version`/`judge_config_hash`/`status`, named `metrics`+`primary_metric` (no `asr` overload), first-class `model_family`/`alignment_tier`/`companion_image_path`, `upstream_ref` pointer, atomic writes. Tables read these fields — **filter by `schema_version`** to exclude any stray legacy dir.
+- ✓ Paper B's old `outputs/` archived to `backup_files/arr_may_submission_files/outputs/`; `outputs/` is empty and Paper-C-only.
+- ✓ **OCR-fidelity probe built as a standalone tool** (`temporary_scripts/ocr_probe.{sbatch,py}`): serves each VLM serially, transcribes sampled `ir_plain` images vs upstream encoded text, prints per-image fidelity + SUMMARY. NURC HTTP-proxy connectivity for loopback health-check/inference **fixed** (the manager's `ProxyHandler({})` pattern → `no_proxy`/`--noproxy` in the probe sbatch).
+- ✓ **Image renderer reworked (2026-06-05):** `ir_plain` now renders at a **fixed readable font and paginates long content across multiple images** — was single-image *shrink-to-fit*, which made long encodings (esp. `code_attack`, ~13k chars) OCR-illegible. Multi-image plumbed end-to-end: schema `image_encoded: list[str]` (back-compat str→[str]), all 4 provider services already accept an image list, defenses load all pages. Over-budget prompts (> `MAX_PAGES_PER_PROMPT=8` pages) are **excluded + flagged `is_within_maxlen=False` / `num_images` in `raw_results`**, never truncated. `page_height=4096` keeps typical prompts to 1–3 images (code_attack→2, math→1). `--max-model-len` kept at 16384 (32768 risks V100 KV-OOM on Pixtral-12B). Old single-image renders demarcated in `experiment_results.md`.
 
-| # | Model | Family | Params | Role | Alignment | Status |
-|---|---|---|---|---|---|---|
-| 1 | **Qwen2.5-VL-7B-Instruct** | Alibaba | 7B | Workhorse (iterate here); best OCR; B anchor | mid | ✅ in registry |
-| 2 | **Pixtral-12B** (`mistralai/Pixtral-12B-2409`) | Mistral | 12B | Breadth; weakly-aligned contrast | weak | ✅ in registry |
-| 3 | **Llama-3.2-11B-Vision-Instruct** | Meta | 11B | Strongly safety-aligned target | strong | ⛔ **get** (gated repo) |
-| 4 | **InternVL3-8B** (`OpenGVLab/InternVL3-8B`) | OpenGVLab | 8B | Cross-family generality; strong OCR | mid | ⛔ **get** |
-
-**To acquire: only #3 and #4** — `meta-llama/Llama-3.2-11B-Vision-Instruct` (accept Meta's license on HF first) and `OpenGVLab/InternVL3-8B`. All four serve on 1–2 GPUs. Four distinct families, alignment spread strong→weak (Llama → Qwen/InternVL → Pixtral).
-
-**Judge:** **`gpt-5-nano` (API), unchanged from B** — both the HarmBench ASR evaluator and the JailbreakBench refusal evaluator use it as backbone. Targets are open; the judge stays API for parity with B's recorded numbers. No classifier serving needed.
-
-### 1.1 Getting a new model before experiments (onboarding checklist)
-
-Do this once per new model (#3, #4) before it can be a task target:
-
-1. **Weights.** Confirm it downloads on the cluster. Llama-3.2-11B-Vision is a **gated** HF repo — accept the license with the HF account, set `HF_TOKEN`, then `huggingface-cli download <id>`. InternVL3 is ungated.
-2. **Registry row.** Add `LLMModel.<NAME> = ModelSpec("<hf_id>", Provider.NU_CLUSTER, max_context_len=<from config.json>)` in `src/llm_utils/llm_model.py`. Leave `chat_template=None` (modern VL checkpoints ship their own); set one only if vLLM can't derive it.
-3. **Deploy config.** Add `conf/llm/<name>.yaml`: `num_gpus`, `max_model_len` (≤ `max_context_len`), `gpu_types_excluded`, and `trust_remote_code` if needed (**InternVL3 requires `trust_remote_code`**).
-4. **Serve + smoke-test.** Bring the server up via `ClusterModelServerManager`; run a 4-row preset hitting the model with one text and one image prompt; confirm a non-empty response.
-5. **OCR fidelity check (VL-specific, gating).** Render one encoded prompt as an image and ask the model to transcribe it. If it can't read rendered text, the image-channel attacks are unrealizable on that model → drop it, or restrict it to text-channel cells.
-
-Models #1–#2 are already onboarded.
+**Next ▶:** Round 0 **re-probe** (paginated renderer) → build attacks/defender → Rounds 1–7.
 
 ---
 
-## 2. Fixed pieces (reused from B's harness)
+## 1. Fixed pieces (reference)
 
-- **Defenses:** `no_defense`, `sage` (system-message), `ecso`, **decoy-lever** (B's baseline: encoded text + fixed decoy image), and **`modality_complete` (NEW** — unconditionally caption/OCR the image *and* read text, run one unified safety check over the union; built from ECSO's caption + SAGE's discrimination primitives). *(Stretch: `joint_verify` — one safety judgment over the joint (text,image) input.)*
-- **Attacks (transforms):** `modality_relocate` (payload → uncovered modality), `ecso_evade` (obfuscated output that passes ECSO's TELL self-judge), **`cross_modal_split` (NEW, stretch** — payload distributed across text+image). Encoders reused: `set_theory`, `formal_logic`, `code_attack`.
-- **Benchmarks:** HarmBench-harmful (100) for ASR; JailbreakBench-benign (100) for utility. Rows 0–99.
-- **Metrics:** ASR (HarmBench evaluator, lower=safer; empty→refusal) and benign-refusal (JBB-refusal evaluator, lower=better), both judged by **`gpt-5-nano`** (B parity); safety–utility plane per (model, defense, attack) cell. Bootstrap 95% CIs; paired permutation tests for attack-vs-baseline and guard-vs-decoy.
-- **Decoding:** deterministic, temp 0, seed 42 (B parity).
+| Axis | Values |
+|---|---|
+| **Targets** | `qwen2_5_vl_7b` (workhorse), `pixtral_12b`, `llama3_2_11b_vision`, `internvl3_8b` — all NU-cluster, 1–2 GPU each |
+| **Encoders** (Stage 1, exist) | `set_theory`, `formal_logic`, `code_attack` |
+| **Image transforms** (Stage 1, exist) | `ir_plain` (render attack into image — **fixed-font, paginated multi-image**), `constant_image` (decoy; `params.image_path`), `blank_image` |
+| **Defenses** (Stage 2) | `no_defense`, `sage`, `ecso`, `modality_complete`, `joint_verify` (stretch) · **SOTA baselines (built):** `eta` (black-box adaptation: CLIP image + ArmoRM output gates + safe-regen), `mllm_protector` (output-side detector+detoxifier). ⚠️ `eta`/`mllm_protector` load HF aux models → the orchestrator job needs a **GPU** (or serve them separately), and their checkpoints must be pulled/merged first. |
+| **Attacks** (Stage 2/transforms) | **to build:** `modality_relocate`, `ecso_evade` · stretch: `cross_modal_split` |
+| **Benchmarks** | HarmBench-harmful (rows 0–99) = ASR; JailbreakBench-benign (0–99) = utility |
+| **Judge** | `gpt-5-nano` (API), B-parity; HarmBench + JBB-refusal evaluators |
+| **Decoding** | temp 0, top_p 1, seed 42 |
 
----
-
-## 3. Phased plan
-
-### Phase 0 — Ceiling test + baseline (GATING, week 1, cluster)
-
-**0a — Reproduce B's image-presence effect on open models.** Run `{no_defense, sage, ecso, decoy}` × `{set_theory, formal_logic, code_attack}` on all 4 models. *Purpose:* confirm the harness works open-weight and that B's "image lowers ASR" / "ECSO+decoy is strong" effect exists on cluster models (the thing C refutes). 4 models × 4 defenses × 3 encoders ≈ **48 cells**. **If B's effect doesn't even appear open-weight, the premise needs rework — surface immediately.**
-
-**0b — Cross-modal splitting feasibility probe (THE CEILING TEST).** On Qwen2.5-VL-7B (+ InternVL3-8B), hand-construct ~10–20 candidate split attacks per encoder where the harmful instruction is distributed across text+image. For each, measure: (i) does **each channel individually** pass SAGE/ECSO/captioning as benign? (ii) does the model **reassemble harmful output** in its answer (ASR)? A "clean" split = both true.
-> **Gate G0 (~Jun 6):** ≥ a handful of clean joint-only splits reproducing across 2 models → **splitting becomes the spine (Phase 3 promoted, strong-paper track).** If splits collapse to "payload mostly in one channel" (caught by per-channel checks) → **drop RQ-D; spine = floor (Phase 1–2) + over-refusal core (Phase 2b); modest-paper track.** Decided here, with ~2 weeks of slack.
-
-### Phase 1 — Modality-placement attacks (floor, RQ-A/B, weeks 1–2)
-
-Build `modality_relocate` + `ecso_evade`. Matrix: `{relocate, ecso_evade}` × `{sage, ecso, decoy}` × encoders × all 4 models + no-defense controls (specificity: attack must ≈ baseline ASR with no defense, large gap with defense). **RQ-A headline:** does `ecso_evade` recover ASR under **ECSO+decoy** (refuting B's Pareto-optimal claim)? ~ (2 attacks × 3 defenses + controls) × 3 encoders × 4 models ≈ **110–130 cells**. Iterate on the 7–8B subset, then complete the matrix.
-
-### Phase 2 — The modality-complete guard + cost (RQ-C, weeks 2–3)
-
-**2a:** run `modality_complete` guard vs Phase-1 attacks (does it restore protection?) + benign-refusal on JBB-benign (cost). Plot the safety–utility plane vs B's decoy lever — headline = does the guard dominate (lower refusal at equal/lower ASR)?
-**2b (over-refusal core — the modest-track backbone if G0 is red):** systematic safety–utility audit of all defenses incl. the trivial-reject regime (B saw 76–100% benign refusal under SAGE+decoy on Gemini — does it recur open-weight?), plus a simple utility-recovery tweak. ~ all defenses × {harmful, benign} × 4 models.
-
-### Phase 3 — Cross-modal splitting (deep result, RQ-D, CONDITIONAL on G0 green)
-
-Full `cross_modal_split` matrix vs **all** defenses incl. `modality_complete`; show per-channel completeness is necessary-but-insufficient. Add `joint_verify` and characterize the per-channel-vs-joint boundary + cost. **Mechanism (white-box):** HF-load Qwen2.5-VL-7B / InternVL3-8B (not vLLM), probe whether/where split content is reassembled (hidden-state / attention analysis on a small prompt set). Validate the confirmed splits across all 4 models.
-
-### Phase 4 — Generalization to API models (breadth, late, budget-permitting)
-
-Port the *confirmed* attacks + guard to B's closed VLMs (gemini-2.x-flash, gpt-4o-mini, claude-sonnet-4-6). Shows the principle isn't open-model-specific. Run only after Phases 1–3 are locked; degrade gracefully if API access is restricted.
-
-### Phase 5 — Statistics & figures
-
-Bootstrap CIs on every headline cell; permutation tests on paired per-prompt verdicts; the safety–utility plane; mechanism figures; cross-family consistency + the alignment-spread (strong→weak) comparison.
+**How to run a stage** (preset = `conf/experiment/<name>.yaml`):
+```bash
+sbatch scripts/run_experiment.sbatch <preset>     # cluster (auto-serves vLLM targets)
+python main.py <preset>                            # local smoke (API targets only)
+```
+**Pipeline:** Stage 1 `prompt_transform` (render attack chains, model-independent) → Stage 2 `defense+evaluate` (consumes a Stage-1 step subdir via `source_transform_subdir`; applies defense, queries target, judges). Stage 1 is cheap and shared across all targets — render once, reuse.
 
 ---
 
-## 4. Cluster execution (NURC)
+## 2. Build status (code) — ✅ all built, registered, smoke-verified, committed
 
-- vLLM servers submitted as separate SLURM jobs via `ClusterModelServerManager`; orchestrator + servers count against `MAX_SUBMIT_JOBS_PER_USER = 8`. All four targets are 7–12B (1–2 GPUs each), so they co-serve comfortably within the cap.
-- Judge is `gpt-5-nano` (API) — no classifier serving. VL target inputs go as base64 `image_url` on the vLLM OpenAI-compatible path (already supported).
-- GPU budget: every target is 7–12B → 1–2 GPUs each; the full 4-model matrix fits without large-model staging.
-- Mechanism work (Phase 3) uses HF `transformers` directly (activation hooks), separate from vLLM serving, on the 7–8B models for tractability.
+| Item | Status | Where |
+|---|---|---|
+| **`modality_complete` defender** (Round 4) | ✅ `35897be` | `src/defense/modality_complete.py` — RECOVER image→text, then one SAGE-style check over the *union* of both channels, eyes-closed |
+| **`joint_verify` defender** (Round 5) | ✅ `35897be` | `src/defense/joint_verify.py` — judge the joint (text+image) request, then answer-or-refuse |
+| **`ecso_evade` attack** (Round 3) | ✅ `6c26a74` | `src/prompt_transformations/text/ecso_evade.py` — output-framing wrapper; exploits the TELL(self-judge) vs HarmBench-judge asymmetry |
+| **`cross_modal_split` attack** (Round 5) | ✅ `6c26a74` | `src/prompt_transformations/image/cross_modal_split.py` — **scaffold** (positional split; Round 2 tunes the rule) |
+| **`modality_relocate` attack** (Round 3) | ✅ reuse existing | = render payload into the image vs SAGE-system → the existing **`ir_plain`** transform; no new class. Add evasion knobs only if Round 1 needs them |
+| **`eta` defender** (Rounds 3–4 baseline) | ✅ `4cbb7b2` | `src/defense/eta.py` — faithful CLIP image pre-eval + ArmoRM output post-eval; white-box align → black-box safe-regen. ⚠️ verify ArmoRM formatting vs `other_repos/ETA`; needs CLIP-336 + ArmoRM-8B on GPU |
+| **`mllm_protector` defender** (Rounds 3–4 baseline) | ✅ `4cbb7b2` | `src/defense/mllm_protector.py` — output-side harm detector + detoxifier. ⚠️ merge released LoRAs (`other_repos/MLLM-protector`) onto bases; needs 3B+7B on GPU |
 
----
-
-## 5. Decision gates & calendar
-
-| Gate | When | Test | Branch |
-|---|---|---|---|
-| **G0** | ~Jun 6 | Phase 0b: clean joint-only splits exist on ≥2 models? | yes → splitting spine (strong) · no → floor + over-refusal (modest) |
-| **G0′** | ~Jun 6 | Phase 0a: B's image-presence effect reproduces open-weight? | no → premise rework, surface immediately |
-| **G1** | ~Jun 13 | Phase 1: `ecso_evade` refutes ECSO+decoy; placement is defense-specific (not generic ASR boost)? | weak → narrow claim; lean on guard + over-refusal |
-| **Freeze** | **~Jun 20** | all data collection done | writing begins (job started Jun 22) |
-
-Calendar: **Now→Jun 6** Phase 0 + start Phase 1 (full-time). **Jun 6→Jun 20** Phases 1–2 always; Phase 3 if G0 green; pilot Phase 4 if ahead. **Jun 22→Jul 21** write (part-time); freeze governs.
+All resolve via `create_defense(...)` / `create_transformation(...)` and pass parse+construct+apply smoke tests. **Caveats:** the four core *defenders* are final; the two *adaptive attacks* (`ecso_evade` framing, `cross_modal_split` rule) are **starting templates** Rounds 1–2 tune. The two SOTA-baseline defenders (`eta`, `mllm_protector`) are wired but **need their aux-model checkpoints pulled/merged + a GPU on the orchestrator** before they run (verify ETA's ArmoRM formatting against the repo first). Reporting follows the **coverage map + pre-registered outcome interpretations** in proposal §6.1–6.3 (every cell is a finding, win or hold — never claim a "sweep").
 
 ---
 
-## 6. Risks (cluster-specific)
+## 3. Rounds (do in order)
+
+### Round 0 — Serve + smoke + OCR fidelity check  ▶ START HERE
+**Goal:** confirm the 2 new models serve and can *read rendered text* (else image-channel attacks are impossible on them).
+**Prereq:** none (weights + configs done).
+**Steps:**
+1. Make `conf/experiment/c0_smoke.yaml`: a few `defense+evaluate`/`no_defense` tasks on `llama3_2_11b_vision` + `internvl3_8b` over ~4 prompts, one text-only and one with an image (`ir_plain` of a benign sentence).
+2. `sbatch scripts/run_experiment.sbatch c0_smoke` — this triggers the orchestrator to auto-serve both vLLM models.
+3. **Check:** server logs come up clean (InternVL3: confirm `--trust-remote-code` passed, chat template resolved). **Llama-3.2-11B-Vision serving is currently BLOCKED** by a vLLM/transformers Mllama incompatibility (`MllamaProcessor has no attribute _get_num_multimodal_tokens`) — pin/upgrade the vLLM+transformers pair or text-restrict Llama; `--enforce-eager` alone does **not** fix it. Responses non-empty.
+4. **OCR check (now a built tool, not eyeballing):** `sbatch temporary_scripts/ocr_probe.sbatch qwen2_5_vl_7b internvl3_8b pixtral_12b`. First run (job 7454645, **OLD single-image renderer**) found **`code_attack` unreadable on all 3** (qwen 0.45 / internvl3 0.10 / pixtral 0.00) while `set_theory`/`formal_logic` read ~0.8–1.0 — this is what drove the renderer rework (§0). **The live R0 gate is the RE-PROBE on the paginated renderer** (after re-rendering `ir_plain`): code_attack fidelity should jump toward ~1.0 at the fixed font.
+**Gate Round 0:** each *serving* model reads the paginated rendered attack at acceptable fidelity. Expectation post-pagination: `code_attack` clears; **watch Pixtral on the longest encodings** (marginal — was the weakest OCR). A model still failing OCR → text-restrict (note in `experiment_results.md`). Prompts exceeding `MAX_PAGES_PER_PROMPT` are reported-excluded (`is_within_maxlen=False`), not dropped. Qwen + InternVL3 known-good on short encodings; Llama gated on the serve fix.
+
+### Round 1 — Phase 0a: reproduce B's image-presence effect (baseline)  → Gate G0′
+**Goal:** confirm B's "image lowers ASR / ECSO+decoy is strong" effect exists on the 4 open models — the thing C refutes. **No new code.**
+**Steps:**
+1. **Stage 1** preset `c1_stage1.yaml`: `prompt_transform` chains on HarmBench (+ JBB-benign for later) for `{set_theory, formal_logic, code_attack}` × `{(text), ir_plain, constant_image(decoy=mountain.png)}`. Run once; note the step subdirs under `outputs/prompt_transform/`.
+2. **Stage 2** preset `c1_stage2.yaml`: `defense+evaluate`, defenses `{no_defense, sage, ecso, decoy}` × the Stage-1 chains × all 4 models → **48 cells**. `sbatch … c1_stage2`.
+3. **Check** each `results.json`: `git_dirty:false`, `primary_metric` set, `model_family`/`companion_image_path` populated; record ASR per cell.
+4. Record the matrix into `experiment_results.md` §C0.
+**Gate G0′:** B's effect reproduces on ≥2 models (decoy/ir_plain lowers ASR; ECSO+decoy strong). If it does **not** appear open-weight → premise rework, surface immediately.
+
+### Round 2 — Phase 0b: cross-modal splitting feasibility  → **Gate G0 (THE gate)**
+**Goal:** decide strong-vs-modest paper track. **No pipeline build yet — manual probe.**
+**Steps:**
+1. By hand, construct ~10–20 candidate *split* attacks per encoder: harmful instruction distributed across text + image so each channel alone looks benign.
+2. For each candidate, on Qwen2.5-VL-7B (+ InternVL3-8B): (a) check each channel *individually* passes SAGE/ECSO/caption as benign; (b) query the joint input and judge whether the model **reassembles harmful output** (ASR). A "clean split" = both true.
+3. Tally clean splits per model; log examples in `experiments_findings.md` §4.
+**Gate G0:**
+- **≥ a handful of clean joint-only splits reproducing across 2 models → STRONG track.** Promote Round 5; build `cross_modal_split`+`joint_verify`.
+- **Splits collapse to "payload mostly in one channel" → MODEST track.** Drop Round 5; lean on Round 4's over-refusal core. Paper targets EACL/Findings (proposal §11).
+
+### Round 3 — Phase 1: modality-placement attacks  → Gate G1
+**Goal:** refute B's "ECSO+decoy is Pareto-optimal" (RQ-A) + show placement is defense-specific (RQ-B).
+**Prereq:** build `modality_relocate` + `ecso_evade` (§2).
+**Steps:**
+1. **Stage 1** `c3_stage1.yaml`: render the new attack chains over HarmBench.
+2. **Stage 2 — core** `c3_stage2.yaml`: `{modality_relocate, ecso_evade}` × `{sage, ecso, decoy}` × 3 encoders × 4 models **+ `no_defense` controls** → ~110–130 cells. Iterate on Qwen+InternVL (7–8B) first, then complete.
+3. **Stage 2 — SOTA baselines** `c3_baselines.yaml` *(after the `eta`/`mllm_protector` checkpoints are pulled/merged and the orchestrator has a GPU — see §1/§2)*: same attacks × `{eta, mllm_protector}` × encoders × 4 models. For **`eta`**, record *image-gate-fired* vs *output-gate-fired* separately (attribution, proposal §6.3): the `decoy` attack should make ETA's image-gate read "safe" → disable it; `ecso_evade` tests `mllm_protector`'s output classifier.
+4. **Headline check:** does `ecso_evade` recover ASR under **ECSO+decoy** (and slip ETA's gates) vs B's near-zero? Record §C1 **per the coverage map** (proposal §6.2 — report each cell as a coverage data point, never a "sweep").
+**Gate G1:** `ecso_evade` refutes ECSO+decoy AND the effect is defense-specific (attack ≈ no_defense baseline, big gap only under a defense). If weak → narrow the claim; lean on the guard + over-refusal.
+
+### Round 4 — Phase 2: modality-complete guard + over-refusal (RQ-C)
+**Goal:** the constructive fix + its utility cost.
+**Prereq:** build `modality_complete` (§2).
+**Steps:**
+1. **2a:** `c4_guard.yaml` — `modality_complete` vs the Round-3 attacks (does it restore protection?) **and** on JBB-benign (refusal cost). Plot the safety–utility plane vs B's decoy lever **and vs `eta` / `mllm_protector`** — headline = the guard dominates (≤ refusal at ≤ ASR) and recovers what ETA's CLIP-scoring / MLLM-Protector's output-check miss (the semantic-scoring-vs-content-recovery contrast, proposal §6.3).
+2. **2b (modest-track backbone):** `c4_overrefusal.yaml` — all defenses (incl. `eta`, `mllm_protector`) × {harmful, benign} × 4 models; quantify the trivial-reject regime (B saw 76–100% benign refusal under SAGE+decoy — does it recur?). Add a simple utility-recovery tweak.
+3. Record §C2.
+
+### Round 5 — Phase 3: cross-modal splitting (STRONG track only, conditional on G0)
+**Goal:** show per-channel completeness is necessary-but-insufficient → joint verification needed.
+**Prereq:** G0 green; build `cross_modal_split` + `joint_verify`.
+**Steps:**
+1. `c5_split.yaml`: full `cross_modal_split` × **all** defenses incl. `modality_complete` (+ `joint_verify`) × models. Characterize where per-channel breaks and joint holds + its cost.
+2. **Mechanism (white-box):** HF-load Qwen2.5-VL-7B / InternVL3-8B (not vLLM); probe whether/where split content is reassembled (hidden-state / attention on a small set).
+3. Record §C3.
+
+### Round 6 — Phase 4: API-model generalization (breadth, budget-permitting)
+**Goal:** show it isn't open-model-specific.
+**Steps:** port the *confirmed* attacks + guard to `gemini-2.x-flash` / `gpt-4o-mini` / `claude-sonnet-4-6`. Run only after Rounds 3–5 are locked; degrade gracefully if API access is restricted. Record §C4.
+
+### Round 7 — Phase 5: statistics, figures, freeze
+**Steps:** bootstrap 95% CIs on every headline cell; paired permutation tests (attack-vs-baseline, guard-vs-decoy); safety–utility plane; mechanism figures; cross-family + alignment-spread (strong→weak) comparison. **Freeze data, then writing begins.**
+
+---
+
+## 4. Decision gates
+
+| Gate | Test | Branch |
+|---|---|---|
+| **R0** | serving models read **paginated** rendered text (`ocr_probe` re-probe); Llama mllama-serve fix | fail OCR → text-restrict; >MAX_PAGES → `is_within_maxlen` exclude |
+| **G0′** | Round 1: B's image-presence effect reproduces open-weight | no → premise rework |
+| **G0** | Round 2: clean joint-only splits on ≥2 models | yes → strong (Round 5) · no → modest (Round 4 core) |
+| **G1** | Round 3: `ecso_evade` refutes ECSO+decoy, defense-specific | weak → narrow claim |
+| **Freeze** | all data done | writing begins |
+
+**Sequencing:** Rounds 0–2 first; then Rounds 3–4 always, Round 5 if G0 green, Round 6 if ahead; then freeze → write.
+
+---
+
+## 5. Risks
 
 | Risk | Mitigation |
 |---|---|
-| Splitting yields no clean joint-only attack (G0 red) | Pre-planned: fall back to floor + over-refusal core (Phase 2b) → modest but solid paper (EACL-Findings tier). Decided Jun 6 with slack. |
-| Open models' OCR too weak to read rendered encoded text → image-channel attacks unrealizable | Qwen/InternVL are OCR-strong by design; run the §1.1 OCR check per model before relying on image-channel cells; drop or text-restrict weak-OCR models. |
-| Weakly-aligned base model has no intrinsic image-safety → pathway-2 effects absent | Expected for Pixtral; that's the point of the alignment spread. Report intrinsic-safety results on Llama-3.2-Vision / Qwen / InternVL; use Pixtral for defense-wrapper cells + the weak-alignment contrast. |
-| New-model onboarding blocks: InternVL3 `trust_remote_code` / vLLM version, or gated Llama-3.2-Vision access | Run §1.1 (incl. OCR check) before Phase 1; Qwen2.5-VL-7B (already serving) carries Phase 0 alone if either slips. |
-| Judge (`gpt-5-nano`) cost on a large cell count | Targets are free; only judging costs, and it's modest (4 models × matrix × 100 rows). Batch judge calls; raw verdicts are stored (B parity) so re-judging never re-queries targets. |
+| G0 red (no clean split) | Pre-planned modest track: Round 4 over-refusal core → solid Findings-tier paper. Known early (Round 2) with slack. |
+| New model fails OCR / serving | **Long-content OCR failure now mitigated by fixed-font pagination** (was the `code_attack` killer at single-image); R0 re-probe confirms. Llama-3.2-Vision serve blocked by Mllama vLLM bug → version-pin fix or text-restrict; Qwen+InternVL3 carry Phase 0 if Llama slips. Pixtral marginal on longest encodings. Over-budget prompts excluded-and-flagged, not dropped. |
+| Weakly-aligned Pixtral shows no intrinsic image-safety | Expected — that's the alignment-spread contrast; report pathway-2 on Llama/Qwen/InternVL, use Pixtral for defense-wrapper + weak-alignment cells. |
+| Placement attack is "just a stronger attack," not modality-specific (G1) | `no_defense` controls anchor specificity (attack ≈ baseline with no defense). |
+| Judge (`gpt-5-nano`) cost on a large cell count | Targets free; judging is modest; raw verdicts stored so re-judging never re-queries targets. |

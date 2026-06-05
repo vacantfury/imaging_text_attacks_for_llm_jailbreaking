@@ -110,6 +110,36 @@ Black-box API access to the target VLM and to any deployed black-box defense (no
 
 A clean paper needs P1–P4 to mostly hold; P2 is the linchpin (it is what makes C a refutation of B's robustness rather than a footnote).
 
+### 6.1 Added SOTA defense baselines (so coverage is tested against the strongest)
+Beyond SAGE/ECSO we add two recent defenses, to pre-empt "you only beat weak defenses":
+- **ETA** (ICLR'25) — *black-box adaptation*: faithful CLIP image pre-eval + ArmoRM output post-eval (its detection); its white-box logit best-of-N *align* is replaced by safe-regeneration when flagged (logit steering is outside our black-box threat model — stated openly). Note ETA gates **leniently** (intervenes only when *both* checks fire), so a benign decoy image makes the image-gate read "safe" and disables it.
+- **MLLM-Protector** (EMNLP'24) — *faithful*: a 3B harm detector on the **output** + a detoxifier (released checkpoints). Serves as the **orthogonality control** (output-side, not input-coverage).
+
+### 6.2 Reporting framework: a coverage map, not a sweep
+We frame results as **"defense effectiveness is governed by which surfaces its safety check covers"** — *not* "we beat every defense." Characterize each defense by covered surfaces and each attack by where the harm lives; each cell tests whether the harm sits outside coverage.
+
+| Defense | input-text | input-image | output | joint |
+|---|:--:|:--:|:--:|:--:|
+| SAGE | ✓ | — | — | — |
+| ECSO | — | ✓ (caption, gated) | — | — |
+| **ETA** | — | ✓ (CLIP) | ✓ (reward) | — |
+| **MLLM-Protector** | — | — | ✓ | — |
+| `modality_complete` | ✓ | ✓ (OCR) | — | — |
+| `joint_verify` | — | — | — | ✓ |
+
+Attacks by harm location: `ir_plain`/`modality_relocate` → input-image · `decoy` → input-text(+benign image) · `ecso_evade` → output(framed benign) · `cross_modal_split` → **joint only**.
+
+### 6.3 Pre-registered outcome interpretations (every outcome is a finding)
+| Result | Interpretation |
+|---|---|
+| decoy/placement beats **ETA** (image-gate "safe" → never checks output) | "semantic image scoring ≠ content coverage; a benign image disables the defense" — core thesis, motivates OCR-recovery guard over CLIP-scoring |
+| ETA's **output reward** still catches the output | "input-coverage bypassable (thesis holds), but output-reward is a complementary net" → `ecso_evade` then tests the output axis |
+| `ecso_evade` beats **MLLM-Protector** | "output-checking alone falls to output-framing" |
+| **MLLM-Protector** holds | "output-side classifiers are a genuinely complementary defense input-placement doesn't address — robust safety needs both axes" (strengthens, not weakens) |
+| `cross_modal_split` defeats even `modality_complete` | per-channel completeness is necessary-but-insufficient → only `joint_verify` reaches joint-only harm (the deepest finding, true either way) |
+
+**Reporting axes:** ASR per (attack × defense); for ETA, separate columns for *image-gate fired* / *output-gate fired* (attribution — this is what makes "beating ETA" non-trivial); benign-refusal alongside ASR (the safety–utility plane). **No cell can sink the paper** — win or hold, each places a data point on the coverage map that tests the principle. Discussable regardless of numbers: (a) modality coverage as governing variable; (b) semantic-scoring vs content-recovery (ETA's CLIP vs our OCR guard); (c) input-coverage vs output-checking as orthogonal axes; (d) safety–utility cost; (e) the joint-only frontier.
+
 ---
 
 ## 7. Timeline (backward from July 21; data frozen ~June 20)

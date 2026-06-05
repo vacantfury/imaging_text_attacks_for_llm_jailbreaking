@@ -1,129 +1,52 @@
 # ============================================================
-# STAGE 2 — Decoy-diversity cross-model verification
+# Paper C · Round 0/1 · STAGE 1b — RE-RENDER ir_plain (paginated renderer)
 # ============================================================
-# Tests whether M4 amplification observed with the "mountain"
-# text-pseudo-image decoy (cross-model evidence from mj_7027715)
-# also holds with two contrasting decoys:
-#   - blank.png: pure white 512x512 (M3 control)
-#   - rabit.jpeg: real natural image (rabbit drawing)
+# Regenerates the `ir_plain` image variant for the THREE canonical encodings
+# using the NEW renderer (2026-06-05): FIXED readable font, content PAGINATED
+# across multiple images instead of single-image shrink-to-fit. This replaces
+# the old single-image ir_plain dirs (deleted) that made long encodings
+# (esp. code_attack, ~13k chars) OCR-illegible.
 #
-# All Stage 1 chains used here were rendered with keep_text=True
-# (the FIXED chains from mj_7028227, not the buggy mj_7027565).
-# Verified: each chain's prompts.jsonl has encoded text on the
-# text channel and the decoy image on the image channel.
+#   ir_plain (image-only): encoded attack rendered INTO image(s); text channel
+#            replaced with a stock "check the image" instruction (keep_text=false).
+#            Long prompts now emit MULTIPLE page images → Prompt.image_encoded is
+#            a LIST of paths (e.g. <id>_encoded_p0.png, _p1.png, …).
 #
-# Skipping SAGE on the new decoys — SAGE × M4-mountain across
-# all 5 models is already available from prior runs (the
-# trivial-reject finding). The novel question is whether ECSO's
-# amplification effect (currently +20–72pp across models on
-# mountain) holds when the decoy changes.
+# Doubles as the multi-image RENDERER test: local-only (no LLM/GPU/API), fast +
+# free, runs on `short`. The full [0,99] range is kept on purpose — the long
+# code_attack prompts are what exercise the new pagination / multi-page output.
+# (The multi-image CALL path — sending N images to a VLM — is validated next by
+#  the OCR re-probe `temporary_scripts/ocr_probe.sbatch` and Stage 2.)
 #
-# Cells: 5 models × {no_defense, ecso} × {ca_blank, ca_rabit,
-# fl_blank, fl_rabit harmful + ben_blank, ben_rabit benign}
-# = 5 × 2 × 6 = 60.
+# NOT re-rendering ir_constant (decoy): the constant renderer is unchanged by
+# the pagination work, so its existing dirs stay valid — re-running would only
+# create duplicate decoy dirs.
 #
-# Cost: ~$15-30 (claude dominates).
-# Wall: ~1-1.5h with num_main_job_threads=4.
+# Produces (new prompt_transform dirs):
+#   outputs/prompt_transform/harmbench/<enc>_ir_plain_<ts>_<r>/ir_plain/
+#       images/<id>_encoded.png        (short prompt → 1 page)
+#       images/<id>_encoded_p0.png …   (long prompt  → N pages)
 #
-# Usage: sbatch scripts/run_experiment.sbatch experiment
+# Run:
+#   python main.py experiment                          # local (recommended; it's free)
+#   sbatch scripts/run_experiment.sbatch experiment    # or on the cluster
+#
+# Sanity after the run: spot-check a long code_attack dir has *_p0/_p1 images and
+# its prompts.jsonl `image_encoded` is a JSON array. Then re-probe OCR fidelity.
 # ============================================================
 
-num_main_job_threads: 4
+num_main_job_threads: 6
 
-# ── Stage 1 chains (FIXED, keep_text=True) from mj_7028227 ────
-_chains:
-  # Harmful × code_attack
-  ca_blank: &ca_blank
-    outputs/prompt_transform/harmbench/code_attack_ir_constant_20260526_050639_48891494/ir_constant
-  ca_rabit: &ca_rabit
-    outputs/prompt_transform/harmbench/code_attack_ir_constant_20260526_050639_86604878/ir_constant
-
-  # Harmful × formal_logic
-  fl_blank: &fl_blank
-    outputs/prompt_transform/harmbench/llm_formal_logic_ir_constant_20260526_050639_87823422/ir_constant
-  fl_rabit: &fl_rabit
-    outputs/prompt_transform/harmbench/llm_formal_logic_ir_constant_20260526_050639_91435899/ir_constant
-
-  # Benign (raw jbb_benign + decoy)
-  ben_blank: &ben_blank
-    outputs/prompt_transform/jailbreakbench_benign/ir_constant_20260526_050641_90920904/ir_constant
-  ben_rabit: &ben_rabit
-    outputs/prompt_transform/jailbreakbench_benign/ir_constant_20260526_050641_2639747/ir_constant
-
-# ── Per-model task templates ─────────────────────────────────
-_g20:   &g20    {mode: defense+evaluate, target_model: gemini-2.0-flash,      prompt_range: [0, 99]}
-_flash: &flash  {mode: defense+evaluate, target_model: gemini-2.5-flash,      prompt_range: [0, 99]}
-_lite:  &lite   {mode: defense+evaluate, target_model: gemini-2.5-flash-lite, prompt_range: [0, 99]}
-_gpt:   &gpt    {mode: defense+evaluate, target_model: gpt-4o-mini,           prompt_range: [0, 99]}
-_clds:  &clds   {mode: defense+evaluate, target_model: claude-sonnet-4-6,     prompt_range: [0, 99]}
+# ── Canonical encodings from Stage 1 (mj_7308777) — UNCHANGED upstream ───────
+_enc_set:  &enc_set   outputs/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory
+_enc_fl:   &enc_fl    outputs/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
+_enc_code: &enc_code  outputs/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack
 
 tasks:
-  # gemini-2.0-flash × 12 (the original headline-cell decoy test, now with fixed chains)
-  - {<<: *g20, defense: no_defense, source_transform_subdir: *ca_blank}
-  - {<<: *g20, defense: ecso,       source_transform_subdir: *ca_blank}
-  - {<<: *g20, defense: no_defense, source_transform_subdir: *ca_rabit}
-  - {<<: *g20, defense: ecso,       source_transform_subdir: *ca_rabit}
-  - {<<: *g20, defense: no_defense, source_transform_subdir: *fl_blank}
-  - {<<: *g20, defense: ecso,       source_transform_subdir: *fl_blank}
-  - {<<: *g20, defense: no_defense, source_transform_subdir: *fl_rabit}
-  - {<<: *g20, defense: ecso,       source_transform_subdir: *fl_rabit}
-  - {<<: *g20, defense: no_defense, source_transform_subdir: *ben_blank}
-  - {<<: *g20, defense: ecso,       source_transform_subdir: *ben_blank}
-  - {<<: *g20, defense: no_defense, source_transform_subdir: *ben_rabit}
-  - {<<: *g20, defense: ecso,       source_transform_subdir: *ben_rabit}
-
-  # gemini-2.5-flash × 12
-  - {<<: *flash, defense: no_defense, source_transform_subdir: *ca_blank}
-  - {<<: *flash, defense: ecso,       source_transform_subdir: *ca_blank}
-  - {<<: *flash, defense: no_defense, source_transform_subdir: *ca_rabit}
-  - {<<: *flash, defense: ecso,       source_transform_subdir: *ca_rabit}
-  - {<<: *flash, defense: no_defense, source_transform_subdir: *fl_blank}
-  - {<<: *flash, defense: ecso,       source_transform_subdir: *fl_blank}
-  - {<<: *flash, defense: no_defense, source_transform_subdir: *fl_rabit}
-  - {<<: *flash, defense: ecso,       source_transform_subdir: *fl_rabit}
-  - {<<: *flash, defense: no_defense, source_transform_subdir: *ben_blank}
-  - {<<: *flash, defense: ecso,       source_transform_subdir: *ben_blank}
-  - {<<: *flash, defense: no_defense, source_transform_subdir: *ben_rabit}
-  - {<<: *flash, defense: ecso,       source_transform_subdir: *ben_rabit}
-
-  # gemini-2.5-flash-lite × 12
-  - {<<: *lite, defense: no_defense, source_transform_subdir: *ca_blank}
-  - {<<: *lite, defense: ecso,       source_transform_subdir: *ca_blank}
-  - {<<: *lite, defense: no_defense, source_transform_subdir: *ca_rabit}
-  - {<<: *lite, defense: ecso,       source_transform_subdir: *ca_rabit}
-  - {<<: *lite, defense: no_defense, source_transform_subdir: *fl_blank}
-  - {<<: *lite, defense: ecso,       source_transform_subdir: *fl_blank}
-  - {<<: *lite, defense: no_defense, source_transform_subdir: *fl_rabit}
-  - {<<: *lite, defense: ecso,       source_transform_subdir: *fl_rabit}
-  - {<<: *lite, defense: no_defense, source_transform_subdir: *ben_blank}
-  - {<<: *lite, defense: ecso,       source_transform_subdir: *ben_blank}
-  - {<<: *lite, defense: no_defense, source_transform_subdir: *ben_rabit}
-  - {<<: *lite, defense: ecso,       source_transform_subdir: *ben_rabit}
-
-  # gpt-4o-mini × 12
-  - {<<: *gpt, defense: no_defense, source_transform_subdir: *ca_blank}
-  - {<<: *gpt, defense: ecso,       source_transform_subdir: *ca_blank}
-  - {<<: *gpt, defense: no_defense, source_transform_subdir: *ca_rabit}
-  - {<<: *gpt, defense: ecso,       source_transform_subdir: *ca_rabit}
-  - {<<: *gpt, defense: no_defense, source_transform_subdir: *fl_blank}
-  - {<<: *gpt, defense: ecso,       source_transform_subdir: *fl_blank}
-  - {<<: *gpt, defense: no_defense, source_transform_subdir: *fl_rabit}
-  - {<<: *gpt, defense: ecso,       source_transform_subdir: *fl_rabit}
-  - {<<: *gpt, defense: no_defense, source_transform_subdir: *ben_blank}
-  - {<<: *gpt, defense: ecso,       source_transform_subdir: *ben_blank}
-  - {<<: *gpt, defense: no_defense, source_transform_subdir: *ben_rabit}
-  - {<<: *gpt, defense: ecso,       source_transform_subdir: *ben_rabit}
-
-  # claude-sonnet-4-6 × 12 (note: code_attack cells affected by Anthropic API filter)
-  - {<<: *clds, defense: no_defense, source_transform_subdir: *ca_blank}
-  - {<<: *clds, defense: ecso,       source_transform_subdir: *ca_blank}
-  - {<<: *clds, defense: no_defense, source_transform_subdir: *ca_rabit}
-  - {<<: *clds, defense: ecso,       source_transform_subdir: *ca_rabit}
-  - {<<: *clds, defense: no_defense, source_transform_subdir: *fl_blank}
-  - {<<: *clds, defense: ecso,       source_transform_subdir: *fl_blank}
-  - {<<: *clds, defense: no_defense, source_transform_subdir: *fl_rabit}
-  - {<<: *clds, defense: ecso,       source_transform_subdir: *fl_rabit}
-  - {<<: *clds, defense: no_defense, source_transform_subdir: *ben_blank}
-  - {<<: *clds, defense: ecso,       source_transform_subdir: *ben_blank}
-  - {<<: *clds, defense: no_defense, source_transform_subdir: *ben_rabit}
-  - {<<: *clds, defense: ecso,       source_transform_subdir: *ben_rabit}
+  # ── ir_plain (image-only delivery), paginated fixed-font renderer ──────────
+  - {mode: prompt_transform, source_transform_subdir: *enc_set,  prompt_range: [0, 99],
+     transformation_list: [{type: ir_plain, params: {keep_text: false}}]}
+  - {mode: prompt_transform, source_transform_subdir: *enc_fl,   prompt_range: [0, 99],
+     transformation_list: [{type: ir_plain, params: {keep_text: false}}]}
+  - {mode: prompt_transform, source_transform_subdir: *enc_code, prompt_range: [0, 99],
+     transformation_list: [{type: ir_plain, params: {keep_text: false}}]}
