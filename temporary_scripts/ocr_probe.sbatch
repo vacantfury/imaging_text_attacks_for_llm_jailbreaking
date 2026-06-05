@@ -39,6 +39,14 @@ export HF_HOME="${HF_HOME:-/scratch/zhang.haoyu6/huggingface_cache}"
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 
+# NURC sets an HTTP proxy in the environment; without bypassing it for loopback,
+# both the curl health check AND the OpenAI/httpx client in ocr_probe.py route
+# 127.0.0.1 requests through the proxy and never reach the local vLLM server
+# (server loads, GPU sits idle, cluster cancels at 15m). The main pipeline solves
+# this with urllib ProxyHandler({}); here we just exempt loopback from the proxy.
+export no_proxy="127.0.0.1,localhost,${no_proxy:-}"
+export NO_PROXY="127.0.0.1,localhost,${NO_PROXY:-}"
+
 IR_DIRS=(outputs/prompt_transform/harmbench/*ir_plain*/ir_plain)
 
 # Serve one model, probe it, tear it down. Never aborts the whole job on a
@@ -92,14 +100,14 @@ PY
         if ! kill -0 "$PID" 2>/dev/null; then
             echo "  ERROR: vLLM died during startup for $MODEL — tail:" >&2; tail -20 "$SERVE_LOG" >&2; break
         fi
-        if curl -sf "http://localhost:$PORT/health" >/dev/null 2>&1; then READY=1; break; fi
+        if curl -sf -4 --noproxy '*' "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then READY=1; break; fi
         sleep 10
     done
 
     if [ "$READY" -eq 1 ]; then
         echo "  server healthy — probing"
         python temporary_scripts/ocr_probe.py \
-            --endpoint "http://localhost:$PORT/v1" \
+            --endpoint "http://127.0.0.1:$PORT/v1" \
             --model "$(python -c "from src.llm_utils.llm_model import LLMModel; print(LLMModel.from_string('$MODEL').model_id)")" \
             "${IR_DIRS[@]}" || echo "  WARN: probe errored for $MODEL (see above)"
     else

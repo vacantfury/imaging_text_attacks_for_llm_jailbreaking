@@ -102,12 +102,15 @@ class ImageRendererTransformation(PromptTransformation):
         out: list[Prompt] = []
         for p in prompts:
             img_name = f"{p.id}_encoded.png"
-            img_rel = f"images/{img_name}"
             text_to_render = p.encoded or ""
-            self._renderer.render_to_file(text_to_render, str(images_dir / img_name))
-            self._image_count += 1
+            # Paginating renderers may emit multiple images; single-image
+            # renderers return exactly one path (saved as `img_name`).
+            abs_paths = self._renderer.render_to_files(
+                text_to_render, str(images_dir / img_name))
+            img_rels = [f"images/{Path(pth).name}" for pth in abs_paths]
+            self._image_count += len(abs_paths)
 
-            updates: dict = {"image_encoded": img_rel, "encoding": self.type_name}
+            updates: dict = {"image_encoded": img_rels, "encoding": self.type_name}
             if not self._keep_text:
                 # Image-only delivery: replace the text channel with a stock
                 # "check the image" instruction so the model has something to

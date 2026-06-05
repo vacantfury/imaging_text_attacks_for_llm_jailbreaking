@@ -40,6 +40,14 @@ from src.utils.provenance import (
 
 logger = get_logger(__name__)
 
+# Max rendered pages (images) a single multimodal prompt may carry before it is
+# excluded from the target query + ASR (is_within_maxlen=False) rather than
+# truncated. A proxy for total content length, which is what actually drives
+# vision-token usage against the served --max-model-len (16384; kept at 16384
+# rather than raised, since 32768 risks V100-32GB KV-cache OOM on Pixtral-12B).
+# Tune down if the re-probe shows requests erroring below this page count.
+MAX_PAGES_PER_PROMPT = 8
+
 
 # ======================== Shared helpers ========================
 
@@ -582,20 +590,48 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
     target_llm = LLMModel.from_string(task.target_model)
     target_model_config = LLMServiceFactory._load_model_defaults(target_llm)
 
-    # Run defense — owns the target-model interaction loop.
+    # Multi-image overflow guard: a paginated prompt can render to many images
+    # and exceed the served context budget. Rather than drop pages (which
+    # mutilates the attack and fakes a refusal), EXCLUDE over-budget prompts
+    # from the query AND from ASR, and flag them (is_within_maxlen=False) so the
+    # coverage loss is recorded honestly instead of silently degraded.
+    def _num_images(p) -> int:
+        return len(p.image_encoded) if p.image_encoded else 0
+
+    if is_multimodal:
+        within = [p for p in prompts if _num_images(p) <= MAX_PAGES_PER_PROMPT]
+        over = [p for p in prompts if _num_images(p) > MAX_PAGES_PER_PROMPT]
+    else:
+        within, over = list(prompts), []
+    if over:
+        logger.warning(
+            f"{len(over)}/{len(prompts)} prompts exceed "
+            f"MAX_PAGES_PER_PROMPT={MAX_PAGES_PER_PROMPT} — excluded from "
+            f"query+ASR (is_within_maxlen=False): {[p.id for p in over][:10]}")
+
+    # Run defense on within-budget prompts only.
     pairs = defense.query(
-        prompts=prompts,
+        prompts=within,
         target_service=target_service,
         is_multimodal=is_multimodal,
         source_dir=source_dir,
         system_message=task.system_message,
     )
 
-    # Build EvaluationRow list with synthetic prompt_stage.
+    # Build EvaluationRow list with synthetic prompt_stage. num_images is
+    # recorded for every prompt; over-budget rows carry an empty response and
+    # is_within_maxlen=False, and are NOT judged.
     stage_label = f"{encoding}__{task.defense}" if encoding else task.defense
+    npages_by_id = {p.id: _num_images(p) for p in prompts}
     all_rows: list[EvaluationRow] = [
-        EvaluationRow(id=pid, prompt_stage=stage_label, response=resp, asr=None)
+        EvaluationRow(id=pid, prompt_stage=stage_label, response=resp, asr=None,
+                      num_images=npages_by_id.get(pid, 0), is_within_maxlen=True)
         for pid, resp in pairs
+    ]
+    all_rows += [
+        EvaluationRow(id=p.id, prompt_stage=stage_label, response="", asr=None,
+                      num_images=_num_images(p), is_within_maxlen=False)
+        for p in over
     ]
 
     # Write raw_results.jsonl (raw model responses preserved so judging can
@@ -604,9 +640,11 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
         out_dir / "raw_results.jsonl",
         [row.model_dump_json() for row in all_rows])
 
-    # Judge.
+    # Judge only within-budget rows (over-budget excluded from ASR). Filtering
+    # keeps object references, so verdict columns still land back in all_rows.
+    within_rows = [r for r in all_rows if r.is_within_maxlen]
     judged = _run_judging(
-        prompts=prompts, all_rows=all_rows, benchmark=benchmark,
+        prompts=within, all_rows=within_rows, benchmark=benchmark,
         judge_method_override=task.judge_method, stage_label=stage_label,
     )
     asr, refusal = judged["asr"], judged["refusal"]

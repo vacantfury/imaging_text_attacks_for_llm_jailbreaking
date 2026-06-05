@@ -196,11 +196,18 @@ class SemanticSmooth(Defense):
                 if not p.image_encoded:
                     raise ValueError(
                         f"Prompt {p.id} marked multimodal but image_encoded is None.")
-                img_path = source_dir / p.image_encoded
-                if not img_path.exists():
-                    raise FileNotFoundError(
-                        f"Prompt {p.id}: image not found at {img_path}")
-                image_by_id[p.id] = Image.open(img_path)
+                # image_encoded is now a list of page paths; load all pages and
+                # pass one PIL (single page) or a list (multi-page) downstream.
+                rel_paths = (p.image_encoded if isinstance(p.image_encoded, list)
+                             else [p.image_encoded])
+                imgs = []
+                for rel in rel_paths:
+                    img_path = source_dir / rel
+                    if not img_path.exists():
+                        raise FileNotFoundError(
+                            f"Prompt {p.id}: image not found at {img_path}")
+                    imgs.append(Image.open(img_path))
+                image_by_id[p.id] = imgs[0] if len(imgs) == 1 else imgs
 
         query_convs = []
         for p in prompts:

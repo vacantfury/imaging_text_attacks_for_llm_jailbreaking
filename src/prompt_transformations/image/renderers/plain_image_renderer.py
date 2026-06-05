@@ -33,6 +33,11 @@ DEFAULT_FG_COLOR = "#000000"
 DEFAULT_PADDING = 40
 DEFAULT_LINE_SPACING = 8
 MAX_IMAGE_HEIGHT = 7680  # Stay under Claude's 8000px API limit
+# Per-page height budget for the paginating renderer. Fixed font + split
+# overflow across multiple images (kept well under MAX_IMAGE_HEIGHT). Taller
+# pages → fewer images per prompt → less max-len pressure (a 13k-char
+# code_attack lands at ~2–3 images here instead of ~6 at 1536px).
+DEFAULT_PAGE_HEIGHT = 4096
 
 
 class PlainImageRenderer(BaseImageRenderer):
@@ -59,6 +64,7 @@ class PlainImageRenderer(BaseImageRenderer):
         fg_color: str = DEFAULT_FG_COLOR,
         padding: int = DEFAULT_PADDING,
         line_spacing: int = DEFAULT_LINE_SPACING,
+        page_height: int = DEFAULT_PAGE_HEIGHT,
         font_path: Optional[str] = None,
         # Degradation params (passed to base)
         blur_radius: float = 0,
@@ -73,6 +79,7 @@ class PlainImageRenderer(BaseImageRenderer):
         self.fg_color = fg_color
         self.padding = padding
         self.line_spacing = line_spacing
+        self.page_height = page_height
         self._explicit_font_path = font_path
         self._font_cache: dict[str, ImageFont.FreeTypeFont] = {}
         self._latin_font = get_font_for_text(
@@ -132,12 +139,53 @@ class PlainImageRenderer(BaseImageRenderer):
         )
         return im
 
+    def _render_pages(self, text: str):
+        """Render text across one OR MORE images at a FIXED font size.
+
+        Unlike `_render_clean` (which shrinks the font to cram everything into
+        one image, destroying OCR fidelity for long content), this keeps
+        `self.font_size` constant and paginates: wrap once, then pack whole
+        lines into successive pages, each auto-fit to its content but bounded
+        by `self.page_height`. Short prompts yield a single page.
+        """
+        font = self._get_font(text)
+        wrap_width = estimate_wrap_width(
+            font, self.width - 2 * self.padding, text)
+        wrapped = textwrap.fill(text, width=wrap_width)
+        lines = wrapped.split("\n")
+
+        # Height of one line (incl. inter-line spacing) at the fixed font.
+        line_h = max(1, measure_text_height("Ag", font, self.line_spacing)
+                     + self.line_spacing)
+        content_h = max(line_h, self.page_height - 2 * self.padding)
+        lines_per_page = max(1, content_h // line_h)
+
+        pages = []
+        for start in range(0, len(lines), lines_per_page):
+            chunk = "\n".join(lines[start:start + lines_per_page])
+            text_h = measure_text_height(chunk, font, self.line_spacing)
+            page_h = max(100, text_h + 2 * self.padding)
+            im = Image.new("RGB", (self.width, page_h), self.bg_color)
+            dr = ImageDraw.Draw(im)
+            dr.text(
+                (self.padding, self.padding), chunk,
+                fill=self.fg_color, font=font, spacing=self.line_spacing)
+            pages.append(im)
+
+        if not pages:  # empty/whitespace text → fall back to a single blank page
+            pages = [self._render_clean(text)]
+        logger.info(
+            f"Paginated {len(text)} chars into {len(pages)} image(s) "
+            f"at fixed font {self.font_size}pt (~{lines_per_page} lines/page)")
+        return pages
+
     def get_config(self) -> dict:
         config = {
             "renderer_type": "plain",
             "font_size": self.font_size,
             "width": self.width,
             "height": self.height,
+            "page_height": self.page_height,
             "max_image_height": MAX_IMAGE_HEIGHT,
             "bg_color": self.bg_color,
             "fg_color": self.fg_color,

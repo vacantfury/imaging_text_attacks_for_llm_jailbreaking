@@ -14,8 +14,8 @@ Two modes only:
       prompts to a Defense (which owns the target-model interaction loop),
       runs the canonical judge, writes raw_results.jsonl + results.json.
 """
-from typing import Annotated, Any, Literal, Optional, Union
-from pydantic import BaseModel, Discriminator, Field, model_validator
+from typing import Annotated, Any, List, Literal, Optional, Union
+from pydantic import BaseModel, Discriminator, Field, field_validator, model_validator
 
 from src.utils.provenance import SCHEMA_VERSION
 
@@ -49,7 +49,21 @@ class Prompt(BaseModel):
     original: str
     encoded: str
     image_original: Optional[str] = None
-    image_encoded: Optional[str] = None
+    # List of rendered-image paths (relative to the prompt_transform step dir).
+    # The paginated renderer emits one path per page; short prompts → 1 path.
+    image_encoded: Optional[List[str]] = None
+
+    @field_validator("image_encoded", mode="before")
+    @classmethod
+    def _coerce_image_encoded(cls, v):
+        """Back-compat: archived prompts.jsonl stored `image_encoded` as a
+        single path string; the paginated renderer now emits a list. Coerce a
+        bare string → 1-element list so old data still loads."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return [v]
+        return list(v)
 
 
 class EvaluationRow(BaseModel):
@@ -58,6 +72,12 @@ class EvaluationRow(BaseModel):
     prompt_stage: str
     response: str
     asr: Optional[bool] = None
+    # Multi-image overflow bookkeeping (paginated renderer). `num_images` is the
+    # page count of the rendered prompt; `is_within_maxlen` is False when that
+    # exceeds MAX_PAGES_PER_PROMPT, in which case the prompt is EXCLUDED from the
+    # target query and from ASR (asr stays None) rather than silently truncated.
+    num_images: int = 0
+    is_within_maxlen: bool = True
     judge_output: Optional[str] = None
     judge_reasoning: Optional[str] = None
     judge_raw_response: Optional[str] = None

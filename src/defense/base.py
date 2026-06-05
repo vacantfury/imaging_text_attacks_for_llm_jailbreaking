@@ -90,8 +90,11 @@ def build_conversation_message(
     """Build a (single-turn) [(text, image_or_None)] message for one Prompt.
 
     is_multimodal=False → [(prompt.encoded, None)]
-    is_multimodal=True  → [(prompt.encoded, PIL.Image)]
-        opens prompt.image_encoded relative to source_dir.
+    is_multimodal=True  → [(prompt.encoded, PIL.Image | list[PIL.Image])]
+        opens every path in prompt.image_encoded relative to source_dir. The
+        paginating renderer emits multiple images per prompt; a single page is
+        passed as one PIL.Image, multiple pages as a list (the LLM service
+        layer accepts either).
     """
     from PIL import Image
 
@@ -106,9 +109,18 @@ def build_conversation_message(
         raise ValueError(
             "is_multimodal=True requires source_dir to resolve image paths.")
 
-    image_path = source_dir / prompt.image_encoded
-    if not image_path.exists():
-        raise FileNotFoundError(
-            f"Prompt {prompt.id}: image not found at {image_path}")
-    pil_image = Image.open(image_path)
-    return [(prompt.encoded, pil_image)]
+    # image_encoded is normally a list; tolerate a bare string defensively.
+    rel_paths = prompt.image_encoded
+    if isinstance(rel_paths, str):
+        rel_paths = [rel_paths]
+
+    images = []
+    for rel in rel_paths:
+        image_path = source_dir / rel
+        if not image_path.exists():
+            raise FileNotFoundError(
+                f"Prompt {prompt.id}: image not found at {image_path}")
+        images.append(Image.open(image_path))
+
+    image_side = images[0] if len(images) == 1 else images
+    return [(prompt.encoded, image_side)]

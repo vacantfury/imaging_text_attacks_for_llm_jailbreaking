@@ -106,12 +106,55 @@ class BaseImageRenderer(ABC):
             PIL Image object (possibly degraded)
         """
         img = self._render_clean(text)
-        
+
         if self.blur_radius > 0 or self.jpeg_quality < 100 or self.noise_std > 0:
             img = self._apply_degradation(img)
-        
+
         return img
-    
+
+    def _render_pages(self, text: str) -> list[Image.Image]:
+        """Render text onto one OR MORE clean images (no degradation).
+
+        Default implementation is single-page (wraps _render_clean), so every
+        existing renderer keeps its single-image behavior unchanged. Paginating
+        renderers (plain) override this to keep a fixed font and split
+        overflowing content across multiple images instead of shrinking the
+        font to illegibility.
+        """
+        return [self._render_clean(text)]
+
+    def render_pages(self, text: str) -> list[Image.Image]:
+        """Render text to a list of images, applying degradation per page."""
+        pages = self._render_pages(text)
+        if self.blur_radius > 0 or self.jpeg_quality < 100 or self.noise_std > 0:
+            pages = [self._apply_degradation(p) for p in pages]
+        return pages
+
+    def render_to_files(self, text: str, output_path: str) -> list[str]:
+        """Render text and save to one or more PNG files.
+
+        For a single page, saves exactly to ``output_path`` (back-compat with
+        callers/filenames that assume one image). For N>1 pages, saves
+        ``<stem>_p0<suffix>``, ``<stem>_p1<suffix>``, … next to ``output_path``.
+
+        Returns:
+            List of absolute paths to the saved PNG(s), in page order.
+        """
+        pages = self.render_pages(text)
+        out = Path(output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        if len(pages) == 1:
+            pages[0].save(out, "PNG")
+            logger.debug(f"Saved image: {out}")
+            return [os.path.abspath(out)]
+        paths: list[str] = []
+        for i, page in enumerate(pages):
+            page_path = out.with_name(f"{out.stem}_p{i}{out.suffix}")
+            page.save(page_path, "PNG")
+            paths.append(os.path.abspath(page_path))
+        logger.debug(f"Saved {len(pages)} paginated images for {out.name}")
+        return paths
+
     def render_to_file(self, text: str, output_path: str) -> str:
         """
         Render text and save to PNG file.

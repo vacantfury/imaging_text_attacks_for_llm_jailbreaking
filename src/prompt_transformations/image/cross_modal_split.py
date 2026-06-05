@@ -64,7 +64,7 @@ class CrossModalSplitTransformation(ImageRendererTransformation):
             self._image_count += 1
             out.append(p.model_copy(update={
                 "encoded": self._combine_template.format(text_part=text_part),
-                "image_encoded": f"images/{img_name}",
+                "image_encoded": [f"images/{img_name}"],
                 "encoding": self.type_name,
             }))
         return out

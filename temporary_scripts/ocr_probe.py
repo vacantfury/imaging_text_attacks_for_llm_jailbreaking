@@ -77,10 +77,13 @@ def _collect(image_dir: Path) -> list[dict]:
         rel = r.get("image_encoded")
         if not rel or rel == "None":
             continue
+        # image_encoded is now a list of page paths (paginated renderer);
+        # tolerate a bare string for older single-image dirs.
+        rels = rel if isinstance(rel, list) else [rel]
         items.append({
             "id": r["id"],
             "dir": image_dir.name,
-            "image_path": image_dir / rel,
+            "image_paths": [image_dir / x for x in rels],
             "truth": gt.get(r["id"], ""),
         })
     return items
@@ -98,7 +101,8 @@ def main() -> int:
     ap.add_argument("--model", default=None, help="served model name (default: first from /models)")
     ap.add_argument("--n", type=int, default=10, help="images to probe per dir (default 10)")
     ap.add_argument("--random", action="store_true", help="uniform sample instead of longest-text")
-    ap.add_argument("--max-tokens", type=int, default=1024)
+    ap.add_argument("--max-tokens", type=int, default=4096,
+                    help="raise for paginated long content (else transcription truncates)")
     ap.add_argument("--warn-below", type=float, default=0.60, help="flag fidelity below this ratio")
     args = ap.parse_args()
 
@@ -131,12 +135,15 @@ def main() -> int:
     flagged: list[tuple[str, float]] = []
     for it in sampled:
         try:
+            # Send ALL pages together (mirrors how the real pipeline delivers a
+            # paginated prompt), and compare the joint transcription to truth.
+            content = [{"type": "text", "text": TRANSCRIBE_INSTRUCTION}]
+            for pth in it["image_paths"]:
+                content.append({"type": "image_url",
+                                "image_url": {"url": _b64_data_url(pth)}})
             resp = client.chat.completions.create(
                 model=model, temperature=0, max_tokens=args.max_tokens,
-                messages=[{"role": "user", "content": [
-                    {"type": "text", "text": TRANSCRIBE_INSTRUCTION},
-                    {"type": "image_url", "image_url": {"url": _b64_data_url(it["image_path"])}},
-                ]}],
+                messages=[{"role": "user", "content": content}],
             )
             out = resp.choices[0].message.content or ""
         except Exception as e:  # noqa: BLE001 — probe must survive a bad cell
@@ -147,7 +154,7 @@ def main() -> int:
         if flag:
             flagged.append((f"{it['dir']}/{it['id']}", ratio))
         print(f"\n[{it['dir']}] id={it['id']}  truth_len={len(it['truth'])}  "
-              f"fidelity={ratio:.2f}{flag}")
+              f"pages={len(it['image_paths'])}  fidelity={ratio:.2f}{flag}")
         print(f"  TRUTH: {_norm(it['truth'])[:160]}")
         print(f"  MODEL: {_norm(out)[:160]}")
 
