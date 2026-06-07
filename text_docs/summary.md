@@ -1,6 +1,6 @@
 # Project Summary — Coverage-Complete Defense for VLM Jailbreaks
 
-*Prepared for Shanu · working draft, June 2026*
+*working draft, June 2026*
 
 ## In one sentence
 
@@ -8,9 +8,9 @@ Current black-box defenses for vision-language models (VLMs) are **specialists**
 
 ## Background
 
-The starting point is our Canadian AI encoding-attack work (the one you presented): recasting a harmful request into a **mathematical or logical encoding** — set theory, formal logic, code — slips it past text-based safety checks, because the request looks benign on the surface.
+The starting point is our prior encoding-attack work (published at Canadian AI): recasting a harmful request into a **mathematical or logical encoding** — set theory, formal logic, code — slips it past text-based safety checks, because the request looks benign on the surface.
 
-The bridge to this project is a follow-up of mine, currently under review, that you may be less familiar with, so here it is in two sentences. It asked what happens when you add an **image** to such an attack on a vision-language model, and found something counter-intuitive: adding an image — even a completely unrelated "decoy" image — often *strengthens* the defense rather than weakening it. The reason turned out to be mechanical: **a defense only blocks an attack when its safety check happens to inspect the surface where the harmful content actually sits**, and adding the image accidentally caused the defense to look in the right place.
+The bridge to this project is a follow-up (currently under review) on vision-language models. It asked what happens when an **image** is added to such an attack, and found something counter-intuitive: adding an image — even a completely unrelated "decoy" image — often *strengthens* the defense rather than weakening it. The reason turned out to be mechanical: **a defense only blocks an attack when its safety check happens to inspect the surface where the harmful content actually sits**, and adding the image accidentally caused the defense to look in the right place.
 
 This project takes that mechanical insight and turns it into a systematic, constructive result.
 
@@ -40,7 +40,7 @@ The result is low-risk and defensible: a defense designed to cover the union bea
 
 ## Status
 
-The full evaluation harness, the coverage-complete defender, and all baselines (including the SOTA defenses ETA and MLLM-Protector) are implemented and smoke-tested. Targets are four open-weight VLMs on the NU cluster (Qwen2.5-VL-7B, InternVL3-8B, Pixtral-12B, Llama-3.2-11B-Vision), with the frontier API models as an optional breadth layer. The immediate step is confirming OCR fidelity of the rendered attacks on the serving models, then running the coverage-gap measurement and the guard's safety–utility evaluation. I will bring preliminary numbers to a group meeting once the first matrix is in.
+The full evaluation harness, the coverage-complete defender, and all baselines (including the SOTA defenses ETA and MLLM-Protector) are implemented and smoke-tested. Targets are four open-weight VLMs on the NU cluster (Qwen2.5-VL-7B, InternVL3-8B, Pixtral-12B, Llama-3.2-11B-Vision), with the frontier API models as an optional breadth layer. The immediate step is confirming OCR fidelity of the rendered attacks on the serving models, then running the coverage-gap measurement and the guard's safety–utility evaluation. Preliminary numbers will be available once the first matrix is in.
 
 ## Directions beyond this paper
 
