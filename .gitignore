@@ -62,6 +62,7 @@ Thumbs.db
 
 # Project-specific
 .cursorignore
+.claude/
 human_and_llm_agent_interaction/
 human_and_agent_interaction
 scripts/
