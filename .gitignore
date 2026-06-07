@@ -80,7 +80,6 @@ keys/
 fonts/
 AI_agent/
 temporary_scripts/
-text_docs/
 
 # Hydra
 multirun/
