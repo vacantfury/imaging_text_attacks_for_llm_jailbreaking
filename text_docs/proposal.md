@@ -1,232 +1,185 @@
-# Research Proposal — Paper C (AAAI-27)
+# Research Proposal — Coverage-Complete Defense (working title)
 
-**Working title:** *Adversarial Modality Placement: The Image-Presence Safety Effect in VLMs Is Not Robust, and the Minimal Defense That Is*
+**Working title:** *Coverage-Complete Defense: A Single Black-Box Guard for the Union of Encoded and Multimodal Jailbreaks on VLMs*
 
-**Target:** AAAI-27 main technical track. Abstract **July 21, 2026** (mandatory, locks title/claim); full paper **July 28**; supplementary + code July 31. Plan backward from July 21.
+**One-line thesis:** Existing black-box VLM jailbreak defenses are *specialists* — each inspects one input/output surface — so no single deployed defense covers the union of known encoded and multimodal attacks; we build the minimal **coverage-complete** guard that does, and quantify the utility cost of completeness.
 
-**Hard calendar:** ~3.3 weeks full-time from now → **June 22** (author starts a demanding job), then ~4 weeks evenings/weekends only. **All data collection must finish ~June 20.** Scope is therefore an evaluation / lightweight-method study on existing open or public-API models — no model training, no heavy infrastructure.
+**Scope note (read first).** This proposal describes **only the current project**: the coverage-gap measurement (motivation) and the coverage-complete unified defense (the contribution). Everything beyond it — new compound attacks, cross-modal splitting, mechanism, and the deeper theory — is deliberately deferred to **§11 Future Work**, not because it lacks value but because it is a separate contribution that builds on this one. Keep the body of this document to what this paper ships.
 
 ---
 
-## 0. Relationship to Paper B (read this first)
+## 0. Relationship to prior work (read this first)
 
-This project builds directly on the author's submitted paper **B** — *"Image Augmentation Strengthens VLM Defenses Against Encoded Jailbreak Attacks"* (under ARR review). It reuses B's entire evaluation harness (multi-provider batch querying; SAGE / ECSO / no-defense wrappers; HarmBench + JailbreakBench judges; the safety–utility plane). It is developed in this repo, on `main`, on top of the tagged baseline `paper-b-arr-submission`.
+This project is the third in a line and reuses the same evaluation harness throughout.
 
-**What B established (the seed):**
-- Adding an *unrelated* image (a "decoy") alongside an encoded text attack **lowers** attack success rate (ASR) on 5 frontier VLMs, via two pathways: (i) caption-mediated defenses (ECSO) branch on `has_image`, so even a content-free decoy fires a safety re-check; (ii) on image-resident content (`ir_plain`), the model's *intrinsic* image-side safety reduces ASR with no explicit defense.
-- A controlled decoy ablation supports an image-**presence** (not image-**content**) account (blank canvas ≈ mountain decoy).
-- The safety gain has a benign-refusal cost: **SAGE + decoy on the Gemini family collapses to 76–100% benign refusal** (trivial-reject). B concludes **ECSO + decoy is the only configuration combining substantial ASR reduction with modest utility cost**, and proposes a deployment lever: *pair encoded inputs with a default decoy image.*
-- B's method section already names **"modality coverage"** as the explanation, and B explicitly does **not** evaluate an adaptive attacker (stated limitation).
+- **MathEnc** — *"Exposing LLM Safety Gaps Through Mathematical Encoding"* (published). Recasts harmful queries into mathematical / logical encodings (set theory, first-order logic, code) that bypass text-side alignment. Supplies the **encoders** this project uses as attack surfaces.
+- **ImgAug** — *"Image Augmentation Strengthens VLM Defenses Against Encoded Jailbreak Attacks"* (under review). Found that adding an image — even a content-unrelated decoy — *changes* a defense's behavior: ECSO's `has_image` branch re-checks; intrinsic image-side safety catches image-resident content. Crucially, ImgAug also documented the **failure cost**: SAGE+decoy on Gemini collapses to 76–100% benign refusal (trivial-reject). Supplies the **image transforms** (`ir_plain`, decoy) and the **decoy-lever baseline** this project stress-tests.
 
-**What C adds (clearly distinct contribution):**
-1. An **adaptive attacker that controls modality placement**, defeating SAGE/ECSO by construction — including refuting the robustness of B's "decoy strengthens the defense" / "ECSO + decoy is Pareto-optimal" claim.
-2. A **modality-complete guard**: the minimal black-box defense that removes the single-modality blind spot, with a quantified safety–utility cost.
-3. *(Stretch)* a **cross-modal splitting** attack that defeats *per-channel* defenses (even modality-complete ones), bounding what per-channel verification can achieve and motivating joint multimodal verification.
-
-C **cites** B (the empirical seed and the defense it stress-tests). It is a different contribution (adaptive attack + defense + principle), so it is not "substantially similar" to B under ARR/AAAI dual-submission rules. C does **not** depend on B being accepted.
+**What this project adds.** ImgAug's finding, restated, is that a defense helps exactly when its coverage *happens* to line up with where the harmful content lives. We make that observation systematic and constructive: we **measure** that no single existing defense covers the union of known attacks, **build** the minimal defense that does, and **characterize the cost** of that completeness. This is a *defense* contribution; it cites MathEnc (encoders) and ImgAug (image transforms, decoy lever, and the over-refusal hazard) and is not substantially similar to either.
 
 ---
 
 ## 1. Core idea
 
-A black-box VLM safety defense inspects content in some subset of the input modalities. Call a defense **modality-complete** if its safety check covers every modality that can carry harmful content, and **single-modality** otherwise. B's observation — that adding an image often *helps* — is, restated, that the defense's coverage *happened* to line up with where the content lived (ECSO's `has_image` re-check re-injected the text; intrinsic image-safety caught image-resident content). 
+A black-box VLM safety defense inspects content on some subset of surfaces: input-text, input-image, output, or the joint (text+image) interpretation. Call the set of surfaces a defense actually checks its **coverage**. Known attacks differ in *where they place the harmful content*: text-side encodings live on input-text; rendered attacks (`ir_plain`) live on input-image; output-framing lives on the output.
 
-**The governing claim of C:** that alignment is *incidental and adversarially controllable.* An attacker who chooses where the harmful content lives can route it into whatever modality the deployed defense does not cover, defeating the defense **and** erasing B's image-presence safety gain. The minimal fix is to make the defense modality-complete by construction. The residual frontier is content that is harmful only in the *joint* multimodal interpretation — which no per-channel check, complete or not, can catch.
+The governing observation: **a defense reduces a given attack's success only when its coverage includes the surface that attack uses.** ImgAug's "image helps" result is one instance — coverage and content happened to align. But each deployed defense is a *specialist*: SAGE covers input-text; ECSO covers a caption of the image, gated on `has_image`; ETA scores the image (CLIP) and the output (reward); MLLM-Protector checks the output. So against a *suite* of attacks that place harm on different surfaces, **for any single defense some attack routes harm to an uncovered surface.** No single specialist covers the union.
 
-This is a principle that is (a) seeded but never weaponized by B, (b) falsifiable per (defense, placement) cell, and (c) closes on a concrete, deployable defense.
+The minimal fix follows directly: a **coverage-complete** guard that, regardless of `has_image`, unconditionally recovers content from *every* input channel (reads the text **and** OCR/captions the image) and runs **one** unified safety check over the union. It removes both the single-channel blind spot and the `has_image` gate (the artifact behind ImgAug's decoy lever). The interesting question is not whether it raises safety — by construction it covers more — but **what completeness costs in utility**, and whether that cost is lower than the specialist defenses and ImgAug's decoy lever.
 
 ---
 
 ## 2. Research questions
 
-**Floor (the AAAI submission core — committed):**
-- **RQ-A (refute B's robustness).** Does an adaptive attacker defeat B's strongest configuration — **ECSO + decoy** — recovering ASR on the cells where B reports it near-eliminated? (e.g., gemini-2.0-flash, where B reports `code_attack` 79→32 and `formal_logic` 67→27 under decoy+ECSO.)
-- **RQ-B (general modality placement).** Across B's 5 models × 3 encoders, does relocating harmful content into the uncovered modality defeat each single-modality defense (content-in-image vs. SAGE-system; ECSO re-check evasion)?
-- **RQ-C (the minimal defense + its cost).** Does a **modality-complete guard** (unconditionally recover and check content from *all* channels, removing the `has_image` gate and the single-channel blind spot) restore protection against RQ-A/RQ-B attacks — and at what benign-refusal cost on JailbreakBench-benign, relative to B's decoy lever (which hits 76–100% refusal on Gemini)?
+- **RQ1 — Coverage gap (motivation).** Characterize each baseline defense by the surface it covers and each attack by where it places harm. Across the attack suite × the specialist defenses, does *any single defense* cover the union, or does every defense leave at least one attack that routes harm to an uncovered surface?
+- **RQ2 — The coverage-complete guard.** Does a single guard that recovers and checks content on *all* input channels close the gap — reducing attack success across the *whole* suite below every single specialist's worst case?
+- **RQ3 — The cost of completeness.** What benign-refusal cost does completeness incur, on JailbreakBench-benign? On the safety–utility plane, does the guard **dominate** ImgAug's decoy lever (≤ refusal at ≤ attack success) and the specialist defenses? Where it does *not* dominate (e.g. vs. output-side MLLM-Protector), what does that say about input-coverage vs. output-checking as complementary axes?
+- **RQ4 — Held-out generalization.** If the guard is configured/tuned on a subset of attacks, does it still cover the *held-out* attacks? (Coverage is structural, so it should — this is the test that separates a real coverage property from a benchmark-overfit defense.)
 
-**Stretch (only if week-2 data is ahead of schedule):**
-- **RQ-D (cross-modal splitting).** Can harmful content be **split** across text and image so each channel is individually benign (passing per-channel and caption checks) while the model reassembles the harmful request in its answer? Does this defeat even the modality-complete *per-channel* guard, and is **joint multimodal verification** required to catch it — at what additional cost?
+RQ1 is the motivating measurement; **RQ2–RQ4 are the contribution.** RQ4 is the linchpin that makes RQ2 a coverage claim rather than a bake-off.
 
 ---
 
 ## 3. Threat model
 
-Black-box API access to the target VLM and to any deployed black-box defense (no weights, no activations) — identical to B, so the comparison is apples-to-apples. The attacker additionally **controls the modality placement** of the (already public) encoded payload: which channel (text, image, or both) carries it, and how it is rendered/composed. The defender deploys one of {no-defense, SAGE-system, ECSO, decoy-lever (B), **modality-complete guard (ours)**}. We do **not** claim the targeted defenses were designed against modality-placement attacks; the contribution is to show that single-modality coverage is an adversarially controllable surface, and to give the minimal coverage-complete defense.
+Black-box API/endpoint access to the target VLM and to any deployed black-box defense — no weights, no activations. The attacker draws from a **fixed, public suite of known attacks** (the MathEnc encoders × ImgAug image transforms): for each harmful prompt the attacker may use any single attack in the suite, and counts a success if the chosen attack defeats the deployed defense (the *portfolio* / best-of-suite threat model). The defender deploys exactly one of {no-defense, SAGE, ECSO, ETA, MLLM-Protector, ImgAug decoy lever, **coverage-complete guard (ours)**}. We do **not** claim the specialist defenses were designed against the full suite; the point is that single-surface coverage is, in deployment, an insufficient surface, and the coverage-complete guard is the minimal black-box fix.
 
 ---
 
 ## 4. Method
 
-### 4.1 Attack families (what's new on the attack side)
+### 4.1 The attack suite (all existing — no new attack work)
 
-1. **Modality relocation.** Move the harmful payload into the modality the defense does not cover.
-   - vs. **SAGE-system** (text-only coverage): deliver via image. B's `ir_plain` already lowers ASR via *intrinsic* image-safety, so the adaptive component is a renderer/composition that stays model-readable while evading intrinsic image-safety (e.g., low-salience or layout-obfuscated rendering, content framed as transcription). Predict: relocation defeats SAGE-system where naive `ir_plain` did not.
-   - vs. **ECSO**: see (2).
-2. **Re-check evasion (ECSO-specific).** ECSO returns the initial response directly unless its self-judge (TELL) flags it, then re-asks safety-first (CAP→SAFE). Two levers: (a) make the *initial* response pass TELL (obfuscated/encoded output the self-judge reads as benign); (b) make the SAFE re-ask still comply. Either defeats **ECSO + decoy**, refuting B's Pareto-optimal claim (RQ-A).
-3. **Cross-modal splitting (stretch, RQ-D).** Distribute the instruction so neither channel — nor any per-channel caption/check — sees a complete harmful request, but the model reassembles it. Defeats per-channel verification by construction.
+The portfolio is the existing, public attack surface, reused unchanged:
 
-### 4.2 Defense (what's new on the defense side)
+| Surface | Attacks |
+|---|---|
+| input-text | `set_theory`, `formal_logic`, `code_attack` (MathEnc encoders) |
+| input-image | `ir_plain` (encoded attack rendered into the image, fixed-font paginated) |
+| input-text + benign image | `decoy` / `constant_image` (ImgAug lever, as an *attack* surface and as a *baseline defense* lever) |
 
-- **Modality-complete guard.** A black-box wrapper that, regardless of `has_image`, (i) recovers content from *every* channel (caption/OCR the image **and** read the text), (ii) runs a unified safety check over the recovered union, (iii) gates the response on it. Built from primitives already in the repo (ECSO's captioning + SAGE's discrimination). Removes the `has_image` gate (the artifact behind B's decoy lever) and the single-channel blind spot. Expected to resist families 1–2; expected **not** to resist family 3 (splitting), which is the point of RQ-D.
-- *(Stretch)* **Joint multimodal verification** — a single safety judgment over the *joint* (text, image) input rather than per-channel — as the candidate fix for splitting; characterize feasibility and cost.
+No new attacks are constructed in this project. Compound/sequential attacks are **Future Work (§11)**.
 
-### 4.3 Metrics
+### 4.2 The defense (the new work)
 
-- **ASR**: fraction of HarmBench-harmful (100 prompts) judged harmful (HarmBench classifier, `gpt-5-nano`). Lower = safer. Empty responses auto-classified as refusals (handles upstream API filtering), per B.
-- **Benign refusal**: fraction of JailbreakBench-benign (100 prompts) judged a refusal. Lower = more useful.
-- **Safety–utility plane**: every (model, defense, attack) cell as an (ASR, benign-refusal) point. The headline is whether the modality-complete guard dominates B's decoy lever (lower refusal at equal/​lower ASR).
-- **Statistics**: bootstrap 95% CIs on per-cell rates; paired permutation tests on per-prompt verdicts for attack-vs-baseline and guard-vs-decoy comparisons.
+- **Coverage-complete guard** (`modality_complete`, already built). A black-box wrapper that, regardless of `has_image`, (i) recovers content from *every* channel (reads the text **and** OCRs/captions the image), (ii) runs a single unified safety check over the recovered union, (iii) gates the response. Built from primitives already in the repo (ECSO's captioning + SAGE's discrimination). Removes the `has_image` gate and the single-channel blind spot.
 
----
+### 4.3 Baselines
 
-## 5. Experimental setup (almost entirely inherited from B)
+`no_defense`, `SAGE` (input-text), `ECSO` (image caption, gated), the **ImgAug decoy lever**, and two recent SOTA defenses for "you only beat weak defenses" pre-emption: **ETA** (black-box adaptation: CLIP image pre-eval + ArmoRM output post-eval + safe-regeneration) and **MLLM-Protector** (output-side harm detector + detoxifier; the *output-axis orthogonality control*). The SOTA baselines are **breadth, not core** — included if their checkpoints/GPU cost is affordable (see plan §3); the paper stands on SAGE/ECSO/decoy.
 
-| Axis | Choice | New work? |
-|---|---|---|
-| **Target VLMs** | gemini-2.0-flash, gemini-2.5-flash, gemini-2.5-flash-lite, gpt-4o-mini, claude-sonnet-4-6 (B's five). Iterate on the cheap Gemini-flash subset; full set for the final matrix. | reuse |
-| **Encoders** | `code_attack`, `set_theory`, `formal_logic` (B's three) | reuse |
-| **Defenses** | no-defense, SAGE-system, ECSO, decoy-lever (B baseline), **modality-complete guard (new)** | 1 new defender |
-| **Attacks** | modality-relocation, ECSO re-check evasion, *(stretch)* cross-modal splitting | new transforms |
-| **Benchmarks** | HarmBench-harmful (100), JailbreakBench-benign (100) | reuse |
-| **Judges** | HarmBench classifier + JBB-refusal classifier, `gpt-5-nano` backbone | reuse |
-| **Decoding** | deterministic (temp 0, seed 42), per B | reuse |
+### 4.4 The coverage map (reporting frame)
 
-**Code to build (small, bounded):**
-1. `modality_complete` defender in the defense factory (compose existing caption + discrimination primitives; ~few days).
-2. Adaptive-placement attack transforms: dual-channel composition (payload in one channel + controlled content in the other); ECSO-evasion output-obfuscation variant. *(Stretch: cross-modal splitting transform.)*
-3. No harness, provider, or judge changes expected.
-
----
-
-## 6. Falsifiable predictions (per the principle)
-
-| # | Prediction | Refutation would mean |
-|---|---|---|
-| P1 | Modality relocation recovers ASR under SAGE-system on cells where B's `ir_plain` lowered it | Intrinsic image-safety is robust, not incidental — narrows the claim |
-| P2 | ECSO re-check evasion recovers ASR under **ECSO + decoy** (refutes B's Pareto-optimal config) | B's decoy lever is adaptively robust — strengthens B, weakens C's premise |
-| P3 | Modality-complete guard restores protection vs. P1/P2 attacks | Coverage-completeness is insufficient — points to a deeper cause |
-| P4 | Modality-complete guard costs *less* benign refusal than B's decoy lever at equal ASR | The decoy lever is utility-competitive — weakens C's deployment story |
-| P5 *(stretch)* | Cross-modal splitting defeats the per-channel modality-complete guard | Per-channel checks suffice — no need for joint verification |
-
-A clean paper needs P1–P4 to mostly hold; P2 is the linchpin (it is what makes C a refutation of B's robustness rather than a footnote).
-
-### 6.1 Added SOTA defense baselines (so coverage is tested against the strongest)
-Beyond SAGE/ECSO we add two recent defenses, to pre-empt "you only beat weak defenses":
-- **ETA** (ICLR'25) — *black-box adaptation*: faithful CLIP image pre-eval + ArmoRM output post-eval (its detection); its white-box logit best-of-N *align* is replaced by safe-regeneration when flagged (logit steering is outside our black-box threat model — stated openly). Note ETA gates **leniently** (intervenes only when *both* checks fire), so a benign decoy image makes the image-gate read "safe" and disables it.
-- **MLLM-Protector** (EMNLP'24) — *faithful*: a 3B harm detector on the **output** + a detoxifier (released checkpoints). Serves as the **orthogonality control** (output-side, not input-coverage).
-
-### 6.2 Reporting framework: a coverage map, not a sweep
-We frame results as **"defense effectiveness is governed by which surfaces its safety check covers"** — *not* "we beat every defense." Characterize each defense by covered surfaces and each attack by where the harm lives; each cell tests whether the harm sits outside coverage.
+Results are framed as a **coverage map**, not a sweep — "defense effectiveness is governed by which surfaces its safety check covers":
 
 | Defense | input-text | input-image | output | joint |
 |---|:--:|:--:|:--:|:--:|
 | SAGE | ✓ | — | — | — |
 | ECSO | — | ✓ (caption, gated) | — | — |
-| **ETA** | — | ✓ (CLIP) | ✓ (reward) | — |
-| **MLLM-Protector** | — | — | ✓ | — |
-| `modality_complete` | ✓ | ✓ (OCR) | — | — |
-| `joint_verify` | — | — | — | ✓ |
+| ETA | — | ✓ (CLIP) | ✓ (reward) | — |
+| MLLM-Protector | — | — | ✓ | — |
+| **coverage-complete (ours)** | ✓ | ✓ (OCR) | — | — |
 
-Attacks by harm location: `ir_plain`/`modality_relocate` → input-image · `decoy` → input-text(+benign image) · `ecso_evade` → output(framed benign) · `cross_modal_split` → **joint only**.
+Each attack is labelled by where it places harm; each cell tests whether that surface is covered. The headline is RQ2/RQ3: the coverage-complete guard covers the union, and its safety–utility frontier vs. the specialists and the decoy lever.
 
-### 6.3 Pre-registered outcome interpretations (every outcome is a finding)
+### 4.5 Metrics
+
+- **Attack success (ASR):** fraction of HarmBench-harmful (100 prompts) judged harmful (HarmBench classifier, `gpt-5-nano`). Lower = safer. Empty responses auto-classified as refusals (handles upstream API filtering).
+- **Benign refusal:** fraction of JailbreakBench-benign (100 prompts) judged a refusal. Lower = more useful.
+- **Portfolio ASR (per defense):** fraction of prompts on which *at least one* suite attack defeats the defense — the deployment-relevant worst case that RQ1 turns on.
+- **Safety–utility plane:** every (model, defense) as an (ASR, benign-refusal) point; the headline is whether the coverage-complete guard dominates the decoy lever and specialists.
+- **Statistics:** bootstrap 95% CIs on per-cell rates; paired permutation tests on per-prompt verdicts (guard-vs-decoy, guard-vs-specialist).
+
+---
+
+## 5. Experimental setup
+
+| Axis | Choice |
+|---|---|
+| **Target VLMs (primary)** | open-weight, NU-cluster / vLLM: `qwen2_5_vl_7b` (workhorse), `pixtral_12b`, `llama3_2_11b_vision`, `internvl3_8b`. Iterate on Qwen + InternVL3 (7–8B), complete on the rest. |
+| **Encoders** | `set_theory`, `formal_logic`, `code_attack` |
+| **Image transforms** | `ir_plain` (fixed-font paginated), `decoy` (`constant_image`) |
+| **Defenses** | no_defense, SAGE, ECSO, decoy-lever, **coverage-complete (new)**; *(breadth)* ETA, MLLM-Protector |
+| **Benchmarks** | HarmBench-harmful (rows 0–99) = ASR; JailbreakBench-benign (0–99) = utility |
+| **Judges** | HarmBench classifier + JBB-refusal classifier, `gpt-5-nano` backbone (parity with ImgAug) |
+| **Decoding** | deterministic (temp 0, top_p 1, seed 42) |
+
+**Code to build:** essentially none — the coverage-complete guard (`modality_complete`) is already built and smoke-verified. This project is primarily **run + analyze**: render the existing attack suite once (Stage 1), then run the defense matrix (Stage 2). API models (gemini-2.x-flash / gpt-4o-mini / claude-sonnet-4-6) are an optional late breadth layer.
+
+---
+
+## 6. Falsifiable predictions
+
+| # | Prediction | Refutation would mean |
+|---|---|---|
+| P1 | For each single specialist defense, ∃ a suite attack that defeats it (no single defense covers the union) | Some single defense already covers everything — collapses the motivation; pivot headline to the cost characterization |
+| P2 | The coverage-complete guard reduces ASR across the *whole* suite below every specialist's worst case | Completeness is insufficient — points to a deeper cause (output-only or joint-only harm), i.e. Future Work |
+| P3 | The guard's safety–utility frontier dominates ImgAug's decoy lever (≤ refusal at ≤ ASR) | The decoy lever is utility-competitive — weakens the deployment story |
+| P4 | The guard generalizes to **held-out** attacks it was not tuned on | Coverage is benchmark-specific, not structural — the contribution is overfit, not a coverage property |
+
+A clean paper needs P2–P4. P4 is what makes this a coverage result rather than a bake-off; P1 is the motivating measurement (and is robust regardless of numbers — it is a characterization, not a gamble).
+
+---
+
+## 7. Why this is the right project to ship first
+
+- **Near-zero null-result risk.** A defense *designed* to cover the union beats each single specialist by construction; the only unknown is the utility cost — and that cost is itself a reportable result whatever its value. There is no "the experiment comes back empty and kills the paper" failure mode.
+- **Almost no new code.** The guard is built; the attacks exist; the baselines are wired. The work is running and analysis.
+- **Reliable accept pattern.** Constructive defense + safety–utility frontier + beats baselines on a unified benchmark is a well-worn path. Evaluating all baselines on a broader suite than each was individually designed for is *standard* for a defense paper — which neutralizes the "out-of-scope attack" critique that would sink the same comparison framed as an attack claim.
+- **It does not foreclose the rest.** The compound attack and the deeper science (§11) build naturally on top, and the eventual stronger defense gains a *characterized* threat space to claim honest generalization against.
+
+The two cheap moves that turn this from a bake-off into a real paper — **held-out attacks** (RQ4/P4) and the **Pareto frontier** (RQ3/P3) — are free: they are just how the runs are sliced and reported.
+
+---
+
+## 8. Reporting framework (every outcome is a finding)
+
+Pre-registered interpretations so no single cell can sink the paper:
+
 | Result | Interpretation |
 |---|---|
-| decoy/placement beats **ETA** (image-gate "safe" → never checks output) | "semantic image scoring ≠ content coverage; a benign image disables the defense" — core thesis, motivates OCR-recovery guard over CLIP-scoring |
-| ETA's **output reward** still catches the output | "input-coverage bypassable (thesis holds), but output-reward is a complementary net" → `ecso_evade` then tests the output axis |
-| `ecso_evade` beats **MLLM-Protector** | "output-checking alone falls to output-framing" |
-| **MLLM-Protector** holds | "output-side classifiers are a genuinely complementary defense input-placement doesn't address — robust safety needs both axes" (strengthens, not weakens) |
-| `cross_modal_split` defeats even `modality_complete` | per-channel completeness is necessary-but-insufficient → only `joint_verify` reaches joint-only harm (the deepest finding, true either way) |
-
-**Reporting axes:** ASR per (attack × defense); for ETA, separate columns for *image-gate fired* / *output-gate fired* (attribution — this is what makes "beating ETA" non-trivial); benign-refusal alongside ASR (the safety–utility plane). **No cell can sink the paper** — win or hold, each places a data point on the coverage map that tests the principle. Discussable regardless of numbers: (a) modality coverage as governing variable; (b) semantic-scoring vs content-recovery (ETA's CLIP vs our OCR guard); (c) input-coverage vs output-checking as orthogonal axes; (d) safety–utility cost; (e) the joint-only frontier.
+| no single specialist covers the union (P1) | "deployed black-box defenses are specialists; coverage is the governing variable" — the motivating thesis |
+| coverage-complete guard covers the union (P2) | "the minimal coverage-complete defense closes the single-surface blind spot" — the contribution |
+| guard dominates the decoy lever (P3) | "completeness is cheaper than ImgAug's lever; the `has_image` gate is an avoidable artifact" |
+| guard does *not* dominate MLLM-Protector | "input-coverage and output-checking are complementary axes; robust safety needs both" (strengthens, not weakens) |
+| guard generalizes to held-out attacks (P4) | "coverage is structural, not benchmark-specific" — the anti-overfit result |
 
 ---
 
-## 7. Timeline (backward from July 21; data frozen ~June 20)
+## 9. Ethics
 
-| Window | Mode | Work |
-|---|---|---|
-| **Now → ~Jun 6** | full-time | Build `modality_complete` defender + dual-channel/ECSO-evasion attack transforms. Smoke-test on the cheap Gemini-flash subset. Pilot RQ-A (refute ECSO+decoy) on 1–2 cells — **this is the gating result**; if P2 fails here, re-scope immediately. |
-| **~Jun 6 → ~Jun 20** | full-time | Run the full floor matrix: RQ-A/B (attacks vs SAGE/ECSO/decoy across 5 models × 3 encoders) + RQ-C (modality-complete guard, safety + benign-refusal). Bootstrap CIs. *If clearly ahead by ~Jun 14: build + pilot RQ-D splitting.* **Freeze data ~Jun 20.** |
-| **Jun 22 → ~Jul 14** | part-time (job started) | Write. Figures (safety–utility plane, per-cell ASR-recovery bars). Statistics. Lock the claim. |
-| **~Jul 14 → Jul 21** | part-time | Polish, internal review, reviewer-proofing. **Submit abstract Jul 21**, paper Jul 28, code Jul 31. |
-
-Gating checkpoint: **the RQ-A pilot (refuting ECSO+decoy) by ~Jun 6.** It is the cheapest decisive test of the whole thesis.
+Consistent with MathEnc / ImgAug. All experiments use standardized public harmful-prompt benchmarks (HarmBench, JailbreakBench); the encoders and image-composition primitives are from published prior work, so this project introduces **no new attack capability** — it constructs no new attacks at all. The contribution is **defense-oriented**: characterizing an insufficiency in deployed black-box defenses and providing the minimal coverage-complete fix, with its over-refusal cost reported openly so deployers do not over-rely on it.
 
 ---
 
-## 8. Risks & mitigations
+## 10. Publication targets (venue-agnostic)
 
-| Risk | Likelihood | Mitigation |
-|---|---|---|
-| P2 fails — ECSO+decoy is adaptively robust | Low–Med | Pivot the headline to SAGE-system relocation (P1) + the modality-complete guard; the principle + defense still stand. Detect early via the Jun 6 pilot. |
-| Adaptive attack is "just a stronger encoded attack," not modality-specific | Med | Anchor every attack to a *no-defense* control: a true modality-placement effect must show the gain is defense-specific (attack ≈ baseline ASR with no defense, large gap with defense). Mirror B's own specificity logic. |
-| "You just combined SAGE + ECSO" criticism of the guard | Med | Frame the contribution as the *principle + adaptive validation*, with the guard as its minimal instantiation; report the splitting result (even as a negative/limitation) to show per-channel completeness is necessary but not sufficient. |
-| Reviewers: defenses weren't designed against placement attacks | Med | Same stance as B: these are the strongest deployed black-box defenses; the point is that single-modality coverage is an exploitable surface, disclosed responsibly with a fix. |
-| Self-overlap with B (under ARR) | Low | Distinct contribution (adaptive attack + defense + principle); cite B; keep B's decoy lever as the *object of study*, not a re-derivation. |
-| Stretch (RQ-D) doesn't finish in the box | Expected | RQ-D is explicitly optional; the floor (RQ-A/B/C) is a complete paper. Present splitting as motivated future work if unfinished. |
-| Upstream API content filtering (esp. Claude `code_attack`) saturates cells | Known (from B) | Exclude saturated cells from the adaptive analysis, as B did; lean on the Gemini-flash family + gpt-4o-mini where B has clean signal. |
+One venue-agnostic body of work; the venue is chosen after results are in. As a constructive defense with a clean safety–utility characterization, natural homes are security/trustworthy-ML and *ACL venues: **SaTML**, **AAAI (AI-Alignment / Safety track)**, **EACL / ARR (main or Findings)**. The same paper cannot be under review at two venues at once. Low variance on acceptance is the point of choosing this project first.
 
 ---
 
-## 9. Paper structure
+## 11. Future Work
 
-1. **Introduction.** Black-box VLM defenses' effectiveness against encoded attacks tracks *whether their safety check covers the modality where the content lives* (B's seed). We show this alignment is incidental and adversarially controllable: an attacker who places content in the uncovered modality defeats SAGE/ECSO — and erases the image-presence safety gain B reports, including refuting B's Pareto-optimal ECSO+decoy configuration. We give the minimal modality-complete guard that restores protection at lower utility cost, and show cross-modal splitting bounds what per-channel verification can achieve.
-2. **Background.** Encoded attacks; VLM modality-safety asymmetry; the three black-box defense families; B's image-presence finding and its decoy lever (the object we stress-test).
-3. **The modality-coverage principle & threat model.** Single-modality vs. modality-complete coverage; adversarial placement.
-4. **Attacks.** Modality relocation; ECSO re-check evasion; (stretch) cross-modal splitting. No-defense controls for specificity.
-5. **The modality-complete guard.** Construction from caption + discrimination primitives; (stretch) joint verification.
-6. **Experiments.** Setup (B's models/encoders/benchmarks/judges). RQ-A refutation; RQ-B general placement; RQ-C guard + safety–utility plane; (stretch) RQ-D splitting.
-7. **Analysis.** Per-defense mechanism; why coverage-completeness is necessary; the per-channel-vs-joint boundary.
-8. **Conclusion / deployment guidance.** Evaluate black-box VLM defenses for modality coverage before deployment; image-presence "safety" must not be relied upon.
+Everything below is deferred — a separate contribution that builds on the coverage-complete guard, **not** part of this paper.
 
----
+### 11.1 Compound (single-input) attacks
+A *new* attack that layers several techniques **sequentially into one input** (e.g. `set_theory`-encode → render to image → output-framing), as opposed to the portfolio's parallel single-method queries.
+- **Synergy / superadditivity:** does layering beat the bare model *more* than its components predict in isolation? A positive result is a genuine attack-mechanism finding (techniques hit independent blind spots at once, or one sets up the next).
+- **Single-input evasion (scope-proof):** because the compound is *one* input the defense must process as a whole, defeating a defense with it has no "out-of-scope attack" excuse — unlike the portfolio framing. This is the clean version of "attack beats defense."
 
-## 10. Ethics
+### 11.2 Cross-modal splitting and joint verification
+Distribute harmful content across text and image so each channel — and any *per-channel* check, even a coverage-complete one — sees only benign content, while the model reassembles the harmful request. If clean splits exist, **per-channel completeness is structurally insufficient**, motivating **joint multimodal verification** (the `joint_verify` defender, already built) — a single safety judgment over the joint (text, image) input. If clean splits *do not* exist, that is itself a positive finding: harmful intent has an irreducible single-channel core.
 
-Consistent with B's stance: all experiments use standardized public harmful-prompt benchmarks (HarmBench, JailbreakBench); the encoders and the image-composition primitive are from published prior work, so we introduce no fundamentally new attack capability. The contribution is **defense-oriented** — characterizing an adversarially controllable weakness in deployed black-box defenses and providing the minimal coverage-complete fix. Appendix examples use informational-harm prompts. We release no adversarial assets beyond what is already public, and report the over-refusal and robustness limitations of the proposed guard so deployers do not over-rely on it.
+### 11.3 Extending the guard to the compound and split attacks
+The unified defense paper: one guard robust to the portfolio **and** the compound attack **and** (where possible) splitting, evaluated with **held-out** generalization and the full safety–utility frontier. Stronger as a follow-on precisely because *this* project will have characterized the threat space it must defend.
 
----
+### 11.4 Mechanism (white-box)
+On open-weight targets (HF-loaded Qwen2.5-VL / InternVL3, not vLLM): why is vision-side alignment weaker than text-side? Where/whether does the model reassemble split content (hidden-state / attention probes)? The explanatory layer beneath the coverage map.
 
-## 11. Publication strategy
+### 11.5 The deeper theory
+- **Context-contaminated safety verdicts.** ImgAug (benign image *helps*) and interference (benign content *hurts* a defense's handling of a co-present attack) are two signs of one property: these defenses do not judge each piece of content on its own merits — their verdict is contaminated by incidental context. Characterize this directly.
+- **The alignment manifold.** MathEnc moves a request into alignment-sparse regions via *encoding*; this line moves it via *modality*. A unified view: alignment is non-uniform over the input representation manifold, and encoding and modality-placement are coordinates on it; a defense "covers" only where it drags the request back toward alignment-dense regions. Turns the coverage map from a taxonomy into a *predictive* theory.
+- **Compositional robustness.** Whether defenses robust to attacks individually are robust to their composition — the general principle of which splitting is the limiting case.
 
-One **venue-agnostic** body of work: the same experiments and claims serve every target; only the template and framing emphasis change. The venue is chosen **after results are in**, not now. The same paper cannot be under review at two venues at once.
-
-### Table 1 — Primary options
-
-The dominant variable is **which paper you end up with**, and that's known early — at **gate G0 (~Jun 6)**, the cross-modal-splitting feasibility test (experiments plan §3):
-- **Strong track** — splitting works → a genuinely novel result (per-channel verification is *structurally* insufficient; joint reasoning required).
-- **Modest track** — splitting fails → the floor only (modality placement + the modality-complete guard + over-refusal audit): solid, but "expected attack + expected defense."
-
-P(accept) is therefore given **per track** (rough; each assumes clean execution of that track). **Value /100** = worth of an acceptance for prestige + record/NIW (job excluded): AAAI is top-tier broad AI (CORE A\*), EACL a tier below ACL/EMNLP, Findings a recognized lower tier.
-
-| # | Option | Deadline | P · strong | P · modest | Value | Fit |
-|---|---|---|:--:|:--:|:--:|---|
-| 1 | AAAI-27 — **Main Technical** | Jul 28 | ~20–25% | ~10–15% | 95 | Strong |
-| 2 | AAAI-27 — **AI Alignment** track | Jul 28 | **~30–35%** | ~12–18% | 92 | **Best** — solicits *"robustness evaluation, red-teaming"* |
-| 3 | EACL 2027 — **main** (ARR Aug) | Aug 3 | ~30% | ~22% | 80 | Strong |
-| 4 | EACL 2027 — **Findings** (ARR Aug) | Aug 3 | →**~55%** any-accept | →**~45%** any-accept | 65 | Good |
-
-Rows 1–2 are **mutually exclusive** (one AAAI track per paper); rows 3–4 are **one ARR submission** with two accept tiers. AAAI special-track rates aren't published yet — confirm when the CFPs post.
-
-**Reading it:**
-- **AAAI Alignment dominates AAAI Main** in both tracks (≈equal value, better fit *and* odds). Alignment *is* the AAAI option; Main only if a reviewer-pool reason ever favors it.
-- **Strong track → a real choice:** AAAI Alignment (value 92, ~30–35%, binary) vs. EACL (value 80/65, ~55% land). EACL banks more *expected* publication; AAAI banks more *prestige per hit* — and prestige is nonlinear for a thin record, so AAAI is worth the binary risk **if the result is clean**.
-- **Modest track → EACL, not close:** AAAI Alignment drops to ~15% (an "expected" result is below the AAAI bar), EACL ~45% with a rebuttal. Findings exists precisely to land a solid-but-unsurprising paper.
-
-**Decision flow (gate-driven, not a single July call):**
-1. **~Jun 6 (G0).** Splitting works? → **yes:** build toward **AAAI AI Alignment**. → **no:** build toward **EACL** (and keep **SaTML**, Sep 24, in view — the modest/robustness paper is dead-center for "secure & trustworthy ML").
-2. **~Jul 20 (final QA).** Is the chosen-track paper actually clean (RQ-A/B/C solid · guard clean · safety–utility crisp)? If a *strong*-track paper came in messy/borderline, **drop AAAI → EACL** before committing.
-3. **Submit** AAAI Jul 28 *or* EACL Aug 3 accordingly (mutually exclusive for the same paper).
-
-### Table 2 — Known-good fallbacks (the rest)
-
-| Venue | Deadline | Value /100 | Fit | Note |
-|---|---|:--:|---|---|
-| SaTML 2027 | Sep 24 | 78 | **Best topical** | "secure & trustworthy ML" — dead-center; for the **modest/robustness** paper a genuine alternative to EACL, not just a fallback |
-| ARR Oct cycle | Oct 12 | 75 (+Findings) | Strong | the **only true sequential net** — opens *after* an AAAI Phase-1 reject (Sept 24); commits to a 2027 \*ACL venue (TBD) |
-| WSDM 2027 | Aug 14 | 73 | Moderate | weak fit (web/data-mining); needs a "trustworthy ML for deployed assistants" reframe; low priority |
-
-**Timing reality:** AAAI's first decision (Sept 24) lands *after* every other deadline except ARR Oct 12 — so there is no "submit to AAAI, see the result, then fall back to EACL/WSDM/SaTML." Those are alternatives chosen *instead of* AAAI, up front. The only genuine after-an-AAAI-reject option is **ARR Oct 12**.
-
-**Context / constraints:** no June/July ARR cycle (the ACL calendar jumps May 25 → Aug 3); EMNLP/AACL 2026 are closed (May 25 cycle — Paper B's); COLM and IEEE ICDM out of scope (timing / fit). Keeping options open is only free if the scope stays fixed — the §7 **June 20 data-freeze** governs; do not let an open venue list become a reason to let the claim drift.
+### 11.6 Breadth
+API-model generalization (gemini-2.x-flash / gpt-4o-mini / claude-sonnet-4-6) once the open-weight results are locked; broader benchmark and alignment-tier spread.

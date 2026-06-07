@@ -1,20 +1,39 @@
-# Image Augmentation Amplifies and Bypasses VLM Jailbreak Defenses
+# Coverage-Complete Defense for Encoded & Multimodal VLM Jailbreaks
 
-Code accompanying the paper of the same title.
+Research codebase for evaluating black-box defenses against encoded and image-rendered jailbreak attacks on Vision-Language Models, and for building a **coverage-complete** defense that inspects every input surface a defense's safety check could miss.
 
-This repository implements and reproduces:
-- The **encoded-jailbreak attack pipeline**: text-side encoders (code-completion, formal logic, set theory) that transform harmful queries into out-of-distribution surface forms.
-- The **image-augmentation operator**: paired (text, image) inputs with two variants — **M2** (encoded text rendered as a typographic image) and **M4** (encoded text on the text channel paired with a content-unrelated decoy image).
-- **Three black-box defenses**: a no-defense passthrough, SAGE (prompt-level safety guard), and ECSO (caption-mediated re-verification).
-- **Paired safety / utility evaluation** on HarmBench (harmful) and JailbreakBench-benign (utility), reported on the safety–utility plane.
+This repo is the shared harness for a line of work:
 
-## Headline findings (from the paper)
+- **MathEnc** — *Exposing LLM Safety Gaps Through Mathematical Encoding* (published): text-side encoders (set theory, formal logic, code) that recast harmful queries into out-of-distribution surface forms.
+- **ImgAug** — *Image Augmentation Strengthens VLM Defenses Against Encoded Jailbreak Attacks* (under review): adding an image — even a content-unrelated decoy — changes a defense's behavior, because the defense's coverage happens to line up (or not) with where the encoded content lives.
+- **Current project** — *Coverage-Complete Defense* (in progress): deployed black-box defenses are **specialists** (each checks one surface), so no single one covers the union of known attacks; we build the minimal guard that recovers and checks content on every input channel, and quantify the utility cost of completeness. See `text_docs/proposal.md` and `text_docs/experiments_plan.md`.
 
-- **Amplification (M4 + ECSO):** wrapping an encoded text attack with a content-unrelated decoy image *strengthens* the caption-mediated defense ECSO. On `gemini-2.0-flash`, ECSO's ASR reduction grows from 1pp (text-only) to 48pp (M4) on code-completion attacks; 5pp to 43pp on formal-logic attacks.
-- **Bypass (M2 + SAGE-as-system):** when the encoded text is rendered *into* the image and SAGE is applied as a system message (text-channel only), the defense is bypassed. On `gemini-2.5-flash-lite`, SAGE's ASR drop collapses from 54→4% (text channel) to 54→33% (image channel) — a +29pp bypass. The failure mode concentrates on the Gemini family in our suite.
-- **Unified mechanism:** defense effectiveness is governed by whether the defense's processing covers the modality where the encoded content lives.
-- **Decoy ablation:** the M4 amplification persists when the image is a content-unrelated decoy, supporting a modality-level (not content-level) mechanism.
-- **Deployment hazard:** SAGE on the Gemini family in the M4 regime achieves near-zero ASR at 76–100% benign-refusal cost — the trivial-reject failure mode.
+> This is an active research repo whose direction shifts; `text_docs/proposal.md`, `text_docs/experiments_plan.md`, and `text_docs/experiment_results.md` are the source of truth for what is currently in scope. Attack-side extensions (compound attacks, cross-modal splitting, mechanism) are **Future Work** (proposal §11).
+
+---
+
+## The pipeline
+
+```
+text_encode → [defense_transform] → [imaging] → evaluate
+                                  └→ evaluate (text-only)
+                  defense    (coupled defense + query + judge)
+```
+
+A harmful prompt is encoded (set theory / formal logic / code), optionally rendered into an image (`ir_plain`, fixed-font paginated) or paired with a decoy image, wrapped by a black-box defense, sent to a target VLM, and ASR-judged. Each stage writes `outputs/<mode>/<benchmark>/<cell>/results.json` with an `upstream_ref` chain so any data point's full provenance is reconstructable.
+
+### Defenses
+
+| Defense | Surface covered | Notes |
+|---|---|---|
+| `no_defense` | — | passthrough baseline |
+| `sage` | input-text | prompt-level safety guard |
+| `ecso` | input-image (caption, gated on `has_image`) | caption-mediated re-verification |
+| `decoy` lever | input-text (+ benign image triggers re-check) | the ImgAug deployment lever, here a baseline |
+| **`modality_complete`** | **input-text + input-image (OCR)** | **the contribution** — recover every channel, one unified check over the union |
+| `eta` | input-image (CLIP) + output (reward) | SOTA breadth baseline; needs CLIP-336 + ArmoRM on GPU |
+| `mllm_protector` | output | SOTA breadth baseline; harm detector + detoxifier on GPU |
+| `joint_verify` | joint (text+image) | built; **Future Work** |
 
 ---
 
@@ -24,9 +43,7 @@ This repository implements and reproduces:
 pip install -e .
 ```
 
-Python ≥ 3.12. Dependencies in `pyproject.toml`.
-
-API keys via `.env`:
+Python ≥ 3.12. Dependencies in `pyproject.toml`. API keys (for judge + API targets) via `.env`:
 
 ```bash
 OPENAI_API_KEY=...
@@ -34,92 +51,59 @@ ANTHROPIC_API_KEY=...
 GOOGLE_API_KEY=...
 ```
 
-Non-Latin-script encoders (e.g. classical Chinese) require Noto fonts; place under `fonts/` (gitignored).
+Non-Latin-script encoders and image rendering require Noto fonts under `fonts/` (gitignored).
 
 ---
 
-## Reproducing the paper
-
-### Quick smoke test (~$0.01)
+## Running
 
 ```bash
-python main.py test
+python main.py test           # 4-task smoke test end-to-end (~$0.01); verifies install + keys
+python main.py experiment     # main run — reads conf/experiment/experiment.yaml
 ```
 
-Runs `conf/experiment/test.yaml` — a 4-task end-to-end pipeline check across two encoders and two models. Verifies the install + API keys are working.
+**Active-preset convention:** the run target is hard-coded to `experiment`. For each round, **overwrite `conf/experiment/experiment.yaml`** with that round's tasks rather than creating per-round preset files. Prior rounds live in git history.
 
-### Full experiment
+### Cluster (NU / SLURM)
+
+Open-weight targets are served as separate vLLM SLURM jobs by the orchestrator:
 
 ```bash
-python main.py experiment
+sbatch scripts/run_experiment.sbatch experiment      # auto-serves vLLM targets, auto-cleans old logs
+sbatch scripts/run_experiment.sbatch test --keep
 ```
 
-Reads `conf/experiment/experiment.yaml`. Each task is a `(mode, model, defense, source_chain, prompt_range)` cell. Tasks run concurrently with `asyncio` (`num_main_job_threads` knob).
-
-The paper's main results come from two job batches:
-
-1. **Stage 1 (prompt transforms)** — render encoded text + image variants once, cache to `outputs/prompt_transform/`. Decoy variants (mountain, blank, rabbit) for the §5.3 mechanism test are rendered here.
-2. **Stage 2 (defense + evaluate)** — for each (model, defense, source) cell, apply the defense, query the target model, and judge the response. Outputs to `outputs/defense+evaluate/<benchmark>/<cell>/results.json`.
-
-To rebuild the paper's tables from outputs:
+### OCR fidelity probe (gate before image-channel runs)
 
 ```bash
-python scripts/build_paper_tables.py            # all three (Table 1, App G, App H)
-python scripts/build_paper_tables.py --table 1  # just Table 1
+sbatch temporary_scripts/ocr_probe.sbatch qwen2_5_vl_7b internvl3_8b pixtral_12b
 ```
 
-The script scans `outputs/defense+evaluate/` and emits LaTeX-ready rows.
-
-### Cleaning failed runs
-
-```bash
-python scripts/cleanup_failed.py              # dry-run
-python scripts/cleanup_failed.py --delete
-python scripts/cleanup_failed.py --recent 1d --delete
-```
-
-Drops any output folder lacking `results.json` (i.e., started but didn't complete).
-
----
-
-## Pipeline modes
-
-| Mode | What it does |
-|---|---|
-| `prompt_transform` | Apply a chain of text encoders + image renderers. Output: a chain folder with per-step subdirectories, each containing `prompts.jsonl` + `results.json`. |
-| `defense+evaluate` | Take a prompt-transform output, apply a defense (no_defense / SAGE / ECSO), query the target VLM, judge with the configured classifier. Coupled in one task to avoid intermediate-state proliferation. |
-| `evaluate` | Query target + judge only (no defense). Used for baselines. |
-| `defense_transform` | Apply a transform-only defense (e.g., SAGE as text rewrite) without querying the target. Produces an intermediate `prompts.jsonl` for downstream `evaluate`. |
-| `imaging` | Standalone image rendering of prompts (used to pre-render large image batches). |
-
-The IR variant grid (M0/M2/M4) is realized by composing different `prompt_transform` chains:
-
-- **M0** (`text`): an encoder step only (e.g., `code_attack`); no image.
-- **M2** (`ir_plain`): encoder step + `ir_plain` typographic renderer.
-- **M4** (`ir_constant`): encoder step + `ir_constant` renderer with a fixed `image_path` (decoy).
-
-`src/prompt_transformations/image/images/` holds the decoy images (`mountain.png`, `blank.png`, `rabit.jpeg`).
+Serves each VLM serially and transcribes sampled `ir_plain` images against the upstream encoded text — confirms the model can actually read the rendered attack before image-side cells are meaningful.
 
 ---
 
 ## Models
 
-Five VLMs, three families, accessed via official APIs:
+**Primary (open-weight, NU cluster / vLLM):**
 
-| Family | Models |
+| Model | Notes |
 |---|---|
-| Google | `gemini-2.0-flash`, `gemini-2.5-flash`, `gemini-2.5-flash-lite` |
-| OpenAI | `gpt-4o-mini` |
-| Anthropic | `claude-sonnet-4-6` |
+| `qwen2_5_vl_7b` | workhorse |
+| `internvl3_8b` | `trust_remote_code: true` |
+| `pixtral_12b` | marginal OCR on the longest encodings |
+| `llama3_2_11b_vision` | serving blocked by a vLLM/Mllama incompatibility — text-restrict or version-pin |
 
-Provider routing (one unified call shape `service.batch_chat(...)`):
+**Breadth (API, optional late layer):** `gemini-2.x-flash`, `gpt-4o-mini`, `claude-sonnet-4-6`.
+
+Provider routing behind one unified call shape `service.batch_chat(...)`:
 
 | Provider | Strategy |
 |---|---|
 | OpenAI | `AsyncOpenAI` + `asyncio.gather` |
-| Anthropic | Native Message Batches API |
-| Google | Native Batch API (inline) |
-| Local (vLLM) | `AsyncOpenAI` against a vLLM HTTP endpoint, supports base64 `image_url` |
+| Anthropic | native Message Batches API |
+| Google | native Batch API (inline) |
+| NU cluster (vLLM) | `AsyncOpenAI` against the vLLM endpoint registered by the server manager; base64 `image_url` for image input |
 
 Model registry + pricing: `src/llm_utils/llm_model.py`.
 
@@ -129,74 +113,67 @@ Model registry + pricing: `src/llm_utils/llm_model.py`.
 
 ```
 conf/
-├── experiment/          # YAML task specs (experiment, test, ablations)
-├── llm/                 # Model registry + per-provider config
-├── prompt_transform/    # Encoder + renderer configs (set_theory, code_attack, ir_plain, ir_constant, ...)
-├── defense/             # SAGE, ECSO config
-└── evaluation/          # Judge configs (HarmBench, JBB-refusal)
+├── experiment/          # YAML task specs (experiment is the run target)
+├── llm/                 # model registry + per-provider config
+├── text_encoding/       # encoder configs (set_theory, formal_logic, code_attack, ...)
+├── imaging/             # renderer configs (ir_plain, figstep, ...)
+├── defense/             # sage, ecso, modality_complete, eta, mllm_protector, ...
+└── evaluation/          # judge configs (harmbench, jailbreakbench, orbench, refusal)
 
 src/
-├── experiment/          # Orchestrator (concurrent task dispatch) + Pydantic schemas
-├── prompt_transformations/
-│   ├── text/encoders/   # LLM-based + rule-based text encoders
-│   └── image/           # ir_plain (typographic) + ir_constant (decoy) renderers
-├── defense/             # SAGE, ECSO, no_defense
-├── evaluation/          # HarmBench classifier + JBB-refusal classifier
-├── llm_utils/           # Provider services (OpenAI / Anthropic / Google / vLLM)
-└── utils/               # Logger, MLflow tracker
+├── experiment/          # orchestrator (concurrent dispatch, cluster server manager) + Pydantic schemas
+├── text_encoding/       # LLM-based + rule-based encoders
+├── imaging/             # image renderers (ir_plain fixed-font paginated, ...)
+├── defense/             # all defenders incl. modality_complete (contribution) + joint_verify (future)
+├── prompt_transformations/  # attack transforms (ecso_evade, cross_modal_split — future-work)
+├── evaluation/          # HarmBench + JBB-refusal + OR-Bench judges
+├── llm_utils/           # provider services + model registry
+└── utils/               # logger, MLflow tracker
 
-scripts/
-├── build_paper_tables.py    # Regenerate paper Table 1 / App G / App H from outputs/
-├── cleanup_failed.py        # Drop incomplete output folders
-└── run_experiment.sbatch    # SLURM submission script (optional)
-
-paper/                       # LaTeX source + figures (camera-ready format)
-data/                        # Datasets (gitignored; obtain from public sources)
-outputs/                     # Experiment outputs (gitignored)
-fonts/                       # Unicode fonts for rendering (gitignored)
-mlruns/                      # MLflow tracking (gitignored)
+scripts/run_experiment.sbatch   # SLURM submission (canonical cluster runner)
+text_docs/              # proposal, experiments plan, results, findings, summary (source of truth)
+data/                   # prompt benchmarks (HarmBench, JBB, OR-Bench)
+outputs/                # experiment outputs (gitignored)
+fonts/ · mlruns/        # fonts + MLflow tracking (gitignored)
 ```
 
 ---
 
 ## Output layout
 
-Every task writes to its own directory:
-
 ```
 outputs/<mode>/<benchmark>/<short_name>_<timestamp>_<rand>/
-├── results.json         # config + headline metrics + upstream chain reference
-├── prompts.jsonl        # per-prompt records (Prompt schema, src/experiment/schemas.py)
+├── results.json         # config + metrics + primary_metric + git_sha + upstream_ref
+├── prompts.jsonl        # per-prompt Prompt records (src/experiment/schemas.py)
 ├── raw_results.jsonl    # per-prompt response + judge_output + judge_reasoning + judge_raw_response
 └── images/              # rendered image artifacts (image-variant tasks only)
 ```
 
-The full judge audit trail (per-prompt `judge_output`, `judge_reasoning`, `judge_raw_response`) is stored — any single judgment can be inspected directly.
-
-The chain provenance is reconstructable from `results.json` → `upstream` → ... recursively.
+The full judge audit trail is stored per prompt, so any judgment can be inspected — or re-judged with a different classifier — without re-querying the target.
 
 ---
 
 ## Tracking
 
-Each task is logged as an MLflow run (params, metrics, artifacts). Local file store under `mlruns/`:
+Each task is an MLflow run (params, metrics, artifacts), local file store under `mlruns/`:
 
 ```bash
 mlflow ui              # http://localhost:5000
 ```
 
-Per-run cost (input/output tokens, USD) is recorded in `target_usage` inside each `results.json`.
+Per-run target token/USD usage is recorded in `results.json`.
+
+---
+
+## Reproducibility notes
+
+- **Pairing:** all variants in a (model, defense, encoding) cell share one canonical encoded text, encoded once and reused via `source_transform_subdir` references rather than re-encoding.
+- **Empty-response handling:** the judge auto-classifies empty responses as refusals — correctly handling upstream API content-filtering on encodings a provider blocks at the API layer.
+- **Schema versioning:** every `results.json` carries `schema_version`/`git_sha`/`git_dirty`; table builders filter on `schema_version` to exclude stray legacy dirs.
+- **Renderer change:** image-side data use the **fixed-font paginated** renderer; older single-image (shrink-to-fit) renders are demarcated in `experiment_results.md` and are **not** directly comparable.
 
 ---
 
 ## License
 
-Code: MIT. Datasets: see the original HarmBench / JailbreakBench / OR-Bench / XSTest licenses for the prompts used as evaluation inputs.
-
----
-
-## Notes on reproducibility
-
-- **Pairing protocol:** all variants in a (model, defense, encoding) cell share a single canonical encoded text, encoded once. Repeated runs reuse it via `source_transform_subdir` references rather than re-encoding.
-- **Empty-response handling:** the judge auto-classifies empty model responses as refusals (`judge_reasoning: "Empty response auto-classified as refusal"`). This correctly handles upstream API content-filtering on encodings the model's provider has decided to block at the API layer.
-- **Variance:** the paper's headline cell uses 3 seeds; per-cell raw judge outputs are stored, so a third party can re-judge with a different classifier without re-querying the target model.
+Code: MIT. Datasets: see the original HarmBench / JailbreakBench / OR-Bench licenses for the evaluation prompts.
