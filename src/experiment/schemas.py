@@ -1,7 +1,7 @@
 """
 Pydantic schemas for the destroyer-paper pipeline (post-refactor).
 
-Two modes only:
+Modes:
 
   Stage 1 — prompt_transform
       Runs a chain of PromptTransformations (encoders + image renderers)
@@ -13,6 +13,11 @@ Two modes only:
       Takes a specific subfolder from a prompt_transform output, hands the
       prompts to a Defense (which owns the target-model interaction loop),
       runs the canonical judge, writes raw_results.jsonl + results.json.
+
+  Stage 3 — analyze
+      Pure post-processing: fans IN from many defense+evaluate dirs and
+      OR-reduces their per-prompt verdicts into derived metrics (e.g.
+      portfolio / best-of-all ASR). No model or judge I/O.
 """
 from typing import Annotated, Any, List, Literal, Optional, Union
 from pydantic import BaseModel, Discriminator, Field, field_validator, model_validator
@@ -242,6 +247,73 @@ class DefenseEvaluateResult(BaseModel):
 
 
 # ====================================================================
+# analyze results — pure post-processing over already-run results
+# ====================================================================
+
+
+class AnalyzeGroupResult(BaseModel):
+    """One (group_by) cell of an analyze run — e.g. one (model, defense).
+
+    All rates are percentages over `denominator`, so portfolio / best-fixed /
+    per-attack are directly comparable. `complementarity_gap` =
+    portfolio_asr - best_fixed_attack_asr (how much the *suite* buys over the
+    single strongest attack)."""
+    group_key: dict[str, str]
+    n_attacks: int                          # distinct attack variants joined
+    attacks: list[str]
+    denominator: int
+    n_broken: int                           # ids broken by >= 1 attack
+    n_excluded_everywhere: int              # ids with asr=None under every attack
+    portfolio_asr: float                    # best-of-all (OR over attacks), %
+    best_fixed_attack_asr: float            # max single-attack ASR, %
+    complementarity_gap: float              # portfolio - best_fixed, pp
+    per_attack_asr: dict[str, float]        # attack label -> ASR % (same denom)
+
+
+class AnalyzeResult(BaseModel):
+    """Top-level results.json for an `analyze` task — written to outputs/analyze/.
+
+    No model/judge I/O: a pure OR-reduction over per-prompt `asr` verdicts in
+    each source dir's raw_results.jsonl, joined on `join_key` (`id`). Per-id
+    attribution (which attack broke each prompt) lives alongside in
+    portfolio_rows.jsonl — that file IS the coverage map.
+    """
+    mode: Literal["analyze"] = "analyze"
+    analysis: str
+
+    # Provenance — the full list of consumed source dirs (analyze is the only
+    # mode that fans IN from many upstreams), each as the standard
+    # {source_dir, results_sha256} pointer.
+    source_dirs: list[str]
+    upstream_refs: list[dict] = Field(default_factory=list)
+
+    group_by: list[str]
+    join_key: str
+    attack_subset: Optional[list[str]] = None
+    denominator_policy: str
+    benchmark: Optional[str] = None
+
+    n_sources: int
+    n_groups: int
+    groups: list[AnalyzeGroupResult]
+
+    metrics: dict[str, float] = Field(default_factory=dict)
+    primary_metric: Optional[str] = None
+    count: int
+
+    elapsed_seconds: float
+    output_dir: str
+    mlflow_run_id: Optional[str] = None
+
+    # Provenance — see src/utils/provenance.py.
+    schema_version: int = SCHEMA_VERSION
+    git_sha: str = ""
+    git_dirty: bool = False
+    status: str = "success"
+    warnings: list[str] = Field(default_factory=list)
+
+
+# ====================================================================
 # Task configs — what experiment.yaml's `tasks:` list contains
 # ====================================================================
 
@@ -304,9 +376,41 @@ class DefenseEvaluateTask(_TaskBase):
     judge_method: Optional[str] = None    # override; usually None (canonical)
 
 
+class AnalyzeTask(_TaskBase):
+    """Post-processing mode: aggregate per-prompt verdicts across already-run
+    `defense+evaluate` output dirs into derived metrics. Pure data processing —
+    no target/judge calls, no cluster serving (the orchestrator classifies it
+    NO_MODEL automatically).
+
+    `source_dirs` are `defense+evaluate` output dirs (each holding results.json
+    + raw_results.jsonl); glob patterns are expanded. Results are grouped by the
+    results.json fields in `group_by` (default model × defense); within a group
+    the per-`id` `asr` verdicts are OR-reduced across the distinct attack
+    variants (the "best-of-all" / portfolio metric).
+    """
+    mode: Literal["analyze"]
+    analysis: str = "portfolio_asr"
+    source_dirs: list[str]
+    # results.json field names to group within before OR-reducing over attacks.
+    group_by: list[str] = Field(default_factory=lambda: ["target_model", "defense"])
+    join_key: str = "id"
+    # Restrict the best-of to these attack labels (None = all variants present).
+    attack_subset: Optional[list[str]] = None
+    # full_source_set: denom = union of ids in the group (excluded-everywhere
+    # prompts count as not-broken — deployment-realistic). evaluated_union:
+    # denom = ids evaluated (asr != None) by >= 1 attack.
+    denominator_policy: Literal["full_source_set", "evaluated_union"] = "full_source_set"
+
+    @model_validator(mode="after")
+    def _validate(self):
+        if not self.source_dirs:
+            raise ValueError("source_dirs must contain at least one defense+evaluate dir or glob")
+        return self
+
+
 # Discriminated union: Pydantic dispatches by `mode`.
 TaskConfig = Annotated[
-    Union[PromptTransformTask, DefenseEvaluateTask],
+    Union[PromptTransformTask, DefenseEvaluateTask, AnalyzeTask],
     Discriminator("mode"),
 ]
 

@@ -1,7 +1,7 @@
 """
 Task runner for the destroyer-paper pipeline.
 
-Two modes only:
+Modes:
 
   prompt_transform  — run a chain of PromptTransformations (attacks + image
                       renderers). Writes one subfolder per step under the
@@ -11,6 +11,11 @@ Two modes only:
   defense+evaluate  — defense + target-model query + judging, all in one
                       task. Consumes a specific subfolder from a
                       prompt_transform run.
+
+  analyze           — pure post-processing over already-run results (no model
+                      or judge I/O). Fans IN from many defense+evaluate dirs
+                      and writes derived metrics (e.g. portfolio / best-of-all
+                      ASR) under outputs/analyze/. See src/analysis/.
 """
 import json
 import time
@@ -711,12 +716,24 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
     }
 
 
+# ======================== analyze ========================
+
+
+def _run_analyze(task) -> dict[str, Any]:
+    """`analyze` mode: pure post-processing over already-run results — no
+    target/judge calls. Delegates to src/analysis (dispatched by task.analysis).
+    """
+    from src.analysis import run_analysis
+    return run_analysis(task)
+
+
 # ======================== Dispatcher ========================
 
 
 TASK_MODES = {
     "prompt_transform": _run_prompt_transform,
     "defense+evaluate": _run_defense_evaluate,
+    "analyze": _run_analyze,
 }
 
 
