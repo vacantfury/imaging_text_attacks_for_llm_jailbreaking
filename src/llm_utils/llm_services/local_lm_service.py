@@ -9,7 +9,7 @@ This service runs models locally on your hardware and automatically detects:
 from typing import List, Tuple, Optional, Dict, Any, Union
 from pathlib import Path
 
-from ..base_llm_service import BaseLLMService
+from ..base_llm_service import BaseLLMService, make_mechanism_error
 from ..llm_model import LLMModel
 from ..constants import HUGGINGFACE_TOKEN, DEFAULT_LOCAL_BATCH_SIZE
 from ...utils.logger import get_logger
@@ -305,6 +305,6 @@ class LocalLMService(BaseLLMService):
                     results.append((conv_id, response_text))
                 except Exception as e2:
                     logger.error(f"Generation error for conversation {conv_id}: {str(e2)}")
-                    results.append((conv_id, f"Error: {str(e2)}"))
+                    results.append((conv_id, make_mechanism_error(str(e2))))
             
             return results

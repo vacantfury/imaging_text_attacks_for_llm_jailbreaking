@@ -31,7 +31,11 @@ cluster:
   time_limit: "08:00:00"
   port: 8000
   gpu_memory_utilization: 0.9
-  max_model_len: 16384
+  max_model_len: 20480   # bumped from 16384 (covers observed ~17.5k code_attack
+                         # ir_plain overflows, +25% KV memory). Residual overflows
+                         # are excluded via is_correctly_processed, not miscounted.
+                         # If Pixtral-12B KV-OOMs at startup, add a per-model
+                         # override (conf/llm/pixtral_12b.yaml: cluster.max_model_len: 16384).
   dtype: null
   chat_template: null
   server_start_timeout: 3600

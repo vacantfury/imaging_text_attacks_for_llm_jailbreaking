@@ -32,6 +32,7 @@ from src.experiment.schemas import (
     TransformationSpec,
 )
 from src.llm_utils import LLMServiceFactory
+from src.llm_utils.base_llm_service import is_mechanism_error, strip_mechanism_error
 from src.llm_utils.llm_model import LLMModel
 from src.prompt_transformations import (
     Modality, create_transformation, resolve_transformation_name,
@@ -48,8 +49,11 @@ logger = get_logger(__name__)
 # Max rendered pages (images) a single multimodal prompt may carry before it is
 # excluded from the target query + ASR (is_within_maxlen=False) rather than
 # truncated. A proxy for total content length, which is what actually drives
-# vision-token usage against the served --max-model-len (16384; kept at 16384
-# rather than raised, since 32768 risks V100-32GB KV-cache OOM on Pixtral-12B).
+# vision-token usage against the served --max-model-len (20480 as of 2026-06-11;
+# raised from 16384 to fit most code_attack ir_plain, but NOT to 32768 — that
+# risks V100-32GB KV-cache OOM on Pixtral-12B). Any prompt that still overflows
+# at query time is excluded via is_correctly_processed (not miscounted), so this
+# page cap + the max-model-len are a best-effort reduction, not a guarantee.
 # Tune down if the re-probe shows requests erroring below this page count.
 MAX_PAGES_PER_PROMPT = 8
 
@@ -625,14 +629,29 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
 
     # Build EvaluationRow list with synthetic prompt_stage. num_images is
     # recorded for every prompt; over-budget rows carry an empty response and
-    # is_within_maxlen=False, and are NOT judged.
+    # is_within_maxlen=False, and are NOT judged. Rows whose target response is a
+    # mechanism-error sentinel (the call failed to produce a valid output:
+    # query-time context-overflow, network, timeout, rate-limit, failed batch
+    # item) are flagged is_correctly_processed=False and likewise excluded from
+    # judging/ASR — an untestable prompt must not count as a defeated attack. A
+    # refusal is a *successful* call, so it stays is_correctly_processed=True.
     stage_label = f"{encoding}__{task.defense}" if encoding else task.defense
     npages_by_id = {p.id: _num_images(p) for p in prompts}
-    all_rows: list[EvaluationRow] = [
-        EvaluationRow(id=pid, prompt_stage=stage_label, response=resp, asr=None,
-                      num_images=npages_by_id.get(pid, 0), is_within_maxlen=True)
-        for pid, resp in pairs
-    ]
+    all_rows: list[EvaluationRow] = []
+    n_mechanism_err = 0
+    for pid, resp in pairs:
+        failed = is_mechanism_error(resp)
+        if failed:
+            n_mechanism_err += 1
+        all_rows.append(EvaluationRow(
+            id=pid, prompt_stage=stage_label,
+            response=strip_mechanism_error(resp), asr=None,
+            num_images=npages_by_id.get(pid, 0),
+            is_within_maxlen=True, is_correctly_processed=not failed))
+    if n_mechanism_err:
+        logger.warning(
+            f"{n_mechanism_err}/{len(pairs)} prompts hit a mechanism error "
+            f"(is_correctly_processed=False) — excluded from query+ASR.")
     all_rows += [
         EvaluationRow(id=p.id, prompt_stage=stage_label, response="", asr=None,
                       num_images=_num_images(p), is_within_maxlen=False)
@@ -645,9 +664,11 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
         out_dir / "raw_results.jsonl",
         [row.model_dump_json() for row in all_rows])
 
-    # Judge only within-budget rows (over-budget excluded from ASR). Filtering
+    # Judge only rows that were both within budget AND correctly processed
+    # (over-budget and mechanism-error rows are excluded from ASR). Filtering
     # keeps object references, so verdict columns still land back in all_rows.
-    within_rows = [r for r in all_rows if r.is_within_maxlen]
+    within_rows = [
+        r for r in all_rows if r.is_within_maxlen and r.is_correctly_processed]
     judged = _run_judging(
         prompts=within, all_rows=within_rows, benchmark=benchmark,
         judge_method_override=task.judge_method, stage_label=stage_label,

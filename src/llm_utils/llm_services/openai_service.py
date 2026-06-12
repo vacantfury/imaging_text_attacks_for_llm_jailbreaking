@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from openai import AsyncOpenAI
 
-from ..base_llm_service import BaseLLMService
+from ..base_llm_service import BaseLLMService, make_mechanism_error
 from ..llm_model import LLMModel, ModelQuirk
 from ..constants import OPENAI_API_KEY
 from ..media_utils import encode_image_to_b64
@@ -135,8 +135,8 @@ class OpenAIService(BaseLLMService):
                         continue
                     self._check_fatal_error(e, self.model.model_id)
                     logger.error(f"OpenAI API error: {err}")
-                    return f"Error: {err}"
-        return "Error: unreachable"
+                    return make_mechanism_error(err)
+        return make_mechanism_error("retries exhausted (unreachable)")
 
     # ------------------------------------------------------------------
     # Public API

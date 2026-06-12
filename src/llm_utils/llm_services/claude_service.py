@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from anthropic import Anthropic
 
-from ..base_llm_service import BaseLLMService
+from ..base_llm_service import BaseLLMService, make_mechanism_error
 from ..llm_model import LLMModel
 from ..constants import ANTHROPIC_API_KEY
 from ..media_utils import encode_image_to_b64
@@ -151,7 +151,11 @@ class ClaudeService(BaseLLMService):
                     self._record_usage(in_tok, out_tok, cost, is_test)
                 results[cid] = text
             else:
-                results[cid] = f"Error: batch result type={result.type}"
+                # Non-"succeeded" item = a real processing failure (errored /
+                # expired / canceled). Content refusals come back as
+                # type="succeeded" with refusal text, so this is a mechanism error.
+                results[cid] = make_mechanism_error(
+                    f"batch result type={result.type}")
         return results
 
     # ------------------------------------------------------------------
@@ -178,6 +182,6 @@ class ClaudeService(BaseLLMService):
         results_map = self._collect_results(batch, is_test)
 
         return [
-            (cid, results_map.get(cid, "Error: missing from batch results"))
+            (cid, results_map.get(cid, make_mechanism_error("missing from batch results")))
             for cid, _ in prepared
         ]

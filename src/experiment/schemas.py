@@ -83,6 +83,13 @@ class EvaluationRow(BaseModel):
     # target query and from ASR (asr stays None) rather than silently truncated.
     num_images: int = 0
     is_within_maxlen: bool = True
+    # False when the target call did not produce a valid model output (mechanism
+    # error: context-overflow at query time, network/timeout, rate-limit
+    # exhaustion, failed batch item). Such rows are EXCLUDED from the query's ASR
+    # denominator — an untestable prompt must not count as a defeated attack.
+    # Distinct from a refusal, which is a successful call (is_correctly_processed
+    # stays True). Distinct from is_within_maxlen, which is a render-time page gate.
+    is_correctly_processed: bool = True
     judge_output: Optional[str] = None
     judge_reasoning: Optional[str] = None
     judge_raw_response: Optional[str] = None

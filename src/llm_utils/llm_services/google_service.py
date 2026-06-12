@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import PIL.Image
 import google.genai as genai
 
-from ..base_llm_service import BaseLLMService
+from ..base_llm_service import BaseLLMService, make_mechanism_error
 from ..llm_model import LLMModel
 from ..constants import GOOGLE_API_KEY
 from ...utils.logger import get_logger
@@ -168,7 +168,10 @@ class GoogleService(BaseLLMService):
                     ) / 1_000_000
                     self._record_usage(in_tok, out_tok, cost, is_test)
             else:
-                text = "Error: no response in batch result"
+                # No inline response = the item errored (a content/safety block
+                # instead returns a response with empty text → "[Empty response]"
+                # above, kept as a refusal). So this is a mechanism failure.
+                text = make_mechanism_error("no response in batch result")
 
             results.append((item_id, text))
         return results

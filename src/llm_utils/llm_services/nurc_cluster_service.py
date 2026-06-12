@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import httpx
 from openai import AsyncOpenAI
 
-from ..base_llm_service import BaseLLMService
+from ..base_llm_service import BaseLLMService, make_mechanism_error
 from ..llm_model import LLMModel
 from ..media_utils import encode_image_to_b64
 from ...utils.logger import get_logger
@@ -126,8 +126,8 @@ class NURCClusterService(BaseLLMService):
                         await asyncio.sleep(wait)
                         continue
                     logger.error(f"vLLM API error: {err}")
-                    return f"Error: {err}"
-        return "Error: unreachable"
+                    return make_mechanism_error(err)
+        return make_mechanism_error("retries exhausted (unreachable)")
 
     # ------------------------------------------------------------------
     # Public API

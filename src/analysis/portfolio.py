@@ -76,8 +76,10 @@ def _group_key(res: dict, group_by: list[str]) -> tuple[tuple[str, str], ...]:
 
 def _load_asr_by_id(source_dir: Path) -> dict[str, Optional[bool]]:
     """Per-id `asr` from raw_results.jsonl. None = excluded/unjudged (e.g.
-    over-maxlen image, upstream API filter). Only is_within_maxlen rows carry a
-    real verdict; excluded rows already have asr=None."""
+    over-maxlen image, mechanism error / query-time overflow, upstream API
+    filter). Only rows that are is_within_maxlen AND is_correctly_processed carry
+    a real verdict; all excluded rows already have asr=None, so reading `asr`
+    directly is sufficient (no need to re-filter here)."""
     out: dict[str, Optional[bool]] = {}
     rf = source_dir / "raw_results.jsonl"
     if not rf.exists():

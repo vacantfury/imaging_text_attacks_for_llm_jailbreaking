@@ -44,6 +44,42 @@ def is_rate_limit_error(exc: BaseException) -> bool:
     return any(p in err for p in _RATE_LIMIT_PATTERNS)
 
 
+# ---------------------------------------------------------------------------
+# Mechanism-error sentinel
+# ---------------------------------------------------------------------------
+# A response wrapped with this sentinel marks a genuine MECHANISM / processing
+# failure: the API call did NOT produce a valid model output (context-overflow,
+# network/connection error, timeout, rate-limit exhaustion, a failed/missing
+# batch item). This is *not* a refusal — a refusal is a successful call that
+# returns refusal text (or empty content). Services emit it only from their
+# failure paths (the `except` handler, or an errored batch item). Downstream,
+# rows whose response carries this sentinel are flagged
+# `is_correctly_processed=False` and EXCLUDED from metric denominators, so an
+# untestable prompt is never miscounted as a defeated attack.
+#
+# The null byte makes the marker impossible to confuse with real model output.
+MECHANISM_ERROR_SENTINEL = "\x00__MECHANISM_ERROR__\x00"
+
+
+def make_mechanism_error(message: str) -> str:
+    """Wrap a failure message as a mechanism-error sentinel response."""
+    return f"{MECHANISM_ERROR_SENTINEL}{message}"
+
+
+def is_mechanism_error(response: Any) -> bool:
+    """True iff `response` is a mechanism-error sentinel (a real processing
+    failure, NOT a refusal)."""
+    return isinstance(response, str) and response.startswith(
+        MECHANISM_ERROR_SENTINEL)
+
+
+def strip_mechanism_error(response: str) -> str:
+    """Return the human-readable failure message (sentinel prefix removed)."""
+    if is_mechanism_error(response):
+        return response[len(MECHANISM_ERROR_SENTINEL):]
+    return response
+
+
 def _backoff_seconds(attempt: int, base: float = 2.0, max_wait: float = 60.0) -> float:
     """Exponential backoff with jitter, capped at `max_wait`."""
     return min(base ** attempt + random.random() * 2, max_wait)
