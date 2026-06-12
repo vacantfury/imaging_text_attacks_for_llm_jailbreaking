@@ -1,0 +1,10 @@
+# AMIA-IA defense configuration.
+# Joint Intention-Analysis component of AMIA (Zhang et al., EMNLP Findings 2025).
+#
+# SCOPE: intention-analysis pass ONLY — AMIA's image-patch masking module is
+# deliberately omitted (it targets pixel-perturbation attacks, absent from our
+# encoded threat model). See src/defense/amia_ia.py and proposal §4.3.
+#
+# Pure prompt-wrapping + output parsing — no additional parameters needed.
+# The intention-analysis template is hardcoded in the defender (a faithful
+# reconstruction; the paper's Figure-3 prompt is an image, not transcribable).

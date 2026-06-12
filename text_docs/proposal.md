@@ -4,7 +4,7 @@
 
 **One-line thesis:** Existing black-box VLM jailbreak defenses are *specialists* — each inspects one input/output surface — so no single deployed defense covers the union of known encoded and multimodal attacks; we build the minimal **coverage-complete** guard that does, and quantify the utility cost of completeness.
 
-**Scope note (read first).** This proposal describes **only the current project**: the coverage-gap measurement (motivation) and the coverage-complete unified defense (the contribution). Everything beyond it — new compound attacks, cross-modal splitting, mechanism, and the deeper theory — is deliberately deferred to **§11 Future Work**, not because it lacks value but because it is a separate contribution that builds on this one. Keep the body of this document to what this paper ships.
+**Scope note (read first).** This proposal describes **only the current project**: the coverage-gap measurement (motivation) and the coverage-complete unified defense (the contribution). Everything beyond it — new compound attacks, cross-modal splitting, mechanism, and the deeper theory — is deliberately deferred to a **separate future-work catalog (`text_docs/future_work.md`)**, not because it lacks value but because it is a separate contribution that builds on this one. Keep the body of this document to what this paper ships.
 
 ---
 
@@ -16,6 +16,8 @@ This project is the third in a line and reuses the same evaluation harness throu
 - **ImgAug** — *"Image Augmentation Strengthens VLM Defenses Against Encoded Jailbreak Attacks"* (under review). Found that adding an image — even a content-unrelated decoy — *changes* a defense's behavior: ECSO's `has_image` branch re-checks; intrinsic image-side safety catches image-resident content. Crucially, ImgAug also documented the **failure cost**: SAGE+decoy on Gemini collapses to 76–100% benign refusal (trivial-reject). Supplies the **image transforms** (`ir_plain`, decoy) and the **decoy-lever baseline** this project stress-tests.
 
 **What this project adds.** ImgAug's finding, restated, is that a defense helps exactly when its coverage *happens* to line up with where the harmful content lives. We make that observation systematic and constructive: we **measure** that no single existing defense covers the union of known attacks, **build** the minimal defense that does, and **characterize the cost** of that completeness. This is a *defense* contribution; it cites MathEnc (encoders) and ImgAug (image transforms, decoy lever, and the over-refusal hazard) and is not substantially similar to either.
+
+**Closest prior art — multi-surface defenses, and the decode gap.** Beyond the single-surface specialists, two recent black-box defenses already inspect *both* input channels: **AMIA** (masks text-irrelevant image patches + a joint intention-analysis pass; Zhang et al., EMNLP Findings 2025) and **BlueSuffix** (a visual purifier + a textual purifier + an RL-trained suffix; Zhao et al., ICLR 2025). These are the prior art the contribution must clear, and the differentiation is **structural** — provable from their published methods, not from a horse-race: both *inspect* content (mask/reason; purify/paraphrase) but neither contains a step that **decodes** an encoded payload (AMIA reasons about intent; BlueSuffix's purifier is meaning-*preserving*). So an attack that hides harm behind a mathematical/logical encoding routes past *inspection* on every surface, and our guard differs by **recovering — decoding — and then judging** the content rather than merely reading it. This decode gap is what RQ2 turns on.
 
 ---
 
@@ -44,6 +46,8 @@ RQ1 is the motivating measurement; **RQ2–RQ4 are the contribution.** RQ4 is th
 
 Black-box API/endpoint access to the target VLM and to any deployed black-box defense — no weights, no activations. The attacker draws from a **fixed, public suite of known attacks** (the MathEnc encoders × ImgAug image transforms): for each harmful prompt the attacker may use any single attack in the suite, and counts a success if the chosen attack defeats the deployed defense (the *portfolio* / best-of-suite threat model). The defender deploys exactly one of {no-defense, SAGE, ECSO, ETA, MLLM-Protector, ImgAug decoy lever, **coverage-complete guard (ours)**}. We do **not** claim the specialist defenses were designed against the full suite; the point is that single-surface coverage is, in deployment, an insufficient surface, and the coverage-complete guard is the minimal black-box fix.
 
+The best-of-suite aggregation — a prompt counts as attacked if *any* suite member defeats the deployed defense — is the standard reliable-robustness protocol (an ensemble of diverse attacks under a *declared* threat model), in the spirit of **AutoAttack** (Croce & Hein, 2020) and **RobustBench** (Croce et al., 2021); we adopt it as methodology and claim **no novelty for the aggregation itself**. Following the within-scope discipline of the adaptive-attack literature (Tramèr et al., 2020), each baseline's failures are reported as **coverage facts** — a specialist covers the surface it was designed for and no more — *not* as indictments. Deployment simply faces the union of all surfaces at once.
+
 ---
 
 ## 4. Method
@@ -58,15 +62,20 @@ The portfolio is the existing, public attack surface, reused unchanged:
 | input-image | `ir_plain` (encoded attack rendered into the image, fixed-font paginated) |
 | input-text + benign image | `decoy` / `constant_image` (ImgAug lever, as an *attack* surface and as a *baseline defense* lever) |
 
-No new attacks are constructed in this project. Compound/sequential attacks are **Future Work (§11)**.
+No new attacks are constructed in this project. Compound/sequential attacks are **future work** (see `text_docs/future_work.md`). **ArtPrompt** (ASCII-art encoding; Jiang et al., 2024) is implemented as an *optional* external-validity add — a published third-party encoding that confirms the decode gap is not an artifact of our own encoders — but it is held out of the core suite (the inclusion call is deferred to the experiment plan).
 
 ### 4.2 The defense (the new work)
 
-- **Coverage-complete guard** (`modality_complete`, already built). A black-box wrapper that, regardless of `has_image`, (i) recovers content from *every* channel (reads the text **and** OCRs/captions the image), (ii) runs a single unified safety check over the recovered union, (iii) gates the response. Built from primitives already in the repo (ECSO's captioning + SAGE's discrimination). Removes the `has_image` gate and the single-channel blind spot.
+- **Coverage-complete guard** (`modality_complete`, already built). A black-box wrapper that, regardless of `has_image`, (i) **recovers — decodes, not merely reads —** content from *every* channel (decodes the text-side encoding **and** OCRs/captions the image), (ii) runs a single unified safety check over the recovered union, (iii) gates the response. Built from primitives already in the repo (ECSO's captioning + SAGE's discrimination). Removes the `has_image` gate and the single-channel blind spot. **The decode step is the differentiator from inspect-only multi-surface defenses (AMIA, BlueSuffix):** they read both channels but do not *recover* encoded content.
 
 ### 4.3 Baselines
 
 `no_defense`, `SAGE` (input-text), `ECSO` (image caption, gated), the **ImgAug decoy lever**, and two recent SOTA defenses for "you only beat weak defenses" pre-emption: **ETA** (black-box adaptation: CLIP image pre-eval + ArmoRM output post-eval + safe-regeneration) and **MLLM-Protector** (output-side harm detector + detoxifier; the *output-axis orthogonality control*). The SOTA baselines are **breadth, not core** — included if their checkpoints/GPU cost is affordable (see plan §3); the paper stands on SAGE/ECSO/decoy.
+
+**Multi-surface tier (closest prior art).** We additionally situate against the two recent defenses that already inspect *both* input channels — **AMIA** and **BlueSuffix**. Because the differentiation is *structural* (neither decodes), the **load-bearing comparison is read from their published methods, not from a re-implemented horse-race**:
+- **BlueSuffix** has released code, so it is **faithful-or-nothing** — we argue it structurally (its visual purifier denoises pixels; its textual purifier paraphrases meaning-preservingly; neither decodes) and do **not** ship a reduced re-implementation. A faithful run is an optional appendix only.
+- **AMIA** has no released code; we re-implement **only its intention-analysis component** (`amia_ia` — prompt + output parsing; the masking module is omitted, as it targets pixel-perturbation attacks absent from our threat model) and run it as a transparent **empirical gate** on the decode claim. If even AMIA's intent-reasoning misses an encoded attack, the decode gap is confirmed; if it catches one, we learn the differentiation is weak *before* committing the paper to it.
+- *Excluded as baselines* (mentioned in related work only): pixel-perturbation detectors (CIDER, JailDAM, JBShield) — mismatched to encoded/typographic attacks, so running them would be an unfair comparison — and off-the-shelf moderation classifiers (Llama-Guard-3-Vision), a separate-trained-model paradigm rather than a black-box prompt-level guard.
 
 ### 4.4 The coverage map (reporting frame)
 
@@ -78,9 +87,11 @@ Results are framed as a **coverage map**, not a sweep — "defense effectiveness
 | ECSO | — | ✓ (caption, gated) | — | — |
 | ETA | — | ✓ (CLIP) | ✓ (reward) | — |
 | MLLM-Protector | — | — | ✓ | — |
-| **coverage-complete (ours)** | ✓ | ✓ (OCR) | — | — |
+| AMIA | — | ✓ (mask) | — | ✓ (intent) |
+| BlueSuffix | ✓ (paraphrase) | ✓ (purify) | — | — |
+| **coverage-complete (ours)** | ✓ **(decode)** | ✓ **(decode/OCR)** | — | — |
 
-Each attack is labelled by where it places harm; each cell tests whether that surface is covered. The headline is RQ2/RQ3: the coverage-complete guard covers the union, and its safety–utility frontier vs. the specialists and the decoy lever.
+Each attack is labelled by where it places harm; each cell tests whether that surface is covered. A ✓ marks a surface the defense *inspects*; crucially, **only our guard *decodes*** an encoded payload — the orthogonal axis the inspect-only multi-surface defenses (AMIA, BlueSuffix) lack, and the source of our differentiation. The headline is RQ2/RQ3: the coverage-complete guard covers the union, and its safety–utility frontier vs. the specialists and the decoy lever.
 
 ### 4.5 Metrics
 
@@ -116,6 +127,7 @@ Each attack is labelled by where it places harm; each cell tests whether that su
 | P2 | The coverage-complete guard reduces ASR across the *whole* suite below every specialist's worst case | Completeness is insufficient — points to a deeper cause (output-only or joint-only harm), i.e. Future Work |
 | P3 | The guard's safety–utility frontier dominates ImgAug's decoy lever (≤ refusal at ≤ ASR) | The decoy lever is utility-competitive — weakens the deployment story |
 | P4 | The guard generalizes to **held-out** attacks it was not tuned on | Coverage is benchmark-specific, not structural — the contribution is overfit, not a coverage property |
+| P5 | The multi-surface defenses (AMIA, BlueSuffix) also fail the encoded suite — they inspect both channels but do not *decode* | A multi-surface defense already decodes encoded content — would collapse the decode-gap differentiation (flagged early by the `amia_ia` gate) |
 
 A clean paper needs P2–P4. P4 is what makes this a coverage result rather than a bake-off; P1 is the motivating measurement (and is robust regardless of numbers — it is a characterization, not a gamble).
 
@@ -126,7 +138,7 @@ A clean paper needs P2–P4. P4 is what makes this a coverage result rather than
 - **Near-zero null-result risk.** A defense *designed* to cover the union beats each single specialist by construction; the only unknown is the utility cost — and that cost is itself a reportable result whatever its value. There is no "the experiment comes back empty and kills the paper" failure mode.
 - **Almost no new code.** The guard is built; the attacks exist; the baselines are wired. The work is running and analysis.
 - **Reliable accept pattern.** Constructive defense + safety–utility frontier + beats baselines on a unified benchmark is a well-worn path. Evaluating all baselines on a broader suite than each was individually designed for is *standard* for a defense paper — which neutralizes the "out-of-scope attack" critique that would sink the same comparison framed as an attack claim.
-- **It does not foreclose the rest.** The compound attack and the deeper science (§11) build naturally on top, and the eventual stronger defense gains a *characterized* threat space to claim honest generalization against.
+- **It does not foreclose the rest.** The compound attack and the deeper science (see `text_docs/future_work.md`) build naturally on top, and the eventual stronger defense gains a *characterized* threat space to claim honest generalization against.
 
 The two cheap moves that turn this from a bake-off into a real paper — **held-out attacks** (RQ4/P4) and the **Pareto frontier** (RQ3/P3) — are free: they are just how the runs are sliced and reported.
 
@@ -155,31 +167,3 @@ Consistent with MathEnc / ImgAug. All experiments use standardized public harmfu
 ## 10. Publication targets (venue-agnostic)
 
 One venue-agnostic body of work; the venue is chosen after results are in. As a constructive defense with a clean safety–utility characterization, natural homes are security/trustworthy-ML and *ACL venues: **SaTML**, **AAAI (AI-Alignment / Safety track)**, **EACL / ARR (main or Findings)**. The same paper cannot be under review at two venues at once. Low variance on acceptance is the point of choosing this project first.
-
----
-
-## 11. Future Work
-
-Everything below is deferred — a separate contribution that builds on the coverage-complete guard, **not** part of this paper.
-
-### 11.1 Compound (single-input) attacks
-A *new* attack that layers several techniques **sequentially into one input** (e.g. `set_theory`-encode → render to image → output-framing), as opposed to the portfolio's parallel single-method queries.
-- **Synergy / superadditivity:** does layering beat the bare model *more* than its components predict in isolation? A positive result is a genuine attack-mechanism finding (techniques hit independent blind spots at once, or one sets up the next).
-- **Single-input evasion (scope-proof):** because the compound is *one* input the defense must process as a whole, defeating a defense with it has no "out-of-scope attack" excuse — unlike the portfolio framing. This is the clean version of "attack beats defense."
-
-### 11.2 Cross-modal splitting and joint verification
-Distribute harmful content across text and image so each channel — and any *per-channel* check, even a coverage-complete one — sees only benign content, while the model reassembles the harmful request. If clean splits exist, **per-channel completeness is structurally insufficient**, motivating **joint multimodal verification** (the `joint_verify` defender, already built) — a single safety judgment over the joint (text, image) input. If clean splits *do not* exist, that is itself a positive finding: harmful intent has an irreducible single-channel core.
-
-### 11.3 Extending the guard to the compound and split attacks
-The unified defense paper: one guard robust to the portfolio **and** the compound attack **and** (where possible) splitting, evaluated with **held-out** generalization and the full safety–utility frontier. Stronger as a follow-on precisely because *this* project will have characterized the threat space it must defend.
-
-### 11.4 Mechanism (white-box)
-On open-weight targets (HF-loaded Qwen2.5-VL / InternVL3, not vLLM): why is vision-side alignment weaker than text-side? Where/whether does the model reassemble split content (hidden-state / attention probes)? The explanatory layer beneath the coverage map.
-
-### 11.5 The deeper theory
-- **Context-contaminated safety verdicts.** ImgAug (benign image *helps*) and interference (benign content *hurts* a defense's handling of a co-present attack) are two signs of one property: these defenses do not judge each piece of content on its own merits — their verdict is contaminated by incidental context. Characterize this directly.
-- **The alignment manifold.** MathEnc moves a request into alignment-sparse regions via *encoding*; this line moves it via *modality*. A unified view: alignment is non-uniform over the input representation manifold, and encoding and modality-placement are coordinates on it; a defense "covers" only where it drags the request back toward alignment-dense regions. Turns the coverage map from a taxonomy into a *predictive* theory.
-- **Compositional robustness.** Whether defenses robust to attacks individually are robust to their composition — the general principle of which splitting is the limiting case.
-
-### 11.6 Breadth
-API-model generalization (gemini-2.x-flash / gpt-4o-mini / claude-sonnet-4-6) once the open-weight results are locked; broader benchmark and alignment-tier spread.

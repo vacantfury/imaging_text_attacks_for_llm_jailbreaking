@@ -22,12 +22,19 @@ from .encoders.llm_formal_logic_encoder import FormalLogicLLMEncoder
 from .encoders.llm_quantum_mechanics_encoder import QuantumMechanicsLLMEncoder
 from .encoders.llm_classical_language_encoder import LLMClassicalLanguageEncoder
 from .encoders.llm_semantic_camo_encoder import SemanticCamoEncoder
+from .encoders.non_llm_artprompt_encoder import ArtPromptEncoder
 
 
 @register_transformation
 class BaselineTransformation(TextEncoderTransformation):
     type_name = "non_llm_baseline"
     encoder_class = BaselineEncoder
+
+
+@register_transformation
+class ArtPromptTransformation(TextEncoderTransformation):
+    type_name = "non_llm_artprompt"
+    encoder_class = ArtPromptEncoder
 
 
 @register_transformation

@@ -20,6 +20,7 @@ from .non_llm_symbol_injection_encoder import SymbolInjectionEncoder
 from .llm_quantum_mechanics_encoder import QuantumMechanicsLLMEncoder
 from .llm_formal_logic_encoder import FormalLogicLLMEncoder
 from .non_llm_baseline_encoder import BaselineEncoder
+from .non_llm_artprompt_encoder import ArtPromptEncoder
 
 
 # Export all
@@ -31,4 +32,5 @@ __all__ = [
     'QuantumMechanicsLLMEncoder',
     'FormalLogicLLMEncoder',
     'BaselineEncoder',
+    'ArtPromptEncoder',
 ]

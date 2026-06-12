@@ -17,8 +17,9 @@ Companion to `proposal.md`. Cluster/open-weight VLMs are primary; closed API mod
 - ✓ Paper ImgAug's old `outputs/` archived to `backup_files/arr_may_submission_files/outputs/`; `outputs/` is empty and current-project-only.
 - ✓ **OCR-fidelity probe built as a standalone tool** (`temporary_scripts/ocr_probe.{sbatch,py}`): serves each VLM serially, transcribes sampled `ir_plain` images vs upstream encoded text, prints per-image fidelity + SUMMARY. NURC HTTP-proxy connectivity for loopback health-check/inference **fixed** (the manager's `ProxyHandler({})` pattern → `no_proxy`/`--noproxy` in the probe sbatch).
 - ✓ **Image renderer reworked (2026-06-05):** `ir_plain` now renders at a **fixed readable font and paginates long content across multiple images** — was single-image *shrink-to-fit*, which made long encodings (esp. `code_attack`, ~13k chars) OCR-illegible. Multi-image plumbed end-to-end: schema `image_encoded: list[str]` (back-compat str→[str]), all 4 provider services already accept an image list, defenses load all pages. Over-budget prompts (> `MAX_PAGES_PER_PROMPT=8` pages) are **excluded + flagged `is_within_maxlen=False` / `num_images` in `raw_results`**, never truncated. `page_height=4096` keeps typical prompts to 1–3 images (code_attack→2, math→1). `--max-model-len` kept at 16384 (32768 risks V100 KV-OOM on Pixtral-12B). Old single-image renders demarcated in `experiment_results.md`.
+- ✓ **Multi-surface baseline + ArtPrompt built (2026-06-11):** `amia_ia` defender (AMIA's *intention-analysis* component only — masking omitted as out-of-threat-model; faithful reconstruction, since AMIA has no released code) and `non_llm_artprompt` encoder (faithful port of `other_repos/ArtPrompt`; dependency-free `gen` font + optional `art`-lib fonts). Both registered + smoke-verified. See `code_dev_plan.md`. These add the **decode-gap** thread to the plan (Round 3).
 
-**Next ▶:** Round 0 **re-probe** (paginated renderer) → Round 1 coverage gap → Round 2 guard + cost → Round 3/4 generalization. (Direction set 2026-06-06: current project is the **coverage-complete defense**; attack-side work moved to Future Work.)
+**Next ▶:** Round 0 **re-probe** (paginated renderer) → Round 1 coverage gap → Round 2 guard + cost → **Round 3 decode gap (multi-surface AMIA-IA/BlueSuffix don't *decode*)** → Round 4 generalization. (Direction set 2026-06-06: current project is the **coverage-complete defense**; attack-side work moved to Future Work. Decode-gap differentiation added 2026-06-11.)
 
 ---
 
@@ -29,8 +30,8 @@ Companion to `proposal.md`. Cluster/open-weight VLMs are primary; closed API mod
 | **Targets** | `qwen2_5_vl_7b` (workhorse), `pixtral_12b`, `llama3_2_11b_vision`, `internvl3_8b` — all NU-cluster, 1–2 GPU each |
 | **Encoders** (Stage 1, exist) | `set_theory`, `formal_logic`, `code_attack` |
 | **Image transforms** (Stage 1, exist) | `ir_plain` (render attack into image — **fixed-font, paginated multi-image**), `constant_image` (decoy; `params.image_path`), `blank_image` |
-| **Attack suite (current project)** | the existing encoders × image transforms above, used as **single-method portfolio** queries. **No new attacks built this project.** |
-| **Defenses (Stage 2)** | `no_defense`, `sage`, `ecso`, `decoy`-lever, **`modality_complete` (the contribution)** · **SOTA baselines (breadth, built):** `eta` (CLIP image + ArmoRM output gates + safe-regen), `mllm_protector` (output-side detector+detoxifier). ⚠️ `eta`/`mllm_protector` load HF aux models → orchestrator job needs a **GPU** (or serve separately), checkpoints pulled/merged first. |
+| **Attack suite (current project)** | the existing encoders × image transforms above, used as **single-method portfolio** (best-of-suite) queries. **No new attacks built this project.** · *Optional external-validity:* `non_llm_artprompt` (published ASCII-art encoding; built) — a third-party encoding for the decode gap, held out of the core suite; **TEXT-channel only** (never → `ir_plain`). |
+| **Defenses (Stage 2)** | `no_defense`, `sage`, `ecso`, `decoy`-lever, **`modality_complete` (the contribution)** · **Multi-surface tier (closest prior art):** `amia_ia` (AMIA intention-analysis only, masking omitted — **the decode-gap baseline**); **BlueSuffix = structural-only, NOT run** (code exists → faithful-or-nothing). · **SOTA baselines (breadth, built):** `eta` (CLIP image + ArmoRM output gates + safe-regen), `mllm_protector` (output-side detector+detoxifier). ⚠️ `eta`/`mllm_protector` load HF aux models → orchestrator job needs a **GPU** (or serve separately), checkpoints pulled/merged first. |
 | **Benchmarks** | HarmBench-harmful (rows 0–99) = ASR; JailbreakBench-benign (0–99) = utility |
 | **Judge** | `gpt-5-nano` (API), ImgAug-parity; HarmBench + JBB-refusal evaluators |
 | **Decoding** | temp 0, top_p 1, seed 42 |
@@ -54,6 +55,8 @@ python main.py <preset>                            # local smoke (API targets on
 | **`joint_verify` defender** | ✅ `35897be` | `src/defense/joint_verify.py` — judge the joint (text+image) request, then answer-or-refuse | **Future Work** (§11.2) |
 | **`ecso_evade` attack** | ✅ `6c26a74` | `src/prompt_transformations/text/ecso_evade.py` — output-framing wrapper | **Future Work** (compound) |
 | **`cross_modal_split` attack** | ✅ `6c26a74` | `src/prompt_transformations/image/cross_modal_split.py` — scaffold (positional split) | **Future Work** (§11.2) |
+| **`amia_ia` defender** (multi-surface baseline) | ✅ 2026-06-11 | `src/defense/amia_ia.py` — AMIA intention-analysis pass only (masking omitted); image passthrough; parses `[Final Response]`, logs raw `[Intention Analysis]` + marker-absence | **YES — decode-gap baseline** |
+| **`non_llm_artprompt` encoder** (external-validity) | ✅ 2026-06-11 | `src/prompt_transformations/text/encoders/non_llm_artprompt_encoder.py` — faithful ArtPrompt port; `gen` no-dep / `art`-lib fonts; `font` is the sweep knob (use `cards`/`alphabet`, not `gen`, for a clean probe) | optional (external validity) |
 
 All resolve via `create_defense(...)` / `create_transformation(...)` and pass parse+construct+apply smoke tests. **For this project the only defender that matters is `modality_complete`** (+ the existing `sage`/`ecso`/`decoy` baselines; `eta`/`mllm_protector` if their aux-model checkpoints are pulled/merged and the orchestrator has a GPU — verify ETA's ArmoRM formatting against `other_repos/ETA` first). The attack-side code (`ecso_evade`, `cross_modal_split`) and `joint_verify` are **built but reserved for Future Work** — do not run them in this plan. Reporting follows the **coverage map** in proposal §1/§4.4/§8 (every cell is a finding — never claim a "sweep").
 
@@ -87,13 +90,15 @@ All resolve via `create_defense(...)` / `create_transformation(...)` and pass pa
 4. Record §C1 (safety) + §C2 (cost) per the coverage map.
 **Gate G2:** `modality_complete` covers the union (ASR ≤ every specialist's worst case across the suite). Near-guaranteed by construction; the real output is the *cost geometry* — report it whatever it is.
 
-### Round 3 — SOTA baselines (breadth, conditional)
-**Goal:** pre-empt "you only beat weak defenses." **Conditional** on the `eta`/`mllm_protector` checkpoints being pulled/merged and the orchestrator having a GPU (§1/§2).
+### Round 3 — Multi-surface baselines + the decode gap (differentiation)  → Gate G3
+**Goal:** pre-empt "you only beat weak/single-surface defenses" AND establish the **decode-gap** differentiation from the *closest* multi-surface prior art. The decode-gap check is cheap (text-only, `amia_ia` + `no_defense`) and **can be pulled earlier as a pilot** — recommended before locking the differentiation framing.
 **Steps:**
-1. Stage 2: the Round-1/2 suite × `{eta, mllm_protector}` × serving models, ASR + benign-refusal.
-2. For **`eta`**, record *image-gate-fired* vs *output-gate-fired* separately (a benign `decoy` should make ETA's image-gate read "safe" → disable it). For **`mllm_protector`** (output-axis), expect it to be *complementary* to our input-coverage guard — where it holds, that strengthens the "input-coverage and output-checking are orthogonal axes" framing (proposal §8).
-3. Add these defenses to the coverage map and the safety–utility plane. Record §C3.
-**If checkpoints/GPU are not affordable:** skip — the paper stands on SAGE/ECSO/decoy; note the omission honestly.
+1. **Decode-gap gate (core).** Stage 2 with **`amia_ia`** (AMIA's intention-analysis pass; *no decode step*) and the inspect-only specialists (`sage`, `ecso`) vs `no_defense`, on the **text-only encoded attacks** `{set_theory, formal_logic, code_attack}` (no image). Does AMIA's intent-*reasoning* flip harmful→refusal *without decoding*? Log the raw `[Intention Analysis]` (gate evidence) + the marker-absence rate. Contrast with **`modality_complete`** (decode-then-judge) on the same prompts.
+2. **(optional) ArtPrompt external validity.** Add **`non_llm_artprompt`** (a *published third-party* encoding; use an `art`-lib font such as `cards`/`alphabet` so the word isn't surface-readable — **not** the dependency-free `gen` font, which leaks letters into the raw text) to the encoded set. Confirms the decode gap isn't an artifact of *our own* encoders. **TEXT-channel only** — never chain into `ir_plain`.
+3. **SOTA breadth (conditional).** `{eta, mllm_protector}` × the suite, if their checkpoints/GPU are affordable. **`eta`**: record *image-gate-fired* vs *output-gate-fired* separately (a benign `decoy` makes ETA's image-gate read "safe"). **`mllm_protector`** (output-axis) is *complementary* to our input-coverage guard — where it holds, that strengthens the "input-coverage vs output-checking are orthogonal axes" framing (proposal §8).
+4. **BlueSuffix — NOT run.** Code exists → faithful-or-nothing; argued **structurally** in the paper (visual purifier denoises pixels, textual purifier paraphrases meaning-preservingly → no decode step). No reduced re-implementation. Note in results.
+5. Add all to the coverage map + safety–utility plane. Record §C3.
+**Gate G3:** `amia_ia` (and the inspect-only specialists) **fail to recover the encoded harm** where `modality_complete` (decode) succeeds → **decode gap confirmed**, the differentiation holds. If `amia_ia`'s intent-reasoning **does** catch the encoded attacks → the decode-gap differentiation is weak; **rethink the framing before writing** (caught early, by design — proposal §6 P5). **If `eta`/`mllm_protector` checkpoints/GPU are unaffordable:** skip step 3 only — the decode-gap core (steps 1–2, 4) still stands.
 
 ### Round 4 — Held-out generalization (RQ4) + statistics  → Freeze
 **Goal:** show the guard's coverage is **structural, not benchmark-overfit** — the anti-bake-off result (P4).
@@ -114,10 +119,11 @@ All resolve via `create_defense(...)` / `create_transformation(...)` and pass pa
 | **R0** | serving models read **paginated** rendered text (`ocr_probe` re-probe); Llama mllama-serve fix | fail OCR → text-restrict; >MAX_PAGES → `is_within_maxlen` exclude |
 | **G1** | Round 1: no single specialist defense covers the union, on ≥2 models | covered-by-one → pivot headline to cost-of-completeness (RQ3) |
 | **G2** | Round 2: `modality_complete` covers the union; cost geometry quantified | near-guaranteed; output is the cost frontier regardless |
+| **G3** | Round 3: multi-surface `amia_ia` (no decode) fails the encoded attacks where `modality_complete` (decode) succeeds | `amia_ia` catches encoded attacks via intent-reasoning → decode-gap differentiation weak; rethink framing **before writing** |
 | **P4** | Round 4: guard covers **held-out** attacks | fails → coverage is overfit; narrow the claim to the tested suite |
 | **Freeze** | Rounds 1–4 done (+ R3/R5 if affordable) | writing begins |
 
-**Sequencing:** Round 0 → 1 → 2 → 4 always; Round 3 (SOTA baselines) and Round 5 (API breadth) if affordable. Then freeze → write. Attack-side / splitting / mechanism rounds are **Future Work** (proposal §11), not scheduled here.
+**Sequencing:** Round 0 → 1 → 2 → **3 (decode-gap core — steps 1–2,4; ETA/MLLM-Protector breadth in step 3 conditional)** → 4 always; Round 5 (API breadth) if affordable. The decode-gap check (R3 step 1) is cheap and may be pulled earlier as a pilot. Then freeze → write. Attack-side / splitting / mechanism rounds are **Future Work** (proposal §11), not scheduled here.
 
 ---
 
@@ -130,4 +136,6 @@ All resolve via `create_defense(...)` / `create_transformation(...)` and pass pa
 | New model fails OCR / serving | Fixed-font pagination mitigates long-content OCR failure; R0 re-probe confirms. Llama-3.2-Vision serve blocked by Mllama vLLM bug → version-pin or text-restrict; Qwen+InternVL3 carry the project. Pixtral marginal on longest encodings. Over-budget prompts excluded-and-flagged. |
 | SOTA-baseline (eta/mllm_protector) checkpoint + GPU cost | Round 3 is **conditional/breadth** — skip cleanly if unaffordable; the paper stands on SAGE/ECSO/decoy. |
 | "You just combined SAGE + ECSO" criticism of the guard | Frame the contribution as the **coverage principle + held-out generalization (RQ4)**, with the guard as its minimal instantiation; the cost frontier (RQ3) is the real content, not the existence of the guard. |
+| Decode-gap fails — AMIA's intent-reasoning catches the encoding *without* decoding | Gated **early** (G3) on a transparent, faithful **IA-only** re-implementation (masking omitted with justification). Load-bearing claim is **structural** (AMIA's published method has no decode step); empirical `amia_ia` is corroboration. BlueSuffix handled structurally (code exists → not strawmanned). If the gate fails, learn before writing and pivot the framing. |
+| ArtPrompt `gen` font confounds the decode probe (surface-readable) | Use an `art`-lib font (`cards`/`alphabet`) for the experiment — `gen` fills letters with themselves and leaks into raw text. `font` is the documented sweep knob; `gen` is smoke-test-only. |
 | Judge (`gpt-5-nano`) cost on a large cell count | Targets free; judging is modest; raw verdicts stored so re-judging never re-queries targets. |
