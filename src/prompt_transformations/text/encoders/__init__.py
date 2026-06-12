@@ -21,6 +21,7 @@ from .llm_quantum_mechanics_encoder import QuantumMechanicsLLMEncoder
 from .llm_formal_logic_encoder import FormalLogicLLMEncoder
 from .non_llm_baseline_encoder import BaselineEncoder
 from .non_llm_artprompt_encoder import ArtPromptEncoder
+from .non_llm_homoglyph_encoder import HomoglyphEncoder
 
 
 # Export all
@@ -33,4 +34,5 @@ __all__ = [
     'FormalLogicLLMEncoder',
     'BaselineEncoder',
     'ArtPromptEncoder',
+    'HomoglyphEncoder',
 ]

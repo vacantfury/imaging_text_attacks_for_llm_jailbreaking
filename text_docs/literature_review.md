@@ -553,6 +553,29 @@ A distinction that matters for what our guard can claim: some "splits" are **sem
 
 ---
 
+## 10. Character-level / imperceptible obfuscation — independent evidence for the inspect-don't-decode gap (added 2026-06-12)
+
+> Read from PDFs in `paper/literature/`. This cluster is the strongest *independent, peer-reviewed* support for the coverage/decode-gap thesis: a safety **classifier inspects bytes and is fooled by encoding, while the model reads straight through** — exactly the gap our decode-then-judge guard targets. Live `bibkey`s.
+
+### 10.1 The canonical attack class — Bad Characters (`9833641`)
+Boucher, Shumailov, Anderson & Papernot, *Bad Characters: Imperceptible NLP Attacks* (IEEE S&P 2022), introduces a class of **imperceptible encoding perturbations** — visually identical to humans but changing the byte stream the model ingests, "exploiting the gap between human and machine perception." Four black-box variants: **homoglyphs** (Unicode confusables, e.g. Latin `a` → Cyrillic `а`), **invisible characters** (zero-width, U+200C/D), **reorderings** (bidi control chars), **deletions** (backspace chars). A single injection materially degrades vulnerable NLP systems; three break most — across MT, toxic-content detection, NLI, NER, sentiment, on 8 models incl. commercial Microsoft/Google/Facebook/IBM/HuggingFace systems. Injection is via a **genetic search** over a per-task loss (so the released repo is an optimization harness, not a one-call substitution — for reuse, port the deterministic confusable mapping from Unicode `confusables.txt` and cite this as origin). Crucially, the paper itself names the defenses: **discard suspect characters pre-tokenization, apply character mappings (normalization), or render+OCR** — i.e. *recover the canonical text before judging*, which is precisely our guard's decode/recover step.
+
+### 10.2 The modern-guardrail version — Bypassing LLM Guardrails (`hackett-etal-2025-bypassing`)
+Hackett et al. (Mindgard / Lancaster, LLMSEC 2025) carry the same idea to **today's production guardrails**: a catalog of character-injection techniques (homoglyph, zero-width, diacritics, full-width, bidi, **emoji / Unicode-tag smuggling**) plus algorithmic AML evasion, evaluated against **6 deployed systems** (Azure Prompt Shield, Meta Prompt Guard, NeMo Guard, ProtectAI, Vijil) — **up to 100% evasion** (44–76% avg). Their stated mechanism is our thesis verbatim: *"Since LLMs are capable of interpreting encoded and modified text, they can still comprehend and execute encoded … payloads"* even though the **guardrail classifier is fooled.** This is the strongest single citation that the inspect-don't-decode gap is real, *deployed*, and exploitable now — and that guardrails' reliance on text-classification models is the weakness our decode-coverage guard addresses.
+
+### 10.3 Why the model reads through — Broken Tokens (`zheng2026broken`)
+Zheng et al., *Broken Tokens? Your Language Model can Secretly Handle Non-Canonical Tokenizations* (NeurIPS 2026), supplies the **mechanism**: LLMs robustly recover meaning from inputs whose tokenization is non-canonical (the regime homoglyph / character attacks induce). This explains the asymmetry the attacks exploit — the *model* reads perturbed bytes a byte-matching *classifier* cannot — and motivates why a defense must **normalize / decode to canonical form before judging.**
+
+### 10.4 Adjacent new additions (briefer)
+- **Defense2Attack** (`ZHAO2026113805`, *Pattern Recognition* 2026) — a VLM jailbreak that *leverages weak defense cues* (defense-styled prompt + affirmative adversarial image + RL red-team suffix) to boost single-attempt ASR on 4 VLMs. A cautionary note for our story: defensive patterns can be turned *into* attack scaffolding — argues for guards that don't leak exploitable structure.
+- **Don't Say No / DSN** (`zhou-etal-2025-dont`, ACL Findings 2025) — an optimization jailbreak adding *refusal suppression* to the target loss; a different axis (gradient/loss attack), not encoding. Cite as a strong-attack baseline, not on the decode-gap line.
+- **The Silent Saboteur** (`song-etal-2025-silent`, ACL Findings 2025) — imperceptible adversarial attacks against black-box **RAG retrieval**; same imperceptibility spirit as Bad Characters but in the retrieval setting, off our model-input scope.
+
+### 10.5 Relevance to this project
+This cluster is **motivation gold**: peer-reviewed, deployed-system evidence that *input inspection is fooled by encoding while the model decodes it anyway* — our coverage/decode gap, independently confirmed. Two concrete uses: (1) cite **Bad Characters** (`9833641`) as the method origin and **Bypassing LLM Guardrails** (`hackett-etal-2025-bypassing`) as the deployed-threat evidence in intro / related work; (2) *if* we add a homoglyph cell, it probes **normalization-decode** (map confusables → ASCII) — distinct from the *semantic* decode that `set_theory`/`formal_logic` need — so it broadens the decode-gap claim across decode *types*, and we would **reuse `confusables.txt` + cite Bad Characters, never a home-grown mapping**. Notably, Bad Characters' own prescribed defense (character normalization / render+OCR before processing) is exactly our guard's recover-then-judge design — an independent convergence on the same fix.
+
+---
+
 ## References
 
 - Anthropic. *The Claude 3 Model Family.* Technical Report, 2024.

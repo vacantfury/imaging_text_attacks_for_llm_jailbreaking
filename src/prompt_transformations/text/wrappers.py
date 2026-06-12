@@ -23,6 +23,7 @@ from .encoders.llm_quantum_mechanics_encoder import QuantumMechanicsLLMEncoder
 from .encoders.llm_classical_language_encoder import LLMClassicalLanguageEncoder
 from .encoders.llm_semantic_camo_encoder import SemanticCamoEncoder
 from .encoders.non_llm_artprompt_encoder import ArtPromptEncoder
+from .encoders.non_llm_homoglyph_encoder import HomoglyphEncoder
 
 
 @register_transformation
@@ -35,6 +36,12 @@ class BaselineTransformation(TextEncoderTransformation):
 class ArtPromptTransformation(TextEncoderTransformation):
     type_name = "non_llm_artprompt"
     encoder_class = ArtPromptEncoder
+
+
+@register_transformation
+class HomoglyphTransformation(TextEncoderTransformation):
+    type_name = "non_llm_homoglyph"
+    encoder_class = HomoglyphEncoder
 
 
 @register_transformation

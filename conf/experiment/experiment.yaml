@@ -1,52 +1,91 @@
 # ============================================================
-# Paper C · Round 0/1 · STAGE 1b — RE-RENDER ir_plain (paginated renderer)
+# Paper C · DECODE-GAP GATE (text channel) — next round (2026-06-11)
 # ============================================================
-# Regenerates the `ir_plain` image variant for the THREE canonical encodings
-# using the NEW renderer (2026-06-05): FIXED readable font, content PAGINATED
-# across multiple images instead of single-image shrink-to-fit. This replaces
-# the old single-image ir_plain dirs (deleted) that made long encodings
-# (esp. code_attack, ~13k chars) OCR-illegible.
+# >>> Active preset: `sbatch scripts/run_experiment.sbatch experiment`
+#     (or `python main.py experiment`). OVERWRITTEN per round; keep prior
+#     rounds in git history, not as extra files. <<<
 #
-#   ir_plain (image-only): encoded attack rendered INTO image(s); text channel
-#            replaced with a stock "check the image" instruction (keep_text=false).
-#            Long prompts now emit MULTIPLE page images → Prompt.image_encoded is
-#            a LIST of paths (e.g. <id>_encoded_p0.png, _p1.png, …).
+# Purpose: the decode-gap validity gate (proposal §6 P5 / plan Round 3 step 1),
+# pulled EARLY on the CLEAN TEXT CHANNEL — no image → no context-overflow and no
+# OCR confound (the two issues that sank code_attack ir_plain, now dropped).
 #
-# Doubles as the multi-image RENDERER test: local-only (no LLM/GPU/API), fast +
-# free, runs on `short`. The full [0,99] range is kept on purpose — the long
-# code_attack prompts are what exercise the new pagination / multi-page output.
-# (The multi-image CALL path — sending N images to a VLM — is validated next by
-#  the OCR re-probe `temporary_scripts/ocr_probe.sbatch` and Stage 2.)
+#   no_defense        — text-channel attack baseline per encoder/model.
+#   sage              — text-side specialist that *reasons* about the prompt.
+#   amia_ia           — AMIA intention-analysis: reasons about intent, NO decode.
+#   modality_complete — the contribution: DECODES the encoding, then judges.
 #
-# NOT re-rendering ir_constant (decoy): the constant renderer is unchanged by
-# the pagination work, so its existing dirs stay valid — re-running would only
-# create duplicate decoy dirs.
+# Decode-gap hypothesis: sage / amia_ia (inspect / reason) MISS the encoded harm
+# that modality_complete (decode-then-judge) catches. If amia_ia already catches
+# it, the differentiation is weak — we learn it HERE, before the full image
+# matrix. This is also the FIRST real run of amia_ia + modality_complete — watch
+# the defense logs for per-defense errors (any are now excluded via
+# is_correctly_processed, not miscounted).
 #
-# Produces (new prompt_transform dirs):
-#   outputs/prompt_transform/harmbench/<enc>_ir_plain_<ts>_<r>/ir_plain/
-#       images/<id>_encoded.png        (short prompt → 1 page)
-#       images/<id>_encoded_p0.png …   (long prompt  → N pages)
+# Sources = existing TEXT-channel encoder renders (May-31 batch; text needs no
+# re-render — the renderer change only affected images). code_attack is
+# TEXT-ONLY now (its ir_plain is dropped — see experiments_plan §0).
 #
-# Run:
-#   python main.py experiment                          # local (recommended; it's free)
-#   sbatch scripts/run_experiment.sbatch experiment    # or on the cluster
+# Models: qwen2_5_vl_7b + internvl3_8b (serving-confirmed) + pixtral_12b (text is
+# safe for Pixtral — the overflow/OCR risks were image-side; doubles as a Pixtral
+# serving test). Llama-3.2-Vision excluded (Mllama vLLM bug).
 #
-# Sanity after the run: spot-check a long code_attack dir has *_p0/_p1 images and
-# its prompts.jsonl `image_encoded` is a JSON array. Then re-probe OCR fidelity.
+# Benchmark: HarmBench-harmful, rows 0–99. 3 encoders × 4 defenses × 3 models = 36 cells.
+# Watch: 3 servers come up clean (Pixtral is the unproven one); cells return
+# non-empty; no mechanism errors on plain text (none expected — text fits 20480).
 # ============================================================
 
-num_main_job_threads: 6
+num_main_job_threads: 6        # in-process task concurrency (≥ one per server)
+num_cluster_jobs: 4            # orchestrator + 3 vLLM servers (≤ MAX_SUBMIT 8)
 
-# ── Canonical encodings from Stage 1 (mj_7308777) — UNCHANGED upstream ───────
-_enc_set:  &enc_set   outputs/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory
-_enc_fl:   &enc_fl    outputs/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
-_enc_code: &enc_code  outputs/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack
+# ── target VLMs ──────────────────────────────────────────────
+_qwen:     &qwen      {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0, 99]}
+_internvl: &internvl  {mode: defense+evaluate, target_model: internvl3_8b, prompt_range: [0, 99]}
+_pixtral:  &pixtral   {mode: defense+evaluate, target_model: pixtral_12b,  prompt_range: [0, 99]}
+
+# ── Stage-1 TEXT-channel source subdirs (May-31 batch; text unaffected by re-render) ──
+_st: &st  outputs/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory
+_fl: &fl  outputs/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
+_ca: &ca  outputs/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack
 
 tasks:
-  # ── ir_plain (image-only delivery), paginated fixed-font renderer ──────────
-  - {mode: prompt_transform, source_transform_subdir: *enc_set,  prompt_range: [0, 99],
-     transformation_list: [{type: ir_plain, params: {keep_text: false}}]}
-  - {mode: prompt_transform, source_transform_subdir: *enc_fl,   prompt_range: [0, 99],
-     transformation_list: [{type: ir_plain, params: {keep_text: false}}]}
-  - {mode: prompt_transform, source_transform_subdir: *enc_code, prompt_range: [0, 99],
-     transformation_list: [{type: ir_plain, params: {keep_text: false}}]}
+  # ── Qwen2.5-VL-7B ──────────────────────────────────────────
+  - {<<: *qwen, defense: no_defense,        source_transform_subdir: *st}
+  - {<<: *qwen, defense: sage,              source_transform_subdir: *st}
+  - {<<: *qwen, defense: amia_ia,           source_transform_subdir: *st}
+  - {<<: *qwen, defense: modality_complete, source_transform_subdir: *st}
+  - {<<: *qwen, defense: no_defense,        source_transform_subdir: *fl}
+  - {<<: *qwen, defense: sage,              source_transform_subdir: *fl}
+  - {<<: *qwen, defense: amia_ia,           source_transform_subdir: *fl}
+  - {<<: *qwen, defense: modality_complete, source_transform_subdir: *fl}
+  - {<<: *qwen, defense: no_defense,        source_transform_subdir: *ca}
+  - {<<: *qwen, defense: sage,              source_transform_subdir: *ca}
+  - {<<: *qwen, defense: amia_ia,           source_transform_subdir: *ca}
+  - {<<: *qwen, defense: modality_complete, source_transform_subdir: *ca}
+
+  # ── InternVL3-8B ───────────────────────────────────────────
+  - {<<: *internvl, defense: no_defense,        source_transform_subdir: *st}
+  - {<<: *internvl, defense: sage,              source_transform_subdir: *st}
+  - {<<: *internvl, defense: amia_ia,           source_transform_subdir: *st}
+  - {<<: *internvl, defense: modality_complete, source_transform_subdir: *st}
+  - {<<: *internvl, defense: no_defense,        source_transform_subdir: *fl}
+  - {<<: *internvl, defense: sage,              source_transform_subdir: *fl}
+  - {<<: *internvl, defense: amia_ia,           source_transform_subdir: *fl}
+  - {<<: *internvl, defense: modality_complete, source_transform_subdir: *fl}
+  - {<<: *internvl, defense: no_defense,        source_transform_subdir: *ca}
+  - {<<: *internvl, defense: sage,              source_transform_subdir: *ca}
+  - {<<: *internvl, defense: amia_ia,           source_transform_subdir: *ca}
+  - {<<: *internvl, defense: modality_complete, source_transform_subdir: *ca}
+
+  # ── Pixtral-12B (serving test; text-channel only) ──────────
+  - {<<: *pixtral, defense: no_defense,        source_transform_subdir: *st}
+  - {<<: *pixtral, defense: sage,              source_transform_subdir: *st}
+  - {<<: *pixtral, defense: amia_ia,           source_transform_subdir: *st}
+  - {<<: *pixtral, defense: modality_complete, source_transform_subdir: *st}
+  - {<<: *pixtral, defense: no_defense,        source_transform_subdir: *fl}
+  - {<<: *pixtral, defense: sage,              source_transform_subdir: *fl}
+  - {<<: *pixtral, defense: amia_ia,           source_transform_subdir: *fl}
+  - {<<: *pixtral, defense: modality_complete, source_transform_subdir: *fl}
+  - {<<: *pixtral, defense: no_defense,        source_transform_subdir: *ca}
+  - {<<: *pixtral, defense: sage,              source_transform_subdir: *ca}
+  - {<<: *pixtral, defense: amia_ia,           source_transform_subdir: *ca}
+  - {<<: *pixtral, defense: modality_complete, source_transform_subdir: *ca}
