@@ -81,6 +81,8 @@ keys/
 fonts/
 AI_agent/
 temporary_scripts/
+# Confidential reviewer text — must NEVER be committed (repo is public)
+text_docs/reviews/
 
 # Hydra
 multirun/

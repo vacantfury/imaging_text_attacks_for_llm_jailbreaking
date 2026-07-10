@@ -46,9 +46,11 @@ pip install -e .
 Python ≥ 3.12. Dependencies in `pyproject.toml`. API keys (for judge + API targets) via `.env`:
 
 ```bash
-OPENAI_API_KEY=...
-ANTHROPIC_API_KEY=...
-GOOGLE_API_KEY=...
+OPENAI_API_KEY=...        # judge + OpenAI targets/encoders
+ANTHROPIC_API_KEY=...     # Anthropic targets (Message Batches API)
+GOOGLE_API_KEY=...        # Gemini targets (Batch API)
+HUGGINGFACE_TOKEN=...     # gated HF model downloads (cluster vLLM serving)
+OLLAMA_BASE_URL=...       # optional; only for local Ollama-served models
 ```
 
 Non-Latin-script encoders and image rendering require Noto fonts under `fonts/` (gitignored).
