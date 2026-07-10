@@ -97,3 +97,4 @@ Every task is an MLflow run (`src/utils/mlflow_tracker.py`). The run_id is writt
 - Cluster outputs are not in the repo — outputs live under `outputs/` (gitignored) and large dataset files under `data/original_datasets/` / `data/processed_datasets/` are also gitignored.
 - Commit-message style is short snake-case phrases (e.g. `add_qwen_model`, `new_big_refactor`); follow that, not Conventional Commits.
 - Python ≥ 3.12. Long-running model selection assumes the current model registry in `llm_model.py` — note that Claude Sonnet 4 / 4.5 are deprecated or sunsetting (see `TODO.md`).
+- Always check and estimate experiment cost when designing experiments — API spend is a first-class design constraint (standing rule; moved here from the old TODO 2026-07-09 because rules that never complete are not tasks).
