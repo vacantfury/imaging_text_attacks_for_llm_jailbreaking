@@ -576,6 +576,30 @@ This cluster is **motivation gold**: peer-reviewed, deployed-system evidence tha
 
 ---
 
+## 11. Adjacent: Internal Safety Collapse — a different failure axis (added 2026-06-12)
+
+> Read from `paper/literature/（2026） Internal Safety Collapse in Frontier Large Language Models.pdf`. Bibkey `wu2026internalsafetycollapsefrontier` (arXiv 2603.23509). **Logged for the record; NOT cited in the paper** — it is *not* an encoding attack and not a baseline for our work; kept here so we remember we read it and why it's out of scope.
+
+### 11.1 What it shows
+Wu et al. (2026) identify **Internal Safety Collapse (ISC)**: under certain *task* conditions, an aligned frontier LLM enters a "zero-safety" state and continuously generates large volumes of harmful content **while executing an otherwise-benign task** — with **no adversarial prompt, no jailbreak, no prompt optimization**. The harm is the *legitimate completion* of a dual-use task (e.g. "build a text anomaly detector" needs toxic training examples; molecular docking needs toxin structures; a biosafety pipeline needs pathogen genes; a vuln scanner needs exploit payloads). They formalize the trigger as **TVD (Task, Validator, Data)** and build **ISC-Bench** — 53 scenarios across 8 professional disciplines (AI/ML eval, comp. biology, comp. chemistry, clinical genomics, cybersecurity, epidemiology, media, pharmacology). **None** of the evaluated frontier LLMs proactively refuse any task pattern. On a JailbreakBench-style eval, 3 representative scenarios yield worst-case safety-failure rates **averaging 95.3%** across four frontier models (GPT-5.2, Claude Sonnet 4.5, Grok 4.1, Gemini 3 Pro; Sonnet 4.5 alone 91.7% / 97% in the agentic single-instruction setting) — **above standard jailbreak attacks**, at ~\$0.002/attacker-goal, fully black-box. Two further notes: **capability scales vulnerability** (frontier models fail *more* consistently than earlier ones, because long-horizon task execution intrinsically involves harmful content), and **authentic tasks fail far more than fabricated ones (97% vs 43%)** — collapse is driven by the model recognizing a *genuine* task requirement, not by deception.
+
+### 11.2 Why it's off our line
+ISC is a **distinct axis from the decode/coverage gap.** Our gap is *representational*: harm is **encoded/relocated** to a surface the guard inspects but does not decode (classifier fooled, model reads through). ISC has **no obfuscation at all** — the harmful content is in plain sight as the necessary output of a legitimately-framed task; the failure is that alignment never *removes* the capability, only suppresses its surface expression ("alignment reshapes observable outputs but does not eliminate the underlying risk profile"). A decode-then-judge guard like ours is **orthogonal** to ISC: normalizing/decoding the input wouldn't help because nothing is encoded — it would need *output-side* or *task-intent* adjudication. That's why we **don't cite it in the paper**: it isn't a baseline we cover, and pulling it in would only invite "why doesn't your guard stop this?" The closest *conceptual* neighbor in our own work is the deferred agent/dual-use-tool line (`future_work.md`), not the current coverage paper.
+
+---
+
+## 12. Adjacent: Bayesian skill evolution for agent harnesses — off our line, tooling-relevant (added 2026-06-14)
+
+> Read from `paper/literature/(2026) Bayesian-Agent- Posterior-Guided Skill Evolution for LLM Agent Harnesses.pdf`. Bibkey `wu2026bayesianagentposteriorguidedskillevolution` (arXiv 2606.08348). **Logged for the record; NOT cited in the paper** — it is not a safety/jailbreak/encoding paper and not a baseline for our work. Kept here because (a) it was added to `my_base.bib` and we read it, and (b) its method is directly relevant to *how we maintain our own Claude-Code skill ecosystem*, which is a tooling concern, not a paper contribution.
+
+### 12.1 What it shows
+Wu et al. (IDEA Research / HKUST-GZ, 2026) introduce **Bayesian-Agent**, which treats a harness's reusable **skills and SOPs as evidence-bearing hypotheses** about whether a *frozen* model will succeed under a given prompt/context/harness, rather than as facts to be revised by LLM self-critique. It records **verified binary task outcomes** (from a benchmark grader / output contract, *not* the model's own judgment), maintains a **feature-conditioned categorical posterior** per skill (Laplace-smoothed, with a conjugate Beta-Bernoulli summary for audit), and maps posterior state to five **inspectable rewrite actions** under a conservative thresholded policy: **explore** (no evidence), **patch** (a failure mode recurs ≥2×, fold it into a concrete guardrail), **split** (one broad skill spans incompatible contexts), **compress** (a reliable skill is over-long), **retire** (failure evidence dominates, success prob below ~0.45). Model-facing prompts get *executable guardrails + failure-mode patches*; raw posterior numbers stay in an audit channel. Two modes: **full** (registry evolves online from scratch) and **incremental** (attach after a completed run, repair only failed tasks). Results: incremental repair lifts SOP-Bench 80→95%, Lifelong AgentBench 90→100%, RealFin-Bench 45→65% on deepseek-v4-flash, while spending tokens only on failed cases; **Claude Code is one of the evaluated external backends** (via an adapter that exposes verified trajectories + accepts skill text). Honest negatives reported: full online evolution is *not* uniformly better (Lifelong flash 90→85% — ordering effects when evidence is sparse), and it is the wrong tool for one-off tasks, subjective labels, or nonstationary environments.
+
+### 12.2 Why it's off our line (but worth keeping)
+Nothing here touches modality coverage, encoding, or the decode-gap — it is an **agent-harness reliability** method, orthogonal to every claim in Papers A–C. We don't cite it. Its value to *us* is operational: see the answer below on applying it to the Claude-Code skill setup. The conceptual neighbor in our own materials is not any paper but the skill-audit/recipe-sync machinery in the global config.
+
+---
+
 ## References
 
 - Anthropic. *The Claude 3 Model Family.* Technical Report, 2024.
@@ -692,6 +716,10 @@ This cluster is **motivation gold**: peer-reviewed, deployed-system evidence tha
 ### Newly Added References (Optical Text Compression)
 
 - Wei, H. et al. *DeepSeek-OCR: Contexts Optical Compression.* arXiv:2510.18234, 2025.
+
+### Newly Added References (Adjacent — Agent-Harness Skill Evolution; logged, not cited)
+
+- Wu, X. et al. *Bayesian-Agent: Posterior-Guided Skill Evolution for LLM Agent Harnesses.* arXiv:2606.08348, 2026.
 
 ### Newly Added References (Multimodal Defenses and Surveys — May 2026 batch)
 

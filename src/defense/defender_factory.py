@@ -60,7 +60,5 @@ from . import ecso  # noqa: E402,F401
 # Paper C defenses (import after sage/ecso — they reuse those primitives).
 from . import modality_complete  # noqa: E402,F401
 from . import joint_verify  # noqa: E402,F401
-# Paper C SOTA baselines (load HF aux models lazily — see each module).
-from . import mllm_protector  # noqa: E402,F401
 # Paper C multi-surface baseline: AMIA intention-analysis component (no masking).
 from . import amia_ia  # noqa: E402,F401

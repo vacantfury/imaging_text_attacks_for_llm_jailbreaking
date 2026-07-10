@@ -167,3 +167,7 @@ Consistent with MathEnc / ImgAug. All experiments use standardized public harmfu
 ## 10. Publication targets (venue-agnostic)
 
 One venue-agnostic body of work; the venue is chosen after results are in. As a constructive defense with a clean safety–utility characterization, natural homes are security/trustworthy-ML and *ACL venues: **SaTML**, **AAAI (AI-Alignment / Safety track)**, **EACL / ARR (main or Findings)**. The same paper cannot be under review at two venues at once. Low variance on acceptance is the point of choosing this project first.
+
+**Target ladder (in order):** AAAI-Alignment (paper ~Jul 28) → SaTML (~Sep 24, the best on-topic fallback — later deadline buys time to finish Rounds 3–4 well) → EACL / ARR.
+
+**Considered and rejected — ICTAI 2026** (deadline ~Jun 30, 2026; IEEE *Int'l Conf. on Tools with AI*). **Value score ≈ 2.5/10 → SKIP.** Reasoning: (1) it sits *below every rung* of the ladder above — ~CORE-B, broad "AI tools" scope, not an AI-safety/NLP audience, low NIW weight; (2) the 6/30 deadline is *tighter* than AAAI on unfrozen data (cluster maintenance mid-June), forcing the very R3/R4 differentiation + rigor cuts that make the paper defensible; (3) the "bank C at ICTAI to free the AAAI slot for the next project" rationale is void — venue slots are not per-author scarce, and the next project can't be AAAI-ready this cycle anyway. If AAAI feels too high-bar, the correct response is **SaTML** (later, on-topic, more reputable), never a pre-emptive downgrade to ICTAI.

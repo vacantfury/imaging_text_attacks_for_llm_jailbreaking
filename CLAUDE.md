@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Visibility: private *(matches the oikos map entry `imaging_text_attacks`; revisit if code is open-sourced at publication)*
+
 ## Project
 
 Research codebase for "Evaluating Defenses Against Text-Encoding Attacks on VLMs" (EMNLP/AIES 2026 target). The pipeline encodes harmful prompts into alternative representations (set theory, formal logic, classical Chinese, etc.), optionally renders them as images, applies black-box defenses (Image Rendering, SAGE, SemanticSmooth, hybrids), queries a target VLM, and ASR-judges the response.
