@@ -1,92 +1,86 @@
 # ============================================================
-# Paper C · ROUND 1b — modality_complete DECODE probe (text-only)  (2026-07-11)
+# Paper C · ROUND 2img — IMAGE-channel modality test  (2026-07-11)
 # ============================================================
 # >>> Active preset: `sbatch scripts/run_experiment.sbatch experiment`
 #     OVERWRITTEN per round; prior rounds live in git history. <<<
 #
-# Follows Round 1 (mj_8291382). DIAGNOSIS: on the text channel modality_complete
-# had NO decode step — it ran SAGE over the still-ENCODED text, so it was ≈ sage
-# by construction. REFINEMENT (commit b034c09): added a DECODE step (restate the
-# encoded text as the plain request, THEN SAGE-guard the plaintext), config-gated
-# `decode_text` (default on). This run disentangles DESIGN vs CAPABILITY:
+# THE MAKE-OR-BREAK: the paper's actual claim is MODALITY coverage (text + IMAGE).
+# Round 1/1b validated decode-then-judge on the TEXT channel. This tests the
+# IMAGE channel: harmful request -> encoded (set_theory/formal_logic) -> rendered
+# to image (ir_plain). Does modality_complete's RECOVER (OCR image->text) + DECODE
+# + GUARD close the gap where a caption defense (ecso) / no defense don't?
 #
-#   (A) DESIGN test — open models (FREE): does the decode step rescue mc there?
-#       modality_complete {decode_text on, off} x 3 encoders x 3 open VLMs = 18.
-#       decode-off = clean same-version ablation (≈ old ≈ sage).
-#   (B) CAPABILITY test — one CHEAP-but-capable API model (gemini-2.5-flash,
-#       clearly > 7-12B open VLMs at decoding; Google Batch = 50% off; NOT the
-#       deprecated 2.0-flash): {no_defense, amia_ia, mc-on, mc-off} x 3 = 12.
-#       Does decode-then-judge work on a capable model even if the open ones
-#       can't decode? amia_ia = the baseline that beat mc on open models.
+# NOTE (commit ddaa7b6): fixed modality_complete to DECODE THE UNION (text +
+# recovered-image), not just the text channel — else the recovered image
+# transcription stays encoded and fools the guard. Text result unchanged.
 #
-# Compare against Round-1's no_defense/sage/amia_ia (open, already recorded).
-# Judge gpt-5-nano (parity). HarmBench-harmful rows 0-99.
+# Defenses:
+#   no_defense       — does the image-rendered encoded attack land? (also an
+#                      implicit OCR check: near-0 here = attack didn't transmit)
+#   ecso             — caption-based image defense (the natural image baseline)
+#   mc-on  (decode)  — RECOVER + DECODE(union) + GUARD (the contribution)
+#   mc-off (ablation)— RECOVER + GUARD on the still-encoded union (should be fooled)
 #
-# 18 open + 12 API = 30 cells. Open targets FREE on cluster; gemini via Batch API
-# (~2k calls, 50% off) + judge (~3k gpt-5-nano) → total < ~$6. gemini needs NO
-# cluster server (API), so num_cluster_jobs stays 4 (3 open VLM servers + orch).
-# Llama-3.2-Vision excluded (Mllama bug).
+# Encoders rendered to ir_plain (paginated, OCR-legible ~0.8-1.0; code_attack
+# ir_plain DROPPED — illegible, plan §0): set_theory, formal_logic.
+# Judge gpt-5-nano. HarmBench rows 0-99.
 #
-# WATCH on sync-back: (a) spot-read the DECODE step output — did the model
-# recover the plain request or refuse/mis-decode? (the crux); (b) mc-on vs mc-off
-# per model (does decode help?); (c) does capable gemini decode where open VLMs
-# don't? (d) refined modality_complete.py (b034c09) must be synced (code change).
+# 4 defenses x 2 encoders x 3 open VLMs = 24 cells. Targets FREE on cluster;
+# mc-on = 3 target calls/prompt (recover+decode+guard), all free. API = judge
+# only (~2.4k gpt-5-nano, < ~$3). Llama-3.2-Vision excluded (Mllama bug).
+#
+# WATCH on sync-back: (a) no_defense ASR — did the attack transmit (OCR ok)?;
+# (b) mc-on vs mc-off — does decoding the union close the image gap?; (c) is mc
+# over-refusing? spot-read raw; (d) refined modality_complete.py (ddaa7b6) must
+# sync (code change); (e) the ir_plain source dirs must exist ON THE CLUSTER
+# (sync-excluded) — verified at submit, scp if absent.
 # ============================================================
 
 num_main_job_threads: 6        # in-process task concurrency (>= one per server)
-num_cluster_jobs: 4            # orchestrator + 3 vLLM servers (<= MAX_SUBMIT 8); gemini is API (no server)
+num_cluster_jobs: 4            # orchestrator + 3 vLLM servers (<= MAX_SUBMIT 8)
 
-# ── targets (campaign-tagged: run_index.py --campaign paper_c_round1b) ──
-_qwen:     &qwen      {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0, 99], campaign: paper_c_round1b}
-_internvl: &internvl  {mode: defense+evaluate, target_model: internvl3_8b, prompt_range: [0, 99], campaign: paper_c_round1b}
-_pixtral:  &pixtral   {mode: defense+evaluate, target_model: pixtral_12b,  prompt_range: [0, 99], campaign: paper_c_round1b}
-_gem:      &gem       {mode: defense+evaluate, target_model: gemini-2.5-flash, prompt_range: [0, 99], campaign: paper_c_round1b}
+# ── targets (campaign-tagged: run_index.py --campaign paper_c_image) ──
+_qwen:     &qwen      {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0, 99], campaign: paper_c_image}
+_internvl: &internvl  {mode: defense+evaluate, target_model: internvl3_8b, prompt_range: [0, 99], campaign: paper_c_image}
+_pixtral:  &pixtral   {mode: defense+evaluate, target_model: pixtral_12b,  prompt_range: [0, 99], campaign: paper_c_image}
 
-# ── Stage-1 source subdirs (TEXT encodes, May-31 batch) ──────
-_st: &st  outputs/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory
-_fl: &fl  outputs/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
-_ca: &ca  outputs/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack
+# ── Stage-1 IMAGE source subdirs (ir_plain, paginated 20260605 renders) ──
+_sti: &sti  outputs/prompt_transform/harmbench/llm_set_theory_ir_plain_20260605_093357_74173344/ir_plain
+_fli: &fli  outputs/prompt_transform/harmbench/llm_formal_logic_ir_plain_20260605_093357_24164176/ir_plain
 
 # ── defense variants ─────────────────────────────────────────
 _mc_on:  &mc_on   {defense: modality_complete, defense_config: {decode_text: true}}
 _mc_off: &mc_off  {defense: modality_complete, defense_config: {decode_text: false}}
 _nd:     &nd      {defense: no_defense}
-_am:     &am      {defense: amia_ia}
+_ec:     &ec      {defense: ecso}
 
 tasks:
-  # ===== (A) DESIGN test — open VLMs, mc decode on/off =====
-  # ── Qwen2.5-VL-7B ──
-  - {<<: [*qwen, *mc_on],  source_transform_subdir: *st}
-  - {<<: [*qwen, *mc_off], source_transform_subdir: *st}
-  - {<<: [*qwen, *mc_on],  source_transform_subdir: *fl}
-  - {<<: [*qwen, *mc_off], source_transform_subdir: *fl}
-  - {<<: [*qwen, *mc_on],  source_transform_subdir: *ca}
-  - {<<: [*qwen, *mc_off], source_transform_subdir: *ca}
-  # ── InternVL3-8B ──
-  - {<<: [*internvl, *mc_on],  source_transform_subdir: *st}
-  - {<<: [*internvl, *mc_off], source_transform_subdir: *st}
-  - {<<: [*internvl, *mc_on],  source_transform_subdir: *fl}
-  - {<<: [*internvl, *mc_off], source_transform_subdir: *fl}
-  - {<<: [*internvl, *mc_on],  source_transform_subdir: *ca}
-  - {<<: [*internvl, *mc_off], source_transform_subdir: *ca}
-  # ── Pixtral-12B ──
-  - {<<: [*pixtral, *mc_on],  source_transform_subdir: *st}
-  - {<<: [*pixtral, *mc_off], source_transform_subdir: *st}
-  - {<<: [*pixtral, *mc_on],  source_transform_subdir: *fl}
-  - {<<: [*pixtral, *mc_off], source_transform_subdir: *fl}
-  - {<<: [*pixtral, *mc_on],  source_transform_subdir: *ca}
-  - {<<: [*pixtral, *mc_off], source_transform_subdir: *ca}
+  # ── Qwen2.5-VL-7B ──────────────────────────────────────────
+  - {<<: [*qwen, *nd],     source_transform_subdir: *sti}
+  - {<<: [*qwen, *ec],     source_transform_subdir: *sti}
+  - {<<: [*qwen, *mc_on],  source_transform_subdir: *sti}
+  - {<<: [*qwen, *mc_off], source_transform_subdir: *sti}
+  - {<<: [*qwen, *nd],     source_transform_subdir: *fli}
+  - {<<: [*qwen, *ec],     source_transform_subdir: *fli}
+  - {<<: [*qwen, *mc_on],  source_transform_subdir: *fli}
+  - {<<: [*qwen, *mc_off], source_transform_subdir: *fli}
 
-  # ===== (B) CAPABILITY test — gemini-2.5-flash (cheap API) =====
-  - {<<: [*gem, *nd],     source_transform_subdir: *st}
-  - {<<: [*gem, *am],     source_transform_subdir: *st}
-  - {<<: [*gem, *mc_on],  source_transform_subdir: *st}
-  - {<<: [*gem, *mc_off], source_transform_subdir: *st}
-  - {<<: [*gem, *nd],     source_transform_subdir: *fl}
-  - {<<: [*gem, *am],     source_transform_subdir: *fl}
-  - {<<: [*gem, *mc_on],  source_transform_subdir: *fl}
-  - {<<: [*gem, *mc_off], source_transform_subdir: *fl}
-  - {<<: [*gem, *nd],     source_transform_subdir: *ca}
-  - {<<: [*gem, *am],     source_transform_subdir: *ca}
-  - {<<: [*gem, *mc_on],  source_transform_subdir: *ca}
-  - {<<: [*gem, *mc_off], source_transform_subdir: *ca}
+  # ── InternVL3-8B ───────────────────────────────────────────
+  - {<<: [*internvl, *nd],     source_transform_subdir: *sti}
+  - {<<: [*internvl, *ec],     source_transform_subdir: *sti}
+  - {<<: [*internvl, *mc_on],  source_transform_subdir: *sti}
+  - {<<: [*internvl, *mc_off], source_transform_subdir: *sti}
+  - {<<: [*internvl, *nd],     source_transform_subdir: *fli}
+  - {<<: [*internvl, *ec],     source_transform_subdir: *fli}
+  - {<<: [*internvl, *mc_on],  source_transform_subdir: *fli}
+  - {<<: [*internvl, *mc_off], source_transform_subdir: *fli}
+
+  # ── Pixtral-12B ────────────────────────────────────────────
+  - {<<: [*pixtral, *nd],     source_transform_subdir: *sti}
+  - {<<: [*pixtral, *ec],     source_transform_subdir: *sti}
+  - {<<: [*pixtral, *mc_on],  source_transform_subdir: *sti}
+  - {<<: [*pixtral, *mc_off], source_transform_subdir: *sti}
+  - {<<: [*pixtral, *nd],     source_transform_subdir: *fli}
+  - {<<: [*pixtral, *ec],     source_transform_subdir: *fli}
+  - {<<: [*pixtral, *mc_on],  source_transform_subdir: *fli}
+  - {<<: [*pixtral, *mc_off], source_transform_subdir: *fli}
