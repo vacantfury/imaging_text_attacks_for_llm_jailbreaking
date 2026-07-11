@@ -193,6 +193,7 @@ class TargetModelConfig(BaseModel):
 class DefenseEvaluateResult(BaseModel):
     """Complete record of a defense+evaluate task — written to results.json."""
     mode: Literal["defense+evaluate"] = "defense+evaluate"
+    campaign: Optional[str] = None       # optional run-campaign label, copied from the task
 
     # Provenance — which prompt_transform step subfolder this consumed.
     source_transform_subdir: str
@@ -329,6 +330,7 @@ class _TaskBase(BaseModel):
     """Fields shared by every task mode."""
     benchmark: Optional[str] = None
     prompt_range: Optional[list[int]] = None
+    campaign: Optional[str] = None      # optional run-campaign label (e.g. "paper_c_round1") — indexed by scripts/run_index.py, logged as an MLflow param
 
 
 class TransformationSpec(BaseModel):

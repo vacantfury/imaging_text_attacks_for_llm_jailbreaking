@@ -689,6 +689,7 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
 
     result = DefenseEvaluateResult(
         source_transform_subdir=str(source_dir),
+        campaign=task.campaign,
         upstream_ref=_upstream_ref(source_dir),
         is_multimodal=is_multimodal,
         defense=task.defense,
