@@ -30,6 +30,10 @@ Companion to `proposal.md`. Cluster/open-weight VLMs are primary; closed API mod
 
 **Next ▶:** triage the above → Round 1 coverage gap → Round 2 guard + cost → **Round 3 decode gap (image + multi-surface)** → Round 4 generalization. (Direction set 2026-06-06: current project is the **coverage-complete defense**; attack-side work moved to Future Work. Decode-gap differentiation added 2026-06-11.)
 
+**⚠️ OPEN — JUDGE METHODOLOGY (first-class, blocks headline numbers · 2026-07-11):** the entire coverage map's *absolute* ASR rests on the `gpt-5-nano` judge, and the Paper-B rebuttal work **confirmed** this judge inflates absolute ASR ~2–3× vs Claude/Gemini judges — the direction held but the *level* did not, and the inflation persisted even under a strong-judge panel (gpt-5, gemini-2.5-pro, claude-sonnet). See `experiment_results.md` Results C / C-strong. This is the **same judge on the same encoded-attack family** Paper C reports, so it is a live Paper-C problem, not a Paper-B-only artifact.
+- **Decision to make (this supersedes the "cheap one-time κ check" framing in §3 Round 4):** which judge produces Paper C's headline numbers? Candidates — (a) a **consensus/panel** judge (majority of 2–3 frontier judges), (b) a **single stronger judge** (e.g. gpt-5 / claude-sonnet / gemini-2.5-pro), or (c) keep `gpt-5-nano` for ImgAug-parity but **re-derive headline numbers under a stronger judge** + hand-labelled κ calibration + explicit caveat. Solving this *well* (a robust, human-calibrated judge) would be a strong contribution in its own right.
+- **Publishability floor (do not block the paper on a perfect judge):** the paper stands **even without** a clean judge solution — the effect **direction is robust across judges**; only absolute ASR is fragile. Fallback framing: report under a defensible judge + caveats, and lean the claims on **relative contrasts + statistical significance** (Wilson CIs, McNemar — already validated on the rebuttal cells) rather than headline absolute ASR. Aim to solve it; ship regardless.
+
 ---
 
 ## 1. Fixed pieces (reference)
