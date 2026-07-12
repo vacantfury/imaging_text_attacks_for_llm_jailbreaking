@@ -1,5 +1,36 @@
 # Cluster properties
 
+## Standardized process — add & serve an open-source model (guard or target VLM)
+
+The repeatable workflow for bringing any HuggingFace open-weight model into the harness. Cluster = **NURC / Explorer**; **downloads run on a compute node via `sbatch`, never the login node.** (Concrete SSH host/user + one-off gotchas live in project-local memory, not committed here.)
+
+**0. Cluster-fit check — BEFORE downloading (cheap; avoids wasted disk/time).**
+- Resolve the exact HF repo id and confirm the **architecture is vLLM-servable** — check the [vLLM supported-models list](https://docs.vllm.ai/en/latest/models/supported_models/) or the card's own `vllm serve …` snippet. ⚠️ Flag omni/audio bases (e.g. `Qwen2.5-Omni`): vLLM may serve only a text/vision subtree, or not at all.
+- **Gating:** license-gated repos (Meta Llama, etc.) require the account behind `HUGGINGFACE_TOKEN` to **click-accept the license on huggingface.co first** — the one manual/auth-wall step (owner's hands). Each gated repo is a separate accept (e.g. Llama-Guard-3-8B and -11B-Vision are two different gates). Non-gated (Apache/MIT) needs nothing.
+- **Size vs GPU:** ~7–8B BF16 ≈ 15–18 GB → fits one V100-32GB / A100 (see partition tables below). `chat_template: passthrough` is required for fine-tuned **classifier/guard** models (they 400 on `/v1/chat/completions` otherwise).
+- **`trust_remote_code`:** note if the card needs it (→ set in the `conf/llm` yaml + `ClusterConfig`).
+
+**1. Download to scratch (compute node, via sbatch):**
+```bash
+ssh <neu-id>@login.explorer.northeastern.edu
+cd ~/projects/imaging_text_attacks_for_llm_jailbreaking
+mkdir -p logs
+sbatch temporary_scripts/download_hf_model.sbatch <hf_id> [<hf_id> ...]   # partition=short (CPU compute node)
+squeue -u $USER            # watch; progress in logs/hf_dl_<jobid>.out
+```
+The sbatch auto-loads `HUGGINGFACE_TOKEN` from `src/llm_utils/.env` and routes the cache to `/scratch/$USER/huggingface_cache` — **the same path vLLM serves from** (must match `cluster.hf_home` in `conf/llm/default.yaml`), else the weights aren't found at serve time.
+
+**2. Wire into the registry:**
+- Add a `ModelSpec` row in `src/llm_utils/llm_model.py` (`Provider.NU_CLUSTER`; set `family` + `alignment_tier`).
+- Add `conf/llm/<model>.yaml` (override the served model id; `trust_remote_code: true` if needed; `chat_template: passthrough` for guards/classifiers).
+
+**3. Serve + verify:**
+- The orchestrator serves the model as a vLLM SLURM job automatically when a task targets it; confirm the server log resolves the chat template and the endpoint health-checks.
+- **Target VLMs:** run the OCR-fidelity probe before trusting image-channel cells.
+- **Guards:** confirm the verdict format parses (many emit a category string / reasoning block, not a plain refusal).
+
+---
+
 ## QOS Job Limits (gpu partition)
 
 | Limit | Value | Meaning |
