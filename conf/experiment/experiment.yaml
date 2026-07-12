@@ -1,86 +1,53 @@
 # ============================================================
-# Paper C · ROUND 2img — IMAGE-channel modality test  (2026-07-11)
+# Paper C · SERVE-TEST — verify the new-architecture models serve  (2026-07-12)
 # ============================================================
 # >>> Active preset: `sbatch scripts/run_experiment.sbatch experiment`
 #     OVERWRITTEN per round; prior rounds live in git history. <<<
 #
-# THE MAKE-OR-BREAK: the paper's actual claim is MODALITY coverage (text + IMAGE).
-# Round 1/1b validated decode-then-judge on the TEXT channel. This tests the
-# IMAGE channel: harmful request -> encoded (set_theory/formal_logic) -> rendered
-# to image (ir_plain). Does modality_complete's RECOVER (OCR image->text) + DECODE
-# + GUARD close the gap where a caption defense (ecso) / no defense don't?
+# PURPOSE: NOT a metrics round. Confirm the new-ARCH / multimodal models actually
+# SERVE on the cluster's vLLM 0.19.1 and return non-empty responses, before we
+# build the Round-3 guard-defense wrappers that will call them.
 #
-# NOTE (commit ddaa7b6): fixed modality_complete to DECODE THE UNION (text +
-# recovered-image), not just the text channel — else the recovered image
-# transcription stays encoded and fools the guard. Text result unchanged.
+# Scope = the 3 servability-RISK models (new arch or multimodal):
+#   qwen3_vl_8b_instruct  — new Qwen3VLForConditionalGeneration arch (recency TARGET)
+#   llama_guard_4_12b     — new Llama4ForConditionalGeneration arch (multimodal guard)
+#   guardreasoner_vl_7b   — Qwen2.5-VL arch (reasoning guard)
+# The 2 TEXT guards (llama_guard_3_8b = Llama-3.1, wildguard = Mistral-7B) are
+# bog-standard archs vLLM has long served — servability not in doubt; they get
+# serve-verified when we build + test their Round-3 defense wrappers (need a TEXT
+# source + their exact input format, which is wrapper work, not a serve smoke).
 #
-# Defenses:
-#   no_defense       — does the image-rendered encoded attack land? (also an
-#                      implicit OCR check: near-0 here = attack didn't transmit)
-#   ecso             — caption-based image defense (the natural image baseline)
-#   mc-on  (decode)  — RECOVER + DECODE(union) + GUARD (the contribution)
-#   mc-off (ablation)— RECOVER + GUARD on the still-encoded union (should be fooled)
+# METHOD: no_defense sends the input straight to the model and returns its raw
+# output. On a GUARD that raw output is a safety verdict — meaningless to the
+# HarmBench judge, but that's fine: we only check SERVES + NON-EMPTY RESPONSE,
+# not any metric. Source = existing set_theory ir_plain render (also exercises
+# each model's image path). HarmBench rows 0-3 (4 prompts). Judge runs but its
+# numbers here are NOT a result.
 #
-# Encoders rendered to ir_plain (paginated, OCR-legible ~0.8-1.0; code_attack
-# ir_plain DROPPED — illegible, plan §0): set_theory, formal_logic.
-# Judge gpt-5-nano. HarmBench rows 0-99.
+# WATCH on sync-back (check-experiment-results): (a) did all 3 vLLM servers come
+# up? (server logs: chat template resolved, no CUDA OOM); (b) non-empty responses
+# in raw_results.jsonl?; (c) llama_guard_4 VRAM — conf num_gpus:1 lands it on
+# A100/H200; if it OOM'd, bump to 2. Ignore ASR/refusal numbers entirely.
 #
-# 4 defenses x 2 encoders x 3 open VLMs = 24 cells. Targets FREE on cluster;
-# mc-on = 3 target calls/prompt (recover+decode+guard), all free. API = judge
-# only (~2.4k gpt-5-nano, < ~$3). Llama-3.2-Vision excluded (Mllama bug).
-#
-# WATCH on sync-back: (a) no_defense ASR — did the attack transmit (OCR ok)?;
-# (b) mc-on vs mc-off — does decoding the union close the image gap?; (c) is mc
-# over-refusing? spot-read raw; (d) refined modality_complete.py (ddaa7b6) must
-# sync (code change); (e) the ir_plain source dirs must exist ON THE CLUSTER
-# (sync-excluded) — verified at submit, scp if absent.
+# NOTE: cluster repo is rsync-synced + STALE — the Cursor sync must carry the new
+# conf/llm/{qwen3_vl_8b_instruct,llama_guard_4_12b,guardreasoner_vl_7b}.yaml AND
+# the llm_model.py registry rows (committed 4c964d0) across, else serving 404s.
 # ============================================================
 
-num_main_job_threads: 6        # in-process task concurrency (>= one per server)
+num_main_job_threads: 4        # in-process concurrency (>= one per server)
 num_cluster_jobs: 4            # orchestrator + 3 vLLM servers (<= MAX_SUBMIT 8)
 
-# ── targets (campaign-tagged: run_index.py --campaign paper_c_image) ──
-_qwen:     &qwen      {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0, 99], campaign: paper_c_image}
-_internvl: &internvl  {mode: defense+evaluate, target_model: internvl3_8b, prompt_range: [0, 99], campaign: paper_c_image}
-_pixtral:  &pixtral   {mode: defense+evaluate, target_model: pixtral_12b,  prompt_range: [0, 99], campaign: paper_c_image}
+# ── targets (campaign: run_index.py --campaign paper_c_servetest) ──
+_qwen3vl: &qwen3vl  {mode: defense+evaluate, target_model: qwen3_vl_8b_instruct, prompt_range: [0, 3], campaign: paper_c_servetest}
+_lg4:     &lg4      {mode: defense+evaluate, target_model: llama_guard_4_12b,    prompt_range: [0, 3], campaign: paper_c_servetest}
+_grvl:    &grvl     {mode: defense+evaluate, target_model: guardreasoner_vl_7b,  prompt_range: [0, 3], campaign: paper_c_servetest}
 
-# ── Stage-1 IMAGE source subdirs (ir_plain, paginated 20260605 renders) ──
-_sti: &sti  outputs/prompt_transform/harmbench/llm_set_theory_ir_plain_20260605_093357_74173344/ir_plain
-_fli: &fli  outputs/prompt_transform/harmbench/llm_formal_logic_ir_plain_20260605_093357_24164176/ir_plain
+# ── Stage-1 source: existing set_theory ir_plain render (present on cluster) ──
+_src: &src  outputs/prompt_transform/harmbench/llm_set_theory_ir_plain_20260605_093357_74173344/ir_plain
 
-# ── defense variants ─────────────────────────────────────────
-_mc_on:  &mc_on   {defense: modality_complete, defense_config: {decode_text: true}}
-_mc_off: &mc_off  {defense: modality_complete, defense_config: {decode_text: false}}
-_nd:     &nd      {defense: no_defense}
-_ec:     &ec      {defense: ecso}
+_nd: &nd  {defense: no_defense}
 
 tasks:
-  # ── Qwen2.5-VL-7B ──────────────────────────────────────────
-  - {<<: [*qwen, *nd],     source_transform_subdir: *sti}
-  - {<<: [*qwen, *ec],     source_transform_subdir: *sti}
-  - {<<: [*qwen, *mc_on],  source_transform_subdir: *sti}
-  - {<<: [*qwen, *mc_off], source_transform_subdir: *sti}
-  - {<<: [*qwen, *nd],     source_transform_subdir: *fli}
-  - {<<: [*qwen, *ec],     source_transform_subdir: *fli}
-  - {<<: [*qwen, *mc_on],  source_transform_subdir: *fli}
-  - {<<: [*qwen, *mc_off], source_transform_subdir: *fli}
-
-  # ── InternVL3-8B ───────────────────────────────────────────
-  - {<<: [*internvl, *nd],     source_transform_subdir: *sti}
-  - {<<: [*internvl, *ec],     source_transform_subdir: *sti}
-  - {<<: [*internvl, *mc_on],  source_transform_subdir: *sti}
-  - {<<: [*internvl, *mc_off], source_transform_subdir: *sti}
-  - {<<: [*internvl, *nd],     source_transform_subdir: *fli}
-  - {<<: [*internvl, *ec],     source_transform_subdir: *fli}
-  - {<<: [*internvl, *mc_on],  source_transform_subdir: *fli}
-  - {<<: [*internvl, *mc_off], source_transform_subdir: *fli}
-
-  # ── Pixtral-12B ────────────────────────────────────────────
-  - {<<: [*pixtral, *nd],     source_transform_subdir: *sti}
-  - {<<: [*pixtral, *ec],     source_transform_subdir: *sti}
-  - {<<: [*pixtral, *mc_on],  source_transform_subdir: *sti}
-  - {<<: [*pixtral, *mc_off], source_transform_subdir: *sti}
-  - {<<: [*pixtral, *nd],     source_transform_subdir: *fli}
-  - {<<: [*pixtral, *ec],     source_transform_subdir: *fli}
-  - {<<: [*pixtral, *mc_on],  source_transform_subdir: *fli}
-  - {<<: [*pixtral, *mc_off], source_transform_subdir: *fli}
+  - {<<: [*qwen3vl, *nd], source_transform_subdir: *src}
+  - {<<: [*lg4, *nd],     source_transform_subdir: *src}
+  - {<<: [*grvl, *nd],    source_transform_subdir: *src}
