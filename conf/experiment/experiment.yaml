@@ -37,8 +37,18 @@
 # HarmBench-harmful rows 0-99.
 #
 # 3 defenses x 5 sources x 3 models = 45 cells.
-# Distinct cluster models = 3 targets + guardreasoner_vl_7b = 4 servers
-#   -> num_cluster_jobs = orchestrator(1) + 4 = 5 (<= MAX_SUBMIT 8). OK
+# Distinct cluster models = 3 targets + guardreasoner_vl_7b = 4 GPU servers
+#   -> num_cluster_jobs = orchestrator(1) + 4 = 5 (<= MAX_SUBMIT 8).
+# JOB-BUDGET REASONING (the binding constraint is NOT the code's cap of 8):
+#   the gpu-partition QOS is MaxSubmitPU=8 / MaxJobsPU=4-running-concurrently
+#   (text_docs/nurc_cluster_properties.md §"QOS Job Limits"). The 4 vLLM servers
+#   run on the GPU partition -> exactly at MaxJobsPU=4 (all 4 run concurrently).
+#   The orchestrator runs on the `short` partition (run_experiment.sbatch:3),
+#   a DIFFERENT QOS, so it does NOT count against the gpu cap. => safe, BUT it
+#   fits ONLY with 0 other gpu jobs running; at submit `squeue --user` must show
+#   no competing gpu jobs, else the 4th server queues and the orchestrator hangs
+#   waiting for its endpoint. (This is the true concurrent-server ceiling; the
+#   old "orchestrator+3=4=cap" note over-counted — orch is on `short`, not gpu.)
 #
 # SYNC PAYLOAD (critical): the cluster checkout is STALE for the guard code
 # (commit cc3c503: guard_utils.py, guard_baseline.py, modality_complete.py,
