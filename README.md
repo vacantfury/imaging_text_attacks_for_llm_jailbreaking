@@ -1,12 +1,12 @@
-# Coverage-Complete Defense for Encoded & Multimodal VLM Jailbreaks
+# The Decode Gap — Black-Box Recover-and-Decode Defense for Encoded & Image-Rendered VLM Jailbreaks
 
-Research codebase for evaluating black-box defenses against encoded and image-rendered jailbreak attacks on Vision-Language Models, and for building a **coverage-complete** defense that inspects every input surface a defense's safety check could miss.
+Research codebase for evaluating black-box defenses against encoded and image-rendered jailbreak attacks on Vision-Language Models, and for building a black-box **recover→decode→guard** defense that closes the **decode gap** — the step deployed guards lack: they *inspect or reason about* content but never *decode* an obfuscated payload.
 
 This repo is the shared harness for a line of work:
 
 - **MathEnc** — *Exposing LLM Safety Gaps Through Mathematical Encoding* (published): text-side encoders (set theory, formal logic, code) that recast harmful queries into out-of-distribution surface forms.
 - **ImgAug** — *Image Augmentation Strengthens VLM Defenses Against Encoded Jailbreak Attacks* (under review): adding an image — even a content-unrelated decoy — changes a defense's behavior, because the defense's coverage happens to line up (or not) with where the encoded content lives.
-- **Current project** — *Coverage-Complete Defense* (in progress): deployed black-box defenses are **specialists** (each checks one surface), so no single one covers the union of known attacks; we build the minimal guard that recovers and checks content on every input channel, and quantify the utility cost of completeness. See `text_docs/proposal.md` and `text_docs/experiments_plan.md`.
+- **Current project** — *The Decode Gap* (in progress): deployed black-box defenses — including the new multimodal / reasoning guards — *inspect or reason about* content but never **decode** an obfuscated payload, so semantically-encoded harm (in text or rendered into an image) routes past them; we build the minimal black-box **recover→decode→guard** defense that closes this gap and quantify its over-refusal cost. Covering every input surface is the method; the decode step is the contribution. See `text_docs/proposal.md` and `text_docs/experiments_plan.md`.
 
 > This is an active research repo whose direction shifts; `text_docs/proposal.md`, `text_docs/experiments_plan.md`, and `text_docs/experiment_results.md` are the source of truth for what is currently in scope. Attack-side extensions (compound attacks, cross-modal splitting, mechanism) are **Future Work** (proposal §11).
 
@@ -30,9 +30,8 @@ A harmful prompt is encoded (set theory / formal logic / code), optionally rende
 | `sage` | input-text | prompt-level safety guard |
 | `ecso` | input-image (caption, gated on `has_image`) | caption-mediated re-verification |
 | `decoy` lever | input-text (+ benign image triggers re-check) | the ImgAug deployment lever, here a baseline |
-| **`modality_complete`** | **input-text + input-image (OCR)** | **the contribution** — recover every channel, one unified check over the union |
-| `eta` | input-image (CLIP) + output (reward) | SOTA breadth baseline; needs CLIP-336 + ArmoRM on GPU |
-| `mllm_protector` | output | SOTA breadth baseline; harm detector + detoxifier on GPU |
+| **`modality_complete`** | **input-text + input-image (OCR)** | **the contribution** — recover **and decode** every channel, one unified safety check over the union |
+| guard-model baselines | input-text · input-image | comparison guards, served checkpoints (LlamaGuard-3 / -Vision, GuardReasoner-VL, OmniGuard, WildGuard) — **in progress**, see experiments plan |
 | `joint_verify` | joint (text+image) | built; **Future Work** |
 
 ---
@@ -119,7 +118,7 @@ conf/
 ├── llm/                 # model registry + per-provider config
 ├── text_encoding/       # encoder configs (set_theory, formal_logic, code_attack, ...)
 ├── imaging/             # renderer configs (ir_plain, figstep, ...)
-├── defense/             # sage, ecso, modality_complete, eta, mllm_protector, ...
+├── defense/             # sage, ecso, modality_complete, amia_ia, semantic_smooth, ...
 └── evaluation/          # judge configs (harmbench, jailbreakbench, orbench, refusal)
 
 src/
