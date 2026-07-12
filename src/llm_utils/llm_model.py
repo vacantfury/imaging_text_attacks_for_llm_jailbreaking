@@ -113,8 +113,8 @@ class LLMModel(Enum):
     GPT_5_MINI    = ModelSpec("gpt-5-mini",     Provider.OPENAI, 0.25,  2.00,  quirks=_GPT5_QUIRKS)
     GPT_5_NANO    = ModelSpec("gpt-5-nano",     Provider.OPENAI, 0.20,  1.25,  quirks=_GPT5_QUIRKS)
     GPT_5_PRO     = ModelSpec("gpt-5-pro",      Provider.OPENAI, 15.00, 120.00, quirks=_GPT5_QUIRKS)
-    GPT_5_1       = ModelSpec("gpt-5.1",        Provider.OPENAI, 1.25,  10.00, quirks=_GPT5_QUIRKS)
-    GPT_5_2       = ModelSpec("gpt-5.2",        Provider.OPENAI, 1.75,  14.00, quirks=_GPT5_QUIRKS)
+    GPT_5_1       = ModelSpec("gpt-5.1",        Provider.OPENAI, 1.25,  10.00, quirks=_GPT5_QUIRKS)  # ⚠️ API access retires 2026-07-23
+    GPT_5_2       = ModelSpec("gpt-5.2",        Provider.OPENAI, 1.75,  14.00, quirks=_GPT5_QUIRKS)  # ⚠️ API access retires 2026-07-23
     GPT_5_2_PRO   = ModelSpec("gpt-5.2-pro",    Provider.OPENAI, 21.00, 168.00, quirks=_GPT5_QUIRKS)
     GPT_5_4       = ModelSpec("gpt-5.4",        Provider.OPENAI, 2.50,  15.00, quirks=_GPT5_QUIRKS)
     GPT_5_4_MINI  = ModelSpec("gpt-5.4-mini",   Provider.OPENAI, 0.75,  4.50,  quirks=_GPT5_QUIRKS)
@@ -122,6 +122,9 @@ class LLMModel(Enum):
     GPT_5_4_PRO   = ModelSpec("gpt-5.4-pro",    Provider.OPENAI, 30.00, 180.00, quirks=_GPT5_QUIRKS)
     GPT_5_5       = ModelSpec("gpt-5.5",        Provider.OPENAI, 5.00,  30.00, quirks=_GPT5_QUIRKS)
     GPT_5_5_PRO   = ModelSpec("gpt-5.5-pro",    Provider.OPENAI, 30.00, 180.00, quirks=_GPT5_QUIRKS)
+    # GPT-5.6 (launched 2026-07-09, verified 2026-07-12): sol = flagship, terra = mid-tier (JUDGE pick)
+    GPT_5_6_SOL   = ModelSpec("gpt-5.6-sol",    Provider.OPENAI, 5.00,  30.00, quirks=_GPT5_QUIRKS)
+    GPT_5_6_TERRA = ModelSpec("gpt-5.6-terra",  Provider.OPENAI, 2.50,  15.00, quirks=_GPT5_QUIRKS)
 
     # O-series reasoning models — same shape as GPT-5
     O1            = ModelSpec("o1",             Provider.OPENAI, 15.00, 60.00, quirks=_GPT5_QUIRKS)
@@ -150,19 +153,22 @@ class LLMModel(Enum):
     GEMINI_2_5_FLASH_LITE          = ModelSpec("gemini-2.5-flash-lite",           Provider.GOOGLE, 0.075, 0.30)
     GEMINI_2_5_PRO                 = ModelSpec("gemini-2.5-pro",                  Provider.GOOGLE, 1.25,  10.00)
     GEMINI_3_FLASH_PREVIEW         = ModelSpec("gemini-3-flash-preview",          Provider.GOOGLE, 0.50,  3.00)
-    GEMINI_3_PRO_PREVIEW           = ModelSpec("gemini-3-pro-preview",            Provider.GOOGLE, 1.25,  10.00)
+    # gemini-3-pro-preview + gemini-3.1-flash-lite-preview REMOVED 2026-07-12 (dead — 404 since Mar/May 2026, verified); use the GA IDs below.
     GEMINI_3_1_PRO_PREVIEW         = ModelSpec("gemini-3.1-pro-preview",          Provider.GOOGLE, 2.00,  12.00)
-    GEMINI_3_1_FLASH_LITE_PREVIEW  = ModelSpec("gemini-3.1-flash-lite-preview",   Provider.GOOGLE, 0.075, 0.30)
+    GEMINI_3_1_FLASH_LITE          = ModelSpec("gemini-3.1-flash-lite",           Provider.GOOGLE, 0.25,  1.50)   # GA (replaced dead preview)
+    GEMINI_3_5_FLASH               = ModelSpec("gemini-3.5-flash",                Provider.GOOGLE, 1.50,  9.00)   # GA ~May 2026 — JUDGE pick
 
     # ──────── DeepSeek (direct mainland, OpenAI-compatible) — judge/eval only, no personal data ────────
     DEEPSEEK_V4_FLASH = ModelSpec("deepseek-v4-flash", Provider.DEEPSEEK, 0.14,  0.28, family="deepseek")
     DEEPSEEK_V4_PRO   = ModelSpec("deepseek-v4-pro",   Provider.DEEPSEEK, 0.435, 0.87, family="deepseek")
 
     # ──────── Z.AI / GLM (direct mainland, OpenAI-compatible) — judge/eval only, no personal data ────────
-    GLM_5         = ModelSpec("glm-5",         Provider.ZAI, 1.00, 3.20, family="glm")
-    GLM_4_7       = ModelSpec("glm-4.7",       Provider.ZAI, 0.60, 2.20, family="glm")
-    GLM_4_7_FLASH = ModelSpec("glm-4.7-flash", Provider.ZAI, 0.00, 0.00, family="glm")   # free tier
-    GLM_4_6V      = ModelSpec("glm-4.6v",      Provider.ZAI, 0.30, 0.90, family="glm")   # vision variant
+    GLM_5_2        = ModelSpec("glm-5.2",        Provider.ZAI, 1.40, 4.40, family="glm")   # current flagship (added 2026-07-12)
+    GLM_5          = ModelSpec("glm-5",          Provider.ZAI, 1.00, 3.20, family="glm")
+    GLM_4_7        = ModelSpec("glm-4.7",        Provider.ZAI, 0.60, 2.20, family="glm")
+    GLM_4_7_FLASHX = ModelSpec("glm-4.7-flashx", Provider.ZAI, 0.07, 0.40, family="glm")   # JUDGE pick — full 4.7 reasoning, ~20x cheaper
+    GLM_4_7_FLASH  = ModelSpec("glm-4.7-flash",  Provider.ZAI, 0.00, 0.00, family="glm")   # free tier
+    GLM_4_6V       = ModelSpec("glm-4.6v",       Provider.ZAI, 0.30, 0.90, family="glm")   # vision variant
 
     # ──────── xAI / Grok (US jurisdiction, OpenAI-compatible) ────────
     GROK_4_5      = ModelSpec("grok-4.5",      Provider.XAI, 2.00, 6.00, family="grok")
