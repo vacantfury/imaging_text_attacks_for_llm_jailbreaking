@@ -1,52 +1,137 @@
 # ============================================================
-# Paper C · GUARD FUNCTIONAL-TEST — validate the Round-3 guard machinery  (2026-07-12)
+# Paper C · ROUND 3 — recover+decode AMPLIFIER × off-the-shelf guard  (2026-07-12)
 # ============================================================
 # >>> Active preset: `sbatch scripts/run_experiment.sbatch experiment`
 #     OVERWRITTEN per round; prior rounds live in git history. <<<
 #
-# PURPOSE: NOT a metrics round. Validate END-TO-END that the Round-3 guard-defense
-# build (commit cc3c503) works on the real cluster — the one thing the fake-service
-# unit tests could not check:
-#   (a) SERVE-PLUMBING — `_required_cluster_models_for_task` now serves a guard
-#       model referenced INSIDE a defense. If the run completes with the guard
-#       served (no "no endpoint" hang), the plumbing works.
-#   (b) guard_baseline flow — guard verdict on RAW input → block / target-answers.
-#   (c) modality_complete[guard_model=X] flow — recover+decode → EXTERNAL guard →
-#       block / target-answers-original (the amplifier's headline condition).
-#   (d) real verdict PARSERS on real guard output (GuardReasoner <think>+Request:,
-#       WildGuard "Harmful request:") — spot-read raw_results on sync-back.
-#   (e) WildGuard SERVES (text guard, not yet serve-tested; passthrough template).
+# THE REFRAMED HEADLINE (commit 6e07023): our contribution is a RECOVER+DECODE
+# AMPLIFIER that prepends to ANY guard. This round is its first real metrics run
+# on the cluster — the money table:
 #
-# Cluster models (num_cluster_jobs budget): target qwen2_5_vl_7b + guard
-# guardreasoner_vl_7b + guard wildguard = 3 servers + orchestrator = 4 jobs
-# (= MaxJobsPU cap, all run, no queue-deadlock). Judge gpt-5-nano = API.
-# HarmBench rows 0-3 (4 prompts). ASR numbers here are NOT a result.
-# llama_guard_3_8b serve-check deferred (standard Llama arch like LG4 which
-# already served; parser = the LG4-validated parse_llama_guard).
+#   guard_baseline[G]        = guard G sees the RAW (still-encoded / imaged) input
+#                              -> expected to MISS the encoded/imaged harm.
+#   modality_complete[G]     = our amplifier (recover image->text, decode
+#     (+ decode)               encoding->plaintext) THEN hands the decoded union
+#                              to the SAME guard G -> expected to CATCH it.
+#   no_defense               = in-run control (attack lands).
 #
-# WATCH on sync-back (check-experiment-results): (1) did guardreasoner_vl_7b +
-# wildguard both serve (server logs, no endpoint hang)?; (2) raw_results — do the
-# guard branches produce sensible block(GUARD_REFUSAL_TEXT)/allow(target answer)
-# outcomes?; (3) are the parsed verdicts consistent with the raw guard text?
+# If mc[G] << guard_baseline[G] across the suite, the amplifier lifts an
+# off-the-shelf guard's coverage -> the reframed claim holds. The already-recorded
+# mc-internal (SAGE-guard) numbers from Round 1b/2img are the SECOND guard
+# instantiation for the "any guard" story (not re-run here).
 #
-# NOTE: cluster is rsync-synced + stale for the NEW guard code (commit cc3c503:
-# guard_utils.py, guard_baseline.py, modality_complete.py, experiment.py) — the
-# Cursor sync must carry those across.
+# GUARD (single, deliberate): guardreasoner_vl_7b — a fine-tune of
+# Qwen2.5-VL-7B-Instruct, SAME arch/size as the qwen2_5_vl_7b workhorse that
+# serves reliably -> lowest serve-risk of the 5 new guards. This is the FIRST
+# real cluster run of the guard serve-plumbing (_required_cluster_models_for_task
+# serving a guard referenced INSIDE a defense) + the guardreasoner <think>/<result>
+# parser (parse_guardreasoner_vl). wildguard + llama_guard_4 (Mistral/Llama4,
+# passthrough templates unverified vs live cards, never served) are EXCLUDED
+# tonight — validated separately after a functest confirms them.
+#
+# Attacks (reuse existing stage-1, NO render round): set_theory / formal_logic /
+# code_attack (TEXT) + set_theory / formal_logic (ir_plain IMAGE). code_attack is
+# TEXT-only (ir_plain dropped: OCR-illegible + overflow, plan §0).
+# Targets: qwen2_5_vl_7b, internvl3_8b, pixtral_12b (Llama-3.2-Vision excluded,
+# Mllama vLLM bug). Judge: gpt-5-nano (Paper-B parity; consensus rejudge planned).
+# HarmBench-harmful rows 0-99.
+#
+# 3 defenses x 5 sources x 3 models = 45 cells.
+# Distinct cluster models = 3 targets + guardreasoner_vl_7b = 4 servers
+#   -> num_cluster_jobs = orchestrator(1) + 4 = 5 (<= MAX_SUBMIT 8). OK
+#
+# SYNC PAYLOAD (critical): the cluster checkout is STALE for the guard code
+# (commit cc3c503: guard_utils.py, guard_baseline.py, modality_complete.py,
+# experiment.py serve-plumbing) + conf/llm/guardreasoner_vl_7b.yaml. The Cursor
+# sync (local->remote) MUST carry HEAD across before submit. The 5 stage-1 source
+# dirs already exist on the cluster (used by Rounds 1/1b/2img; outputs/ is
+# sync-EXCLUDED so they are NOT re-carried — they must already be there).
+#
+# WATCH on sync-back (check-experiment-results):
+#  (1) did guardreasoner_vl_7b SERVE (server log, no endpoint hang)? — the one
+#      all-or-nothing risk. If the whole job hung, this is why.
+#  (2) guard_baseline[gr]: does the guard MISS (high ASR) on encoded/imaged input?
+#      mc[gr]: does the amplifier let it CATCH (low ASR)? spot-read raw_results.
+#  (3) parse_guardreasoner_vl on real <think>/<result> output — are parsed
+#      verdicts consistent with the raw guard text? (fail-closed on unparseable
+#      -> watch for artifact over-blocking / suspiciously low ASR.)
+#  (4) runtime: guardreasoner's 4096-token reasoning on ~30 cells is the wildcard;
+#      partial cells are per-cell isolated (rerun stragglers), not a failed round.
+#  (5) mc[gr] and no_defense on these exact sources overlap Round 1b/2img — the
+#      in-run no_defense should reproduce those (sanity anchor).
 # ============================================================
 
-num_main_job_threads: 4        # in-process concurrency (>= one per server)
-num_cluster_jobs: 4            # orchestrator + qwen + guardreasoner + wildguard (= MaxJobs 4)
+num_main_job_threads: 6        # in-process task concurrency (>= one per server)
+num_cluster_jobs: 5            # orchestrator + qwen + internvl3 + pixtral + guardreasoner (<= 8)
 
-# ── target (campaign: run_index.py --campaign paper_c_guard_functest) ──
-_qwen: &qwen  {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0, 3], campaign: paper_c_guard_functest}
+# ── target VLMs (campaign-tagged: run_index.py --campaign paper_c_round3_amplifier) ──
+_qwen:     &qwen      {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0, 99], campaign: paper_c_round3_amplifier}
+_internvl: &internvl  {mode: defense+evaluate, target_model: internvl3_8b, prompt_range: [0, 99], campaign: paper_c_round3_amplifier}
+_pixtral:  &pixtral   {mode: defense+evaluate, target_model: pixtral_12b,  prompt_range: [0, 99], campaign: paper_c_round3_amplifier}
 
-# ── Stage-1 source: existing set_theory ir_plain render (present on cluster) ──
-_src: &src  outputs/prompt_transform/harmbench/llm_set_theory_ir_plain_20260605_093357_74173344/ir_plain
+# ── guard config anchor (the external off-the-shelf guard the amplifier feeds) ──
+_gr:    &gr    guardreasoner_vl_7b
+
+# ── Stage-1 sources (present on cluster from Rounds 1/1b/2img) ──
+_st:     &st     outputs/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory
+_fl:     &fl     outputs/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
+_ca:     &ca     outputs/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack
+_st_img: &st_img outputs/prompt_transform/harmbench/llm_set_theory_ir_plain_20260605_093357_74173344/ir_plain
+_fl_img: &fl_img outputs/prompt_transform/harmbench/llm_formal_logic_ir_plain_20260605_093357_24164176/ir_plain
 
 tasks:
-  # guard_baseline with a MULTIMODAL guard on the raw image attack (serve-plumbing + baseline flow + GuardReasoner parser)
-  - {<<: *qwen, defense: guard_baseline,    defense_config: {guard_model: guardreasoner_vl_7b},                  source_transform_subdir: *src}
-  # modality_complete AMPLIFIER: recover+decode -> external guard (the headline condition)
-  - {<<: *qwen, defense: modality_complete, defense_config: {guard_model: guardreasoner_vl_7b, decode_text: true}, source_transform_subdir: *src}
-  # guard_baseline with a TEXT-ONLY guard (serve-verify wildguard + text-only handling + WildGuard parser)
-  - {<<: *qwen, defense: guard_baseline,    defense_config: {guard_model: wildguard},                            source_transform_subdir: *src}
+  # ══ Qwen2.5-VL-7B ══════════════════════════════════════════
+  # set_theory (text)
+  - {<<: *qwen, defense: no_defense,                                                              source_transform_subdir: *st}
+  - {<<: *qwen, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *st}
+  - {<<: *qwen, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *st}
+  # formal_logic (text)
+  - {<<: *qwen, defense: no_defense,                                                              source_transform_subdir: *fl}
+  - {<<: *qwen, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *fl}
+  - {<<: *qwen, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *fl}
+  # code_attack (text-only)
+  - {<<: *qwen, defense: no_defense,                                                              source_transform_subdir: *ca}
+  - {<<: *qwen, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *ca}
+  - {<<: *qwen, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *ca}
+  # set_theory (ir_plain image)
+  - {<<: *qwen, defense: no_defense,                                                              source_transform_subdir: *st_img}
+  - {<<: *qwen, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *st_img}
+  - {<<: *qwen, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *st_img}
+  # formal_logic (ir_plain image)
+  - {<<: *qwen, defense: no_defense,                                                              source_transform_subdir: *fl_img}
+  - {<<: *qwen, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *fl_img}
+  - {<<: *qwen, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *fl_img}
+
+  # ══ InternVL3-8B ═══════════════════════════════════════════
+  - {<<: *internvl, defense: no_defense,                                                              source_transform_subdir: *st}
+  - {<<: *internvl, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *st}
+  - {<<: *internvl, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *st}
+  - {<<: *internvl, defense: no_defense,                                                              source_transform_subdir: *fl}
+  - {<<: *internvl, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *fl}
+  - {<<: *internvl, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *fl}
+  - {<<: *internvl, defense: no_defense,                                                              source_transform_subdir: *ca}
+  - {<<: *internvl, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *ca}
+  - {<<: *internvl, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *ca}
+  - {<<: *internvl, defense: no_defense,                                                              source_transform_subdir: *st_img}
+  - {<<: *internvl, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *st_img}
+  - {<<: *internvl, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *st_img}
+  - {<<: *internvl, defense: no_defense,                                                              source_transform_subdir: *fl_img}
+  - {<<: *internvl, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *fl_img}
+  - {<<: *internvl, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *fl_img}
+
+  # ══ Pixtral-12B ════════════════════════════════════════════
+  - {<<: *pixtral, defense: no_defense,                                                              source_transform_subdir: *st}
+  - {<<: *pixtral, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *st}
+  - {<<: *pixtral, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *st}
+  - {<<: *pixtral, defense: no_defense,                                                              source_transform_subdir: *fl}
+  - {<<: *pixtral, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *fl}
+  - {<<: *pixtral, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *fl}
+  - {<<: *pixtral, defense: no_defense,                                                              source_transform_subdir: *ca}
+  - {<<: *pixtral, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *ca}
+  - {<<: *pixtral, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *ca}
+  - {<<: *pixtral, defense: no_defense,                                                              source_transform_subdir: *st_img}
+  - {<<: *pixtral, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *st_img}
+  - {<<: *pixtral, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *st_img}
+  - {<<: *pixtral, defense: no_defense,                                                              source_transform_subdir: *fl_img}
+  - {<<: *pixtral, defense: guard_baseline,    defense_config: {guard_model: *gr},                    source_transform_subdir: *fl_img}
+  - {<<: *pixtral, defense: modality_complete, defense_config: {guard_model: *gr, decode_text: true}, source_transform_subdir: *fl_img}
