@@ -1,53 +1,52 @@
 # ============================================================
-# Paper C · SERVE-TEST — verify the new-architecture models serve  (2026-07-12)
+# Paper C · GUARD FUNCTIONAL-TEST — validate the Round-3 guard machinery  (2026-07-12)
 # ============================================================
 # >>> Active preset: `sbatch scripts/run_experiment.sbatch experiment`
 #     OVERWRITTEN per round; prior rounds live in git history. <<<
 #
-# PURPOSE: NOT a metrics round. Confirm the new-ARCH / multimodal models actually
-# SERVE on the cluster's vLLM 0.19.1 and return non-empty responses, before we
-# build the Round-3 guard-defense wrappers that will call them.
+# PURPOSE: NOT a metrics round. Validate END-TO-END that the Round-3 guard-defense
+# build (commit cc3c503) works on the real cluster — the one thing the fake-service
+# unit tests could not check:
+#   (a) SERVE-PLUMBING — `_required_cluster_models_for_task` now serves a guard
+#       model referenced INSIDE a defense. If the run completes with the guard
+#       served (no "no endpoint" hang), the plumbing works.
+#   (b) guard_baseline flow — guard verdict on RAW input → block / target-answers.
+#   (c) modality_complete[guard_model=X] flow — recover+decode → EXTERNAL guard →
+#       block / target-answers-original (the amplifier's headline condition).
+#   (d) real verdict PARSERS on real guard output (GuardReasoner <think>+Request:,
+#       WildGuard "Harmful request:") — spot-read raw_results on sync-back.
+#   (e) WildGuard SERVES (text guard, not yet serve-tested; passthrough template).
 #
-# Scope = the 3 servability-RISK models (new arch or multimodal):
-#   qwen3_vl_8b_instruct  — new Qwen3VLForConditionalGeneration arch (recency TARGET)
-#   llama_guard_4_12b     — new Llama4ForConditionalGeneration arch (multimodal guard)
-#   guardreasoner_vl_7b   — Qwen2.5-VL arch (reasoning guard)
-# The 2 TEXT guards (llama_guard_3_8b = Llama-3.1, wildguard = Mistral-7B) are
-# bog-standard archs vLLM has long served — servability not in doubt; they get
-# serve-verified when we build + test their Round-3 defense wrappers (need a TEXT
-# source + their exact input format, which is wrapper work, not a serve smoke).
+# Cluster models (num_cluster_jobs budget): target qwen2_5_vl_7b + guard
+# guardreasoner_vl_7b + guard wildguard = 3 servers + orchestrator = 4 jobs
+# (= MaxJobsPU cap, all run, no queue-deadlock). Judge gpt-5-nano = API.
+# HarmBench rows 0-3 (4 prompts). ASR numbers here are NOT a result.
+# llama_guard_3_8b serve-check deferred (standard Llama arch like LG4 which
+# already served; parser = the LG4-validated parse_llama_guard).
 #
-# METHOD: no_defense sends the input straight to the model and returns its raw
-# output. On a GUARD that raw output is a safety verdict — meaningless to the
-# HarmBench judge, but that's fine: we only check SERVES + NON-EMPTY RESPONSE,
-# not any metric. Source = existing set_theory ir_plain render (also exercises
-# each model's image path). HarmBench rows 0-3 (4 prompts). Judge runs but its
-# numbers here are NOT a result.
+# WATCH on sync-back (check-experiment-results): (1) did guardreasoner_vl_7b +
+# wildguard both serve (server logs, no endpoint hang)?; (2) raw_results — do the
+# guard branches produce sensible block(GUARD_REFUSAL_TEXT)/allow(target answer)
+# outcomes?; (3) are the parsed verdicts consistent with the raw guard text?
 #
-# WATCH on sync-back (check-experiment-results): (a) did all 3 vLLM servers come
-# up? (server logs: chat template resolved, no CUDA OOM); (b) non-empty responses
-# in raw_results.jsonl?; (c) llama_guard_4 VRAM — conf num_gpus:1 lands it on
-# A100/H200; if it OOM'd, bump to 2. Ignore ASR/refusal numbers entirely.
-#
-# NOTE: cluster repo is rsync-synced + STALE — the Cursor sync must carry the new
-# conf/llm/{qwen3_vl_8b_instruct,llama_guard_4_12b,guardreasoner_vl_7b}.yaml AND
-# the llm_model.py registry rows (committed 4c964d0) across, else serving 404s.
+# NOTE: cluster is rsync-synced + stale for the NEW guard code (commit cc3c503:
+# guard_utils.py, guard_baseline.py, modality_complete.py, experiment.py) — the
+# Cursor sync must carry those across.
 # ============================================================
 
 num_main_job_threads: 4        # in-process concurrency (>= one per server)
-num_cluster_jobs: 4            # orchestrator + 3 vLLM servers (<= MAX_SUBMIT 8)
+num_cluster_jobs: 4            # orchestrator + qwen + guardreasoner + wildguard (= MaxJobs 4)
 
-# ── targets (campaign: run_index.py --campaign paper_c_servetest) ──
-_qwen3vl: &qwen3vl  {mode: defense+evaluate, target_model: qwen3_vl_8b_instruct, prompt_range: [0, 3], campaign: paper_c_servetest}
-_lg4:     &lg4      {mode: defense+evaluate, target_model: llama_guard_4_12b,    prompt_range: [0, 3], campaign: paper_c_servetest}
-_grvl:    &grvl     {mode: defense+evaluate, target_model: guardreasoner_vl_7b,  prompt_range: [0, 3], campaign: paper_c_servetest}
+# ── target (campaign: run_index.py --campaign paper_c_guard_functest) ──
+_qwen: &qwen  {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0, 3], campaign: paper_c_guard_functest}
 
 # ── Stage-1 source: existing set_theory ir_plain render (present on cluster) ──
 _src: &src  outputs/prompt_transform/harmbench/llm_set_theory_ir_plain_20260605_093357_74173344/ir_plain
 
-_nd: &nd  {defense: no_defense}
-
 tasks:
-  - {<<: [*qwen3vl, *nd], source_transform_subdir: *src}
-  - {<<: [*lg4, *nd],     source_transform_subdir: *src}
-  - {<<: [*grvl, *nd],    source_transform_subdir: *src}
+  # guard_baseline with a MULTIMODAL guard on the raw image attack (serve-plumbing + baseline flow + GuardReasoner parser)
+  - {<<: *qwen, defense: guard_baseline,    defense_config: {guard_model: guardreasoner_vl_7b},                  source_transform_subdir: *src}
+  # modality_complete AMPLIFIER: recover+decode -> external guard (the headline condition)
+  - {<<: *qwen, defense: modality_complete, defense_config: {guard_model: guardreasoner_vl_7b, decode_text: true}, source_transform_subdir: *src}
+  # guard_baseline with a TEXT-ONLY guard (serve-verify wildguard + text-only handling + WildGuard parser)
+  - {<<: *qwen, defense: guard_baseline,    defense_config: {guard_model: wildguard},                            source_transform_subdir: *src}
