@@ -24,6 +24,7 @@ from .encoders.llm_classical_language_encoder import LLMClassicalLanguageEncoder
 from .encoders.llm_semantic_camo_encoder import SemanticCamoEncoder
 from .encoders.non_llm_artprompt_encoder import ArtPromptEncoder
 from .encoders.non_llm_homoglyph_encoder import HomoglyphEncoder
+from .encoders.non_llm_cipher_encoder import CipherEncoder
 
 
 @register_transformation
@@ -42,6 +43,12 @@ class ArtPromptTransformation(TextEncoderTransformation):
 class HomoglyphTransformation(TextEncoderTransformation):
     type_name = "non_llm_homoglyph"
     encoder_class = HomoglyphEncoder
+
+
+@register_transformation
+class CipherTransformation(TextEncoderTransformation):
+    type_name = "non_llm_cipher"
+    encoder_class = CipherEncoder
 
 
 @register_transformation
