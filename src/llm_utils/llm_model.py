@@ -177,6 +177,61 @@ class LLMModel(Enum):
     INTERNVL3_8B = ModelSpec(   # needs trust_remote_code (set in conf/llm)
         "OpenGVLab/InternVL3-8B", Provider.NU_CLUSTER,
         family="internvl", alignment_tier="mid")
+    QWEN3_VL_8B_INSTRUCT = ModelSpec(
+        # Recency control, sibling of QWEN2_5_VL_7B (same family, newer
+        # generation). Native 256K context (expandable to 1M) — no arch
+        # ceiling concern at our max_model_len default (20480).
+        "Qwen/Qwen3-VL-8B-Instruct", Provider.NU_CLUSTER,
+        family="qwen", alignment_tier="mid")
+
+    # ──────── Guard model baselines (safety classifiers — inspect/judge, not
+    # attack targets; see text_docs/literature_review.md §"Text guards" /
+    # §"current-generation guards"). `alignment_tier` deliberately left None
+    # for all four: that field means "how aligned is this model against being
+    # attacked as a target" (task.py stamps it only from `target_llm`), which
+    # doesn't apply to a guard's role — same precedent as the judge models
+    # below (HARMBENCH_LLAMA_2_13B_CLS / LLAMA_3_3_70B_INSTRUCT), which also
+    # leave it unset. `family` is still set (base-architecture provenance).
+    GUARDREASONER_VL_7B = ModelSpec(
+        # Fine-tune of Qwen2.5-VL-7B-Instruct (R-SFT + online RL) — mirrors
+        # QWEN2_5_VL_7B's serving profile exactly. Chat/reasoning model:
+        # emits <think>...</think> + <result>...</result>, NOT a passthrough
+        # classifier — uses the tokenizer's own (Qwen2.5-VL) baked-in chat
+        # template like its base model.
+        "yueliu1999/GuardReasoner-VL-7B", Provider.NU_CLUSTER,
+        family="qwen")
+    LLAMA_GUARD_4_12B = ModelSpec(
+        # Llama4ForConditionalGeneration — dense 12B pruned from Llama 4
+        # Scout (shared expert retained, routed experts densified; NOT MoE
+        # at inference). Natively multimodal, no trust_remote_code. Tokenizer
+        # ships its own safety-taxonomy chat template (categories baked in),
+        # so NOT passthrough — see conf/llm/llama_guard_4_12b.yaml for the
+        # TODO on how that template surfaces via vLLM's OpenAI endpoint.
+        "meta-llama/Llama-Guard-4-12B", Provider.NU_CLUSTER,
+        family="llama")
+    LLAMA_GUARD_3_8B = ModelSpec(
+        # Llama-3.1-8B base, fine-tuned for content-safety classification.
+        # Text-only. max_context_len mirrors LLAMA3_1_8B_CLUSTER's known
+        # Llama-3.1 ceiling (131072) — same base architecture. Tokenizer
+        # ships its own safety-taxonomy chat template (like Llama Guard 4),
+        # so NOT passthrough.
+        "meta-llama/Llama-Guard-3-8B", Provider.NU_CLUSTER,
+        max_context_len=131_072, family="llama")
+    WILDGUARD = ModelSpec(
+        # Mistral-7B-v0.3 base. NOT a chat-tuned classifier — expects one
+        # exact pre-formatted instruction string (system + user rules +
+        # "Human user:"/"AI assistant:" fields + "Answers: [/INST]"), quoted
+        # in conf/llm/wildguard.yaml. Same situation as
+        # HARMBENCH_LLAMA_2_13B_CLS: passthrough, caller supplies the raw
+        # formatted prompt as a single message. max_context_len left
+        # unset — Mistral-7B-v0.3's config.json max_position_embeddings is
+        # disputed between 32768 (commonly cited practical ceiling) and
+        # 131072 (some sources); repo is gated so config.json couldn't be
+        # fetched to confirm. Our default max_model_len (20480) is under
+        # either number, so this is safe either way — but don't rely on
+        # this field to catch an overrun for this model.
+        "allenai/wildguard", Provider.NU_CLUSTER,
+        family="mistral", chat_template="passthrough")
 
     # Judge models for canonical benchmark evaluators
     HARMBENCH_LLAMA_2_13B_CLS = ModelSpec(

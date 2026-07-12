@@ -1,0 +1,47 @@
+# Llama-Guard-4-12B (Meta) — natively multimodal GUARD.
+# Llama4ForConditionalGeneration: dense 12B (pruned from Llama 4 Scout's MoE —
+# shared expert kept, routed experts densified; NOT MoE at inference time).
+# Gated HF repo — accept the Meta license before downloading (separate gate
+# from Llama-Guard-3-8B / Llama-3.2-11B-Vision).
+
+model:
+  model: meta-llama/Llama-Guard-4-12B
+  max_tokens: 128   # output is short: "safe" / "unsafe\nS9" style verdicts
+
+# 12B dense weights ≈ 24GB at BF16 + vision tower + KV cache. gpu_types_excluded
+# rules out V100/T4/P100 (no hardware bf16 support, and too little VRAM
+# headroom regardless) — same reasoning as the judge models below, whose
+# role (inspect/classify, not attack target) this shares. That leaves
+# A100 (40/80GB) or H200 on this cluster's `gpu` partition, either of which
+# should fit 12B on a single GPU without tensor-parallel.
+cluster:
+  num_gpus: 1
+  mem_gb: 64   # comparable size class to HARMBENCH_LLAMA_2_13B_CLS (13B); mirror its bump from the 32GB default
+  gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]
+  # TODO(verify at serve-test): if this OOMs on the assigned GPU (e.g. lands
+  # on an A100-40GB node under memory pressure from vision-token KV cache),
+  # bump num_gpus to 2 here (adds --tensor-parallel-size 2 automatically —
+  # see src/llm_utils/cluster_server_manager.py). The task brief flagged this
+  # as a real possibility; we don't have a way to load-test VRAM headroom
+  # without actually serving it, and V100 is excluded above so the "32GB
+  # V100 needs TP>=2" scenario shouldn't arise on this cluster's `gpu`
+  # partition, but keep this note until a real serve confirms single-GPU
+  # is enough.
+  # trust_remote_code NOT needed — Llama4ForConditionalGeneration has had
+  # native vLLM support (day-0, ~April 2025) and native transformers support
+  # since v4.51.3-LlamaGuard-preview; both should be well inside any
+  # currently-installed cluster env by now (2026-07).
+  # chat_template: left unset (None) — the tokenizer ships its own
+  # safety-taxonomy chat template (categories baked in; confirmed via model
+  # card `apply_chat_template` usage), so NOT passthrough.
+  # TODO(verify at serve-test): Llama Guard's official usage pattern (both
+  # v3 and v4) calls `tokenizer.apply_chat_template(chat, categories=...)`
+  # with extra kwargs to control which turn (user prompt vs. assistant
+  # response) and which safety categories are checked. vLLM's OpenAI-
+  # compatible /v1/chat/completions endpoint applies the chat template with
+  # only what the request body supplies (roles/content, plus any
+  # `chat_template_kwargs` in extra_body if the vLLM version supports
+  # passthrough of those). Confirm whether the default (no extra kwargs)
+  # produces sane behavior — checking the LAST message's role — or whether
+  # the eventual calling code needs to pass `chat_template_kwargs` explicitly
+  # via the API request body.

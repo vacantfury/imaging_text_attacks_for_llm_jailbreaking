@@ -1,0 +1,26 @@
+# Llama-Guard-3-8B (Meta) — text-only GUARD (classifier).
+# Llama-3.1-8B base, fine-tuned for content-safety classification.
+# Gated HF repo — accept the Meta license before downloading (separate gate
+# from Llama-Guard-4-12B / Llama-3.2-11B-Vision).
+
+model:
+  model: meta-llama/Llama-Guard-3-8B
+  max_tokens: 128   # output is short: "safe" / "unsafe\nS1,S4" style verdicts
+
+# Text-only 8B, Llama-3.1 architecture — comparable VRAM footprint to the
+# other 7-8B siblings. gpu_types_excluded rules out V100/T4/P100 for the
+# same reasons as the other guards (no hardware bf16, judge/classifier role).
+cluster:
+  gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]
+  # chat_template: left unset (None) — the model card's usage example calls
+  # tokenizer.apply_chat_template() directly with no manual prompt
+  # construction, i.e. the tokenizer ships its own safety-taxonomy chat
+  # template (this is Llama Guard's known behavior: its chat_template.jinja
+  # differs from base Llama-3.1's and bakes in the S1-S14 category list).
+  # NOT passthrough.
+  # TODO(verify at serve-test): same open question as Llama-Guard-4-12B —
+  # confirm vLLM's /v1/chat/completions endpoint applies this template
+  # correctly with default kwargs (no `categories`/role override), or
+  # whether the eventual calling code needs `chat_template_kwargs` in the
+  # request body to select which turn (user request vs. model response) is
+  # being checked.

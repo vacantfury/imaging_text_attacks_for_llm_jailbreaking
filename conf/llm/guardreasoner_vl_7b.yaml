@@ -1,0 +1,26 @@
+# GuardReasoner-VL-7B (yueliu1999) — multimodal reasoning GUARD.
+# Fine-tune of Qwen/Qwen2.5-VL-7B-Instruct (R-SFT + online RL) — same arch,
+# same size class as the qwen2_5_vl_7b workhorse. Mirrors that yaml exactly.
+#
+# Chat/reasoning model, NOT a passthrough classifier: it emits
+# <think>...reasoning...</think> then <result>...verdict...</result>, driven
+# by a specific system-prompt instruction (quoted on the model card) rather
+# than by a special chat_template. It uses the tokenizer's own baked-in
+# Qwen2.5-VL chat template (same as QWEN2_5_VL_7B — chat_template left unset
+# on the ModelSpec), so ordinary /v1/chat/completions calls work; the
+# classifier system prompt is a caller-supplied message, not a serving concern.
+#
+# TODO(verify at serve-test): whichever defense/evaluator code ends up
+# calling this guard must supply GuardReasoner-VL's exact system-prompt
+# instruction (from the model card: "You are a classifier for analyzing
+# interactions between humans and AI... You must think step by step.") and
+# parse the <think>/<result> tags out of the response — no such caller
+# exists in src/defense or src/evaluation yet as of this wiring.
+
+model:
+  model: yueliu1999/GuardReasoner-VL-7B
+  max_tokens: 4096   # long reasoning traces before the <result> verdict
+
+# Same VRAM class as Qwen2.5-VL-7B (~16-20GB) — exclude small/old GPUs.
+cluster:
+  gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]
