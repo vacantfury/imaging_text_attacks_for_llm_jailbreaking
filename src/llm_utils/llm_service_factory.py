@@ -10,7 +10,10 @@ from .llm_model import LLMModel, Provider
 from .base_llm_service import BaseLLMService
 
 # Import concrete service implementations
-from .llm_services import OpenAIService, ClaudeService, GoogleService, LocalLMService, NURCClusterService
+from .llm_services import (
+    OpenAIService, DeepSeekService, ZAIService, XAIService,
+    ClaudeService, GoogleService, LocalLMService, NURCClusterService,
+)
 
 
 class LLMServiceFactory:
@@ -24,6 +27,9 @@ class LLMServiceFactory:
     # Registry mapping providers to their service implementations
     _PROVIDER_REGISTRY: Dict[Provider, Type[BaseLLMService]] = {
         Provider.OPENAI: OpenAIService,
+        Provider.DEEPSEEK: DeepSeekService,
+        Provider.ZAI: ZAIService,
+        Provider.XAI: XAIService,
         Provider.ANTHROPIC: ClaudeService,
         Provider.GOOGLE: GoogleService,
         Provider.LOCAL: LocalLMService,

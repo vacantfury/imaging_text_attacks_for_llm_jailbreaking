@@ -33,6 +33,14 @@ class Provider(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
+    # ── OpenAI-compatible third-party endpoints (added 2026-07-12; mirror of
+    # psyche llm_utils). DeepSeek + Z.AI are DIRECT MAINLAND endpoints — NEVER
+    # send personal data through them; for ZERO-personal-data bulk work only
+    # (LLM-judge calls / evals over public-benchmark responses), the sanctioned
+    # use under the global data-jurisdiction rule. xAI (Grok) is US jurisdiction.
+    DEEPSEEK = "deepseek"
+    ZAI = "zai"
+    XAI = "xai"
     LOCAL = "local"
     NU_CLUSTER = "nu_cluster"
 
@@ -145,6 +153,20 @@ class LLMModel(Enum):
     GEMINI_3_PRO_PREVIEW           = ModelSpec("gemini-3-pro-preview",            Provider.GOOGLE, 1.25,  10.00)
     GEMINI_3_1_PRO_PREVIEW         = ModelSpec("gemini-3.1-pro-preview",          Provider.GOOGLE, 2.00,  12.00)
     GEMINI_3_1_FLASH_LITE_PREVIEW  = ModelSpec("gemini-3.1-flash-lite-preview",   Provider.GOOGLE, 0.075, 0.30)
+
+    # ──────── DeepSeek (direct mainland, OpenAI-compatible) — judge/eval only, no personal data ────────
+    DEEPSEEK_V4_FLASH = ModelSpec("deepseek-v4-flash", Provider.DEEPSEEK, 0.14,  0.28, family="deepseek")
+    DEEPSEEK_V4_PRO   = ModelSpec("deepseek-v4-pro",   Provider.DEEPSEEK, 0.435, 0.87, family="deepseek")
+
+    # ──────── Z.AI / GLM (direct mainland, OpenAI-compatible) — judge/eval only, no personal data ────────
+    GLM_5         = ModelSpec("glm-5",         Provider.ZAI, 1.00, 3.20, family="glm")
+    GLM_4_7       = ModelSpec("glm-4.7",       Provider.ZAI, 0.60, 2.20, family="glm")
+    GLM_4_7_FLASH = ModelSpec("glm-4.7-flash", Provider.ZAI, 0.00, 0.00, family="glm")   # free tier
+    GLM_4_6V      = ModelSpec("glm-4.6v",      Provider.ZAI, 0.30, 0.90, family="glm")   # vision variant
+
+    # ──────── xAI / Grok (US jurisdiction, OpenAI-compatible) ────────
+    GROK_4_5      = ModelSpec("grok-4.5",      Provider.XAI, 2.00, 6.00, family="grok")
+    GROK_4_3      = ModelSpec("grok-4.3",      Provider.XAI, 1.25, 2.50, family="grok")
 
     # ──────── Local (HF transformers in-process) ────────
     LLAMA3       = ModelSpec("llama3",                                   Provider.LOCAL)

@@ -18,7 +18,17 @@ logger = get_logger(__name__)
 
 
 class OpenAIService(BaseLLMService):
-    """Service for OpenAI models (GPT-4o, GPT-5, etc.)."""
+    """Service for OpenAI models (GPT-4o, GPT-5, etc.).
+
+    Also the base for OpenAI-COMPATIBLE third-party endpoints (DeepSeek, Z.AI,
+    xAI) — subclasses override the three class attributes below and inherit all
+    request logic unchanged (see llm_services/openai_compatible_services.py).
+    """
+
+    # Provider overrides — subclasses change these for OpenAI-compatible endpoints.
+    API_KEY: Optional[str] = OPENAI_API_KEY
+    BASE_URL: Optional[str] = None            # None → default OpenAI endpoint
+    SERVICE_NAME: str = "OpenAI"
 
     def __init__(self, model: LLMModel, config=None, **kwargs):
         super().__init__(
@@ -28,16 +38,20 @@ class OpenAIService(BaseLLMService):
             batch_timeout=kwargs.pop("batch_timeout", 3600),
         )
         self.model = model
-        self.api_key = kwargs.get("api_key") or OPENAI_API_KEY
+        self.api_key = kwargs.get("api_key") or self.API_KEY
         if not self.api_key:
             raise ValueError(
-                "OpenAI API key not found. Set OPENAI_API_KEY in .env or pass api_key parameter"
+                f"{self.SERVICE_NAME} API key not found. Set the appropriate "
+                f"*_API_KEY in .env or pass the api_key parameter"
             )
         self.temperature = kwargs.get("temperature", 0.0)
         self.max_tokens = kwargs.get("max_tokens", 4096)
 
-        self.async_client = AsyncOpenAI(api_key=self.api_key)
-        logger.info(f"Initialized OpenAI service with {model.model_id}")
+        client_kwargs = {"api_key": self.api_key}
+        if self.BASE_URL:
+            client_kwargs["base_url"] = self.BASE_URL
+        self.async_client = AsyncOpenAI(**client_kwargs)
+        logger.info(f"Initialized {self.SERVICE_NAME} service with {model.model_id}")
 
     # ------------------------------------------------------------------
     # Model-specific helpers
