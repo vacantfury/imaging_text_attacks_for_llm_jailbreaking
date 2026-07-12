@@ -157,8 +157,10 @@ def _judge_model_for_method(judge_method: str) -> Optional[Any]:
 def _required_cluster_models_for_task(info: "TaskInfo") -> set:
     """Return the set of cluster-hosted LLMModels this task needs.
 
-    Covers BOTH the target model (if cluster-hosted) AND the judge model(s)
-    for the evaluator(s) that will run. Judge discovery has two paths:
+    Covers the target model (if cluster-hosted), the judge model(s) for the
+    evaluator(s) that will run, AND any cluster-hosted SECOND model a defense
+    itself references (Round-3 guard amplifier's `guard_model`, or
+    SemanticSmooth's `perturbation_model`). Judge discovery has two paths:
 
       1. Explicit override: task.judge_method set in YAML.
       2. Canonical inference: derive judge_method list from the benchmark
@@ -168,6 +170,18 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
 
     Without path (2), removing `judge_method` from task YAMLs would silently
     bypass cluster judge discovery — tasks would hang on acquire_endpoint().
+
+    Defense-config scan is DELIBERATELY narrow: only the two known
+    second-model keys (`guard_model`, `perturbation_model`) are looked up —
+    defense_config is a free-form dict and we don't want to guess at
+    arbitrary keys. Extend this tuple deliberately if a new defense adds
+    another second-model config key.
+
+    Budget note: a defense+evaluate task with a cluster target AND a cluster
+    guard AND a cluster judge needs orchestrator + 3 vLLM servers = 4 SLURM
+    jobs (well under MAX_SUBMIT_JOBS_PER_USER=8, but each cluster-hosted
+    second model directly consumes num_cluster_jobs — account for it when
+    sizing a round with multiple concurrent cluster-guard tasks).
     """
     from src.llm_utils import Provider
     from .schemas import DefenseEvaluateTask
@@ -201,6 +215,16 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
                 judge = _judge_model_for_method(method)
                 if judge is not None and judge.provider == Provider.NU_CLUSTER:
                     required.add(judge)
+
+        # Defense-owned second model(s) — guard_baseline / modality_complete's
+        # guard_model, and semantic_smooth's perturbation_model. Only these
+        # two keys are scanned (see docstring).
+        for key in ("guard_model", "perturbation_model"):
+            model_str = task.defense_config.get(key)
+            if model_str:
+                m = _resolve_model(model_str)
+                if m is not None and m.provider == Provider.NU_CLUSTER:
+                    required.add(m)
 
     return required
 

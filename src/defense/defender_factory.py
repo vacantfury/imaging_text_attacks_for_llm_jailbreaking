@@ -62,3 +62,6 @@ from . import modality_complete  # noqa: E402,F401
 from . import joint_verify  # noqa: E402,F401
 # Paper C multi-surface baseline: AMIA intention-analysis component (no masking).
 from . import amia_ia  # noqa: E402,F401
+# Round-3: guard-as-deployed baseline + amplifier-generalized modality_complete
+# both live behind guard_utils.py's shared parsers/formatters.
+from . import guard_baseline  # noqa: E402,F401

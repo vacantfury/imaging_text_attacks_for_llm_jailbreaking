@@ -16,8 +16,17 @@ Mechanism (built from ECSO's caption + SAGE's discrimination primitives):
            check judges the DECODED plaintext, not the encoded surface (on
            EITHER channel). Set `decode_text: false` to ablate (→ SAGE over the
            still-encoded union).
-  Step 4 — GUARD (always, eyes-closed / no image): wrap the decoded union in the
-           SAGE discrimination prompt and answer.
+  Step 4 — GUARD: either of two modes, selected by `guard_model` (default None):
+   - guard_model=None (default, UNCHANGED behavior): wrap the decoded union
+     in the SAGE discrimination prompt and answer, eyes-closed, on the
+     TARGET model itself — the original Round-1/2 mechanism, byte-for-byte.
+   - guard_model=<name> (Round-3 amplifier condition): send the decoded
+     union to an EXTERNAL classifier guard (guard_utils.query_guard) instead
+     of SAGE-on-target. UNSAFE -> refusal; SAFE -> query the TARGET with the
+     ORIGINAL prompt input (not the decoded/union text) and return its
+     response. This is "recover+decode, THEN hand off to a real guard" — the
+     amplifier's headline contribution, measured against GuardBaseline's
+     raw-input guard-alone condition (guard_baseline.py).
 
 This closes both blind spots: the image channel is folded into the text-side
 safety check (RECOVER), AND whatever encoding is on either channel is decoded to
@@ -26,18 +35,24 @@ guard (the 2026-07-11 Round-1 finding: pure-text mc == SAGE-over-encoded ≈ sag
 Decoding the UNION (not just the text channel) is what makes the IMAGE channel
 work — the recovered image transcription is itself encoded and must be decoded.
 
-Same target VLM for all calls (provider-agnostic via batch_chat), so all usage
-is the target's — no separate defense model. Calls/query: up to 3 multimodal
-(recover + decode + guard), 2 text (decode + guard), or 1 with decode ablated.
+Same target VLM for all calls when guard_model=None (provider-agnostic via
+batch_chat), so all usage is the target's — no separate defense model. Calls/
+query: up to 3 multimodal (recover + decode + guard), 2 text (decode + guard),
+or 1 with decode ablated. When guard_model is set, the guard call is a SEPARATE
+service (own usage, see get_usage()) and a successful verdict adds one more
+target call (the original-input query) on top of recover/decode.
 """
 from pathlib import Path
 from typing import Optional
 
 from src.experiment.schemas import Prompt
 from src.llm_utils.base_llm_service import BaseLLMService
+from src.llm_utils.llm_model import LLMModel
+from src.llm_utils.llm_service_factory import LLMServiceFactory
 from src.utils.logger import get_logger
 from .base import Defense, build_conversation_message
 from .defender_factory import register_defense
+from .guard_utils import GUARD_REFUSAL_TEXT, query_guard
 from .sage import SAGE_TEMPLATE
 
 logger = get_logger(__name__)
@@ -76,6 +91,34 @@ class ModalityComplete(Defense):
     check (eyes-closed)."""
 
     type_name = "modality_complete"
+
+    def __init__(
+        self,
+        decode_text: bool = True,
+        guard_model: Optional[str] = None,
+        **kwargs,
+    ):
+        """
+        Args:
+            decode_text: Step 3 DECODE toggle (default True; see module
+                docstring's ablation note).
+            guard_model: optional external classifier-guard model name for
+                Step 4 (Round-3 amplifier condition). None (default)
+                preserves the ORIGINAL SAGE-self-check-on-target Step 4
+                exactly — no regression. When set, Step 4 hands the decoded
+                union to this guard instead (see module docstring).
+        """
+        super().__init__(decode_text=decode_text, guard_model=guard_model, **kwargs)
+        self._guard_model_name = guard_model
+        self._guard_model: Optional[LLMModel] = (
+            LLMModel.from_string(guard_model) if guard_model else None
+        )
+        self._guard_service: Optional[BaseLLMService] = None
+
+    def _get_guard_service(self) -> BaseLLMService:
+        if self._guard_service is None:
+            self._guard_service = LLMServiceFactory.create(self._guard_model_name)
+        return self._guard_service
 
     def query(
         self,
@@ -129,18 +172,69 @@ class ModalityComplete(Defense):
         else:
             guard_content_by_id = dict(union_by_id)
 
-        # ---------- Step 4: GUARD over the decoded union, eyes-closed ----------
-        guard_convs: list[tuple[str, list]] = []
+        # ---------- Step 4: GUARD over the decoded union ----------
+        if self._guard_model is None:
+            # ORIGINAL behavior, UNCHANGED: SAGE self-check on the target,
+            # eyes-closed.
+            guard_convs: list[tuple[str, list]] = []
+            for p in prompts:
+                content = guard_content_by_id.get(p.id, union_by_id[p.id])
+                wrapped = SAGE_TEMPLATE.format(content=content)
+                guard_convs.append((p.id, [(wrapped, None)]))  # eyes closed
+
+            logger.info(
+                f"ModalityComplete step 4 (SAGE-on-target GUARD): "
+                f"{len(guard_convs)} unified safety checks "
+                f"(is_multimodal={is_multimodal}, decode_text={decode_text})")
+            return target_service.batch_chat(
+                conversations=guard_convs,
+                system_message=system_message,
+                is_test=True,
+            )
+
+        # AMPLIFIED condition: decode-then-external-guard. The guard sees the
+        # DECODED union (text-only, eyes-closed — same content the SAGE
+        # branch above would see). SAFE -> re-query the TARGET with the
+        # ORIGINAL prompt input (not the decoded/union text), so the target's
+        # response is what a real deployment would actually produce.
+        guard_service = self._get_guard_service()
+        guard_items = [
+            (p.id, guard_content_by_id.get(p.id, union_by_id[p.id]), None)
+            for p in prompts
+        ]
+        logger.info(
+            f"ModalityComplete step 4 (EXTERNAL GUARD): {len(guard_items)} "
+            f"decoded-union verdicts via {self._guard_model_name}")
+        verdicts = query_guard(
+            guard_service, self._guard_model, guard_items, is_test=True)
+
+        target_convs: list[tuple[str, list]] = []
         for p in prompts:
-            content = guard_content_by_id.get(p.id, union_by_id[p.id])
-            wrapped = SAGE_TEMPLATE.format(content=content)
-            guard_convs.append((p.id, [(wrapped, None)]))  # eyes closed
+            if not verdicts.get(p.id, True):  # fail-closed default
+                messages = build_conversation_message(p, is_multimodal, source_dir)
+                target_convs.append((p.id, messages))
 
         logger.info(
-            f"ModalityComplete step 4 (GUARD): {len(guard_convs)} unified safety "
-            f"checks (is_multimodal={is_multimodal}, decode_text={decode_text})")
-        return target_service.batch_chat(
-            conversations=guard_convs,
-            system_message=system_message,
-            is_test=True,
-        )
+            f"ModalityComplete step 4: {len(target_convs)}/{len(prompts)} "
+            f"passed external guard -> querying target with ORIGINAL input")
+        target_results: dict[str, str] = {}
+        if target_convs:
+            target_results = dict(target_service.batch_chat(
+                conversations=target_convs,
+                system_message=system_message,
+                is_test=True,
+            ))
+
+        return [
+            (p.id, target_results.get(p.id, GUARD_REFUSAL_TEXT))
+            for p in prompts
+        ]
+
+    def get_usage(self) -> Optional[dict]:
+        """LLM usage from the external guard model, if configured (a
+        SEPARATE service from the target). None when guard_model=None (the
+        original behavior has no second model — steps 1-4 all run on
+        target_service, whose usage is tracked/surfaced separately)."""
+        if self._guard_service is not None:
+            return {"guard": self._guard_service.get_usage()}
+        return None
