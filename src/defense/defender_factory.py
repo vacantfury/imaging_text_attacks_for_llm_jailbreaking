@@ -65,3 +65,5 @@ from . import amia_ia  # noqa: E402,F401
 # Round-3: guard-as-deployed baseline + amplifier-generalized modality_complete
 # both live behind guard_utils.py's shared parsers/formatters.
 from . import guard_baseline  # noqa: E402,F401
+# Paper D: canonicalization defense (effective-N reduction vs Best-of-N).
+from . import canonicalize  # noqa: E402,F401

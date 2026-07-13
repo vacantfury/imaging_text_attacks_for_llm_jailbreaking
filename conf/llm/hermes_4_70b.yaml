@@ -9,7 +9,7 @@ model:
 
 cluster:
   num_gpus: 2
-  gpu_constraint: "a100@80g"
+  gpu_constraint: "a100@80g|cascadelake"   # A100-80GB, else fall back to H200 nodes
   mem_gb: 128
   max_model_len: 8192
   gpu_memory_utilization: 0.92
