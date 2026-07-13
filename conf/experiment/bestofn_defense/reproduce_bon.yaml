@@ -1,5 +1,7 @@
-# Paper D (bestofn_defense) — reproduce Best-of-N's TEXT attack in our pipeline,
-# judged with BoN's OWN judge (gpt-4o running the HarmBench rubric prompt).
+# Paper D (bestofn_defense) — reproduce Best-of-N's TEXT attack in our pipeline.
+# Judge: TEST runs use a capable OPEN model (hermes_4_70b, cluster-served, ~free,
+# low-refusal-by-design) to avoid API cost; the FINAL/headline reproduction uses
+# gpt-4o (BoN's own judge — LLM-as-judge with the HarmBench rubric). Swap judge_model below.
 # Posture: we BELIEVE BoN is a real threat and reproduce it faithfully — this is
 # a reproduction check, NOT a judge-doubt study (that would be Paper §9).
 #
@@ -26,5 +28,5 @@ tasks:
     source_transform_subdir: outputs/bestofn_defense/prompt_transform/harmbench/CHAIN_TIMESTAMP/non_llm_best_of_n
     target_model: qwen2_5_vl_7b      # served open target; swap per run (BoN tested frontier models)
     defense: no_defense
-    judge_model: gpt-4o              # BoN's judge: LLM-as-judge with the HarmBench rubric
+    judge_model: hermes_4_70b        # TEST judge: capable open, cluster-served (~free), low-refusal. FINAL: swap to gpt-4o (BoN's judge).
     benchmark: harmbench
