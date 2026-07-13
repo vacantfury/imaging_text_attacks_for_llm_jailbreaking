@@ -58,7 +58,10 @@ Companion to `experiments_plan.md` §0 JUDGE METHODOLOGY + Round J, and `literat
 4. **Llama-3.3-70B-Instruct** — literature-validated general judge (JailbreakBench official).
 5. **Nous Hermes 4-70B** or **Command-A (CONTEXTUAL)** — the usability-safe steerable general judge.
 6. **A capable large open model** (Qwen3-235B / DeepSeek-V3.2 / GLM-4.5-Air / gpt-oss-120b) — capability arm for buried encoded harm; DeepSeek-V3.2 has a judge precedent, GLM/Qwen best on Chinese.
-   *(+ the API arm from `llm_model.py`: gpt-5-nano incumbent + gpt-5.6-terra / gemini-3.5-flash.)*
+
+**DECIDED POOL (2026-07-12) — expanded for a cheap, broad screening bake-off.** Screening a candidate = ~40 judge calls (nearly free); only the winning TWO re-judge the full headline cells. So the pool is broad, spanning capability × type × multilingual × modality; the final panel stays two.
+- **Open (downloading — see `cluster_models.md`):** already-served `harmbench-cls` / `wildguard` / `llama-guard-4` / `guardreasoner-vl` / `llama-3.1-8b` / `llama-3.3-70b`, plus new pulls `qwen3guard-gen-8b` · `shieldlm-7b` · `md-judge-v0.1` · `thinkguard` · `hermes-4-70b` · `command-a` · `glm-4.5-air`. Capability-ceiling (Qwen3-235B / DeepSeek-V3.2, 8×H200) deferred to Phase 2.
+- **API arm — CHEAP TIER ONLY (owner 2026-07-12; strong/expensive flagships dropped — expensive AND prone to refuse; capability ceiling lives on the open large models):** `gpt-5-nano` (incumbent) · `gpt-5-mini` · `gemini-2.5-flash-lite` · `gemini-3.1-flash-lite` · `deepseek-v4-flash` · `glm-4.7-flashx` (· `grok-4.3` optional). DeepSeek/Z.AI cheap tiers double as *permissive* candidates; top-up only if one makes the final two. No download (API-only).
 
 ## Avoid as a *permissive* judge (documented conservative/heavy safety-RL)
 Baichuan2 (200K red-team, DPO+PPO), MiniMax-M2 (~100% jailbreak resistance in indep. red-team), openPangu-7B (explicit refusal-training), gpt-oss base (over-conservative — but gpt-oss-*safeguard* is the classifier variant). Also: Snowflake-Arctic (weak general), DBRX/Yi/iFlytek (dated).
