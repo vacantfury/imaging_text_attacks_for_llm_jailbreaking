@@ -11,7 +11,9 @@ model:
   max_tokens: 512
 
 cluster:
-  num_gpus: 2
+  num_gpus: 1
+  quantization: fp8           # 1 GPU/job cap (gpu PartitionQOS) → fit 106B MoE on one H200 via fp8
+  time_limit: "01:00:00"      # short → SLURM can backfill this 1-GPU job into a gap
   gpu_constraint: "cascadelake"
   mem_gb: 200
   max_model_len: 8192

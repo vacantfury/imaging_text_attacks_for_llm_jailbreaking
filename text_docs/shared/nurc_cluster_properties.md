@@ -42,6 +42,27 @@ The sbatch auto-loads `HUGGINGFACE_TOKEN` from `src/llm_utils/.env` and routes t
 
 **Implication:** With 1 master job, max `parallel_jobs = 7` (master + 7 workers = 8 submitted).
 Only 4 workers run at a time; the rest wait in queue.
+
+**Per-job GPU cap — CRITICAL (discovered 2026-07-13).** The `gpu` PartitionQOS enforces
+**`MaxTRESPerJob gres/gpu=1`**: every job may request **at most 1 GPU**, plus per-user
+**`MaxTRESPU gres/gpu=4`** (4 GPUs total across ≤4 running jobs). A `--gres=gpu:2` request never
+schedules — reason `QOSMaxGRESPerJob`. QOSes that allow multi-GPU exist (`multigpu`: gres/gpu=8;
+`gpu-short`: gres/gpu=2/job) **but user `zhang.haoyu6` is associated with only the `normal` QOS**
+(check: `sacctmgr -n show assoc user=zhang.haoyu6 format=QOS`), so `--qos=multigpu` is rejected with
+`sbatch: error: Invalid qos specification`. **Consequence: no tensor-parallel across GPUs for us.**
+To serve a model larger than one card, **quantize it onto one GPU** — set `quantization: fp8` in the
+model's `conf/llm/*.yaml` (wired in `cluster_server_manager` → `--quantization`); fp8 fits a 70–111B
+model on one H200 (141 GB). Budget: 4 servers × 1 GPU = the 4-GPU / 4-job ceiling exactly.
+
+**GPU nodes (2026-07-13).** H200 nodes `d4052–d4055` = 8× H200-141GB each, feature `cascadelake` — the
+only `cascadelake` GPU nodes besides the t4 box, so `gpu_constraint: cascadelake` (with t4 in
+`gpu_types_excluded`) targets H200. A100-80GB nodes `d1028/d1029` (feature `a100@80g`, 4× 80GB) were
+**draining/down** on 2026-07-13 — don't assume they're available.
+
+**sbatch gotchas (2026-07-13).** (1) An **OR feature-constraint** like `--constraint="a100@80g|cascadelake"`
+makes `sbatch` HANG (hits the 30s submit timeout and kills the run) — use a **single** feature. (2) The
+login SLURM controller is intermittently slow to answer `sbatch` (>30s); `cluster_server_manager._submit_sbatch`
+now retries 4× at a 120s timeout instead of failing hard.
 1. sinfo -o "%20P %5a %10l %6D %10s %25f %20G" | head -40
 PARTITION            AVAIL TIMELIMIT  NODES  JOB_SIZE   AVAIL_FEATURES            GRES                
 gpu                  up    8:00:00    9      1-infinite (null)                    gpu:v100-sxm2:4(S:0-

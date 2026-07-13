@@ -531,6 +531,11 @@ class ClusterModelServerManager:
         ]
         if config.get("dtype"):
             vllm_args.append(f"--dtype {config['dtype']}")
+        # On-the-fly weight quantization (e.g. fp8) so a large model fits on ONE
+        # GPU — required here because the `gpu` PartitionQOS caps 1 GPU/job and
+        # this account can't request tensor-parallel across GPUs.
+        if config.get("quantization"):
+            vllm_args.append(f"--quantization {config['quantization']}")
         if config["num_gpus"] > 1:
             vllm_args.append(f"--tensor-parallel-size {config['num_gpus']}")
         # Some checkpoints (e.g. InternVL) ship custom modeling code in their HF
@@ -577,6 +582,11 @@ class ClusterModelServerManager:
         gpu_constraint = config.get("gpu_constraint")
         if gpu_constraint:
             sbatch_lines.append(f"#SBATCH --constraint={gpu_constraint}")
+        # The `gpu` PartitionQOS caps 1 GPU/job; multi-GPU serving must run under
+        # the `multigpu` QOS (no per-job GPU cap, up to 8 GPUs across 4 jobs).
+        qos = config.get("qos")
+        if qos:
+            sbatch_lines.append(f"#SBATCH --qos={qos}")
         sbatch_lines.extend([
             "#SBATCH --nodes=1",
             f"#SBATCH --gres=gpu:{config['num_gpus']}",
@@ -608,21 +618,33 @@ class ClusterModelServerManager:
         return sbatch_path
 
     def _submit_sbatch(self, sbatch_path: Path) -> str:
-        """Submit sbatch script and return the SLURM job ID."""
-        try:
-            result = subprocess.run(
-                ["sbatch", str(sbatch_path)],
-                capture_output=True, text=True, timeout=30)
-            if result.returncode != 0:
-                raise RuntimeError(f"sbatch failed: {result.stderr.strip()}")
+        """Submit sbatch script and return the SLURM job ID.
 
-            output = result.stdout.strip()
-            return output.split()[-1]
-
-        except FileNotFoundError:
-            raise RuntimeError(
-                "sbatch command not found. "
-                "Are you running this on the cluster login node?")
+        The login-node SLURM controller is intermittently slow to answer
+        `sbatch` (observed >30s under load), which used to kill the whole run
+        on a single blip. Retry a few times with a generous per-attempt
+        timeout instead of failing hard.
+        """
+        last_err = None
+        for attempt in range(4):
+            try:
+                result = subprocess.run(
+                    ["sbatch", str(sbatch_path)],
+                    capture_output=True, text=True, timeout=120)
+                if result.returncode != 0:
+                    raise RuntimeError(f"sbatch failed: {result.stderr.strip()}")
+                return result.stdout.strip().split()[-1]
+            except subprocess.TimeoutExpired as e:
+                last_err = e
+                logger.warning(
+                    f"sbatch slow (attempt {attempt + 1}/4) for "
+                    f"{sbatch_path.name}; retrying")
+                continue
+            except FileNotFoundError:
+                raise RuntimeError(
+                    "sbatch command not found. "
+                    "Are you running this on the cluster login node?")
+        raise RuntimeError(f"sbatch timed out after 4 attempts: {last_err}")
 
     def _resolve_job_node(self, job_id: str) -> Optional[str]:
         """

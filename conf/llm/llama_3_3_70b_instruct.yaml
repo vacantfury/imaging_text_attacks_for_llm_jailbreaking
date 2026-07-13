@@ -25,8 +25,10 @@ model:
 # (e.g., "a100@80g|h200") if you want to fall back to H200 nodes when
 # 80GB A100s are contended.
 cluster:
-  num_gpus: 2
-  gpu_constraint: "a100@80g|cascadelake"   # A100-80GB, else fall back to H200 nodes
+  num_gpus: 1
+  quantization: fp8           # 1 GPU/job cap (gpu PartitionQOS) → fit 70B on one H200 via fp8
+  time_limit: "01:00:00"      # short → SLURM can backfill this 1-GPU job into a gap
+  gpu_constraint: "cascadelake"   # H200 nodes (A100-80GB nodes are drained); no OR — sbatch chokes on `|`
   mem_gb: 128
   max_model_len: 8192
   gpu_memory_utilization: 0.92
