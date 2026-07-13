@@ -14,7 +14,7 @@ num_main_job_threads: 1
 
 tasks:
   # Stage 1: chain of [set_theory text encoder] + [ir_plain image renderer].
-  # Produces subfolders under outputs/prompt_transform/harmbench/<...>/:
+  # Produces subfolders under outputs/autoattack_defense/prompt_transform/harmbench/<...>/:
   #   llm_set_theory/  → encoded text + cumulative results.json
   #   ir_plain/        → encoded text-rendered images + cumulative results.json
   #                      (is_multimodal=true after this step)

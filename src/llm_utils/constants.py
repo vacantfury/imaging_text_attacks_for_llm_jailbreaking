@@ -86,5 +86,5 @@ DEFAULT_LOCAL_BATCH_SIZE: Final[int] = 4  # Good for 1B models on MPS
 # NURC Cluster SLURM Limits
 # =============================================================================
 # Hard limits imposed by the NURC gpu partition QOS.
-# See text_docs/nurc_cluster_properties.md for details.
+# See text_docs/shared/nurc_cluster_properties.md for details.
 MAX_SLURM_TIME_LIMIT: Final[str] = "08:00:00"  # max wall time for gpu partition

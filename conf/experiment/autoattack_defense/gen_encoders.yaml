@@ -10,7 +10,7 @@
 # existing code_attack/formal_logic decoy runs (conf/experiment/experiment.yaml).
 #
 # Each chain produces TWO subdirs under
-# outputs/prompt_transform/harmbench/<chain_label>_<timestamp>_<rand>/:
+# outputs/autoattack_defense/prompt_transform/harmbench/<chain_label>_<timestamp>_<rand>/:
 #   <encoder_type_name>/  → plain encoded text channel
 #   ir_constant/           → same encoded text + mountain.png decoy image
 #                            (image_path pinned to match the Paper-B decoy,

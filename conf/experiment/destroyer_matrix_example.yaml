@@ -33,39 +33,39 @@ tasks:
 
   # ── Pure-attack baselines ──
   - mode: defense+evaluate
-    source_transform_subdir: outputs/prompt_transform/harmbench/CHAIN_TIMESTAMP/llm_set_theory
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/CHAIN_TIMESTAMP/llm_set_theory
     target_model: gpt-5.4
     defense: no_defense
 
   - mode: defense+evaluate
-    source_transform_subdir: outputs/prompt_transform/harmbench/CHAIN_TIMESTAMP/ir_plain
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/CHAIN_TIMESTAMP/ir_plain
     target_model: gpt-5.4
     defense: no_defense
 
   # ── SAGE on both delivery modes ──
   - mode: defense+evaluate
-    source_transform_subdir: outputs/prompt_transform/harmbench/CHAIN_TIMESTAMP/llm_set_theory
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/CHAIN_TIMESTAMP/llm_set_theory
     target_model: gpt-5.4
     defense: sage
 
   - mode: defense+evaluate
-    source_transform_subdir: outputs/prompt_transform/harmbench/CHAIN_TIMESTAMP/ir_plain
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/CHAIN_TIMESTAMP/ir_plain
     target_model: gpt-5.4
     defense: sage
 
   # ── ECSO on both (text degrades to no-defense automatically) ──
   - mode: defense+evaluate
-    source_transform_subdir: outputs/prompt_transform/harmbench/CHAIN_TIMESTAMP/llm_set_theory
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/CHAIN_TIMESTAMP/llm_set_theory
     target_model: gpt-5.4
     defense: ecso
 
   - mode: defense+evaluate
-    source_transform_subdir: outputs/prompt_transform/harmbench/CHAIN_TIMESTAMP/ir_plain
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/CHAIN_TIMESTAMP/ir_plain
     target_model: gpt-5.4
     defense: ecso
 
   # ── SemanticSmooth on text only (multimodal not supported) ──
   - mode: defense+evaluate
-    source_transform_subdir: outputs/prompt_transform/harmbench/CHAIN_TIMESTAMP/llm_set_theory
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/CHAIN_TIMESTAMP/llm_set_theory
     target_model: gpt-5.4
     defense: semantic_smooth

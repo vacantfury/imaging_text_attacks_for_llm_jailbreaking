@@ -22,7 +22,7 @@ surface-level safety filter while a sufficiently capable model can still
 decode-and-answer — the same "classifier fooled, model understands" decode
 gap that non_llm_homoglyph tests via Unicode normalization instead.
 
-Form notes (see text_docs/code_dev_plan.md "Pipeline-fit"):
+Form notes (see text_docs/shared/code_dev_plan.md "Pipeline-fit"):
   - TEXT-channel only — do NOT route through the imaging stage.
   - Output is NOT self-contained (unlike ArtPrompt) — the ciphertext alone
     doesn't tell the target which cipher was used, so TARGET_PREFIX is

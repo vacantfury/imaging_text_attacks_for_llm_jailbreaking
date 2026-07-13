@@ -8,6 +8,17 @@ from typing import Optional
 
 RANDOM_NUMBER_LIMIT = 100000000
 
+# Active paper namespace for output dirs (set once per experiment run). When set,
+# outputs/<mode>/... becomes outputs/<paper>/<mode>/... so multiple paper lines
+# (autoattack_defense, bestofn_defense, ...) don't collide in outputs/.
+_CURRENT_PAPER: Optional[str] = None
+
+
+def set_current_paper(paper: Optional[str]) -> None:
+    """Set (or clear with None) the paper namespace prepended to output dirs."""
+    global _CURRENT_PAPER
+    _CURRENT_PAPER = paper
+
 
 def get_new_experiment_data_dir(experiment_dir: str, dataset: Optional[str] = None, model: Optional[str] = None) -> str:
     """
@@ -31,6 +42,8 @@ def get_new_experiment_data_dir(experiment_dir: str, dataset: Optional[str] = No
     rand_suffix = random.randint(0, RANDOM_NUMBER_LIMIT)
     
     path = experiment_dir
+    if _CURRENT_PAPER and path.startswith("outputs/"):
+        path = f"outputs/{_CURRENT_PAPER}/" + path[len("outputs/"):]
     if dataset:
         path = os.path.join(path, dataset)
     

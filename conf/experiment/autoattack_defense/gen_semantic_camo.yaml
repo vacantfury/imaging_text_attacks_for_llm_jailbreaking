@@ -9,7 +9,7 @@
 # already-good classical_chinese output is not duplicated / re-billed.
 #
 # Same encoder + decoy config as gen_encoders.yaml. Produces
-# outputs/prompt_transform/harmbench/semantic_camo_ir_constant_<ts>/ with:
+# outputs/autoattack_defense/prompt_transform/harmbench/semantic_camo_ir_constant_<ts>/ with:
 #   llm_semantic_camo/  → plain encoded text
 #   ir_constant/         → same text + mountain.png decoy
 # ============================================================
