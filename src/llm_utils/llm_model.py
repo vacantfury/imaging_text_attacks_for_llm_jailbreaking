@@ -261,6 +261,29 @@ class LLMModel(Enum):
         "allenai/wildguard", Provider.NU_CLUSTER,
         family="mistral", chat_template="passthrough")
 
+    # Round-J open-source judge candidates (added 2026-07-13) — response-harm
+    # classifiers, scored via human_label/cluster_judge_rejudge.py.
+    QWEN3GUARD_GEN_8B = ModelSpec(
+        # Generative guard; safety taxonomy baked into the tokenizer's own chat
+        # template. Two-turn [user, assistant] → "Safety: Safe/Unsafe/Controversial".
+        # 119 languages (the classical-Chinese arm). No trust_remote_code (Gen variant).
+        "Qwen/Qwen3Guard-Gen-8B", Provider.NU_CLUSTER, family="qwen")
+    SHIELDLM_7B = ModelSpec(
+        # InternLM2-7B base — needs trust_remote_code (conf). Passthrough: caller
+        # supplies the [Answer]/[Analysis] instruction template as one message.
+        "thu-coai/ShieldLM-7B-internlm2", Provider.NU_CLUSTER,
+        family="internlm", chat_template="passthrough")
+    MD_JUDGE_V0_1 = ModelSpec(
+        # Mistral-7B-v0.1 classifier (SALAD-Bench). Passthrough: caller supplies
+        # the [INST] task template; outputs first-line safe/unsafe + O-category.
+        "OpenSafetyLab/MD-Judge-v0.1", Provider.NU_CLUSTER,
+        family="mistral", chat_template="passthrough")
+    THINKGUARD = ModelSpec(
+        # Llama-Guard-3-8B + critique fine-tune; native Llama-Guard-3 chat
+        # template. Two-turn [user, assistant] → safe/unsafe (+ critique).
+        "Rakancorle1/ThinkGuard", Provider.NU_CLUSTER,
+        max_context_len=131_072, family="llama")
+
     # Judge models for canonical benchmark evaluators
     HARMBENCH_LLAMA_2_13B_CLS = ModelSpec(
         "cais/HarmBench-Llama-2-13b-cls", Provider.NU_CLUSTER,

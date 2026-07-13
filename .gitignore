@@ -84,6 +84,9 @@ temporary_scripts/
 # Confidential reviewer text — must NEVER be committed (repo is public)
 text_docs/reviews/
 
+# Idea-stage paper drafts / external idea-check writeups (kept local until ready)
+new_papers/
+
 # Hydra
 multirun/
 outputs/

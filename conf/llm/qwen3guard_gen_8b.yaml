@@ -1,0 +1,9 @@
+# Qwen3Guard-Gen-8B — generative safety guard (Round-J judge candidate).
+# Native chat template (safety taxonomy baked in); two-turn user+assistant.
+model:
+  model: Qwen/Qwen3Guard-Gen-8B
+  max_tokens: 128
+cluster:
+  num_gpus: 1
+  mem_gb: 40
+  gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]

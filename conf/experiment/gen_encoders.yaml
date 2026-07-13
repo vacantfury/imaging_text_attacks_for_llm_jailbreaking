@@ -1,0 +1,63 @@
+# ============================================================
+# ARR rebuttal — Stage-1 encodes for 2 non-symbolic encoder families
+# ============================================================
+# Reviewers asked whether the decoy-image amplification effect is specific
+# to "symbolic obfuscation" (set_theory/formal_logic/code_attack). This
+# preset generates Stage-1 chains for two NON-symbolic encoders —
+# semantic_camo (natural-language semantic camouflage, Jiang et al. 2025)
+# and classical_chinese_simplified (文言文 translation, CC-BOS direct
+# strategy, Huang et al. 2026) — on HarmBench rows 0-99, mirroring the
+# existing code_attack/formal_logic decoy runs (conf/experiment/experiment.yaml).
+#
+# Each chain produces TWO subdirs under
+# outputs/prompt_transform/harmbench/<chain_label>_<timestamp>_<rand>/:
+#   <encoder_type_name>/  → plain encoded text channel
+#   ir_constant/           → same encoded text + mountain.png decoy image
+#                            (image_path pinned to match the Paper-B decoy,
+#                            same file used by fl_M4/ca_M4 in experiment.yaml)
+#
+# NOTE (classical_chinese_simplified config-merge gap): the classical-language
+# autoresolve path (transformation_factory._resolve_classical_language) is
+# NOT reached by task._resolve_step_config's file-existence probe (it only
+# checks conf/text_encoding/{name}.yaml and conf/text_encoding/{canonical}.yaml,
+# never the classical_language/ subdirectory), so conf/text_encoding/default.yaml
+# is NOT merged in for this encoder. `model` must therefore be supplied
+# explicitly below or LLMClassicalLanguageEncoder raises
+# "model is required". temperature/max_tokens/target_prefix are left at
+# their (empty) class defaults for the same reason — classical Chinese
+# translation reads as natural prose, unlike the symbolic encoders, so no
+# "decode and respond" framing is obviously needed; flagged here rather than
+# silently patched in case the caller wants target_prefix parity instead.
+#
+# Cost estimate: ~200 prompts total.
+#   semantic_camo: 3 sequential LLM calls/prompt (extract + step1 + step2)
+#     x 100 prompts x gpt-4.1-mini ≈ $1-2.
+#   classical_chinese_simplified: 1 LLM call/prompt (direct strategy)
+#     x 100 prompts x gpt-4.1-mini ≈ <$0.50.
+#   Total ≈ $2-3. No target-model queries, no judging — Stage 1 only.
+# ============================================================
+
+num_main_job_threads: 4
+
+tasks:
+  # ── semantic_camo: text channel + decoy channel ──────────────
+  - mode: prompt_transform
+    source_file: data/harmbench_prompts.jsonl
+    prompt_range: [0, 99]
+    transformation_list:
+      - type: semantic_camo          # alias → llm_semantic_camo
+      - type: ir_constant
+        params:
+          image_path: src/prompt_transformations/image/images/mountain.png
+
+  # ── classical_chinese_simplified: text channel + decoy channel ──
+  - mode: prompt_transform
+    source_file: data/harmbench_prompts.jsonl
+    prompt_range: [0, 99]
+    transformation_list:
+      - type: classical_chinese_simplified   # autoresolve → llm_classical_language
+        params:
+          model: gpt-4.1-mini                # see NOTE above — default.yaml not merged for this path
+      - type: ir_constant
+        params:
+          image_path: src/prompt_transformations/image/images/mountain.png

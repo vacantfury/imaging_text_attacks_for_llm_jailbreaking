@@ -1,0 +1,27 @@
+# ============================================================
+# ARR rebuttal — semantic_camo ONLY (re-run of the slow half of gen_encoders)
+# ============================================================
+# gen_encoders.yaml runs BOTH semantic_camo and classical_chinese_simplified.
+# classical_chinese completed fine on the first launch; semantic_camo is slow
+# (its encoder processes prompts SEQUENTIALLY with 3 LLM calls each ≈ 300
+# sequential calls, ~30 min) and got SIGTERM-killed by the background
+# wall-clock limit. This preset re-runs semantic_camo alone (detached) so the
+# already-good classical_chinese output is not duplicated / re-billed.
+#
+# Same encoder + decoy config as gen_encoders.yaml. Produces
+# outputs/prompt_transform/harmbench/semantic_camo_ir_constant_<ts>/ with:
+#   llm_semantic_camo/  → plain encoded text
+#   ir_constant/         → same text + mountain.png decoy
+# ============================================================
+
+num_main_job_threads: 1
+
+tasks:
+  - mode: prompt_transform
+    source_file: data/harmbench_prompts.jsonl
+    prompt_range: [0, 99]
+    transformation_list:
+      - type: semantic_camo          # alias → llm_semantic_camo
+      - type: ir_constant
+        params:
+          image_path: src/prompt_transformations/image/images/mountain.png
