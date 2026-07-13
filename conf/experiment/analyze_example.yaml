@@ -7,7 +7,7 @@
 #
 # `analyze` does NO model/judge queries — it OR-reduces the per-prompt `asr`
 # verdicts already stored in each source dir's raw_results.jsonl, joined on the
-# stable prompt `id`. Output: outputs/analyze/<benchmark>/<...>/results.json
+# stable prompt `id`. Output: outputs/autoattack_defense/analyze/<benchmark>/<...>/results.json
 # (per-(model,defense) portfolio_asr, best_fixed_attack_asr, complementarity_gap,
 # per_attack_asr) + portfolio_rows.jsonl (per-id attribution = the coverage map).
 
@@ -20,7 +20,7 @@ tasks:
     # Source dirs: explicit paths or globs (expanded; only dirs with a
     # results.json are kept). Here: every defense+evaluate cell on HarmBench.
     source_dirs:
-      - outputs/defense+evaluate/harmbench/*
+      - outputs/autoattack_defense/defense+evaluate/harmbench/*
 
     # OR-reduce the per-id verdicts WITHIN each (model, defense); across the
     # distinct attack variants in that group. These are results.json field names.

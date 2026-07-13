@@ -213,7 +213,7 @@ class LLMModel(Enum):
         family="qwen", alignment_tier="mid")
 
     # ──────── Guard model baselines (safety classifiers — inspect/judge, not
-    # attack targets; see text_docs/literature_review.md §"Text guards" /
+    # attack targets; see text_docs/shared/literature_review.md §"Text guards" /
     # §"current-generation guards"). `alignment_tier` deliberately left None
     # for all four: that field means "how aligned is this model against being
     # attacked as a target" (task.py stamps it only from `target_llm`), which

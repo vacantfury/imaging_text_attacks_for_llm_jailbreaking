@@ -29,10 +29,10 @@ _internvl: &internvl  {mode: defense+evaluate, target_model: internvl3_8b, promp
 _pixtral:  &pixtral   {mode: defense+evaluate, target_model: pixtral_12b,  prompt_range: [0, 99]}
 
 # ── Stage-1 source subdirs (May-31 batch; already on cluster) ──
-_fl:  &fl   outputs/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
-_ca:  &ca   outputs/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack
-_flc: &flc  outputs/prompt_transform/harmbench/llm_formal_logic_ir_constant_20260531_061400_16547161/ir_constant
-_cac: &cac  outputs/prompt_transform/harmbench/code_attack_ir_constant_20260531_061400_61010177/ir_constant
+_fl:  &fl   outputs/autoattack_defense/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
+_ca:  &ca   outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack
+_flc: &flc  outputs/autoattack_defense/prompt_transform/harmbench/llm_formal_logic_ir_constant_20260531_061400_16547161/ir_constant
+_cac: &cac  outputs/autoattack_defense/prompt_transform/harmbench/code_attack_ir_constant_20260531_061400_61010177/ir_constant
 
 tasks:
   # ── Qwen2.5-VL-7B ──

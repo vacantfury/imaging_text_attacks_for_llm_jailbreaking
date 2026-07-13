@@ -8,18 +8,18 @@ Visibility: public *(deliberately public from the start — owner policy 2026-07
 
 Research codebase for "Evaluating Defenses Against Text-Encoding Attacks on VLMs" (EMNLP/AIES 2026 target). The pipeline encodes harmful prompts into alternative representations (set theory, formal logic, classical Chinese, etc.), optionally renders them as images, applies black-box defenses (Image Rendering, SAGE, SemanticSmooth, hybrids), queries a target VLM, and ASR-judges the response.
 
-See `README.md` for the research narrative and `text_docs/experiments_plan.md` / `text_docs/experiment_results.md` for the current experimental state — this is an active research repo whose direction shifts week to week, so consult those before assuming what's important.
+See `README.md` for the research narrative and `text_docs/autoattack_defense/experiments_plan.md` / `text_docs/autoattack_defense/experiment_results.md` for the current experimental state — this is an active research repo whose direction shifts week to week, so consult those before assuming what's important.
 
 ## Common commands
 
 ```bash
 pip install -e .                          # install (uses pyproject.toml)
 python main.py test                       # smoke test (~$0.01)
-python main.py experiment                 # main run — reads conf/experiment/experiment.yaml
+python main.py autoattack_defense/experiment                 # main run — reads conf/experiment/autoattack_defense/experiment.yaml
 python main.py <preset>                   # any conf/experiment/<preset>.yaml
 
 # Cluster (NURC)
-sbatch scripts/run_experiment.sbatch experiment       # auto-cleans old logs
+sbatch scripts/run_experiment.sbatch autoattack_defense/experiment       # auto-cleans old logs
 sbatch scripts/run_experiment.sbatch test --keep
 
 # Cleanup half-finished experiment dirs (outputs/ that lack results.json)

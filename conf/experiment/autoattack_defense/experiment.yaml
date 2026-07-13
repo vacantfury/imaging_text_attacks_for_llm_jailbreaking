@@ -83,11 +83,11 @@ _pixtral:  &pixtral   {mode: defense+evaluate, target_model: pixtral_12b,  promp
 _gr:    &gr    guardreasoner_vl_7b
 
 # ── Stage-1 sources (present on cluster from Rounds 1/1b/2img) ──
-_st:     &st     outputs/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory
-_fl:     &fl     outputs/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
-_ca:     &ca     outputs/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack
-_st_img: &st_img outputs/prompt_transform/harmbench/llm_set_theory_ir_plain_20260605_093357_74173344/ir_plain
-_fl_img: &fl_img outputs/prompt_transform/harmbench/llm_formal_logic_ir_plain_20260605_093357_24164176/ir_plain
+_st:     &st     outputs/autoattack_defense/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory
+_fl:     &fl     outputs/autoattack_defense/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
+_ca:     &ca     outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack
+_st_img: &st_img outputs/autoattack_defense/prompt_transform/harmbench/llm_set_theory_ir_plain_20260605_093357_74173344/ir_plain
+_fl_img: &fl_img outputs/autoattack_defense/prompt_transform/harmbench/llm_formal_logic_ir_plain_20260605_093357_24164176/ir_plain
 
 tasks:
   # ══ Qwen2.5-VL-7B ══════════════════════════════════════════

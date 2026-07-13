@@ -11,7 +11,7 @@ Citation: the homoglyph attack (Boucher et al., 2022, "Bad Characters",
 `9833641`). The substitution map comes from the `homoglyphs` library (Unicode
 confusables), NOT a hand-rolled table.
 
-Form notes (see text_docs/code_dev_plan.md "Pipeline-fit"):
+Form notes (see text_docs/shared/code_dev_plan.md "Pipeline-fit"):
   - TEXT-channel only — do NOT route through the imaging stage: rendering
     homoglyph text to an image lets the target's OCR read the visual glyphs as
     ASCII and un-homoglyph it (self-defeating).

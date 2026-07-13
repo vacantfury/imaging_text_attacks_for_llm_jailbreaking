@@ -740,6 +740,11 @@ def run_experiment_from_preset(preset_name: str, conf_dir: Optional[Path] = None
         conf_dir = Path(__file__).resolve().parent.parent.parent / "conf"
     preset = load_preset(preset_name, conf_dir)
 
+    # Namespace outputs by paper line, inferred from the preset subdir
+    # (e.g. 'autoattack_defense/experiment' -> outputs/autoattack_defense/...).
+    from src.utils.experiment import set_current_paper
+    set_current_paper(preset_name.split("/")[0] if "/" in preset_name else None)
+
     exp = Experiment(
         conf_dir,
         num_main_job_threads=preset.num_main_job_threads,

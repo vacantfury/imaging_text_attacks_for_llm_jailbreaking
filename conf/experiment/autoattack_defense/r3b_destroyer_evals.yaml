@@ -13,7 +13,7 @@
 # Cost: ~$10–15.
 #
 # PRE-REQ: run r3a_destroyer_chains first, then update M1..M4 below with the
-# 4 chain output dirs (look in outputs/prompt_transform/harmbench/llm_formal_logic_ir_plain_<TS>/ir_plain).
+# 4 chain output dirs (look in outputs/autoattack_defense/prompt_transform/harmbench/llm_formal_logic_ir_plain_<TS>/ir_plain).
 #
 # Usage: sbatch scripts/run_experiment.sbatch r3b_destroyer_evals
 # ============================================================
@@ -21,10 +21,10 @@
 num_main_job_threads: 4
 
 _chains:
-  M1: &M1 outputs/prompt_transform/harmbench/llm_formal_logic_ir_plain_FILL_ME/ir_plain  # ir_only
-  M2: &M2 outputs/prompt_transform/harmbench/llm_formal_logic_ir_plain_FILL_ME/ir_plain  # text+ir
-  M3: &M3 outputs/prompt_transform/harmbench/llm_formal_logic_ir_plain_FILL_ME/ir_plain  # text+blank
-  M4: &M4 outputs/prompt_transform/harmbench/llm_formal_logic_ir_plain_FILL_ME/ir_plain  # text+unrelated
+  M1: &M1 outputs/autoattack_defense/prompt_transform/harmbench/llm_formal_logic_ir_plain_FILL_ME/ir_plain  # ir_only
+  M2: &M2 outputs/autoattack_defense/prompt_transform/harmbench/llm_formal_logic_ir_plain_FILL_ME/ir_plain  # text+ir
+  M3: &M3 outputs/autoattack_defense/prompt_transform/harmbench/llm_formal_logic_ir_plain_FILL_ME/ir_plain  # text+blank
+  M4: &M4 outputs/autoattack_defense/prompt_transform/harmbench/llm_formal_logic_ir_plain_FILL_ME/ir_plain  # text+unrelated
 
 tasks:
   # ── M1: ir_only ────────────────────────────────────────────

@@ -9,7 +9,7 @@ word as ASCII art, and wraps the whole thing in a step-by-step
 plain decodable form — the target must *visually decode* the ASCII art to
 recover the masked word.
 
-Form notes (see text_docs/code_dev_plan.md "Pipeline-fit constraints"):
+Form notes (see text_docs/shared/code_dev_plan.md "Pipeline-fit constraints"):
   - Output is a COMPLETE, self-contained prompt → TARGET_PREFIX is forced to ""
     so the generic decode-prefix is never prepended.
   - Whitespace-sensitive: this is a TEXT-channel encoder; do NOT route its
