@@ -25,6 +25,7 @@ from .encoders.llm_semantic_camo_encoder import SemanticCamoEncoder
 from .encoders.non_llm_artprompt_encoder import ArtPromptEncoder
 from .encoders.non_llm_homoglyph_encoder import HomoglyphEncoder
 from .encoders.non_llm_cipher_encoder import CipherEncoder
+from .encoders.non_llm_best_of_n_encoder import BestOfNEncoder
 
 
 @register_transformation
@@ -49,6 +50,12 @@ class HomoglyphTransformation(TextEncoderTransformation):
 class CipherTransformation(TextEncoderTransformation):
     type_name = "non_llm_cipher"
     encoder_class = CipherEncoder
+
+
+@register_transformation
+class BestOfNTransformation(TextEncoderTransformation):
+    type_name = "non_llm_best_of_n"
+    encoder_class = BestOfNEncoder
 
 
 @register_transformation

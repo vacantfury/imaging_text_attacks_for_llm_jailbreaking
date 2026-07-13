@@ -1,0 +1,17 @@
+# Hermes-4-70B (NousResearch) — Round-J open general-LLM RUBRIC judge.
+# Applies the HarmBench classifier rubric in chat mode (steerable, low refusal
+# by design). Served for human_label/cluster_judge_rejudge.py.
+#
+# Llama-3.1-70B base ≈ 140 GB @ bf16 → 2× A100-80GB (TP=2), like Llama-3.3-70B.
+model:
+  model: NousResearch/Hermes-4-70B
+  max_tokens: 512
+
+cluster:
+  num_gpus: 2
+  gpu_constraint: "a100@80g"
+  mem_gb: 128
+  max_model_len: 8192
+  gpu_memory_utilization: 0.92
+  dtype: bfloat16
+  gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]

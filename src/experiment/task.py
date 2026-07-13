@@ -185,11 +185,13 @@ def _infer_benchmark(source_path: str) -> str:
 
 def _resolve_evaluators(
     judge_method_override: Optional[str], benchmark: str,
+    judge_model_override: Optional[str] = None,
 ) -> list:
     """Resolve the canonical evaluator list + bind the shared judge LLM."""
     eval_config = _load_conf("evaluation")
     judge_cfg = dict(eval_config.get("judge_llm_config", {}))
-    judge_model_str = judge_cfg.pop("model", "gpt-5-nano")
+    default_model = judge_cfg.pop("model", "gpt-5-nano")
+    judge_model_str = judge_model_override or default_model
     judge_model = LLMModel.from_string(judge_model_str)
     if judge_method_override:
         logger.warning(
@@ -240,6 +242,7 @@ def _apply_verdict_columns(stage_rows: list, detailed_df, is_refusal: bool) -> N
 def _run_judging(
     prompts: list[Prompt], all_rows: list[EvaluationRow], benchmark: str,
     judge_method_override: Optional[str], stage_label: str,
+    judge_model_override: Optional[str] = None,
 ) -> dict:
     """Single-stage judging: runs every canonical evaluator on `all_rows`.
 
@@ -248,7 +251,7 @@ def _run_judging(
     name). asr/refusal are scalars or None if no judge of that type ran;
     non-empty judge_errors means metrics are incomplete (status "partial_judge").
     """
-    evaluators = _resolve_evaluators(judge_method_override, benchmark)
+    evaluators = _resolve_evaluators(judge_method_override, benchmark, judge_model_override)
     asr: Optional[float] = None
     refusal: Optional[float] = None
     eval_stats: dict[str, dict] = {}
@@ -672,6 +675,7 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
     judged = _run_judging(
         prompts=within, all_rows=within_rows, benchmark=benchmark,
         judge_method_override=task.judge_method, stage_label=stage_label,
+        judge_model_override=task.judge_model,
     )
     asr, refusal = judged["asr"], judged["refusal"]
     eval_stats, jhash, judge_errors = (

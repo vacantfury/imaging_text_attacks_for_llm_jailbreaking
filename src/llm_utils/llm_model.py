@@ -296,6 +296,23 @@ class LLMModel(Enum):
         "meta-llama/Llama-3.3-70B-Instruct", Provider.NU_CLUSTER,
         max_context_len=131_072)               # Llama-3.3 long-context
 
+    # Round-J open general-LLM RUBRIC judges (added 2026-07-13) — capable general
+    # models applying the HarmBench classifier rubric (the "faithful rule-applier"
+    # open arm, vs. the purpose-built guards' own taxonomies). Chat-mode; scored via
+    # human_label/cluster_judge_rejudge.py. No passthrough — native chat templates.
+    HERMES_4_70B = ModelSpec(
+        # Llama-3.1-70B base; "neutral alignment" (steerable, low refusal by design).
+        "NousResearch/Hermes-4-70B", Provider.NU_CLUSTER,
+        family="llama", max_context_len=131_072)
+    GLM_4_5_AIR = ModelSpec(
+        # 106B MoE (12B active); capable + strong zh. trust_remote_code (conf).
+        "zai-org/GLM-4.5-Air", Provider.NU_CLUSTER,
+        family="glm", max_context_len=131_072)
+    COMMAND_A = ModelSpec(
+        # Cohere 111B dense; CONTEXTUAL/STRICT safety dial, steerable general judge.
+        "CohereLabs/c4ai-command-a-03-2025", Provider.NU_CLUSTER,
+        family="cohere", max_context_len=131_072)
+
     # ──────── Accessors ────────────────────────────────────────────────
     # Same API surface as before: model.model_id, model.provider, etc.
     # Just reading from the dataclass instead of a positional tuple.

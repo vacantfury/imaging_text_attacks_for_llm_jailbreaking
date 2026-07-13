@@ -381,6 +381,7 @@ class DefenseEvaluateTask(_TaskBase):
     defense: str = "no_defense"
     defense_config: dict[str, Any] = Field(default_factory=dict)
     target_model: str
+    judge_model: Optional[str] = None  # per-task judge LLM override; lets parallel papers use different judges (else conf/evaluation default)
     system_message: Optional[str] = None
     judge_method: Optional[str] = None    # override; usually None (canonical)
 
