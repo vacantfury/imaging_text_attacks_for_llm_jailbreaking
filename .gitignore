@@ -98,3 +98,6 @@ data/processed_datasets/
 # Provenance breadcrumb: current commit SHA, auto-written by the post-commit
 # hook so cluster runs (no .git there) still record a real git_sha.
 .git_sha
+
+# Round J human-label sheets (ground-truth labels, kept local)
+human_label/
