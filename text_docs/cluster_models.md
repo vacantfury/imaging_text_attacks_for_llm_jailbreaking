@@ -24,12 +24,10 @@
 - `renjiepi/mllm_protector_detoxifier` · `renjiepi/protector_detector_3b_lora` — **mllm_protector defense was REMOVED from the repo (2026-06-16) → dead weights, safe to delete**
 
 ## Round-J judge candidates — download status (pool decided 2026-07-12)
-**Downloading (submitted 2026-07-12):**
-- job `8310494` (small guards, 1-GPU each): `Qwen/Qwen3Guard-Gen-8B` (zh arm) · `thu-coai/ShieldLM-7B-internlm2` (zh/en) · `OpenSafetyLab/MD-Judge-v0.1` (classifier) · `Rakancorle1/ThinkGuard` (reasoning guard)
-- job `8310495` (large): `NousResearch/Hermes-4-70B` (steerable, 2×A100/1×H200) · `zai-org/GLM-4.5-Air` (capability + zh, ~1×H200)
-
-**Downloading (owner granted HF access 2026-07-12):**
-- job `8310503`: `CohereLabs/c4ai-command-a-03-2025` — Command-A (steerable general, explicit CONTEXTUAL/STRICT safety dial; 111B dense → 4×A100 / 2×H200). Was `gated: auto`; owner accepted the license.
+**Downloaded ✓ (2026-07-12, jobs COMPLETED):**
+- job `8310494` (small guards, 1-GPU each): `Qwen/Qwen3Guard-Gen-8B` (16G, zh arm) · `thu-coai/ShieldLM-7B-internlm2` (15G, zh/en) · `OpenSafetyLab/MD-Judge-v0.1` (14G, classifier) · `Rakancorle1/ThinkGuard` (15G, reasoning guard)
+- job `8310495`: `NousResearch/Hermes-4-70B` (132G, steerable, 2×A100/1×H200) · `zai-org/GLM-4.5-Air` (206G, capability + zh, ~1×H200)
+- job `8310503`: `CohereLabs/c4ai-command-a-03-2025` (207G) — Command-A (steerable general, CONTEXTUAL/STRICT dial; 111B dense → 4×A100 / 2×H200). Owner accepted the `gated:auto` license.
 
 **Deferred capability-ceiling (Phase 2 — download only if the calibration curve needs a higher point):**
 - `Qwen/Qwen3-235B-A22B` or `deepseek-ai/DeepSeek-V3.2-Exp` (671B — full 8×H200 node to serve).
