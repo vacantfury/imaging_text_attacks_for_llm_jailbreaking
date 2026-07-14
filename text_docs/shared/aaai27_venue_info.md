@@ -45,14 +45,22 @@ The abstract deadline (7/21) is a **hard wall with no paper attached yet** — y
 - **The Paper B timing bind is the real issue, not fit:** sending Paper B to AAAI means **withdrawing from ARR first** (irreversible — no un-withdraw), and the **7/21 abstract wall lands BEFORE the 7/30 meta-reviews and the 8/2 EMNLP/AACL commit**. So an AAAI-B route forces the withdraw call on **raw scores + whatever discussion signal exists by ~7/20**, giving up the ARR meta-review information. Current standing decision (TODO item 1 timeline, owner leans NOT to withdraw) already reflects this; the decision is revisited at the **2026-07-19 checkpoint** (see the abstract-placeholder tactic below — the binding wall is actually 7/28, but still pre-meta-review). This doc is the fact base for that checkpoint.
 
 ## ARR May 2026 cycle timeline (Paper B's current process)
-Paper B is under review in the ARR **May 2026** cycle (feeds EMNLP 2026 + AACL 2026).
-| Milestone | Date |
+Paper B is under review in the ARR **May 2026** cycle (feeds EMNLP 2026 + AACL 2026). *(Discussion-close through meta-review-start updated 2026-07-13 from the ARR program-chairs timeline email — see the note below the table.)*
+| Milestone | Date (AoE) |
 |---|---|
 | Submission | May 25, 2026 |
-| Author response / discussion window | July 8–14, 2026 (now closed) |
+| Author-Reviewer discussion window | July 8 – **July 15** (extended +1 day from 7/14) |
+| Reviewers finalize reviews | July 16 – 17 |
+| **Authors submit Review Issue Reports** | **by July 17** |
+| Meta-reviewing period begins | July 18, 2026 |
 | Meta-reviews released | **July 30, 2026** |
 | Commitment deadline (EMNLP & AACL, same) | **August 2, 2026** |
 | Acceptance notification | August 20, 2026 |
+
+**ARR timeline-email details (2026-07-13):**
+- **Discussion extended one day to July 15 AoE.** When it closes, reviewers re-check the forum for author responses and are asked to update assessments if a listed major weakness was sufficiently addressed or rested on a misunderstanding that a clarification resolved. Authors may point reviewers to the [ARR review guidelines](https://aclrollingreview.org/reviewerguidelines) in discussion; a well-justified guideline issue should prompt a review update.
+- **Review Issue Report — NEW author deliverable, due July 17 AoE.** A new kind of "official comment" on a review, filed in the OpenReview interface. Authors flag if a review seems seriously amiss. It (a) informs the AC's decision and (b) is analyzed program-wide for the quality distribution of peer reviews (feeding ARR process design). Details + screenshots: https://aclrollingreview.org/authors#step2.2. This is a companion lever to the discussion engagement — use it where a review genuinely departs from the guidelines, not routinely.
+- **Revised review form.** Now includes an **excitement score** = a reviewer's personal preference, which *may not* be backed by the review text (so it can't be challenged for lack of textual support). By contrast, **soundness** and **reproducibility** assessments *must* be backed by the review text — these are the dimensions a Review Issue Report can legitimately contest. Formulations of soundness and overall assessment were also revised.
 
 ## EMNLP vs AACL — the choice was LOCKED at submission (May), not deferrable to commitment
 **Key finding (2026-07-13): the EMNLP-vs-AACL choice is single-select and was made at ARR submission in May — you CANNOT switch at commitment time.** Both venues carry the identical, symmetric gate:
