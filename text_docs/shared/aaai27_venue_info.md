@@ -1,6 +1,6 @@
 # AAAI-27 submission facts — venue reference for the Paper B / Paper C route decision
 
-*Compiled 2026-07-13 from the official AAAI-27 pages (see Sources). Shared across papers (Paper B/C/D submission timeline = TODO item 1; Paper C experiments = TODO item 6; Paper D = TODO item 10). This is the reference the "withdraw Paper B from ARR → submit to AAAI?" question turns on.*
+*Compiled 2026-07-13 from the official AAAI-27 pages (see Sources). Shared across papers (Paper B/C/D submission timeline = TODO item 1; Paper C experiments = TODO item 6; Paper D = TODO item 9). This is the reference the "withdraw Paper B from ARR → submit to AAAI?" question turns on.*
 
 ## Conference
 - **AAAI-27** = 41st AAAI Conference on Artificial Intelligence, **Montréal, Canada, Feb 16–23, 2027**.
@@ -26,6 +26,13 @@ The abstract deadline (7/21) is a **hard wall with no paper attached yet** — y
 - **Dual / concurrent submission — the load-bearing constraint:** *"AAAI-27 does not permit simultaneous submission of papers involving an overlapping set of authors that do not constitute distinct scientific contributions, whether submitted to AAAI-27 or another archival conference or journal."* → **A paper currently under ARR review must be WITHDRAWN from ARR before it can be submitted to AAAI-27.** (ARR is an archival review process.)
 - **Author submission cap:** ≤10 AAAI-27 submissions per author, combined across the main track + AI Alignment + AI for Social Impact special tracks. Not binding for us (we'd submit ≤2).
 - **No transfer between main track and special tracks** (stated for AAAI-25/26; assume it still holds — you pick the track at submission, no post-hoc move).
+
+## Preprint / arXiv policy — when each paper may go on arXiv (verified 2026-07-13)
+Governs TODO item 1 ⑦ (the arXiv-posting step). The two venues differ:
+- **ARR (EMNLP/EACL route):** ACL removed the fixed anonymity period on **2024-02-15** — a non-anonymous preprint is allowed at any time, the OpenReview submission just stays anonymized. At submission you pick a **preprint-status** option; the **binding "no non-anonymous preprint"** choice grants ARR **award eligibility + priority on borderline acceptance decisions**, and commits you to *"not preprinting until the metareviews are released, under the penalty of desk rejection."* The cutoff is **meta-review, NOT acceptance** — so the optimal play is: *choose binding → post arXiv right after that cycle's meta-review.* The earned benefit survives (it rewards the clean anonymous review) and the preprint still precedes final acceptance. Meta-review dates: **May cycle = 7/30**; **August cycle ≈ October**. ⚠️ A paper's preprint-status choice is fixed at submission — **Paper B's May-cycle choice is already locked** (check OpenReview → the submission's preprint field to see what was selected).
+- **AAAI-27:** preprints are permitted, but the two artifacts must stay **disconnected** — *"the AAAI-27 submission should not include citations or pointers to the non-anonymous material and the non-anonymous online material should not reference the fact that the work was submitted to AAAI-27; violations may lead to summary rejection."* So an AAAI-routed paper can go on arXiv **right after the 7/28 submission**, as long as the arXiv version doesn't name AAAI and the AAAI PDF doesn't cite the arXiv.
+- **arXiv version always links the REAL public repo** (`github.com/…/imaging_text_attacks_for_llm_jailbreaking`), never the blind review mirror (`blind-submission1111/…`, which expires); the anonymized submission keeps the blind repo. The repo is already public under the author's name (project policy), so linking it on arXiv adds no de-anonymization beyond the named preprint itself.
+- Sources: ARR anonymity policy (aclrollingreview.org/anonymity + the CFP preprint clause); AAAI-27 submission instructions.
 
 ## AI Alignment special track (relevant because both our papers fit it)
 - **Exists at AAAI-27** (one of two special tracks, alongside AI for Social Impact). Special-track papers are **reviewed under a different rubric than the main track.**
