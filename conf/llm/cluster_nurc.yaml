@@ -10,6 +10,8 @@ cluster:
   # Loads a CUDA module matching the uv env's torch (cu130); the torch wheel bundles its own runtime,
   # so this is mostly for any JIT/compile. If a node's driver is too old for CUDA 13, pin an older vLLM
   # (match the conda env) instead — the conda fallback covers those nodes meanwhile.
+  # venv lives on /scratch (NURC home quota is too small for torch+vLLM ~7GB; /scratch has room,
+  # same place as the HF cache). If /scratch purges it, rebuild via the recipe in the NURC ops doc.
   env_setup:
     - "module load cuda/13.2.0"
-    - "source $HOME/projects/imaging_text_attacks_for_llm_jailbreaking/.venv/bin/activate"
+    - "source /scratch/$USER/venvs/imaging_uv/bin/activate"
