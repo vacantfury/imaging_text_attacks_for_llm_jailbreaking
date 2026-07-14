@@ -369,14 +369,33 @@ class Experiment:
         """
         Load cluster server config for a model.
 
-        Uses the shared _load_conf helper: merges conf/llm/default.yaml
-        with any model-specific overrides, returns the 'cluster' section.
-        """
-        from .config import load_conf
+        Layers: conf/llm/default.yaml (NURC defaults) → the model-specific
+        override's cluster block → an optional CLUSTER_PROFILE overlay.
 
-        return load_conf(
+        CLUSTER_PROFILE (env var, set by the per-cluster orchestrator sbatch —
+        e.g. `CLUSTER_PROFILE=aicr` from run_experiment_aicr.sbatch) overlays
+        `conf/llm/cluster_<profile>.yaml`'s `cluster` block LAST, so the running
+        cluster's partition / GPU-request style / env-setup / hf_home win over
+        the NURC defaults. Unset → NURC behavior, unchanged.
+        """
+        import os
+        from .config import load_conf, _load_yaml, _deep_merge, CONF_DIR
+
+        cfg = load_conf(
             "llm", section="cluster",
             match_field="model.model", match_value=model.model_id)
+
+        profile = os.environ.get("CLUSTER_PROFILE", "").strip()
+        if profile:
+            overlay_path = CONF_DIR / "llm" / f"cluster_{profile}.yaml"
+            if overlay_path.exists():
+                overlay = _load_yaml(overlay_path).get("cluster", {})
+                cfg = _deep_merge(cfg, overlay)
+            else:
+                logger.warning(
+                    f"CLUSTER_PROFILE={profile!r} but {overlay_path} not found; "
+                    f"using NURC defaults.")
+        return cfg
 
     def _count_existing_slurm_jobs(self) -> int:
         """Count this user's existing SLURM jobs that count against the QOS budget.

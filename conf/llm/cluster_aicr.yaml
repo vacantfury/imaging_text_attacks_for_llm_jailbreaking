@@ -1,0 +1,20 @@
+# AICR cluster profile — overlaid on conf/llm/default.yaml's `cluster` block when
+# CLUSTER_PROFILE=aicr (set by scripts/run_experiment_aicr.sbatch). Only the fields
+# that DIFFER from the NURC defaults live here; everything else inherits default.yaml.
+# Applied last by Experiment._load_cluster_config. Full cluster facts:
+# cluster_files/aicr_cluster_properties.md (gitignored, local-only).
+cluster:
+  partition: rtx-batch          # RTX PRO 6000 (~96GB), 8/node, 24h. Use b200-batch for the biggest models.
+  gpu_request_style: gpus       # AICR partitions are homogeneous -> `--gpus=N` (not NURC's `--gres=gpu:N`).
+  excluded_nodes: []            # NURC's d1027 exclusion does not apply here.
+  cuda_module: "cuda/13.1.1"    # AICR CUDA module (driver 580.x).
+  hf_home: /scratch/zhang_haoyu6_neu/huggingface_cache
+  # uv-venv activation REPLACES NURC's conda `module load anaconda3 + source activate AI_security`:
+  env_setup:
+    - "module load cuda/13.1.1"
+    - "source $HOME/projects/imaging_text_attacks_for_llm_jailbreaking/.venv/bin/activate"
+  # AICR login node has internet; compute-node internet is TBD (GPU-probe step). If compute
+  # nodes turn out offline, set this true and pre-download weights (the NURC pattern).
+  hf_offline: false
+  # NOTE: multi-GPU tensor-parallel (num_gpus > 1) is set PER-MODEL in the model's conf/llm/*.yaml
+  # (AICR allows it — QOS caps 8/job); the gpu_request_style above makes `--gpus=N` requests work.

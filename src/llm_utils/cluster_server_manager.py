@@ -587,9 +587,34 @@ class ClusterModelServerManager:
         qos = config.get("qos")
         if qos:
             sbatch_lines.append(f"#SBATCH --qos={qos}")
+        # GPU request directive — NURC uses `--gres=gpu:N`; AICR's homogeneous
+        # partitions want `--gpus=N` (partition selects the GPU type). Config-driven.
+        if config.get("gpu_request_style", "gres") == "gpus":
+            gpu_directive = f"#SBATCH --gpus={config['num_gpus']}"
+        else:
+            gpu_directive = f"#SBATCH --gres=gpu:{config['num_gpus']}"
+
+        # Env setup — default is NURC's conda (anaconda3 module + `source activate <env>`).
+        # A cluster profile can REPLACE both lines via config['env_setup'] (AICR: cuda
+        # module + `source .venv/bin/activate` for the uv venv).
+        env_setup = config.get("env_setup")
+        if env_setup:
+            env_lines = list(env_setup)
+        else:
+            env_lines = [
+                f"module load anaconda3/2024.06 {config['cuda_module']}",
+                f"source activate {config['conda_env']}",
+            ]
+
+        # HF cache + offline mode. NURC compute nodes have no internet (offline forced);
+        # a cluster with online compute nodes sets hf_offline=false to pull weights live.
+        hf_lines = [f"export HF_HOME=\"${{HF_HOME:-{config['hf_home']}}}\""]
+        if config.get("hf_offline", True):
+            hf_lines += ["export HF_HUB_OFFLINE=1", "export TRANSFORMERS_OFFLINE=1"]
+
         sbatch_lines.extend([
             "#SBATCH --nodes=1",
-            f"#SBATCH --gres=gpu:{config['num_gpus']}",
+            gpu_directive,
             f"#SBATCH --cpus-per-task={config['cpus_per_task']}",
             f"#SBATCH --mem={config['mem_gb']}GB",
             f"#SBATCH --time={time_limit}",
@@ -598,13 +623,10 @@ class ClusterModelServerManager:
             "",
             "# Setup environment",
             "mkdir -p logs",
-            f"module load anaconda3/2024.06 {config['cuda_module']}",
-            f"source activate {config['conda_env']}",
+            *env_lines,
             "",
-            "# Compute nodes have no internet — must run fully offline",
-            f"export HF_HOME=\"${{HF_HOME:-{config['hf_home']}}}\"",
-            "export HF_HUB_OFFLINE=1",
-            "export TRANSFORMERS_OFFLINE=1",
+            "# HuggingFace cache (+ offline mode where compute nodes have no internet)",
+            *hf_lines,
             "",
             "# Start vLLM server (blocks until killed by scancel or time limit)",
             vllm_cmd,

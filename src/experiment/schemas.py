@@ -484,6 +484,15 @@ class ClusterConfig(BaseModel):
     cuda_module: str
     hf_home: str
     health_recheck_interval: int = 60
+    # --- multi-cluster support (NURC default; AICR overrides via conf/llm/cluster_aicr.yaml) ---
+    # GPU request directive: "gres" -> `--gres=gpu:N` (NURC), "gpus" -> `--gpus=N` (AICR, homogeneous partitions).
+    gpu_request_style: str = "gres"
+    # Shell lines that set up the Python env in the sbatch, REPLACING the default
+    # `module load anaconda3 <cuda> ; source activate <conda_env>` pair. AICR uses a uv venv:
+    # ["module load cuda/13.1.1", "source $HOME/projects/.../.venv/bin/activate"]. None -> NURC default.
+    env_setup: Optional[list[str]] = None
+    # NURC compute nodes have no internet (offline HF). AICR compute-node internet TBD -> set per cluster.
+    hf_offline: bool = True
 
 
 class LLMConfig(BaseModel):
