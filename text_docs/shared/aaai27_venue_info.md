@@ -42,7 +42,27 @@ The abstract deadline (7/21) is a **hard wall with no paper attached yet** — y
 
 ## Fit read (my assessment, not a decision)
 - **Both Paper B and Paper C are robustness / red-teaming / safety-evaluation work** → strong fit for the AI Alignment track, arguably a *better* home than the main track: criterion 1 (relevance to alignment) rewards the framing, and the "open code/eval tools encouraged" note matches our released pipeline. The tighter page budget (7 vs 8) is the main format cost.
-- **The Paper B timing bind is the real issue, not fit:** sending Paper B to AAAI means **withdrawing from ARR first** (irreversible — no un-withdraw), and the **7/21 abstract wall lands BEFORE the 7/30 meta-reviews and the 8/2 EMNLP/AACL commit**. So an AAAI-B route forces the withdraw call on **raw scores + whatever discussion signal exists by ~7/20**, giving up the ARR meta-review information. Current standing decision (TODO item 5, owner leans NOT to withdraw) already reflects this; this doc is the fact base if the lean is revisited before 7/21.
+- **The Paper B timing bind is the real issue, not fit:** sending Paper B to AAAI means **withdrawing from ARR first** (irreversible — no un-withdraw), and the **7/21 abstract wall lands BEFORE the 7/30 meta-reviews and the 8/2 EMNLP/AACL commit**. So an AAAI-B route forces the withdraw call on **raw scores + whatever discussion signal exists by ~7/20**, giving up the ARR meta-review information. Current standing decision (TODO item 5, owner leans NOT to withdraw) already reflects this; the decision is revisited at the **2026-07-19 checkpoint** (see the abstract-placeholder tactic below — the binding wall is actually 7/28, but still pre-meta-review). This doc is the fact base for that checkpoint.
+
+## ARR May 2026 cycle timeline (Paper B's current process)
+Paper B is under review in the ARR **May 2026** cycle (feeds EMNLP 2026 + AACL 2026).
+| Milestone | Date |
+|---|---|
+| Submission | May 25, 2026 |
+| Author response / discussion window | July 8–14, 2026 (now closed) |
+| Meta-reviews released | **July 30, 2026** |
+| Commitment deadline (EMNLP & AACL, same) | **August 2, 2026** |
+| Acceptance notification | August 20, 2026 |
+
+## EMNLP vs AACL — when the venue is chosen
+- The final EMNLP-vs-AACL choice is locked at the ARR **commitment step (deadline Aug 2, 2026)** — *after* the July 30 meta-reviews, so you decide it with final scores in hand (the 7/30 → 8/2 window). This is a **separate decision from AAAI-vs-ARR**, and it is **moot if Paper B is withdrawn for AAAI**.
+- ⚠️ **EMNLP-2026-specific gate (verbatim):** *"authors will need to explicitly declare which conference they intend to commit to at submission time. This choice will be binding for EMNLP 2026: i.e., ARR 2026 May submissions that do not select EMNLP 2026 during submission will not be able to commit to EMNLP 2026."* → whether **both** venues are still open depends on **what Paper B selected at ARR submission in May.** Action (owner's eyes, OpenReview): confirm the submission-time venue selection. If EMNLP was selected, the EMNLP commitment is preserved; committing to AACL instead may or may not be allowed depending on AACL's own commitment rule (verify on the AACL 2026 CFP only if a switch is actually contemplated).
+
+## AAAI abstract-placeholder tactic (holds the AAAI option at ~zero cost)
+- **Registering the AAAI abstract by 7/21 is a free, non-binding placeholder** — title + abstract + authors only, no obligation to submit the full paper. An abstract registration is **not** a paper "under review," so it does **not** trigger the dual-submission conflict. Paper B can stay in ARR through 7/21.
+- The dual-submission conflict triggers only when the **same full paper is under review at two archival venues at once** — i.e. when the AAAI full paper is submitted on **7/28**. So: make the *binding* AAAI-vs-ARR call by **7/28**; if going AAAI, **withdraw from ARR first, then submit the AAAI full paper**; if staying ARR, just let the AAAI abstract lapse.
+- **Net:** the placeholder extends the AAAI decision runway from 7/21 to ~7/28 at no cost. **But 7/28 is still before the 7/30 ARR meta-reviews** — the tactic does *not* buy meta-review visibility. Choosing AAAI always means deciding pre-meta-review.
+- Verify once (owner or session): confirm AAAI's submission instructions don't treat abstract registration *itself* as a binding "submission" under the dual-submission policy — standard practice is that it does not, but worth a glance.
 
 ## Sources
 - [AAAI-27 Main Technical Track Call](https://aaai.org/conference/aaai/aaai-27/main-technical-track-call/)
