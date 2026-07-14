@@ -77,6 +77,20 @@ from OnDemand may be needed (confirm the cert lifetime on first probe).
 - **Module system** (`module avail` / `module load`) with common-core + institution-specific modules.
   Exact module names (Anaconda/conda? CUDA? Python?) are UNVERIFIED — see probe checklist.
 
+## Operational notes
+
+- **Scheduled MONTHLY maintenance — plan runs around it.** AICR takes a recurring **monthly**
+  maintenance window during which all resources are unavailable. Observed instance:
+  **Tue 2026-07-21, 5am–5pm EST** (~12h; pattern inferred = 3rd Tuesday of the month — confirm as more
+  notices arrive). Don't schedule a long batch run across it — a 24h `*-batch` job spanning the window
+  gets killed. ⚠️ The 2026-07-21 window overlaps the AAAI abstract deadline (7/21; TODO items 1 & 5);
+  low practical risk since AICR isn't a live experiment surface yet, but flag it if AICR ever lands on
+  the critical path for that crunch.
+- **GPU driver baseline (post the 2026-07-21 upgrade):** Nvidia driver **580.126.20** (up from
+  580.105.08); host kernel 5.14.0-570.60.1+16.1. The driver caps the usable CUDA/vLLM toolkit version
+  — 580.x covers CUDA ≤ 13.x, ample for current vLLM. Confirm the live value with `nvidia-smi` at probe
+  (checklist #8); recorded here as the compatibility anchor.
+
 ## PROBE CHECKLIST (run on first SSH — fills the gaps; mirrors item-4's Xiangchen probe)
 Once `ssh aicr` works, run these on the login node and record results here:
 1. `sinfo -o "%20P %5a %10l %6D %25f %30G"` — real partition list, features, GRES strings, availability.
