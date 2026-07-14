@@ -22,6 +22,13 @@ python main.py <preset>                   # any conf/experiment/<preset>.yaml
 sbatch scripts/run_experiment.sbatch autoattack_defense/experiment       # auto-cleans old logs
 sbatch scripts/run_experiment.sbatch test --keep
 
+# Cluster (AICR) — same, via the AICR profile wrapper
+sbatch scripts/run_experiment_aicr.sbatch autoattack_defense/experiment
+
+# Multi-cluster: split ONE preset across AICR+NURC, AICR-first (dry-run by default)
+python dispatch.py autoattack_defense/experiment            # plan + ssh commands, submits nothing
+python dispatch.py autoattack_defense/experiment --submit   # place + sbatch each sub-preset over ssh (sync code first)
+
 # Cleanup half-finished experiment dirs (outputs/ that lack results.json)
 python scripts/cleanup_failed.py                      # dry-run
 python scripts/cleanup_failed.py --delete
@@ -51,7 +58,15 @@ Each `results.json` carries an `upstream_ref: {source_dir, results_sha256}` poin
 - `num_main_job_threads` — `asyncio.Semaphore` controlling in-process task concurrency.
 - `num_cluster_jobs` — SLURM job budget (orchestrator + vLLM servers), hard-capped at `MAX_SUBMIT_JOBS_PER_USER = 8`.
 
-When any task targets a `Provider.NU_CLUSTER` model, `ClusterModelServerManager` submits vLLM servers as separate SLURM jobs, waits for one endpoint per model, and registers them with `LLMServiceFactory` so cluster-bound tasks auto-resolve endpoints. Servers are torn down in a `finally` block.
+When any task targets a `Provider.NU_CLUSTER` model, `ClusterModelServerManager` submits vLLM servers as separate SLURM jobs, waits for one endpoint per model, and registers them with `LLMServiceFactory` so cluster-bound tasks auto-resolve endpoints. Servers are torn down in a `finally` block. A single orchestrator run is **single-cluster**: every SLURM call (`sbatch`/`squeue`/`scontrol`) is a local subprocess, so "which cluster" is just where the orchestrator process runs plus the `CLUSTER_PROFILE` env var (NURC default, or `aicr` → overlay `conf/llm/cluster_aicr.yaml`).
+
+### Multi-cluster dispatch (`dispatch.py` / `src/experiment/multi_cluster.py`)
+
+Because the code is synced to both clusters and each orchestrator only talks to its own local SLURM, using AICR **and** NURC together is a thin pre-submit split, not runtime SSH federation. `dispatch.py <preset>` splits one preset's task matrix across an ordered cluster pool (`conf/cluster_pool.yaml`, gitignored; template `conf/cluster_pool.example.yaml`), writes one sub-preset per cluster under the *same* paper subdir (`<paper>/_mc_<base>_<cluster>.yaml`, so output namespacing is preserved), and submits each via `ssh <cluster> sbatch <wrapper> <sub-preset>`. **Zero edits to the orchestrator runtime** — each cluster runs the existing single-cluster path natively.
+
+- **Split key** = the full set of *cluster-served* models each task needs (target ∪ judge ∪ guard), computed by reusing `_required_cluster_models_for_task`. API judges (e.g. `gpt-5-nano`) aren't servers so they drop out → the split is target-only when the judge is API, target+judge when it's served. A cell is atomic: it runs on one cluster that serves all its models; a pipeline is never split.
+- **Placement** = greedy, pool-ordered (AICR first): pack tasks onto the first cluster whose remaining server `budget` fits them, overflow the rest to the next. Small matrix → all on AICR, NURC idle (AICR preferred); big matrix → spills to NURC (both used, not failover). A model shared across a split is served once per cluster (accepted duplication); a `pins:` map forces a model onto a named cluster to keep e.g. a big judge single.
+- **DRY-RUN by default** — prints the plan + exact ssh commands and writes sub-presets locally, submits nothing. `--submit` actually places + `sbatch`es (sync the code to both clusters first). Never self-initiate a run.
 
 ### 3-layer config merge
 

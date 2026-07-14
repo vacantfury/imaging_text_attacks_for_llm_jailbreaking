@@ -110,3 +110,10 @@ human_label/
 
 # Cluster ops/property docs + local key material (personal, never public)
 cluster_files/
+
+# Multi-cluster dispatch: real pool config carries cluster host/user/account
+# specifics (local-only; conf/cluster_pool.example.yaml is the committed template).
+conf/cluster_pool.yaml
+# Generated per-cluster sub-presets (written by dispatch.py under the paper subdir).
+conf/experiment/_mc_*.yaml
+conf/experiment/**/_mc_*.yaml
