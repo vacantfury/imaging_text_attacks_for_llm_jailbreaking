@@ -1,0 +1,15 @@
+# NURC/Explorer uv profile — overlaid on conf/llm/default.yaml's `cluster` block when
+# CLUSTER_PROFILE=nurc (set by scripts/run_experiment_uv.sbatch, the uv variant).
+# NON-DESTRUCTIVE migration: the conda `AI_security` env + the original conda
+# scripts/run_experiment.sbatch stay UNTOUCHED as the crunch fallback. This profile
+# changes ONLY the env activation (conda -> uv venv); every other NURC cluster value
+# (partition gpu, `--gres=gpu:N`, offline HF, /scratch cache) inherits from default.yaml.
+# Post-crunch (item 2, [after: 2026-07-28]): make this the default + uninstall conda.
+cluster:
+  # uv-venv activation REPLACES the default `module load anaconda3/2024.06 + source activate AI_security`.
+  # Loads a CUDA module matching the uv env's torch (cu130); the torch wheel bundles its own runtime,
+  # so this is mostly for any JIT/compile. If a node's driver is too old for CUDA 13, pin an older vLLM
+  # (match the conda env) instead — the conda fallback covers those nodes meanwhile.
+  env_setup:
+    - "module load cuda/13.2.0"
+    - "source $HOME/projects/imaging_text_attacks_for_llm_jailbreaking/.venv/bin/activate"
