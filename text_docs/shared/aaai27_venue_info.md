@@ -70,6 +70,12 @@ This whole question is **moot if Paper B is withdrawn for AAAI.**
 - **Net:** the placeholder extends the AAAI decision runway from 7/21 to ~7/28 at no cost. **But 7/28 is still before the 7/30 ARR meta-reviews** — the tactic does *not* buy meta-review visibility. Choosing AAAI always means deciding pre-meta-review.
 - Verify once (owner or session): confirm AAAI's submission instructions don't treat abstract registration *itself* as a binding "submission" under the dual-submission policy — standard practice is that it does not, but worth a glance.
 
+## ARR withdrawal & resubmission mechanics (Paper B)
+- **Withdrawal is immediate** (OpenReview → select submission → trash-can icon). Dual-submission restrictions lift at once, so a same-day *withdraw → submit to AAAI* is fine — no latency.
+- **Withdrawal is permanent/irreversible:** *"any earlier reviewed versions also become ineligible for commitment"* — once you withdraw you can no longer commit those reviews to EMNLP. Only withdraw when the AAAI decision is locked; there is **no path back to EMNLP** after withdrawal.
+- **The EACL-2027 route is NOT a withdrawal — it's revise-and-resubmit.** ARR: *"If you can see ways to markedly improve your paper… consider revising it and resubmitting to a subsequent ARR review cycle"* — a distinct process needing no withdrawal, with **no penalty**; the May reviews carry forward into the August cycle. (The 48-hour rule — withdrawing >48h after the submission deadline blocks *ARR resubmission* in the next cycle — therefore does **not** bite the EACL route, since that route is a resubmit, not a withdrawal.)
+- **After the meta-review (7/30) the paper is free:** *"Your paper's review is considered complete as soon as you receive the meta-review, and you are free to commit it to a venue that accepts ARR reviews, submit it to some other venue, or resubmit it to ARR in the next cycle."* → once 7/30 passes, B can go to AAAI/EACL/EMNLP with no withdrawal needed. But the **AAAI full-paper deadline (7/28) precedes 7/30**, so for the AAAI route you'll normally still be pre-meta-review and must withdraw first — unless the meta-review is early (the reason step ④ checks on 7/26).
+
 ## Sources
 - [AAAI-27 Main Technical Track Call](https://aaai.org/conference/aaai/aaai-27/main-technical-track-call/)
 - [AAAI-27 Submission Instructions](https://aaai.org/conference/aaai/aaai-27/submission-instructions/)
