@@ -30,6 +30,14 @@ dependencies = [
 [tool.poetry]
 package-mode = false
 
+# uv equivalent of poetry's package-mode=false: this repo is a dependency
+# container run from the repo root (main.py imports src/ via cwd), not an
+# installable package. Lets `uv sync` / `uv pip install` set up the env without
+# trying to build the project. (Ignored by poetry/pip, so NURC's conda env is
+# unaffected.) Part of the staged poetry+conda -> uv migration (AICR first).
+[tool.uv]
+package = false
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
