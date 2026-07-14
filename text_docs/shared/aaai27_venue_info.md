@@ -54,9 +54,17 @@ Paper B is under review in the ARR **May 2026** cycle (feeds EMNLP 2026 + AACL 2
 | Commitment deadline (EMNLP & AACL, same) | **August 2, 2026** |
 | Acceptance notification | August 20, 2026 |
 
-## EMNLP vs AACL — when the venue is chosen
-- The final EMNLP-vs-AACL choice is locked at the ARR **commitment step (deadline Aug 2, 2026)** — *after* the July 30 meta-reviews, so you decide it with final scores in hand (the 7/30 → 8/2 window). This is a **separate decision from AAAI-vs-ARR**, and it is **moot if Paper B is withdrawn for AAAI**.
-- ⚠️ **EMNLP-2026-specific gate (verbatim):** *"authors will need to explicitly declare which conference they intend to commit to at submission time. This choice will be binding for EMNLP 2026: i.e., ARR 2026 May submissions that do not select EMNLP 2026 during submission will not be able to commit to EMNLP 2026."* → whether **both** venues are still open depends on **what Paper B selected at ARR submission in May.** Action (owner's eyes, OpenReview): confirm the submission-time venue selection. If EMNLP was selected, the EMNLP commitment is preserved; committing to AACL instead may or may not be allowed depending on AACL's own commitment rule (verify on the AACL 2026 CFP only if a switch is actually contemplated).
+## EMNLP vs AACL — the choice was LOCKED at submission (May), not deferrable to commitment
+**Key finding (2026-07-13): the EMNLP-vs-AACL choice is single-select and was made at ARR submission in May — you CANNOT switch at commitment time.** Both venues carry the identical, symmetric gate:
+- **EMNLP CFP (verbatim):** *"authors will need to explicitly declare which conference they intend to commit to at submission time. This choice will be binding for EMNLP 2026: i.e., ARR 2026 May submissions that do not select EMNLP 2026 during submission will not be able to commit to EMNLP 2026."*
+- **AACL CFP (verbatim):** *"ARR 2026 May submissions that do not select AACL 2026 during submission will not be able to commit to AACL 2026."*
+- The wording is *"which conference"* (**singular**) → exactly **one** venue was selected in May. The one you did NOT select, you **cannot** commit to now.
+
+**Consequence:** if Paper B declared **EMNLP** at submission, it **cannot switch to AACL** (and vice-versa). The commitment step (deadline **Aug 2, 2026** for both; AACL acceptance notification Sept 7 vs EMNLP Aug 20) is only where you *finalize* the commit to the venue you already selected — it is **not** a second chance to pick the venue.
+
+**Action (owner's eyes, OpenReview): confirm which venue Paper B selected at submission** — that is the venue you're locked to on the ARR path. (Only if the ARR form somehow recorded *both* would the choice re-open; the CFPs say single-select, so assume locked.)
+
+This whole question is **moot if Paper B is withdrawn for AAAI.**
 
 ## AAAI abstract-placeholder tactic (holds the AAAI option at ~zero cost)
 - **Registering the AAAI abstract by 7/21 is a free, non-binding placeholder** — title + abstract + authors only, no obligation to submit the full paper. An abstract registration is **not** a paper "under review," so it does **not** trigger the dual-submission conflict. Paper B can stay in ARR through 7/21.
