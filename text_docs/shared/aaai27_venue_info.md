@@ -1,6 +1,6 @@
 # AAAI-27 submission facts — venue reference for the Paper B / Paper C route decision
 
-*Compiled 2026-07-13 from the official AAAI-27 pages (see Sources). Shared across papers (Paper B route decision = TODO item 5; Paper C = TODO item 6). This is the reference the "withdraw Paper B from ARR → submit to AAAI?" question turns on.*
+*Compiled 2026-07-13 from the official AAAI-27 pages (see Sources). Shared across papers (Paper B/C/D submission timeline = TODO item 1; Paper C experiments = TODO item 6; Paper D = TODO item 10). This is the reference the "withdraw Paper B from ARR → submit to AAAI?" question turns on.*
 
 ## Conference
 - **AAAI-27** = 41st AAAI Conference on Artificial Intelligence, **Montréal, Canada, Feb 16–23, 2027**.
@@ -42,7 +42,7 @@ The abstract deadline (7/21) is a **hard wall with no paper attached yet** — y
 
 ## Fit read (my assessment, not a decision)
 - **Both Paper B and Paper C are robustness / red-teaming / safety-evaluation work** → strong fit for the AI Alignment track, arguably a *better* home than the main track: criterion 1 (relevance to alignment) rewards the framing, and the "open code/eval tools encouraged" note matches our released pipeline. The tighter page budget (7 vs 8) is the main format cost.
-- **The Paper B timing bind is the real issue, not fit:** sending Paper B to AAAI means **withdrawing from ARR first** (irreversible — no un-withdraw), and the **7/21 abstract wall lands BEFORE the 7/30 meta-reviews and the 8/2 EMNLP/AACL commit**. So an AAAI-B route forces the withdraw call on **raw scores + whatever discussion signal exists by ~7/20**, giving up the ARR meta-review information. Current standing decision (TODO item 5, owner leans NOT to withdraw) already reflects this; the decision is revisited at the **2026-07-19 checkpoint** (see the abstract-placeholder tactic below — the binding wall is actually 7/28, but still pre-meta-review). This doc is the fact base for that checkpoint.
+- **The Paper B timing bind is the real issue, not fit:** sending Paper B to AAAI means **withdrawing from ARR first** (irreversible — no un-withdraw), and the **7/21 abstract wall lands BEFORE the 7/30 meta-reviews and the 8/2 EMNLP/AACL commit**. So an AAAI-B route forces the withdraw call on **raw scores + whatever discussion signal exists by ~7/20**, giving up the ARR meta-review information. Current standing decision (TODO item 1 timeline, owner leans NOT to withdraw) already reflects this; the decision is revisited at the **2026-07-19 checkpoint** (see the abstract-placeholder tactic below — the binding wall is actually 7/28, but still pre-meta-review). This doc is the fact base for that checkpoint.
 
 ## ARR May 2026 cycle timeline (Paper B's current process)
 Paper B is under review in the ARR **May 2026** cycle (feeds EMNLP 2026 + AACL 2026).
@@ -60,9 +60,7 @@ Paper B is under review in the ARR **May 2026** cycle (feeds EMNLP 2026 + AACL 2
 - **AACL CFP (verbatim):** *"ARR 2026 May submissions that do not select AACL 2026 during submission will not be able to commit to AACL 2026."*
 - The wording is *"which conference"* (**singular**) → exactly **one** venue was selected in May. The one you did NOT select, you **cannot** commit to now.
 
-**Consequence:** if Paper B declared **EMNLP** at submission, it **cannot switch to AACL** (and vice-versa). The commitment step (deadline **Aug 2, 2026** for both; AACL acceptance notification Sept 7 vs EMNLP Aug 20) is only where you *finalize* the commit to the venue you already selected — it is **not** a second chance to pick the venue.
-
-**Action (owner's eyes, OpenReview): confirm which venue Paper B selected at submission** — that is the venue you're locked to on the ARR path. (Only if the ARR form somehow recorded *both* would the choice re-open; the CFPs say single-select, so assume locked.)
+**Paper B selected EMNLP at submission (owner-confirmed 2026-07-13)** → it is **locked to EMNLP** on the ARR path and **cannot switch to AACL**. The commitment step (deadline **Aug 2, 2026**; AACL acceptance notification Sept 7 vs EMNLP Aug 20) is only where you *finalize* the EMNLP commit — not a second chance to pick the venue.
 
 This whole question is **moot if Paper B is withdrawn for AAAI.**
 
