@@ -107,3 +107,6 @@ data/processed_datasets/
 
 # Round J human-label sheets (ground-truth labels, kept local)
 human_label/
+
+# Cluster ops/property docs + local key material (personal, never public)
+cluster_files/
