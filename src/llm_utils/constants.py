@@ -2,16 +2,21 @@
 Constants for LLM configurations and endpoints.
 """
 import os
+from pathlib import Path
 from typing import Final, Optional, TYPE_CHECKING
 
-# Load .env file if python-dotenv is available
 from dotenv import load_dotenv
 
 # Import LLMModel for type annotations
 if TYPE_CHECKING:
     from .llm_model import LLMModel
 
-load_dotenv()
+# API keys are read as plain environment variables (see .env.example for the list).
+# They can be exported in the shell, injected by a secret manager, or placed in a
+# gitignored repo-root `.env`. We load that `.env` here if present, with
+# override=False so anything already set in the real environment always wins.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(_REPO_ROOT / ".env", override=False)
 
 
 # API Keys (loaded from environment variables)

@@ -22,6 +22,9 @@ wheels/
 
 # Virtual environments
 .env
+# Local secret-injection launcher (a wrapper that feeds env-var values from a
+# secret manager; never holds secret values itself — keep out of this public repo):
+/run
 .venv
 env/
 venv/

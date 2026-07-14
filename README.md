@@ -42,15 +42,25 @@ A harmful prompt is encoded (set theory / formal logic / code), optionally rende
 pip install -e .
 ```
 
-Python ≥ 3.12. Dependencies in `pyproject.toml`. API keys (for judge + API targets) via `.env`:
+Python ≥ 3.12. Dependencies in `pyproject.toml`.
+
+API keys (for judge + API targets) are read as plain environment variables (see
+`.env.example`). Supply them however you prefer: export them in your shell, drop a
+gitignored `.env` at the repo root, or feed them from your own secret manager. The
+variables:
 
 ```bash
 OPENAI_API_KEY=...        # judge + OpenAI targets/encoders
 ANTHROPIC_API_KEY=...     # Anthropic targets (Message Batches API)
 GOOGLE_API_KEY=...        # Gemini targets (Batch API)
 HUGGINGFACE_TOKEN=...     # gated HF model downloads (cluster vLLM serving)
+DEEPSEEK_API_KEY=...      # DeepSeek (OpenAI-compatible; judge/eval)
+ZAI_API_KEY=...           # Z.AI / GLM (OpenAI-compatible; judge/eval)
+XAI_API_KEY=...           # xAI / Grok (OpenAI-compatible)
 OLLAMA_BASE_URL=...       # optional; only for local Ollama-served models
 ```
+
+The real `.env` is gitignored — never commit key values.
 
 Non-Latin-script encoders and image rendering require Noto fonts under `fonts/` (gitignored).
 
