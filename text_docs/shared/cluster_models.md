@@ -51,7 +51,7 @@ set (everything above except the already-present 0.5B smoke model) via
 `HUGGINGFACE_TOKEN` already accepted these licenses (used for the NURC downloads). Acceptance
 is **account-scoped**, so the same token pulls them on AICR — no per-cluster re-accept needed.
 
-### Capability arm — AICR only (owner-approved 2026-07-15; expanded to 4 models)
+### Capability arm — AICR only (owner-approved 2026-07-15; 3 models)
 Promoted into the active Round-J pool now that AICR serves 200B+ natively (8-GPU
 tensor-parallel, no NURC fp8-onto-one-GPU workaround). AICR only — NOT mirrored to NURC
 (NURC's 1-GPU/job cap can't serve them). Each is served + scored TEXT-only via the
@@ -66,15 +66,16 @@ Serve configs: `conf/llm/{qwen3_235b_a22b_instruct,deepseek_v3_2_exp,kimi_k2_ins
   (DSA) may need a vLLM-version check before it serves — serve-smoke before the bake-off.
 - `moonshotai/Kimi-K2-Instruct` — the PERMISSIVE-CEILING arm (lowest documented general-harm
   refusal of the survey); 1T/32B-active MoE, block-fp8 ≈ 1 TB, one b200 node (tight).
-  Modified-MIT. Download **PENDING** (2026-07-15). ⚠️ size at node ceiling → serve-smoke.
-- `mistralai/Mistral-Large-3-675B-Instruct-2512` — Western MINIMAL-ALIGNMENT baseline;
-  675B/41B-active MoE, fp8 ≈ 675 G, b200 node. Apache-2.0. Download **PENDING** (2026-07-15).
-  ⚠️ highest serving risk (on-the-fly fp8 may OOM at load → may need a pre-quantized fp8 ckpt).
+  Modified-MIT. **DOWNLOADED + verified** (61/61 shards, 2026-07-15; needed 128G RAM to avoid OOM).
+  ⚠️ size at node ceiling → serve-smoke.
 
-**Considered and DROPPED (2026-07-15):** `meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8` —
-its only distinct axis was native-multimodal *image*-judging, but Round-J judges score the
-response TEXT only, so multimodality is unused; the Meta family is already covered by
-Llama-3.3-70B. (Also the sole gated repo of the set — dropping it removes the one license accept.)
+**Considered and DROPPED (2026-07-15):**
+- `mistralai/Mistral-Large-3-675B-Instruct-2512` (Western minimal-alignment) — riskiest serve of
+  the arm (675B on-the-fly fp8 OOM risk) + slow download; its permissive/minimal-alignment axis is
+  already covered by Kimi-K2 + DeepSeek-V3.2. Download cancelled + partial data deleted mid-download.
+- `meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8` — its only distinct axis was native-multimodal
+  *image*-judging, but Round-J judges score the response TEXT only, so multimodality is unused; the
+  Meta family is already covered by Llama-3.3-70B. (Also the sole gated repo of the set.)
 
 Serving configs (`conf/llm/*.yaml`) still to be written AICR-aware (`num_gpus: 8` tensor-parallel,
 `partition: rtx-batch`/`b200-batch`) — the existing `command_a.yaml`/`glm_4_5_air.yaml` are

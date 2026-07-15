@@ -332,11 +332,9 @@ class LLMModel(Enum):
         # survey -> the PERMISSIVE-CEILING judge. One AICR b200 node (fp8 ~1 TB, tight).
         "moonshotai/Kimi-K2-Instruct", Provider.NU_CLUSTER,
         family="kimi", max_context_len=131_072)
-    MISTRAL_LARGE_3 = ModelSpec(
-        # 675B/41B-active MoE, Apache-2.0; Western MINIMAL-ALIGNMENT baseline. bf16 too
-        # tight for one node -> fp8 serve (serve-smoke; may need an fp8 checkpoint).
-        "mistralai/Mistral-Large-3-675B-Instruct-2512", Provider.NU_CLUSTER,
-        family="mistral", max_context_len=262_144)
+    # (Mistral-Large-3 considered + dropped 2026-07-15: riskiest serve of the arm — 675B
+    #  on-the-fly fp8 OOM risk — plus slow download; its Western minimal-alignment/permissive
+    #  axis is already covered by Kimi-K2 + DeepSeek-V3.2.)
 
     # ──────── Accessors ────────────────────────────────────────────────
     # Same API surface as before: model.model_id, model.provider, etc.
