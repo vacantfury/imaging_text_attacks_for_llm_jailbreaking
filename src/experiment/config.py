@@ -112,3 +112,45 @@ def _select(d: dict, dotted_path: str) -> Any:
             return None
         cur = cur[part]
     return cur
+
+
+def load_cluster_profile(profile: str, conf_dir: Path = CONF_DIR) -> dict[str, Any]:
+    """Merge a cluster profile's config from conf/clusters/.
+
+    Layers (base-most first): conf/clusters/_defaults.yaml `cluster` block →
+    the profile's `extends` chain → the profile's own `cluster` block. Returns
+    the merged `cluster` dict (server params + limits + dispatch keys like
+    sbatch/budget/max_submit). Per-MODEL overrides are applied by the caller
+    on top of this (they win).
+
+    A cluster file may set top-level `extends: <parent-profile>` to inherit that
+    parent's `cluster` block (e.g. nurc_uv extends nurc). Raises FileNotFoundError
+    for an unknown profile and ValueError on a circular extends chain.
+    """
+    clusters_dir = conf_dir / "clusters"
+
+    merged: dict[str, Any] = {}
+    defaults_path = clusters_dir / "_defaults.yaml"
+    if defaults_path.exists():
+        merged = dict(_load_yaml(defaults_path).get("cluster", {}))
+
+    # Walk the extends chain, collecting each file's `cluster` block.
+    chain: list[dict] = []
+    seen: set[str] = set()
+    name: Optional[str] = profile
+    while name:
+        if name in seen:
+            raise ValueError(
+                f"circular 'extends' in cluster profile chain at '{name}'")
+        seen.add(name)
+        path = clusters_dir / f"{name}.yaml"
+        if not path.exists():
+            raise FileNotFoundError(
+                f"cluster profile '{name}' not found at {path}")
+        data = _load_yaml(path)
+        chain.append(data.get("cluster", {}))
+        name = data.get("extends")
+
+    for block in reversed(chain):   # parent → child, child wins
+        merged = _deep_merge(merged, block)
+    return merged

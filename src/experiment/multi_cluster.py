@@ -43,8 +43,6 @@ from pathlib import Path
 
 import yaml
 
-from .constants import MAX_SUBMIT_JOBS_PER_USER
-
 
 class DispatchError(Exception):
     """Raised when a preset cannot be split across the configured pool."""
@@ -56,23 +54,35 @@ class DispatchError(Exception):
 class ClusterSpec:
     """One cluster in the ordered dispatch pool.
 
-    budget = max concurrent vLLM SERVERS the orchestrator may hold on this
-    cluster (its GPU-QOS concurrent-job ceiling; the orchestrator itself runs
-    on a separate CPU partition/QOS and does NOT count against it).
+    Private connection (ssh, repo) comes from the gitignored conf/cluster_pool.yaml;
+    the public server/limit fields (sbatch, budget, max_submit) are merged in from
+    the committed conf/clusters/<name>.yaml — one home per cluster (item 3).
+
+    budget = max concurrent vLLM SERVERS the orchestrator may hold on this cluster
+    (its GPU-QOS concurrent-job ceiling; the orchestrator runs on a separate CPU
+    partition/QOS and does NOT count against it).
     """
     name: str
-    ssh: str                 # ssh alias/target in ~/.ssh/config
-    repo: str                # repo path on the cluster (may start with ~)
-    sbatch: str              # sbatch wrapper, e.g. scripts/run_experiment_aicr.sbatch
-    cluster_profile: str     # CLUSTER_PROFILE the wrapper exports ("" = NURC default)
-    budget: int              # max concurrent vLLM servers on this cluster
+    ssh: str                 # ssh alias/target in ~/.ssh/config (private)
+    repo: str                # repo path on the cluster (private; may start with ~)
+    sbatch: str              # sbatch wrapper, from conf/clusters/<name>.yaml
+    budget: int              # max concurrent vLLM servers, from conf/clusters/<name>.yaml
+    max_submit: int          # QOS submit cap, from conf/clusters/<name>.yaml
 
 
-def load_pool(path: Path) -> tuple[list[ClusterSpec], dict[str, str]]:
-    """Load the ordered cluster pool + optional model pins from a YAML file.
+def load_pool(path: Path, conf_dir: Path) -> tuple[list[ClusterSpec], dict[str, str]]:
+    """Load the ordered cluster pool + optional model pins.
+
+    The pool file (path, gitignored) carries ONLY the private connection + order
+    + pins: `clusters: [{name, ssh, repo}, ...]` and `pins`. Each cluster's public
+    server/limit config (sbatch, budget, max_submit) is read from the committed
+    conf/clusters/<name>.yaml via config.load_cluster_profile.
 
     Returns (clusters, pins) where pins maps a model_id -> cluster name.
     """
+    from .config import load_cluster_profile
+    from .constants import MAX_SUBMIT_JOBS_PER_USER
+
     if not path.exists():
         raise DispatchError(
             f"cluster pool config not found: {path}\n"
@@ -86,17 +96,29 @@ def load_pool(path: Path) -> tuple[list[ClusterSpec], dict[str, str]]:
 
     clusters: list[ClusterSpec] = []
     for i, c in enumerate(raw_clusters):
-        missing = {"name", "ssh", "repo", "sbatch", "budget"} - set(c)
+        missing = {"name", "ssh", "repo"} - set(c)
         if missing:
             raise DispatchError(
                 f"cluster #{i} in {path} is missing keys: {sorted(missing)}")
+        name = str(c["name"])
+        try:
+            prof = load_cluster_profile(name, conf_dir)
+        except (FileNotFoundError, ValueError) as e:
+            raise DispatchError(
+                f"cluster '{name}' in {path} has no committed "
+                f"conf/clusters/{name}.yaml: {e}")
+        sbatch = prof.get("sbatch")
+        budget = prof.get("budget")
+        if not sbatch or budget is None:
+            raise DispatchError(
+                f"conf/clusters/{name}.yaml must define 'sbatch' and 'budget'.")
         clusters.append(ClusterSpec(
-            name=str(c["name"]),
+            name=name,
             ssh=str(c["ssh"]),
             repo=str(c["repo"]),
-            sbatch=str(c["sbatch"]),
-            cluster_profile=str(c.get("cluster_profile", "")),
-            budget=int(c["budget"]),
+            sbatch=str(sbatch),
+            budget=int(budget),
+            max_submit=int(prof.get("max_submit", MAX_SUBMIT_JOBS_PER_USER)),
         ))
 
     names = [c.name for c in clusters]
@@ -122,8 +144,9 @@ class ClusterAssignment:
 
     @property
     def num_cluster_jobs(self) -> int:
-        """orchestrator (1) + one vLLM job per distinct served model, code-capped."""
-        return min(len(self.server_models) + 1, MAX_SUBMIT_JOBS_PER_USER)
+        """orchestrator (1) + one vLLM job per distinct served model, capped at
+        this cluster's max_submit."""
+        return min(len(self.server_models) + 1, self.cluster.max_submit)
 
     @property
     def active(self) -> bool:
@@ -329,7 +352,7 @@ def dispatch(
     ssh them to each cluster and sbatch. Dry-run otherwise."""
     from .experiment import load_preset
 
-    clusters, pins = load_pool(pool_path)
+    clusters, pins = load_pool(pool_path, conf_dir)
     preset = load_preset(preset_name, conf_dir)
     task_models = compute_task_models(preset)
     plan = plan_split(task_models, clusters, pins)

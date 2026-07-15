@@ -1,0 +1,22 @@
+# AICR (Massachusetts AI Compute Resource) — uv env, RTX PRO 6000 (~96GB), multi-GPU.
+# Peer of nurc.yaml over conf/clusters/_defaults.yaml. Loaded when CLUSTER_PROFILE=aicr
+# (scripts/run_experiment_aicr.sbatch). Full facts: cluster_files/aicr_cluster_properties.md.
+cluster:
+  # --- dispatch / limits ---
+  sbatch: scripts/run_experiment_aicr.sbatch
+  budget: 7                                 # concurrent vLLM servers (gres/gpu=32/user, code cap 8 -> ~7)
+  max_submit: 8
+  max_slurm_time_limit: "24:00:00"          # AICR batch allows 24h (raises the old NURC-derived 8h clamp)
+  # --- AICR-specific server params (rest inherit _defaults.yaml) ---
+  partition: rtx-batch                      # use b200-batch for the biggest models
+  gpu_request_style: gpus                   # homogeneous partitions -> `--gpus=N`
+  excluded_nodes: []
+  time_limit: "08:00:00"                    # default vLLM server wall (raise per-model up to 24h now)
+  cuda_module: "cuda/13.1.1"
+  hf_home: /scratch/zhang_haoyu6_neu/huggingface_cache
+  hf_offline: false                         # AICR compute nodes have internet
+  # uv-venv activation REPLACES the conda default. Multi-GPU tensor-parallel (num_gpus>1)
+  # is set PER-MODEL in conf/llm/<model>.yaml; gpu_request_style: gpus makes `--gpus=N` work.
+  env_setup:
+    - "module load cuda/13.1.1"
+    - "source $HOME/projects/imaging_text_attacks_for_llm_jailbreaking/.venv/bin/activate"

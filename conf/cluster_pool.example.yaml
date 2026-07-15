@@ -1,35 +1,26 @@
-# Multi-cluster dispatch pool (TODO item 3) — TEMPLATE.
+# Multi-cluster dispatch pool (item 4) — TEMPLATE.
 #
 # Copy this to conf/cluster_pool.yaml (gitignored) and fill in your real ssh
 # aliases / usernames / repo paths. The real file is local-only because it
-# carries cluster host + account specifics (public-grade discipline — same
-# reason scripts/ and cluster_files/ are gitignored).
+# carries the private cluster CONNECTION (ssh host/user, repo path) — same
+# reason scripts/ and cluster_files/ are gitignored.
 #
-# `dispatch.py` reads this ordered list and splits one preset across the pool,
-# tried in order: fill the first cluster's server budget, overflow the rest to
-# the next. Each cluster then runs the existing single-cluster orchestrator
-# natively (submitted via its own sbatch wrapper over ssh).
+# SENSITIVITY SPLIT (item 3): this file holds ONLY the private connection + the
+# ordered list + pins. Each cluster's PUBLIC server config, QOS limits, sbatch
+# wrapper, and `budget` live in the committed conf/clusters/<name>.yaml, keyed by
+# the `name` below. `dispatch.py` merges the two.
 #
-# budget = max concurrent vLLM SERVERS the orchestrator may hold on that cluster
-#   (its GPU-QOS concurrent-job ceiling). The orchestrator itself runs on a
-#   separate CPU partition/QOS and does NOT count against this.
-#     AICR: gres/gpu=32/user, no per-job cap, code cap MAX_SUBMIT=8 -> ~7 servers.
-#     NURC/Explorer: QOS MaxJobsPU=4 concurrent GPU jobs -> ~4 servers.
+# Order = preference: fill the first cluster's server budget, overflow the rest
+# to the next. Each cluster runs its own single-cluster orchestrator natively
+# (submitted via its conf/clusters/<name>.yaml `sbatch` wrapper over ssh).
 
 clusters:
-  - name: aicr                       # preferred first — bigger GPUs (~96GB), multi-GPU
-    ssh: aicr                        # ssh alias in ~/.ssh/config
+  - name: aicr        # must match conf/clusters/aicr.yaml
+    ssh: aicr         # ssh alias in ~/.ssh/config
     repo: ~/projects/imaging_text_attacks_for_llm_jailbreaking
-    sbatch: scripts/run_experiment_aicr.sbatch
-    cluster_profile: aicr            # CLUSTER_PROFILE the wrapper exports
-    budget: 7
-
-  - name: nurc                       # overflow — Northeastern Explorer
+  - name: nurc        # conda; use name: nurc_uv (conf/clusters/nurc_uv.yaml) for the uv env
     ssh: <neu-id>@login.explorer.northeastern.edu
     repo: ~/projects/imaging_text_attacks_for_llm_jailbreaking
-    sbatch: scripts/run_experiment.sbatch
-    cluster_profile: ""              # empty => NURC defaults (no overlay)
-    budget: 4
 
 # Optional: pin a model (by model_id) onto a specific cluster, overriding the
 # automatic AICR-first packing. Every task needing that model is forced onto the

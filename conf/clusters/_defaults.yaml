@@ -1,0 +1,34 @@
+# Cluster-AGNOSTIC vLLM server defaults — shared by every cluster in conf/clusters/.
+# Per-cluster files (nurc.yaml, aicr.yaml, …) overlay only what DIFFERS; per-model
+# conf/llm/<model>.yaml::cluster blocks overlay LAST (they win). Merged by
+# config.load_cluster_profile() and Experiment._load_cluster_config().
+# (Item 3, 2026-07-14: replaces the old conf/llm/default.yaml `cluster:` block —
+# NURC and AICR are now peers over this, no more NURC-as-base asymmetry.)
+cluster:
+  # request / sizing (per-model overrides common: num_gpus, mem_gb, quantization, …)
+  num_gpus: 1
+  num_instances: 1
+  cpus_per_task: 4
+  mem_gb: 32
+  port: 8000
+  gpu_memory_utilization: 0.9
+  max_model_len: 20480   # covers ~17.5k code_attack ir_plain overflows; residual
+                         # overflows are excluded via is_correctly_processed.
+  dtype: null
+  chat_template: null
+  trust_remote_code: false
+  gpu_types_excluded: []
+  # GPU request directive: "gres" -> `--gres=gpu:N` (NURC); "gpus" -> `--gpus=N`
+  # (AICR, homogeneous partitions). Per-cluster overrides.
+  gpu_request_style: gres
+  # HF offline exports in the generated vLLM sbatch. NURC keeps the historical
+  # true (unchanged); AICR sets false (compute-node internet). Per-cluster overrides.
+  hf_offline: true
+  # timeouts / polling (cluster-agnostic)
+  server_start_timeout: 3600
+  endpoint_wait_timeout: 30
+  cluster_server_endpoint_timeout: 10000
+  monitor_poll_interval: 10
+  health_check_timeout: 5
+  slurm_cmd_timeout: 15
+  health_recheck_interval: 60

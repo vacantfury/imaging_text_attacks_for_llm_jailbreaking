@@ -1,0 +1,16 @@
+# NURC / Explorer — UV env variant (same physical cluster as nurc.yaml, different
+# Python env). NON-DESTRUCTIVE migration: conda (nurc.yaml + run_experiment.sbatch)
+# stays the crunch fallback. `extends: nurc` inherits every NURC value; this overrides
+# ONLY the env activation. Loaded when CLUSTER_PROFILE=nurc_uv (scripts/run_experiment_uv.sbatch).
+# Post-crunch (item 2, [after: 2026-07-28]): once conda is uninstalled, fold this into
+# nurc.yaml and delete this file.
+extends: nurc
+cluster:
+  sbatch: scripts/run_experiment_uv.sbatch
+  # uv-venv activation REPLACES the inherited conda `module load anaconda3 + source activate`.
+  # cuda/12.8.0 matches the uv env's torch cu128 (runs on NURC's V100 driver 545 via CUDA
+  # minor-version forward-compat; cu130/CUDA-13 does NOT). Env pinned: torch 2.10.0+cu128, vLLM 0.19.1.
+  cuda_module: "cuda/12.8.0"
+  env_setup:
+    - "module load cuda/12.8.0"
+    - "source /scratch/$USER/venvs/imaging_uv/bin/activate"

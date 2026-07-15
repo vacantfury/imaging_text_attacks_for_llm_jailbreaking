@@ -1,0 +1,18 @@
+# NURC / Northeastern Explorer — CONDA env (the current primary). Peer of aicr.yaml
+# over conf/clusters/_defaults.yaml. env_setup UNSET -> the generated vLLM sbatch uses
+# the default `module load anaconda3 <cuda_module> ; source activate <conda_env>` pair.
+# The uv variant is conf/clusters/nurc_uv.yaml (extends this). Loaded when
+# CLUSTER_PROFILE=nurc (scripts/run_experiment.sbatch) or CLUSTER_PROFILE unset.
+cluster:
+  # --- dispatch / limits (read by multi_cluster.load_pool + the job-budget caps) ---
+  sbatch: scripts/run_experiment.sbatch     # orchestrator wrapper for this cluster
+  budget: 4                                 # max concurrent vLLM servers (QOS MaxJobsPU=4)
+  max_submit: 8                             # QOS MaxSubmitPU (running + pending)
+  max_slurm_time_limit: "08:00:00"          # gpu-partition QOS wall cap (clamps server time_limit)
+  # --- NURC-specific server params (rest inherit _defaults.yaml) ---
+  partition: gpu
+  excluded_nodes: [d1027]
+  time_limit: "08:00:00"                    # default vLLM server wall
+  conda_env: AI_security
+  cuda_module: "cuda/12.1.1"
+  hf_home: /scratch/zhang.haoyu6/huggingface_cache

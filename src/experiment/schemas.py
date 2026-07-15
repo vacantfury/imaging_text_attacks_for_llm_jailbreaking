@@ -480,19 +480,24 @@ class ClusterConfig(BaseModel):
     monitor_poll_interval: int
     health_check_timeout: int
     slurm_cmd_timeout: int
-    conda_env: str
+    conda_env: Optional[str] = None   # None when env_setup replaces conda (AICR / nurc_uv)
     cuda_module: str
     hf_home: str
     health_recheck_interval: int = 60
-    # --- multi-cluster support (NURC default; AICR overrides via conf/llm/cluster_aicr.yaml) ---
+    # --- per-cluster config (conf/clusters/<name>.yaml; item 3, 2026-07-14) ---
     # GPU request directive: "gres" -> `--gres=gpu:N` (NURC), "gpus" -> `--gpus=N` (AICR, homogeneous partitions).
     gpu_request_style: str = "gres"
     # Shell lines that set up the Python env in the sbatch, REPLACING the default
-    # `module load anaconda3 <cuda> ; source activate <conda_env>` pair. AICR uses a uv venv:
-    # ["module load cuda/13.1.1", "source $HOME/projects/.../.venv/bin/activate"]. None -> NURC default.
+    # `module load anaconda3 <cuda> ; source activate <conda_env>` pair. AICR/nurc_uv use a uv venv.
+    # None -> the conda default.
     env_setup: Optional[list[str]] = None
-    # NURC compute nodes have no internet (offline HF). AICR compute-node internet TBD -> set per cluster.
+    # NURC compute nodes: offline HF (historical); AICR sets false (compute-node internet).
     hf_offline: bool = True
+    # Dispatch + QOS limits (read by multi_cluster.load_pool and the job-budget caps).
+    sbatch: Optional[str] = None                      # orchestrator wrapper for this cluster
+    budget: Optional[int] = None                      # max concurrent vLLM servers
+    max_submit: int = 8                               # QOS MaxSubmitPU (running + pending)
+    max_slurm_time_limit: Optional[str] = None        # gpu-partition QOS wall cap (clamps time_limit)
 
 
 class LLMConfig(BaseModel):

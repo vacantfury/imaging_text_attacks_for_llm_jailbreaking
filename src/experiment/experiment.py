@@ -369,33 +369,29 @@ class Experiment:
         """
         Load cluster server config for a model.
 
-        Layers: conf/llm/default.yaml (NURC defaults) → the model-specific
-        override's cluster block → an optional CLUSTER_PROFILE overlay.
+        Layers: conf/clusters/_defaults.yaml → the CLUSTER_PROFILE's file
+        (+ its `extends` chain) → the model-specific conf/llm/<model>.yaml
+        `cluster` block (applied LAST — per-model wins, so e.g. a model's
+        `time_limit: 01:00:00` backfill override survives).
 
         CLUSTER_PROFILE (env var, set by the per-cluster orchestrator sbatch —
-        e.g. `CLUSTER_PROFILE=aicr` from run_experiment_aicr.sbatch) overlays
-        `conf/llm/cluster_<profile>.yaml`'s `cluster` block LAST, so the running
-        cluster's partition / GPU-request style / env-setup / hf_home win over
-        the NURC defaults. Unset → NURC behavior, unchanged.
+        e.g. `CLUSTER_PROFILE=aicr` from run_experiment_aicr.sbatch) selects
+        conf/clusters/<profile>.yaml. Unset → `nurc` (the default cluster).
+        NURC and AICR are peers over _defaults.yaml; a typo'd profile fails loud.
         """
         import os
-        from .config import load_conf, _load_yaml, _deep_merge, CONF_DIR
+        from .config import load_conf, load_cluster_profile, _deep_merge, CONF_DIR
 
-        cfg = load_conf(
+        profile = os.environ.get("CLUSTER_PROFILE", "").strip() or "nurc"
+        base = load_cluster_profile(profile, CONF_DIR)
+
+        # Per-model cluster overrides (conf/llm/<model>.yaml::cluster). default.yaml
+        # no longer carries a `cluster:` block, so this returns just the model's block.
+        per_model = load_conf(
             "llm", section="cluster",
             match_field="model.model", match_value=model.model_id)
 
-        profile = os.environ.get("CLUSTER_PROFILE", "").strip()
-        if profile:
-            overlay_path = CONF_DIR / "llm" / f"cluster_{profile}.yaml"
-            if overlay_path.exists():
-                overlay = _load_yaml(overlay_path).get("cluster", {})
-                cfg = _deep_merge(cfg, overlay)
-            else:
-                logger.warning(
-                    f"CLUSTER_PROFILE={profile!r} but {overlay_path} not found; "
-                    f"using NURC defaults.")
-        return cfg
+        return _deep_merge(base, per_model)
 
     def _count_existing_slurm_jobs(self) -> int:
         """Count this user's existing SLURM jobs that count against the QOS budget.
@@ -494,16 +490,27 @@ class Experiment:
         cluster_models_sorted = sorted(cluster_models, key=lambda m: m.model_id)
         model_configs = {m: self._load_cluster_config(m) for m in cluster_models_sorted}
 
+        # Per-cluster QOS submit cap (conf/clusters/<profile>.yaml::max_submit);
+        # MAX_SUBMIT_JOBS_PER_USER stays as the fail-safe fallback.
+        import os
+        from .config import load_cluster_profile
+        profile = os.environ.get("CLUSTER_PROFILE", "").strip() or "nurc"
+        try:
+            cluster_max_submit = int(load_cluster_profile(profile, self.conf_dir)
+                                     .get("max_submit", MAX_SUBMIT_JOBS_PER_USER))
+        except Exception:
+            cluster_max_submit = MAX_SUBMIT_JOBS_PER_USER
+
         # Pre-flight: account for any existing user SLURM jobs against QOS budget.
         existing = self._count_existing_slurm_jobs()
         if existing:
             effective_budget = min(
-                self.num_cluster_jobs, MAX_SUBMIT_JOBS_PER_USER - existing
+                self.num_cluster_jobs, cluster_max_submit - existing
             )
             logger.warning(
                 f"Pre-flight: user has {existing} existing SLURM job(s). "
                 f"Effective budget = min(num_cluster_jobs={self.num_cluster_jobs}, "
-                f"MAX={MAX_SUBMIT_JOBS_PER_USER} - existing={existing}) "
+                f"MAX={cluster_max_submit} - existing={existing}) "
                 f"= {effective_budget}")
         else:
             effective_budget = self.num_cluster_jobs

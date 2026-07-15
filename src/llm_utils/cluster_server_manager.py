@@ -515,12 +515,15 @@ class ClusterModelServerManager:
             if all_excluded else ""
         )
 
+        # Per-cluster wall cap (conf/clusters/<profile>.yaml::max_slurm_time_limit);
+        # MAX_SLURM_TIME_LIMIT stays as the fail-safe fallback (NURC's 8h).
+        max_wall = config.get("max_slurm_time_limit") or MAX_SLURM_TIME_LIMIT
         time_limit = config["time_limit"]
-        if time_limit and time_limit > MAX_SLURM_TIME_LIMIT:
+        if time_limit and time_limit > max_wall:
             logger.warning(
                 f"time_limit '{time_limit}' exceeds cluster max "
-                f"'{MAX_SLURM_TIME_LIMIT}', clamping")
-            time_limit = MAX_SLURM_TIME_LIMIT
+                f"'{max_wall}', clamping")
+            time_limit = max_wall
 
         vllm_args = [
             f"--model {model.model_id}",
