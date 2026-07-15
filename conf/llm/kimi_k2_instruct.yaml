@@ -1,0 +1,17 @@
+# Kimi-K2-Instruct — Round-J CAPABILITY-ARM rubric judge (the PERMISSIVE-CEILING arm:
+# lowest documented general-harm refusal of the survey). HarmBench rubric, chat,
+# TEXT-only. AICR-ONLY, 8-GPU tensor-parallel. 1T/32B-active MoE, block-fp8 ≈ 1 TB
+# -> b200 node (1.44 TB), tight. Modified-MIT license (not gated).
+# ⚠️ Size is at the node ceiling -> serve-smoke REQUIRED (may need lower gpu_mem_util).
+model:
+  model: moonshotai/Kimi-K2-Instruct
+  max_tokens: 512
+
+cluster:
+  partition: b200-batch
+  num_gpus: 8
+  time_limit: "04:00:00"
+  mem_gb: 512
+  max_model_len: 16384
+  gpu_memory_utilization: 0.92
+  trust_remote_code: true

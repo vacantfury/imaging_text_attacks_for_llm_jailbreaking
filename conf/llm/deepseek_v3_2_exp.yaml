@@ -1,0 +1,17 @@
+# DeepSeek-V3.2-Exp — Round-J CAPABILITY-ARM rubric judge (capability + permissive +
+# published ASR-judge precedent 2603.17368). HarmBench rubric, chat, TEXT-only.
+# AICR-ONLY, 8-GPU tensor-parallel. 671B MoE, NATIVE fp8 ≈ 671 GB -> b200 node
+# (180 GB × 8 ≈ 1.44 TB) for KV headroom. Open license (not gated).
+# ⚠️ Sparse attention (DSA) may need a vLLM-version bump -> serve-smoke REQUIRED.
+model:
+  model: deepseek-ai/DeepSeek-V3.2-Exp
+  max_tokens: 512
+
+cluster:
+  partition: b200-batch         # 671 GB fp8 + KV -> the roomier b200 node
+  num_gpus: 8
+  time_limit: "04:00:00"
+  mem_gb: 512
+  max_model_len: 16384
+  gpu_memory_utilization: 0.90
+  trust_remote_code: true       # DeepSeek custom modeling / DSA kernels

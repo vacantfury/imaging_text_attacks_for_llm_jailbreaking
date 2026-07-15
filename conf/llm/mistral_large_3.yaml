@@ -1,0 +1,19 @@
+# Mistral-Large-3-675B-Instruct-2512 — Round-J CAPABILITY-ARM rubric judge (Western
+# MINIMAL-ALIGNMENT baseline; Apache-2.0, lighter-touch safety tuning). HarmBench
+# rubric, chat, TEXT-only. AICR-ONLY, 8-GPU tensor-parallel. 675B/41B-active MoE;
+# bf16 ≈ 1.35 TB is too tight for one node -> serve fp8 (~675 GB) on b200.
+# Apache-2.0 (not gated).
+# ⚠️ On-the-fly fp8 may OOM at load for a 675B model -> serve-smoke REQUIRED;
+#    if it OOMs, switch to a pre-quantized fp8 checkpoint (highest serving risk of the arm).
+model:
+  model: mistralai/Mistral-Large-3-675B-Instruct-2512
+  max_tokens: 512
+
+cluster:
+  partition: b200-batch
+  num_gpus: 8
+  time_limit: "04:00:00"
+  mem_gb: 512
+  max_model_len: 16384
+  gpu_memory_utilization: 0.90
+  quantization: fp8             # bf16 too tight for one node; smoke may force an fp8 checkpoint

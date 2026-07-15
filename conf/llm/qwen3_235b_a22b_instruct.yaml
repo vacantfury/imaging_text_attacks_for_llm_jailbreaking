@@ -1,0 +1,18 @@
+# Qwen3-235B-A22B-Instruct-2507 — Round-J CAPABILITY-ARM rubric judge (capability +
+# strongest open Chinese, for the classical-Chinese arm). Applies the HarmBench
+# rubric in chat mode (scored TEXT-only, like every Round-J judge). AICR-ONLY:
+# 8-GPU tensor-parallel (NURC's 1-GPU/job cap can't host it).
+# 235B/22B-active MoE, bf16 ≈ 470 GB -> fits one 8×RTX-PRO-6000 node (768 GB).
+# Open license (not gated). Serve-smoke before the bake-off.
+model:
+  model: Qwen/Qwen3-235B-A22B-Instruct-2507
+  max_tokens: 512
+
+cluster:
+  partition: rtx-batch          # 470 GB bf16 fits the 768 GB rtx node
+  num_gpus: 8                    # -> --tensor-parallel-size 8
+  time_limit: "04:00:00"
+  mem_gb: 256
+  max_model_len: 16384          # judge needs modest context (response truncated to 8k chars)
+  gpu_memory_utilization: 0.90
+  dtype: bfloat16

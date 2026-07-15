@@ -313,6 +313,31 @@ class LLMModel(Enum):
         "CohereLabs/c4ai-command-a-03-2025", Provider.NU_CLUSTER,
         family="cohere", max_context_len=131_072)
 
+    # Round-J CAPABILITY-ARM RUBRIC judges (added 2026-07-15) — the capability ceiling
+    # of the open judge pool. Served on AICR via 8-GPU tensor-parallel ONLY (NURC's
+    # 1-GPU/job cap can't host them). Same HarmBench-rubric chat-judge path as the 70B
+    # arm above; capability drives recall of buried encoded harm. Each needs an AICR
+    # serve-smoke before the bake-off (conf/llm/*.yaml + experiments_plan.md Round J).
+    QWEN3_235B_A22B_INSTRUCT = ModelSpec(
+        # 235B/22B-active MoE, bf16; strongest open Chinese -> the classical-Chinese arm.
+        "Qwen/Qwen3-235B-A22B-Instruct-2507", Provider.NU_CLUSTER,
+        family="qwen", max_context_len=262_144)
+    DEEPSEEK_V3_2_EXP = ModelSpec(
+        # 671B MoE, NATIVE fp8; permissive + published ASR-judge precedent (2603.17368).
+        # Sparse attention (DSA) -> vLLM serve-smoke required before the bake-off.
+        "deepseek-ai/DeepSeek-V3.2-Exp", Provider.NU_CLUSTER,
+        family="deepseek", max_context_len=163_840)
+    KIMI_K2_INSTRUCT = ModelSpec(
+        # 1T/32B-active MoE, block-fp8; lowest documented general-harm refusal of the
+        # survey -> the PERMISSIVE-CEILING judge. One AICR b200 node (fp8 ~1 TB, tight).
+        "moonshotai/Kimi-K2-Instruct", Provider.NU_CLUSTER,
+        family="kimi", max_context_len=131_072)
+    MISTRAL_LARGE_3 = ModelSpec(
+        # 675B/41B-active MoE, Apache-2.0; Western MINIMAL-ALIGNMENT baseline. bf16 too
+        # tight for one node -> fp8 serve (serve-smoke; may need an fp8 checkpoint).
+        "mistralai/Mistral-Large-3-675B-Instruct-2512", Provider.NU_CLUSTER,
+        family="mistral", max_context_len=262_144)
+
     # ──────── Accessors ────────────────────────────────────────────────
     # Same API surface as before: model.model_id, model.provider, etc.
     # Just reading from the dataclass instead of a positional tuple.

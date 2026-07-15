@@ -51,15 +51,30 @@ set (everything above except the already-present 0.5B smoke model) via
 `HUGGINGFACE_TOKEN` already accepted these licenses (used for the NURC downloads). Acceptance
 is **account-scoped**, so the same token pulls them on AICR — no per-cluster re-accept needed.
 
-### Capability arm — AICR only (owner-approved 2026-07-15, downloading)
-The former "Phase 2 capability-ceiling" pair, promoted into the active Round-J pool now that
-AICR serves 200B+ natively (8-GPU tensor-parallel, no NURC fp8-onto-one-GPU workaround). AICR
-only — NOT mirrored to NURC (NURC's 1-GPU/job cap can't serve them):
+### Capability arm — AICR only (owner-approved 2026-07-15; expanded to 4 models)
+Promoted into the active Round-J pool now that AICR serves 200B+ natively (8-GPU
+tensor-parallel, no NURC fp8-onto-one-GPU workaround). AICR only — NOT mirrored to NURC
+(NURC's 1-GPU/job cap can't serve them). Each is served + scored TEXT-only via the
+HarmBench rubric (the judge never sees the attack image). **All four are OPEN-license —
+none is gated, so no HF access grant is needed** (flag on sight if a download 401s).
+Serve configs: `conf/llm/{qwen3_235b_a22b_instruct,deepseek_v3_2_exp,kimi_k2_instruct,mistral_large_3}.yaml`.
 - `Qwen/Qwen3-235B-A22B-Instruct-2507` — capability + strongest Chinese (classical-Chinese arm);
-  MoE 235B/22B-active, bf16 ≈ 470 G, fits one 8×RTX PRO 6000 node. Job **157576** (2026-07-15).
+  MoE 235B/22B-active, bf16 ≈ 470 G, fits one 8×RTX PRO 6000 node (rtx-batch). Apache-2.0.
+  Job **157576** (2026-07-15).
 - `deepseek-ai/DeepSeek-V3.2-Exp` — capability + permissive + published ASR-judge precedent;
-  native FP8 ≈ 671 G. Job **157577** (2026-07-15). ⚠️ V3.2's sparse attention (DSA) may need a
-  vLLM-version check before it serves — serve-smoke before the bake-off.
+  native FP8 ≈ 671 G, b200 node. MIT. Job **157577** (2026-07-15). ⚠️ V3.2's sparse attention
+  (DSA) may need a vLLM-version check before it serves — serve-smoke before the bake-off.
+- `moonshotai/Kimi-K2-Instruct` — the PERMISSIVE-CEILING arm (lowest documented general-harm
+  refusal of the survey); 1T/32B-active MoE, block-fp8 ≈ 1 TB, one b200 node (tight).
+  Modified-MIT. Download **PENDING** (2026-07-15). ⚠️ size at node ceiling → serve-smoke.
+- `mistralai/Mistral-Large-3-675B-Instruct-2512` — Western MINIMAL-ALIGNMENT baseline;
+  675B/41B-active MoE, fp8 ≈ 675 G, b200 node. Apache-2.0. Download **PENDING** (2026-07-15).
+  ⚠️ highest serving risk (on-the-fly fp8 may OOM at load → may need a pre-quantized fp8 ckpt).
+
+**Considered and DROPPED (2026-07-15):** `meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8` —
+its only distinct axis was native-multimodal *image*-judging, but Round-J judges score the
+response TEXT only, so multimodality is unused; the Meta family is already covered by
+Llama-3.3-70B. (Also the sole gated repo of the set — dropping it removes the one license accept.)
 
 Serving configs (`conf/llm/*.yaml`) still to be written AICR-aware (`num_gpus: 8` tensor-parallel,
 `partition: rtx-batch`/`b200-batch`) — the existing `command_a.yaml`/`glm_4_5_air.yaml` are
@@ -67,8 +82,9 @@ NURC-only (fp8-on-1-GPU + `cascadelake`). API judges (gpt-5-nano/-mini · gemini
 deepseek-v4-flash · glm-4.7-flashx) need no download.
 
 ### Still deferred (neither cluster)
-`Kimi-K2.x` (1T) / `DeepSeek-V4-Pro` (1.6T) / `GLM-5.x` (~750B) — API-only or >1 node; pull only
-if the calibration curve demands an even higher point.
+`DeepSeek-V4-Pro` (1.6T) / `GLM-5.x` (~750B) — >1 node or API-only; pull only if the calibration
+curve demands an even higher point. (Kimi-K2 1T is NO LONGER deferred — it fits one b200 node at
+fp8 ≈ 1 TB < 1.44 TB, so it was promoted into the active capability arm above.)
 
 ## NURC-only dead / legacy (do NOT mirror — cleanup candidates)
 Present on NURC scratch but unused; safe to delete to free disk, never replicated to AICR:
