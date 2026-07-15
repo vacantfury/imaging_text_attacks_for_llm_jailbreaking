@@ -1,37 +1,80 @@
-# NURC cluster — downloaded open-weight models (inventory)
+# Cluster model inventory (per-cluster open-weight downloads)
 
-**Cache:** `/scratch/zhang.haoyu6/huggingface_cache/hub` (= `cluster.hf_home` in `conf/llm/default.yaml`). Download via `sbatch temporary_scripts/download_hf_model.sbatch <hf_id ...>` (compute node — never login node); workflow in `nurc_cluster_properties.md`. **Living inventory — update on every download/removal.** Snapshot **2026-07-12**: 18 models, **572 GB** used; `/scratch` ~323 TB free (plenty of headroom).
+Two SLURM clusters serve this project's open-weight models from a scratch HF cache.
+**Living inventory — update on every download/removal, per cluster.**
 
-## Target VLMs (Paper C)
-- `Qwen/Qwen2.5-VL-7B-Instruct` — workhorse
-- `OpenGVLab/InternVL3-8B`
-- `mistralai/Pixtral-12B-2409`
-- `meta-llama/Llama-3.2-11B-Vision-Instruct` — ⚠️ serve BLOCKED (Mllama vLLM bug); text-restricted
-- `Qwen/Qwen3-VL-8B-Instruct` — recency control
+| Cluster | HF cache (`hf_home`/hub)                          | Download script                              | Env   | Compute-node net |
+|---------|--------------------------------------------------|----------------------------------------------|-------|------------------|
+| NURC    | `/scratch/zhang.haoyu6/huggingface_cache/hub`    | `temporary_scripts/download_hf_model.sbatch` | conda | offline (pre-download) |
+| AICR    | `/scratch/zhang_haoyu6_neu/huggingface_cache/hub`| `scripts/download_hf_model_aicr.sbatch`      | uv    | online (`hf` pulls live) |
 
-## Judges / guards (safety-specialized)
-- `cais/HarmBench-Llama-2-13b-cls` — ASR judge / bake-off FLOOR
-- `allenai/wildguard` — guard
-- `meta-llama/Llama-Guard-3-8B` · `meta-llama/Llama-Guard-4-12B` — guards (LG4 multimodal)
-- `yueliu1999/GuardReasoner-VL-7B` — reasoning guard (Round-3 amplifier + Round-J candidate)
+Download runs on a **compute node, never the login node** — NURC partition `short`, AICR
+partition `cpu` (24h wall). Both scripts take one or more HF ids and route the cache to the
+path above, which MUST match `cluster.hf_home` in `conf/clusters/<cluster>.yaml`.
 
-## General LLMs (judge / aux)
-- `meta-llama/Llama-3.3-70B-Instruct` — ✅ **already here** — JailbreakBench's validated general judge (Round-J candidate, no download needed)
-- `meta-llama/Llama-3.1-8B-Instruct` · `meta-llama/Meta-Llama-3-8B-Instruct`
+Disk headroom is ample on both: NURC `/scratch` had ~323 TB free; AICR `/scratch` = 10 TiB
+quota on a 2.6 PB filesystem (2026-07-15).
 
-## Legacy / dead (cleanup candidates — free disk if needed)
-- `lmsys/vicuna-13b-v1.5` · `lmsys/vicuna-7b-v1.5` · `openlm-research/open_llama_3b_v2` — old base models, unused
-- `renjiepi/mllm_protector_detoxifier` · `renjiepi/protector_detector_3b_lora` — **mllm_protector defense was REMOVED from the repo (2026-06-16) → dead weights, safe to delete**
+## Live set — presence per cluster
+Snapshot **2026-07-15** (`ls` of each scratch hub). ✓ = present, — = absent.
 
-## Round-J judge candidates — download status (pool decided 2026-07-12)
-**Downloaded ✓ (2026-07-12, jobs COMPLETED):**
-- job `8310494` (small guards, 1-GPU each): `Qwen/Qwen3Guard-Gen-8B` (16G, zh arm) · `thu-coai/ShieldLM-7B-internlm2` (15G, zh/en) · `OpenSafetyLab/MD-Judge-v0.1` (14G, classifier) · `Rakancorle1/ThinkGuard` (15G, reasoning guard)
-- job `8310495`: `NousResearch/Hermes-4-70B` (132G, steerable, 2×A100/1×H200) · `zai-org/GLM-4.5-Air` (206G, capability + zh, ~1×H200)
-- job `8310503`: `CohereLabs/c4ai-command-a-03-2025` (207G) — Command-A (steerable general, CONTEXTUAL/STRICT dial; 111B dense → 4×A100 / 2×H200). Owner accepted the `gated:auto` license.
+| Model | Role | NURC | AICR |
+|---|---|:--:|:--:|
+| Qwen/Qwen2.5-VL-7B-Instruct | VLM workhorse (Paper C) | ✓ | — |
+| OpenGVLab/InternVL3-8B | VLM | ✓ | — |
+| mistralai/Pixtral-12B-2409 | VLM | ✓ | — |
+| meta-llama/Llama-3.2-11B-Vision-Instruct | VLM (serve-blocked, text-restricted) | ✓ | — |
+| Qwen/Qwen3-VL-8B-Instruct | VLM recency control | ✓ | — |
+| cais/HarmBench-Llama-2-13b-cls | ASR judge / bake-off floor | ✓ | — |
+| allenai/wildguard | guard | ✓ | — |
+| meta-llama/Llama-Guard-3-8B | guard | ✓ | — |
+| meta-llama/Llama-Guard-4-12B | guard (multimodal) | ✓ | — |
+| yueliu1999/GuardReasoner-VL-7B | reasoning guard | ✓ | — |
+| Qwen/Qwen3Guard-Gen-8B | guard (zh arm) | ✓ | — |
+| thu-coai/ShieldLM-7B-internlm2 | guard (zh/en) | ✓ | — |
+| OpenSafetyLab/MD-Judge-v0.1 | judge classifier | ✓ | — |
+| Rakancorle1/ThinkGuard | reasoning guard | ✓ | — |
+| meta-llama/Llama-3.3-70B-Instruct | general judge (JBB-validated) | ✓ | — |
+| meta-llama/Llama-3.1-8B-Instruct | general | ✓ | — |
+| meta-llama/Meta-Llama-3-8B-Instruct | general | ✓ | — |
+| NousResearch/Hermes-4-70B | steerable judge | ✓ | — |
+| zai-org/GLM-4.5-Air | capability + zh judge | ✓ | — |
+| CohereLabs/c4ai-command-a-03-2025 | steerable judge (gated:auto) | ✓ | — |
+| Qwen/Qwen2.5-0.5B-Instruct | smoke-test model | ✓ | ✓ |
 
-**Deferred capability-ceiling (Phase 2 — download only if the calibration curve needs a higher point):**
-- `Qwen/Qwen3-235B-A22B` or `deepseek-ai/DeepSeek-V3.2-Exp` (671B — full 8×H200 node to serve).
+**AICR: 20-model live set download PENDING** (this session, 2026-07-15) — mirror NURC's live
+set (everything above except the already-present 0.5B smoke model) via
+`scripts/download_hf_model_aicr.sbatch`. Flip each row's AICR cell to ✓ as the jobs complete.
 
-_All candidates are `gated: false` on HF except Command-A. The API judges (gpt-5-nano/-mini · gemini-2.5-flash-lite / 3.1-flash-lite · deepseek-v4-flash · glm-4.7-flashx) need no download — API-only._
+### Gated repos
+`meta-llama/*` and `CohereLabs/c4ai-command-a-03-2025` are gated; the HF account behind
+`HUGGINGFACE_TOKEN` already accepted these licenses (used for the NURC downloads). Acceptance
+is **account-scoped**, so the same token pulls them on AICR — no per-cluster re-accept needed.
 
-_(Candidate rationale + full landscape: `judge_candidates.md`.)_
+### Capability arm — AICR only (owner-approved 2026-07-15, downloading)
+The former "Phase 2 capability-ceiling" pair, promoted into the active Round-J pool now that
+AICR serves 200B+ natively (8-GPU tensor-parallel, no NURC fp8-onto-one-GPU workaround). AICR
+only — NOT mirrored to NURC (NURC's 1-GPU/job cap can't serve them):
+- `Qwen/Qwen3-235B-A22B-Instruct-2507` — capability + strongest Chinese (classical-Chinese arm);
+  MoE 235B/22B-active, bf16 ≈ 470 G, fits one 8×RTX PRO 6000 node. Job **157576** (2026-07-15).
+- `deepseek-ai/DeepSeek-V3.2-Exp` — capability + permissive + published ASR-judge precedent;
+  native FP8 ≈ 671 G. Job **157577** (2026-07-15). ⚠️ V3.2's sparse attention (DSA) may need a
+  vLLM-version check before it serves — serve-smoke before the bake-off.
+
+Serving configs (`conf/llm/*.yaml`) still to be written AICR-aware (`num_gpus: 8` tensor-parallel,
+`partition: rtx-batch`/`b200-batch`) — the existing `command_a.yaml`/`glm_4_5_air.yaml` are
+NURC-only (fp8-on-1-GPU + `cascadelake`). API judges (gpt-5-nano/-mini · gemini-flash-lite ·
+deepseek-v4-flash · glm-4.7-flashx) need no download.
+
+### Still deferred (neither cluster)
+`Kimi-K2.x` (1T) / `DeepSeek-V4-Pro` (1.6T) / `GLM-5.x` (~750B) — API-only or >1 node; pull only
+if the calibration curve demands an even higher point.
+
+## NURC-only dead / legacy (do NOT mirror — cleanup candidates)
+Present on NURC scratch but unused; safe to delete to free disk, never replicated to AICR:
+- `lmsys/vicuna-13b-v1.5` · `lmsys/vicuna-7b-v1.5` · `openlm-research/open_llama_3b_v2` — old base models
+- `renjiepi/mllm_protector_detoxifier` · `renjiepi/protector_detector_3b_lora` — mllm_protector defense
+  REMOVED from the repo (2026-06-16) → dead weights
+
+_(Candidate rationale + full judge landscape: `judge_candidates.md`. Cluster access + serving
+runbooks: `cluster_files/nurc_cluster_properties.md`, `cluster_files/aicr_cluster_properties.md`.)_
