@@ -117,3 +117,7 @@ conf/cluster_pool.yaml
 # Generated per-cluster sub-presets (written by dispatch.py under the paper subdir).
 conf/experiment/_mc_*.yaml
 conf/experiment/**/_mc_*.yaml
+
+# Auto-research strategy docs — personal strategy content (charter, blueprint), local-only like TODO.md
+text_docs/shared/auto_research_pattern.md
+text_docs/shared/auto_research_charter.md
