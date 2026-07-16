@@ -65,3 +65,26 @@ Prep DONE this session: dataset built, judges wired to `gpt-5-mini` in the prese
 - **Full-N on-the-fly loop** — dataset expansion caps at pilot N (~hundreds); BoN's full N=10k needs a loop, not materialized rows.
 - **Spell-correction** — canonicalize more of the scramble/ASCII tail (needs a dep; mature library per house rule).
 - Promote this proposal to the full paper structure once the pilot lands.
+
+## 8. Pilot results & status (2026-07-16) — PARKED
+
+**Qwen pilot** (target `qwen2_5_vl_7b`, judge `gpt-5-mini`, N=200, HarmBench; ran on NURC job `8390523`): VERIFIED, and it's *negative for the defense / positive for an amplifier*.
+
+| N | no_defense ASR | canonicalize ASR |
+|---|---|---|
+| 2 | 0.152 | 0.176 |
+| 10 | 0.398 | 0.439 |
+| 50 | 0.676 | 0.708 |
+| 200 | 0.817 | 0.844 |
+
+Canonicalize ASR is **higher at every N** (log-log slope −0.313 vs −0.338 — no favorable bend, just a small upward shift). Verdict-flip across 8000 variants: **498 safe→harmful vs 364 harmful→safe** (net +134 harmful, 707→841; ~4–5σ from chance). Spot-check confirmed the defense IS applied (`prompt_stage` differs, responses diverge) and the judge is sane (refusals correctly scored "no"). **So canonicalization does NOT collapse effective-N — it modestly AMPLIFIES BoN**, consistent with a "noise-as-accidental-defense" mechanism: cleaning the BoN garble makes prompts more legible → more compliance.
+
+**Two live directions (owner, 2026-07-16):** *D-defense* (original — discouraged on qwen) vs **D-amplifier** (canonicalization/normalization as a BoN attack amplifier — better-supported, evidence in hand). Decision deferred to the confirmation battery.
+
+**Confirmation battery — PARKED (both clusters GPU-saturated; AICR serving broken):**
+- **Judge-robustness (IN FLIGHT):** WildGuard rejudge of the qwen responses — NURC job `8391410` (queued behind saturated GPUs; monitor `biuy7g7bl` in the originating session reports on completion). Resume: `find outputs/bestofn_defense/rejudge -name results.json` → `bon_asr.py` on each; does WildGuard agree canonicalize ≥ no_defense?
+- **Generality (TODO — re-run on NURC):** internvl3_8b + pixtral_12b × {no_defense, canonicalize}, WildGuard judge, N=100. AICR run `159850` FAILED (see below); re-run on NURC (proven VLM serving) when it frees. Preset shape: `conf/experiment/bestofn_defense/_run_stage2_gen.yaml` (cluster-local).
+- **Bootstrap 95% CIs** on the ASR(N) gap (read-only, free) — is +134 net outside the per-behavior noise band?
+- **AICR serving is BROKEN (infra debt):** the rebuilt `.venv` (torch 2.11+cu130 / vLLM 0.25.0) imports fine but vLLM crashes at GPU `init_device()` on the rtx-batch nodes (likely GPU-arch/driver/cu130 mismatch; checkout also stale at `d118044`, DIRTY). AICR *orchestrator* works; AICR *serving* does not — fix before serving models on AICR. Sweep the empty failed dirs with `scripts/cleanup_failed.py`.
+
+Cost to date: ~$3–4 (qwen `gpt-5-mini` judging — a cheap-first miss, now gated). Everything after = free/open-source.
