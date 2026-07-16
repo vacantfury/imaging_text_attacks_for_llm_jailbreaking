@@ -1,17 +1,16 @@
 # Conference submission timeline — shared reference
 
-*One time-ordered list of SUBMISSION deadlines (abstract / full paper only) for the venues this repo's papers target. Not paper-specific — consult it for ANY publication planning. Keep review status, paper→venue mapping, and strategy reasoning OUT of this file (public repo; that lives in the gitignored TODO.md / psyche portfolio). Maintenance: when a CFP is announced or a date shifts, update the row and the "verified" date; entries marked EXPECTED are extrapolated from the previous year and must be re-verified before planning against them.*
+*SUBMISSION deadlines (abstract / full paper only) for the venues this repo's papers target. Not paper-specific — consult it for ANY publication planning. **Structure (fixed): exactly TWO lists — §Conferences and §Workshops — each in strict time order, one row per time point, abstract and full paper always separate rows.** Keep review status, paper→venue mapping, and strategy reasoning OUT of this file (public repo; that lives in the gitignored TODO.md / psyche portfolio). Maintenance: when a CFP is announced or a date shifts, update the row and the "verified" date; entries marked EXPECTED are extrapolated from the previous year and must be re-verified before planning against them.*
 
 *Last verified: 2026-07-16. All deadlines AoE (UTC-12) unless noted.*
 
-## Upcoming deadlines (time order — one row per time point; abstract and full paper always separate rows)
+## Conferences (time order — one row per time point)
 
 | Deadline | Venue | Abstract or full paper | Status |
 |---|---|---|---|
 | **2026-07-21** | AAAI-27 (main + AI Alignment track) | Abstract (mandatory to submit paper) | confirmed |
 | **2026-07-28** | AAAI-27 (main + AI Alignment track) | Full paper | confirmed |
 | **2026-08-03** | ARR August 2026 cycle (→ EACL 2027) | Full paper | confirmed |
-| **2026-08-21 → 09-11** | NeurIPS 2026 workshops | Workshop papers, per-workshop dates — every time point listed in the table below | confirmed per workshop |
 | **~2026-09-19** | ICLR 2027 | Abstract (EXPECTED — ICLR 2026 was 09-19; CFP not out) | EXPECTED |
 | **~2026-09-24** | ICLR 2027 | Full paper (EXPECTED — ICLR 2026 was 09-24; CFP not out) | EXPECTED |
 | **2026-09-29** | IEEE SaTML 2027 (Reykjavik, May 2027) | Full paper (no separate abstract deadline) | confirmed |
@@ -23,7 +22,11 @@
 
 Recently passed, for orientation (same one-row-per-time-point form): 2026-05-04 NeurIPS 2026 abstract (main/datasets/position) · 2026-05-06 NeurIPS 2026 full paper · 2026-05-25 ARR May 2026 cycle full paper (meta-reviews 2026-07-30; feeds EMNLP 2026 + AACL 2026).
 
-## NeurIPS 2026 workshops — per-workshop paper deadlines
+## Workshops (time order — one row per time point)
+
+*All workshop submission deadlines live in this one list, whatever the parent conference; currently it holds the NeurIPS 2026 batch.*
+
+### NeurIPS 2026 workshops
 
 *NeurIPS 2026 runs Dec 6–12 in Sydney with satellite venues in Atlanta and Paris (Dec 9–13). Workshop papers: suggested submission date 2026-08-29 AoE, mandatory accept/reject notification 2026-09-29 (hard). 26 workshop venues registered on OpenReview as of 2026-07-16 (acceptance notifications went out 07-11; more may appear — re-check the official neurips.cc workshops page once it's up).*
 
