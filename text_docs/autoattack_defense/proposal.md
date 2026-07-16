@@ -62,12 +62,14 @@ The portfolio is the existing, public attack surface, reused unchanged:
 | Surface | Attacks |
 |---|---|
 | input-text | `set_theory`, `formal_logic`, `code_attack` (MathEnc encoders) |
-| input-image | `ir_plain` (encoded attack rendered into the image, fixed-font paginated) |
+| input-image | `ir_plain` (encoded attack rendered into the image, fixed-font paginated), **plus an ensemble of established, code-released multimodal jailbreaks** reimplemented from their reference repos: `ir_figstep` (FigStep), `ir_fc_flowchart` (FC-Attack), `ir_mm_typo` (MM-SafetyBench TYPO), `ir_low_contrast` / `ir_occluded` (Adversarial Smuggling), `ir_distraction_grid` (Text-DJ / CS-DJ) |
 | input-text + benign image | `decoy` / `constant_image` (ImgAug lever, as an *attack* surface and as a *baseline defense* lever) |
 
 No new attacks are constructed in this project. Compound/sequential attacks are **future work** (see `text_docs/future_work.md`). The suite is broadened only with **off-the-shelf, code-released encoders** that harden the decode-gap probe across decode *types* and add an independent-group encoder: **ArtPrompt** (ASCII-art; Jiang et al., 2024), **homoglyph** normalization (Bad Characters; Boucher et al., 2022 — text-channel only), a **cipher** cell (Base64/Caesar; CipherChat lineage), and **Classical Chinese** (a linguistic decode type; text-channel, and image-legible). These span the *semantic* (set theory / formal logic), *algorithmic* (code), *normalization* (homoglyph/cipher), and *linguistic* (Classical Chinese) decode types, so "the decode gap" is not an artifact of one encoder family (the concrete per-round inclusion lives in the experiment plan).
 
 **Reuse, not reinvention (CAMO).** Our `{set_theory, formal_logic} × ir_plain` cell instantiates the construction of **CAMO** (Cross-Modal Obfuscation; Jiang et al., 2025) — semantically-encoded text rendered into an image, defeating OCR-toxicity and moderation APIs; we reuse this published attack surface rather than claim it as new, and cite it where the suite is defined.
+
+**Established multimodal attacks (reused, not invented).** Because the image channel is load-bearing for the claim, the image surface is populated with a *diverse* set of **published, code-released multimodal jailbreaks** — not only encoded-text renders — each reimplemented in our black-box factory from its reference repo (`other_repos/`): **FigStep** (typographic; Gong et al., AAAI 2025), **FC-Attack** (flowchart; Zhang et al., EMNLP Findings 2025), the **MM-SafetyBench** TYPO variant (query-relevant typography; Liu et al., ECCV 2024), **Adversarial Smuggling** low-contrast/occluded (perceptual degradation; Li et al., ACL 2026), and **Text-DJ / CS-DJ** distraction (Chen 2026 / Yang et al., CVPR 2025). These span distinct multimodal *mechanisms* — typographic, structural, perceptual-degradation, distraction — so the coverage claim on the image surface rests on recognized attacks, not a single homemade render. Consistent with the black-box, single-input threat model, attacks needing **image generation** (MM-SafetyBench SD variants, HADES's Stable-Diffusion stage, VRP's character-image generation) or **white-box optimization** (HADES's adversarial-noise stage) are excluded; **JailBreakV-28K** is a frozen benchmark, not a constructive method (used, if at all, as an alternate prompt pool); and **Reference Attack** (Wang et al., ACL 2026) is held for a targeted amplifier pilot. Semantic-camouflage-in-image is the chain `llm_semantic_camo → ir_plain` (no new transform).
 
 **Cross-modal *splitting* is out of scope (an explicit boundary).** Attacks whose harm exists only in the joint text+image interpretation, with each channel benign — **MML**, **SI-Attack**, **Jailbreak-in-Pieces** — are not in the suite. A per-channel recover→decode→guard covers *semantic* cross-channel placement (the union of recovered text/captions is harmful) but **not** *steganographic/embedding-space* splits (Jailbreak-in-Pieces), which sit below the recoverable layer. We name this as the honest boundary that motivates joint multimodal verification (Future Work, §11.2), not something this guard claims to solve.
 
@@ -116,13 +118,13 @@ Each attack is labelled by where it places harm; each cell tests whether that su
 |---|---|
 | **Target VLMs (primary)** | open-weight, NU-cluster / vLLM: `qwen2_5_vl_7b` (workhorse), `pixtral_12b`, `llama3_2_11b_vision`, `internvl3_8b`. Iterate on Qwen + InternVL3 (7–8B), complete on the rest. |
 | **Encoders** | `set_theory`, `formal_logic`, `code_attack` |
-| **Image transforms** | `ir_plain` (fixed-font paginated), `decoy` (`constant_image`) |
+| **Image / multimodal attacks** | `ir_plain` (fixed-font paginated), `decoy` (`constant_image`); **established ensemble** (reimplemented from released code): `ir_figstep`, `ir_fc_flowchart`, `ir_mm_typo`, `ir_low_contrast`, `ir_occluded`, `ir_distraction_grid`, + the `llm_semantic_camo → ir_plain` chain |
 | **Defenses** | no_defense, SAGE, ECSO, decoy-lever, **coverage-complete (new)**; *(breadth)* ETA, MLLM-Protector |
 | **Benchmarks** | HarmBench-harmful (rows 0–99) = ASR; JailbreakBench-benign (0–99) = utility |
 | **Judges** | HarmBench classifier + JBB-refusal classifier, `gpt-5-nano` backbone (parity with ImgAug) |
 | **Decoding** | deterministic (temp 0, top_p 1, seed 42) |
 
-**Code to build:** essentially none — the coverage-complete guard (`modality_complete`) is already built and smoke-verified. This project is primarily **run + analyze**: render the existing attack suite once (Stage 1), then run the defense matrix (Stage 2). API models (gemini-2.x-flash / gpt-4o-mini / claude-sonnet-4-6) are an optional late breadth layer.
+**Code to build:** the coverage-complete guard (`modality_complete`) was already built and smoke-verified; the **established multimodal-attack ensemble was reimplemented from released code (2026-07-16)** — `ir_figstep` / `ir_fc_flowchart` / `ir_mm_typo` / `ir_low_contrast` / `ir_occluded` / `ir_distraction_grid`, all render-verified (the two aux-LLM ones construct via `gpt-4.1-mini`). The project is otherwise **run + analyze**: render the attack suite once (Stage 1), then run the defense matrix (Stage 2). API models (gemini-2.x-flash / gpt-4o-mini / claude-sonnet-4-6) are an optional late breadth layer.
 
 ---
 
