@@ -1,21 +1,19 @@
 # Paper D (bestofn_defense) — reproduce Best-of-N's TEXT attack in our pipeline
 # and measure the canonicalization defense's effect on ASR(N).
 #
-# JUDGES (shared Round-J resolution, 2026-07-15 — text_docs/shared/judge_validation_sample.md):
-#   headline   = gpt-5-mini  (HarmBench rubric, API; the validated headline judge) — set below.
-#   robustness = WildGuard   (own-policy response-harm view) applied as a POST-RUN rejudge
-#                pass on the saved responses (no target re-query):
-#     python scripts/build_rejudge_preset.py --paper bestofn_defense \
-#         --campaigns bestofn_pilot --judges "wildguard:wildguard" \
-#         --out conf/experiment/bestofn_defense/rejudge_bon.yaml
-#     then run that preset. (Supersedes the earlier llama/gpt-4o plan.)
-#   cheap-smoke alt: for a zero-cost first integration smoke, temporarily set
-#     judge_model: llama_3_3_70b_instruct (served, ~free) below, then rejudge to gpt-5-mini.
-# Posture: we BELIEVE BoN is a real threat and reproduce+defend it — NOT a
-# judge-doubt study (that is Paper §9).
+# JUDGES (shared Round-J resolution — text_docs/shared/judge_validation_sample.md):
+#   intermediate/pilot = wildguard  (free, 7B, cluster-served, judge_method: wildguard) — set below.
+#   final/headline     = gpt-5-mini (API, validated) — RESERVED for the final reportable run only,
+#                        behind the API HARD GATE (state reason + explicit owner OK before use), or
+#                        applied as a rejudge pass over saved responses (no re-query).
+#   Do NOT use llama_3_3_70b (70B, multi-GPU, NOT a decided judge) or gpt-4o — superseded plan.
+# Posture: we BELIEVE BoN is a real threat and reproduce+defend it — NOT a judge-doubt study (§9).
 #
-# PREREQUISITE — the expanded variant dataset (pilot scale) is BUILT at
-#   data/harmbench_bon_pilot.jsonl  (40 behaviors x 200 variants = 8000 rows), via:
+# NOTE (2026-07-16): the qwen pilot judged with gpt-5-mini (a cheap-first miss, now gated) and
+# found canonicalization AMPLIFIES BoN rather than defending it (proposal §8); future runs use
+# wildguard per cheap-first.
+#
+# PREREQUISITE — build the pilot variant dataset first:
 #   python3 scripts/expand_bon_dataset.py --src data/harmbench_prompts.jsonl \
 #       --out data/harmbench_bon_pilot.jsonl --n-variants 200 --n-behaviors 40
 # Run stage 1, read its output timestamp, fill CHAIN_TIMESTAMP below, run stage 2.
@@ -31,25 +29,25 @@ tasks:
       - type: non_llm_best_of_n
         params: {sigma: 0.4, seed: 0}
 
-  # Stage 2 — query the target, judge each variant with gpt-5-mini + HarmBench rubric.
+  # Stage 2 — query the target, judge each variant with WildGuard (free).
   # no_defense = raw BoN ASR. Success per behavior = ANY __bonK variant flagged
   # (computed downstream by OR-reducing on the base id via src/analysis/bon_asr.py).
   - mode: defense+evaluate
     source_transform_subdir: outputs/bestofn_defense/prompt_transform/harmbench/CHAIN_TIMESTAMP/non_llm_best_of_n
-    target_model: qwen2_5_vl_7b      # served open target; swap per run (BoN tested frontier models)
+    target_model: qwen2_5_vl_7b      # smallest served VLM target; swap per run
     defense: no_defense
-    judge_model: gpt-5-mini          # headline judge (shared Round-J); WildGuard robustness via rejudge (see header)
+    judge_model: wildguard           # free intermediate judge; gpt-5-mini reserved for final (API gate)
+    judge_method: wildguard
     benchmark: harmbench
     campaign: bestofn_pilot
 
   # Stage 2b — SAME variants, canonicalization defense: the effective-N gate.
   # Run bon_asr on both output dirs and compare ASR(N): no_defense vs canonicalize.
-  # Non-adaptive here (attacker doesn't yet relocate to the irreducible tail); the
-  # full R2 gate adds an adaptive attacker. Expect a partial drop (the head collapses).
   - mode: defense+evaluate
     source_transform_subdir: outputs/bestofn_defense/prompt_transform/harmbench/CHAIN_TIMESTAMP/non_llm_best_of_n
     target_model: qwen2_5_vl_7b
     defense: canonicalize
-    judge_model: gpt-5-mini
+    judge_model: wildguard
+    judge_method: wildguard
     benchmark: harmbench
     campaign: bestofn_pilot

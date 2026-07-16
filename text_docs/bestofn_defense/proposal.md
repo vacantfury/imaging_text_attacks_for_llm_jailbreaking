@@ -26,7 +26,7 @@ Best-of-N (Hughes et al., NeurIPS 2025) is a black-box **budget** attack: sample
 Report with the **shared** judges (same as Papers B/C — do NOT re-run judge selection; `text_docs/shared/judge_validation_sample.md`). This is NOT a multi-judge-correction study (that's §9); it is one consistent headline judge plus a robustness cross-view.
 - **Headline:** `gpt-5-mini` — the validated headline judge, HarmBench rubric (API). Set as the pilot's per-task `judge_model`.
 - **Robustness:** `WildGuard` — own-policy response-harm view, applied as a **rejudge** pass on the saved responses (no target re-query), via `scripts/build_rejudge_preset.py --paper bestofn_defense --campaigns bestofn_pilot --judges "wildguard:wildguard"`.
-- **Cheap-smoke alt:** `llama_3_3_70b_instruct` (cluster-served, ~free, JBB official judge, >90% human agreement) as a temporary primary for a zero-cost first integration smoke, then rejudge to `gpt-5-mini`.
+- **Intermediate/pilot judge:** `WildGuard` (free, 7B, cluster-served, `judge_method: wildguard`) — the decided free judge; use for ALL pilots/smokes/directional runs, reserving `gpt-5-mini` for the final reportable run only. (NOT `llama_3_3_70b` — 70B, multi-GPU, not a decided judge.)
 - **Optional BoN-parity appendix:** `gpt-4o` (BoN's own judge) for a direct-comparability check only — NOT the headline. (Supersedes the earlier gpt-4o-as-final plan.)
 
 ## 4. What's BUILT (committed + pushed, through `8ea4f73`)
