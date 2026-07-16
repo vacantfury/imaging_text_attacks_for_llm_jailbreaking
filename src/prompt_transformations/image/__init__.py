@@ -19,3 +19,5 @@ Param convention shared by all:
 """
 from . import wrappers       # noqa: F401  — all ir_* transformations registered here
 from . import cross_modal_split  # noqa: F401  — Paper C RQ-D split attack
+from . import mm_safetybench_typo  # noqa: F401  — ir_mm_typo (query-relevant typography)
+from . import distraction_grid     # noqa: F401  — ir_distraction_grid (Text-DJ/CS-DJ)

@@ -40,6 +40,13 @@ TRANSFORMATION_ALIASES: dict[str, str] = {
     "symbol_injection": "non_llm_symbol_injection",
     "semantic_camo": "llm_semantic_camo",
     "cipher": "non_llm_cipher",
+    # Established multimodal attacks (Paper C ensemble, added 2026-07-16)
+    "low_contrast": "ir_low_contrast",
+    "occluded": "ir_occluded",
+    "mm_typo": "ir_mm_typo",
+    "mm_safetybench": "ir_mm_typo",
+    "distraction": "ir_distraction_grid",
+    "distraction_grid": "ir_distraction_grid",
 }
 
 

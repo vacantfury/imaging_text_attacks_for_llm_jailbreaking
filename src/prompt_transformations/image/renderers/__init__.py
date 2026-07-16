@@ -14,6 +14,7 @@ from .fc_flowchart_image_renderer import FCFlowchartImageRenderer
 from .plain_image_renderer import PlainImageRenderer
 from .blank_image_renderer import BlankImageRenderer
 from .constant_image_renderer import ConstantImageRenderer
+from .occluded_image_renderer import OccludedImageRenderer
 
 __all__ = [
     'PlainImageRenderer',
@@ -22,4 +23,5 @@ __all__ = [
     'FCFlowchartImageRenderer',
     'BlankImageRenderer',
     'ConstantImageRenderer',
+    'OccludedImageRenderer',
 ]

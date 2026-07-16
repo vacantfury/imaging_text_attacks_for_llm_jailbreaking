@@ -22,6 +22,7 @@ from .renderers.figstep_image_renderer import FigstepImageRenderer
 from .renderers.fc_flowchart_image_renderer import FCFlowchartImageRenderer
 from .renderers.blank_image_renderer import BlankImageRenderer
 from .renderers.constant_image_renderer import ConstantImageRenderer
+from .renderers.occluded_image_renderer import OccludedImageRenderer
 
 
 @register_transformation
@@ -58,3 +59,18 @@ class IRBlankTransformation(ImageRendererTransformation):
 class IRConstantTransformation(ImageRendererTransformation):
     type_name = "ir_constant"
     renderer_class = ConstantImageRenderer
+
+
+@register_transformation
+class IRLowContrastTransformation(ImageRendererTransformation):
+    # Adversarial Smuggling — Low-Contrast (perceptual-blindness) attack.
+    # Reuses the plain renderer; low fg/bg contrast set in conf/imaging/low_contrast.yaml.
+    type_name = "ir_low_contrast"
+    renderer_class = PlainImageRenderer
+
+
+@register_transformation
+class IROccludedTransformation(ImageRendererTransformation):
+    # Adversarial Smuggling — Occluded-Text (perceptual-blindness) attack.
+    type_name = "ir_occluded"
+    renderer_class = OccludedImageRenderer
