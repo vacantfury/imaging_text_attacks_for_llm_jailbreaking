@@ -1,6 +1,6 @@
 # GLM-4.5-Air (zai-org) — Round-J open general-LLM RUBRIC judge (capable + zh).
 # Applies the HarmBench classifier rubric in chat mode. trust_remote_code
-# (custom GLM modeling code). Served for human_label/cluster_judge_rejudge.py.
+# (custom GLM modeling code). Served for judge_model_issue/cluster_judge_rejudge.py.
 #
 # 106B MoE (12B active) ≈ 212 GB @ bf16 (total params resident) → needs > 2× A100-80GB,
 # so target 2× H200-141GB (282 GB). The H200 nodes are the ONLY `cascadelake`-feature

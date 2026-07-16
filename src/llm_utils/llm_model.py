@@ -262,7 +262,7 @@ class LLMModel(Enum):
         family="mistral", chat_template="passthrough")
 
     # Round-J open-source judge candidates (added 2026-07-13) — response-harm
-    # classifiers, scored via human_label/cluster_judge_rejudge.py.
+    # classifiers, scored via judge_model_issue/cluster_judge_rejudge.py.
     QWEN3GUARD_GEN_8B = ModelSpec(
         # Generative guard; safety taxonomy baked into the tokenizer's own chat
         # template. Two-turn [user, assistant] → "Safety: Safe/Unsafe/Controversial".
@@ -299,7 +299,7 @@ class LLMModel(Enum):
     # Round-J open general-LLM RUBRIC judges (added 2026-07-13) — capable general
     # models applying the HarmBench classifier rubric (the "faithful rule-applier"
     # open arm, vs. the purpose-built guards' own taxonomies). Chat-mode; scored via
-    # human_label/cluster_judge_rejudge.py. No passthrough — native chat templates.
+    # judge_model_issue/cluster_judge_rejudge.py. No passthrough — native chat templates.
     HERMES_4_70B = ModelSpec(
         # Llama-3.1-70B base; "neutral alignment" (steerable, low refusal by design).
         "NousResearch/Hermes-4-70B", Provider.NU_CLUSTER,
