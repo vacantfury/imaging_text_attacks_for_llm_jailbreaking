@@ -1,14 +1,24 @@
-# Paper D (bestofn_defense) — reproduce Best-of-N's TEXT attack in our pipeline.
-# Judge: TEST runs use llama_3_3_70b_instruct — already served on the cluster (~free)
-# and JailbreakBench's official judge (>90% human agreement); the FINAL/headline
-# reproduction uses gpt-4o (BoN's own judge). Both apply the HarmBench rubric. Swap judge_model below.
-# Posture: we BELIEVE BoN is a real threat and reproduce it faithfully — this is
-# a reproduction check, NOT a judge-doubt study (that would be Paper §9).
+# Paper D (bestofn_defense) — reproduce Best-of-N's TEXT attack in our pipeline
+# and measure the canonicalization defense's effect on ASR(N).
 #
-# PREREQUISITE — build the expanded variant dataset first (pilot scale):
+# JUDGES (shared Round-J resolution, 2026-07-15 — text_docs/shared/judge_validation_sample.md):
+#   headline   = gpt-5-mini  (HarmBench rubric, API; the validated headline judge) — set below.
+#   robustness = WildGuard   (own-policy response-harm view) applied as a POST-RUN rejudge
+#                pass on the saved responses (no target re-query):
+#     python scripts/build_rejudge_preset.py --paper bestofn_defense \
+#         --campaigns bestofn_pilot --judges "wildguard:wildguard" \
+#         --out conf/experiment/bestofn_defense/rejudge_bon.yaml
+#     then run that preset. (Supersedes the earlier llama/gpt-4o plan.)
+#   cheap-smoke alt: for a zero-cost first integration smoke, temporarily set
+#     judge_model: llama_3_3_70b_instruct (served, ~free) below, then rejudge to gpt-5-mini.
+# Posture: we BELIEVE BoN is a real threat and reproduce+defend it — NOT a
+# judge-doubt study (that is Paper §9).
+#
+# PREREQUISITE — the expanded variant dataset (pilot scale) is BUILT at
+#   data/harmbench_bon_pilot.jsonl  (40 behaviors x 200 variants = 8000 rows), via:
 #   python3 scripts/expand_bon_dataset.py --src data/harmbench_prompts.jsonl \
 #       --out data/harmbench_bon_pilot.jsonl --n-variants 200 --n-behaviors 40
-# Then run stage 1, read its output timestamp, fill CHAIN_TIMESTAMP below, run stage 2.
+# Run stage 1, read its output timestamp, fill CHAIN_TIMESTAMP below, run stage 2.
 # Full N (up to 10k) needs an on-the-fly variant loop — deferred until this pilot lands.
 
 num_main_job_threads: 8
@@ -21,15 +31,16 @@ tasks:
       - type: non_llm_best_of_n
         params: {sigma: 0.4, seed: 0}
 
-  # Stage 2 — query the target, judge each variant with gpt-4o + HarmBench rubric.
+  # Stage 2 — query the target, judge each variant with gpt-5-mini + HarmBench rubric.
   # no_defense = raw BoN ASR. Success per behavior = ANY __bonK variant flagged
-  # (computed downstream by OR-reducing on the base id).
+  # (computed downstream by OR-reducing on the base id via src/analysis/bon_asr.py).
   - mode: defense+evaluate
     source_transform_subdir: outputs/bestofn_defense/prompt_transform/harmbench/CHAIN_TIMESTAMP/non_llm_best_of_n
     target_model: qwen2_5_vl_7b      # served open target; swap per run (BoN tested frontier models)
     defense: no_defense
-    judge_model: llama_3_3_70b_instruct  # TEST judge: already-served on cluster (~free), JBB official judge (>90% human agr.). FINAL: swap to gpt-4o (BoN's judge).
+    judge_model: gpt-5-mini          # headline judge (shared Round-J); WildGuard robustness via rejudge (see header)
     benchmark: harmbench
+    campaign: bestofn_pilot
 
   # Stage 2b — SAME variants, canonicalization defense: the effective-N gate.
   # Run bon_asr on both output dirs and compare ASR(N): no_defense vs canonicalize.
@@ -39,5 +50,6 @@ tasks:
     source_transform_subdir: outputs/bestofn_defense/prompt_transform/harmbench/CHAIN_TIMESTAMP/non_llm_best_of_n
     target_model: qwen2_5_vl_7b
     defense: canonicalize
-    judge_model: llama_3_3_70b_instruct
+    judge_model: gpt-5-mini
     benchmark: harmbench
+    campaign: bestofn_pilot

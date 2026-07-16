@@ -1,10 +1,10 @@
 # Research Proposal — Paper D: Canonicalization Defense Against Best-of-N (`bestofn_defense`)
 
-**Workflow stage:** S9 run — code built (S7 done), pilot **GATED on Paper C freeing the cluster** (as of 2026-07-13)
+**Workflow stage:** S9 run — code built (S7 done) + **pilot prep DONE** (dataset built, judges wired to `gpt-5-mini`, docs reconciled — 2026-07-15). The cluster run itself is **GATED on the owner's go signal**.
 
 *Full idea writeup + cspaper idea-check + internal reviewer analysis (R1–R6): `new_papers/paperd_bestofn_canonicalization_defense_idea.md` (local, gitignored — persists on this machine across /clear). Reference impl cloned at `other_repos/bon-jailbreaking/`. Origin: `text_docs/shared/future_work.md` §4.*
 
-> **Judge (SHARED, ✅ resolved 2026-07-15):** report HarmBench ASR with **`gpt-5-mini`** (the validated headline judge) + the 26-judge robustness panel — NOT `gpt-5-nano`. Reuse the shared Round-J resolution; do not re-run judge selection. Report `judge_model_issue/JUDGE_MODEL_REPORT.md`; summary `text_docs/shared/judge_validation_sample.md`.
+> **Judge (SHARED, ✅ resolved 2026-07-15):** report HarmBench ASR with **`gpt-5-mini`** (the validated headline judge) + a **WildGuard** own-policy robustness pass (rejudge) — NOT `gpt-5-nano`. Reuse the shared Round-J resolution; do not re-run judge selection. Report `judge_model_issue/JUDGE_MODEL_REPORT.md`; summary `text_docs/shared/judge_validation_sample.md`.
 
 ---
 
@@ -21,11 +21,13 @@ Best-of-N (Hughes et al., NeurIPS 2025) is a black-box **budget** attack: sample
 
 **Prior art to cite + differentiate (mechanism exists ad-hoc; novelty = the principled framing):** TRYLOCK (Layer-0 canonicalization), RLM-JB (ad-hoc canon + base64 de-obfuscation). Both in `paper/literature/my_base.bib`; RLM-JB entered in `text_docs/shared/literature_review.md` §6.4. cspaper idea-check: **net-positive on novelty** (the effective-N framing fills a gap; the *mechanism* is not novel). Deepest risk lives in the idea doc §R1–R6.
 
-## 3. Judge methodology (settled)
+## 3. Judge methodology (settled — shared Round-J resolution, 2026-07-15)
 
-**ONE consistent judge** = an LLM applying the HarmBench rubric (BoN's setting). This is NOT a multi-judge-correction study (that's §9).
-- **TEST runs:** `llama_3_3_70b_instruct` — already cluster-served, JailbreakBench's official judge (>90% human agreement), ~free.
-- **FINAL / headline:** `gpt-4o` (BoN's own judge, for direct comparability). Swap via the per-task `judge_model` field.
+Report with the **shared** judges (same as Papers B/C — do NOT re-run judge selection; `text_docs/shared/judge_validation_sample.md`). This is NOT a multi-judge-correction study (that's §9); it is one consistent headline judge plus a robustness cross-view.
+- **Headline:** `gpt-5-mini` — the validated headline judge, HarmBench rubric (API). Set as the pilot's per-task `judge_model`.
+- **Robustness:** `WildGuard` — own-policy response-harm view, applied as a **rejudge** pass on the saved responses (no target re-query), via `scripts/build_rejudge_preset.py --paper bestofn_defense --campaigns bestofn_pilot --judges "wildguard:wildguard"`.
+- **Cheap-smoke alt:** `llama_3_3_70b_instruct` (cluster-served, ~free, JBB official judge, >90% human agreement) as a temporary primary for a zero-cost first integration smoke, then rejudge to `gpt-5-mini`.
+- **Optional BoN-parity appendix:** `gpt-4o` (BoN's own judge) for a direct-comparability check only — NOT the headline. (Supersedes the earlier gpt-4o-as-final plan.)
 
 ## 4. What's BUILT (committed + pushed, through `8ea4f73`)
 
@@ -34,25 +36,27 @@ Best-of-N (Hughes et al., NeurIPS 2025) is a black-box **budget** attack: sample
 | Attack | `src/prompt_transformations/text/encoders/non_llm_best_of_n_encoder.py` (`type_name: non_llm_best_of_n`) | scramble+caps+ASCII, `sigma`, seeded. Config `conf/text_encoding/best_of_n.yaml`. |
 | Fan-out | `scripts/expand_bon_dataset.py` | behavior → N rows `<id>__bonK` (gitignored dir; local). |
 | Defense | `src/defense/canonicalize.py` (`type_name: canonicalize`) | NFKC + strip-control + case-fold + whitespace. Config `conf/defense/canonicalize.yaml`. Carve unit-tested: caps-only→effective-N=1; full-augment→tail survives. |
-| Judge infra | per-task `judge_model` field (`schemas.py` `DefenseEvaluateTask`, threaded in `task.py::_resolve_evaluators`/`_run_judging`) | parallel-paper-safe (C keeps gpt-5-nano default). |
+| Judge infra | per-task `judge_model` field (`schemas.py` `DefenseEvaluateTask`, threaded in `task.py`) + `rejudge` mode (`RejudgeTask`) for the WildGuard robustness pass | parallel-paper-safe (each paper sets its own `judge_model`). |
 | Analysis | `src/analysis/bon_asr.py` | ASR(N) = mean_i[1-(1-p_i)^N] + log-log slope. Stdlib, standalone CLI. Unit-tested. |
-| Preset | `conf/experiment/bestofn_defense/reproduce_bon.yaml` | stage1 augment → stage2 `no_defense` **and** `canonicalize` (the R2 comparison in one run). |
+| Preset | `conf/experiment/bestofn_defense/reproduce_bon.yaml` | stage1 augment → stage2 `no_defense` **and** `canonicalize`, judged `gpt-5-mini`, tagged `campaign: bestofn_pilot`. |
 
-**Verification status:** every piece unit-verified on this machine (syntax + logic), BUT the local `python3` is **3.9** — the project needs **3.12**, so the **full-pipeline end-to-end run is UNRUN**. The first cluster run IS that smoke; expect to fix small integration issues (registration, preset load, judge serving).
+**Verification status:** every piece unit-verified (syntax + logic). Local `python3` is now **3.13** (the earlier "3.9" blocker is stale) and the pilot dataset is **built** (`data/harmbench_bon_pilot.jsonl`, 8000 rows), but the **full model-serving + judging pipeline is still UNRUN** — per the cluster-first rule the first cluster run IS that smoke; expect small integration fixes (transform registration, preset/chain load, gpt-5-mini judging path, WildGuard serving/parse).
 
 ## 5. The decisive experiment — R2 defense gate
 
 Run the pilot → `no_defense` vs `canonicalize` ASR(N) → **does canonicalization bend the slope or just shift the constant?** The carve unit-test already shows the head collapses and the scramble/ASCII tail survives, so the run measures *how big the surviving tail is*. The **full** R2 gate adds an **adaptive attacker** that relocates onto the irreducible tail (deferred).
 
-## 6. HOW TO RUN THE PILOT (cold-resume recipe) — GATED on Paper C freeing the cluster
+## 6. HOW TO RUN THE PILOT (cold-resume recipe) — GATED on the owner's go signal
 
-1. `python3 scripts/expand_bon_dataset.py --src data/harmbench_prompts.jsonl --out data/harmbench_bon_pilot.jsonl --n-variants 200 --n-behaviors 40`
-2. Serve `llama_3_3_70b_instruct` (auto-served when a task targets it; or pre-serve on an H200 node). Target model in the preset is `qwen2_5_vl_7b` (already served) — swap if desired.
-3. Run **stage 1** (prompt_transform) via `sbatch scripts/run_experiment.sbatch bestofn_defense/reproduce_bon`, or run stage 1 alone, read its output timestamp, and fill `CHAIN_TIMESTAMP` in the preset's stage-2 tasks.
-4. Run **stage 2** (`no_defense` + `canonicalize`).
-5. ASR(N): `python3 src/analysis/bon_asr.py <no_defense_run_dir>` and `<canonicalize_run_dir>`; compare curves.
+Prep DONE this session: dataset built, judges wired to `gpt-5-mini` in the preset, `campaign: bestofn_pilot` tag added, docs reconciled. The run itself is one gated sequence — **do not launch without the owner's go**:
 
-Cost ≈ free (open judge on cluster), ~1–2 h cluster time. Outputs land under `outputs/bestofn_defense/…` (paper key auto-inferred from the preset subdir).
+1. ✅ **Dataset built** — `data/harmbench_bon_pilot.jsonl` (40 behaviors × 200 variants = 8000 rows). (Halve `--n-variants` to 100 to cut cost/time.)
+2. **Stage 1** (BoN augment) — `sbatch scripts/run_experiment.sbatch bestofn_defense/reproduce_bon` runs the whole preset; or run stage 1 alone, read its output timestamp under `outputs/bestofn_defense/prompt_transform/harmbench/<ts>/`, and fill `CHAIN_TIMESTAMP` in the preset's stage-2 tasks.
+3. **Stage 2** (`no_defense` + `canonicalize`, target `qwen2_5_vl_7b` served, judge `gpt-5-mini`). Writes two dirs under `outputs/bestofn_defense/defense+evaluate/harmbench/` tagged `campaign: bestofn_pilot`, each with `raw_results.jsonl`.
+4. **WildGuard robustness rejudge** (no target re-query) — `python scripts/build_rejudge_preset.py --paper bestofn_defense --campaigns bestofn_pilot --judges "wildguard:wildguard" --out conf/experiment/bestofn_defense/rejudge_bon.yaml`, then `sbatch scripts/run_experiment.sbatch bestofn_defense/rejudge_bon` (serves WildGuard, re-scores the two dirs into `outputs/bestofn_defense/rejudge/`).
+5. **ASR(N):** `python3 src/analysis/bon_asr.py <no_defense_dir>` and `<canonicalize_dir>` (gpt-5-mini headline) — compare curves; slope-bend vs constant-shift is the R2 gate read.
+
+**Cost estimate (house rule):** target queries on served `qwen2_5_vl_7b` ≈ free; `gpt-5-mini` judging ≈ 16k judgments × ~800 tok ≈ 12.8M input tok ≈ **$3–4** (@ $0.25/1M in, output negligible); WildGuard rejudge served ≈ free. **Total ≈ $3–4**, ~1–2 h cluster. Outputs land under `outputs/bestofn_defense/…`.
 
 ## 7. Deferred (post-pilot)
 
