@@ -833,7 +833,9 @@ def _run_rejudge(task) -> dict[str, Any]:
     result = RejudgeResult(
         rejudge_of=str(src),
         upstream_ref=_upstream_ref(src),
-        campaign=task.campaign,
+        # Inherit the source run's campaign so rejudge results are self-describing
+        # (which round each cell came from) without re-reading the source.
+        campaign=task.campaign or source.get("campaign"),
         target_model=target_model,
         defense=defense,
         is_multimodal=bool(source.get("is_multimodal", False)),
