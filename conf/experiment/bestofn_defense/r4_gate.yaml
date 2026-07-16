@@ -1,0 +1,112 @@
+# Paper D / R4 gate — PHASE 2 (defenses): the canonicalize->guard adaptive-carve.
+# Run r4_transforms.yaml FIRST, then replace each CHAIN_* below with the real
+# output subdir (identify full/head/tail by each results.json's transform params).
+#
+# Judges: this pilot uses WildGuard (free) for BOTH the input guard and the
+# response ASR judge. A final reportable run may swap judge_model -> gpt-5-mini
+# (owner-approved, a few final runs only); the guard stays WildGuard.
+#
+# Arms per benchmark (5). The 4 CORE arms decide R4; `head` is the collapse demo.
+#   no_defense         x full  -> baseline ASR(N)                          [core]
+#   no_defense         x tail  -> undefended ADAPTIVE-attacker baseline     [core]
+#   canonicalize_guard x full  -> defense vs the naive attacker             [core]
+#   canonicalize_guard x tail  -> defense vs the ADAPTIVE attacker  <== gate [core]
+#   canonicalize_guard x head  -> N-independent collapse demonstration      [demo]
+#
+# R4 read (src/analysis/bon_asr.py, compare log-log ASR-vs-N slopes):
+#   - head arm: ASR ~ 0, flat in N  -> the canonicalizable axis collapses (N-independent).
+#   - canonicalize_guard x tail  vs  no_defense x full:
+#       tail ~ full  -> attacker relocates cheaply -> constant shift -> LOSE.
+#       tail << full -> forcing the attacker onto the tail bends the slope -> WIN.
+
+num_main_job_threads: 8
+
+tasks:
+  # ==================== HarmBench ====================
+  - mode: defense+evaluate            # no_defense x full  [core baseline]
+    target_model: qwen2_5_vl_7b
+    defense: no_defense
+    judge_model: wildguard
+    judge_method: wildguard
+    benchmark: harmbench
+    campaign: bestofn_r4
+    source_transform_subdir: outputs/bestofn_defense/prompt_transform/harmbench/CHAIN_HB_FULL/non_llm_best_of_n
+  - mode: defense+evaluate            # no_defense x tail  [adaptive baseline]
+    target_model: qwen2_5_vl_7b
+    defense: no_defense
+    judge_model: wildguard
+    judge_method: wildguard
+    benchmark: harmbench
+    campaign: bestofn_r4
+    source_transform_subdir: outputs/bestofn_defense/prompt_transform/harmbench/CHAIN_HB_TAIL/non_llm_best_of_n
+  - mode: defense+evaluate            # canonicalize_guard x full
+    target_model: qwen2_5_vl_7b
+    defense: canonicalize_guard
+    defense_config: {guard_model: wildguard}
+    judge_model: wildguard
+    judge_method: wildguard
+    benchmark: harmbench
+    campaign: bestofn_r4
+    source_transform_subdir: outputs/bestofn_defense/prompt_transform/harmbench/CHAIN_HB_FULL/non_llm_best_of_n
+  - mode: defense+evaluate            # canonicalize_guard x head  [collapse demo]
+    target_model: qwen2_5_vl_7b
+    defense: canonicalize_guard
+    defense_config: {guard_model: wildguard}
+    judge_model: wildguard
+    judge_method: wildguard
+    benchmark: harmbench
+    campaign: bestofn_r4
+    source_transform_subdir: outputs/bestofn_defense/prompt_transform/harmbench/CHAIN_HB_HEAD/non_llm_best_of_n
+  - mode: defense+evaluate            # canonicalize_guard x tail  <== THE GATE
+    target_model: qwen2_5_vl_7b
+    defense: canonicalize_guard
+    defense_config: {guard_model: wildguard}
+    judge_model: wildguard
+    judge_method: wildguard
+    benchmark: harmbench
+    campaign: bestofn_r4
+    source_transform_subdir: outputs/bestofn_defense/prompt_transform/harmbench/CHAIN_HB_TAIL/non_llm_best_of_n
+  # ==================== JailbreakBench ====================
+  - mode: defense+evaluate            # no_defense x full  [core baseline]
+    target_model: qwen2_5_vl_7b
+    defense: no_defense
+    judge_model: wildguard
+    judge_method: wildguard
+    benchmark: jailbreakbench
+    campaign: bestofn_r4
+    source_transform_subdir: outputs/bestofn_defense/prompt_transform/jailbreakbench/CHAIN_JBB_FULL/non_llm_best_of_n
+  - mode: defense+evaluate            # no_defense x tail  [adaptive baseline]
+    target_model: qwen2_5_vl_7b
+    defense: no_defense
+    judge_model: wildguard
+    judge_method: wildguard
+    benchmark: jailbreakbench
+    campaign: bestofn_r4
+    source_transform_subdir: outputs/bestofn_defense/prompt_transform/jailbreakbench/CHAIN_JBB_TAIL/non_llm_best_of_n
+  - mode: defense+evaluate            # canonicalize_guard x full
+    target_model: qwen2_5_vl_7b
+    defense: canonicalize_guard
+    defense_config: {guard_model: wildguard}
+    judge_model: wildguard
+    judge_method: wildguard
+    benchmark: jailbreakbench
+    campaign: bestofn_r4
+    source_transform_subdir: outputs/bestofn_defense/prompt_transform/jailbreakbench/CHAIN_JBB_FULL/non_llm_best_of_n
+  - mode: defense+evaluate            # canonicalize_guard x head  [collapse demo]
+    target_model: qwen2_5_vl_7b
+    defense: canonicalize_guard
+    defense_config: {guard_model: wildguard}
+    judge_model: wildguard
+    judge_method: wildguard
+    benchmark: jailbreakbench
+    campaign: bestofn_r4
+    source_transform_subdir: outputs/bestofn_defense/prompt_transform/jailbreakbench/CHAIN_JBB_HEAD/non_llm_best_of_n
+  - mode: defense+evaluate            # canonicalize_guard x tail  <== THE GATE
+    target_model: qwen2_5_vl_7b
+    defense: canonicalize_guard
+    defense_config: {guard_model: wildguard}
+    judge_model: wildguard
+    judge_method: wildguard
+    benchmark: jailbreakbench
+    campaign: bestofn_r4
+    source_transform_subdir: outputs/bestofn_defense/prompt_transform/jailbreakbench/CHAIN_JBB_TAIL/non_llm_best_of_n

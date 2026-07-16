@@ -67,3 +67,6 @@ from . import amia_ia  # noqa: E402,F401
 from . import guard_baseline  # noqa: E402,F401
 # Paper D: canonicalization defense (effective-N reduction vs Best-of-N).
 from . import canonicalize  # noqa: E402,F401
+# Paper D / R4: canonicalize -> guard-screen (the guarded architecture the
+# guardless `canonicalize` above lacked; see proposal.md §9).
+from . import canonicalize_guard  # noqa: E402,F401
