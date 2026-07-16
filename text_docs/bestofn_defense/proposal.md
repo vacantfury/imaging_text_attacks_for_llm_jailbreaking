@@ -4,6 +4,8 @@
 
 *Full idea writeup + cspaper idea-check + internal reviewer analysis (R1–R6): `new_papers/paperd_bestofn_canonicalization_defense_idea.md` (local, gitignored — persists on this machine across /clear). Reference impl cloned at `other_repos/bon-jailbreaking/`. Origin: `text_docs/shared/future_work.md` §4.*
 
+> **Judge (SHARED, ✅ resolved 2026-07-15):** report HarmBench ASR with **`gpt-5-mini`** (the validated headline judge) + the 26-judge robustness panel — NOT `gpt-5-nano`. Reuse the shared Round-J resolution; do not re-run judge selection. Report `judge_model_issue/JUDGE_MODEL_REPORT.md`; summary `text_docs/shared/judge_validation_sample.md`.
+
 ---
 
 ## 1. Decision & posture (settled 2026-07-13 — do NOT relitigate)

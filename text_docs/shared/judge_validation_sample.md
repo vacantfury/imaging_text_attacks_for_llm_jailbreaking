@@ -1,7 +1,17 @@
 # Judge validation (Round J) — sample, results & selection
 
-*Shared across all papers (they use the same attack/defense suite). Selected judges:
-**WildGuard + Llama-Guard-3** (see "Results & judge selection" below).*
+*Shared across ALL papers that report HarmBench ASR — Paper B (imgaug_defense), Paper C
+(autoattack_defense), Paper D (bestofn_defense): same attack/defense suite, same judge.*
+
+> **✅ RESOLVED 2026-07-15 — FINAL JUDGE SELECTION.** **`gpt-5-mini`** is the single headline ASR judge
+> (the best *justifiable* HarmBench-rubric judge — κ=0.68 vs the 62y/38n human labels — and balanced,
+> 50% harm-rate). The full 26-judge panel, with **`WildGuard`** featured (the one guard whose own paper
+> justifies response-harm judging — NeurIPS 2024, adversarial/jailbreak training, compliance-style
+> definition), is reported as a **robustness/calibration** view, NOT as a co-equal ASR number. Apply
+> gpt-5-mini + the HarmBench rubric **uniformly to HB and JBB** (one consistent judge → comparable
+> numbers). This **supersedes** the earlier "WildGuard + Llama-Guard-3" guess. Full report — problem,
+> design, κ table, the criteria/leniency findings, the guards'-papers justification, HB/JBB decision,
+> caveats, lift-ready bottom line: **`judge_model_issue/JUDGE_MODEL_REPORT.md`** (local, gitignored).
 
 Design + composition of the human-labeled sample that anchors Round J (judge
 validation & selection — `experiments_plan.md §Round J`). This is a **paper
