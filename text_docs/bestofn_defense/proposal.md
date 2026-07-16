@@ -1,6 +1,8 @@
 # Research Proposal — Paper D: Canonicalization Defense Against Best-of-N (`bestofn_defense`)
 
-**Workflow stage:** S9 run — code built (S7 done) + **pilot prep DONE** (dataset built, judges wired to `gpt-5-mini`, docs reconciled — 2026-07-15). The cluster run itself is **GATED on the owner's go signal**.
+**Workflow stage:** ⏳ **GATED on the R4 experiment (2026-07-16) — NOT dead.** An earlier same-day read called this dead; it was based on a pilot that ran the *wrong architecture* (canonicalize → target, no guard, no adaptive attacker) plus an over-strong read of the prior art. Corrected: the real thesis — canonicalize → **guard**, giving N-independent protection on the canonicalizable classes (a slope kill, not DATDP's constant ~500× multiplier) — is **unrun**. The paper turns on one cheap, decisive experiment: the R4 adaptive-carve gate (see §9). Pilot judging = free WildGuard; final reportable judge may be gpt-5-mini (owner-approved for a few final runs). Code + data live under the `bestofn_defense` namespace.
+
+*(Historical: S9 — code built (S7) + pilot prep 2026-07-15; the 2026-07-16 pilot tested canonicalize→target, the wrong architecture — see §8/§9.)*
 
 *Full idea writeup + cspaper idea-check + internal reviewer analysis (R1–R6): `new_papers/paperd_bestofn_canonicalization_defense_idea.md` (local, gitignored — persists on this machine across /clear). Reference impl cloned at `other_repos/bon-jailbreaking/`. Origin: `text_docs/shared/future_work.md` §4.*
 
@@ -88,3 +90,17 @@ Canonicalize ASR is **higher at every N** (log-log slope −0.313 vs −0.338 �
 - **AICR serving is BROKEN (infra debt):** the rebuilt `.venv` (torch 2.11+cu130 / vLLM 0.25.0) imports fine but vLLM crashes at GPU `init_device()` on the rtx-batch nodes (likely GPU-arch/driver/cu130 mismatch; checkout also stale at `d118044`, DIRTY). AICR *orchestrator* works; AICR *serving* does not — fix before serving models on AICR. Sweep the empty failed dirs with `scripts/cleanup_failed.py`.
 
 Cost to date: ~$3–4 (qwen `gpt-5-mini` judging — a cheap-first miss, now gated). Everything after = free/open-source.
+
+## 9. Reassessment & the R4 gate — why Paper D is NOT closed (2026-07-16)
+
+An earlier version of this section (same day) called Paper D dead. That was wrong, on two counts:
+
+**Correction 1 — the pilot (§8) tested the wrong architecture.** It ran `canonicalize → target` with no guard: it cleaned the best-of-N garble and forwarded it straight to the raw target, which (unsurprisingly) complied *more*. That is not the thesis. The thesis is `canonicalize → guard`: collapse the N surface variants to one canonical form, then let a guard block that one form. On the canonicalizable classes this gives **N-independent protection** — 0% ASR no matter how large N grows, because all N variants become a single guarded decision. The pilot never tested this; the defense is **unrun, not disproven.**
+
+**Correction 2 — DATDP is a weak incumbent, and it gives a *different kind* of result.** DATDP (Armstrong et al., 2025; arXiv:2502.00580; read in full) is genuinely weak: no adaptive attacker, 5–25× inference cost per prompt, an over-broad `forbidden_task` with an under-measured 250-prompt benign set, and only overtly-harmful HarmBench prompts on a single benchmark — plausibly why it is a 17-month-unpublished preprint. It also gives only a **constant multiplier** (~500× harder; still loses at large N). Our thesis is qualitatively different — an **N-independent slope/exponent kill** on the covered classes, which DATDP neither achieves nor pre-empts.
+
+**What actually decides the paper — the R4 gate (unrun).** Once canonicalization is applied, an adaptive attacker abandons the canonicalizable head and relocates onto the irreducible tail (scramble / ASCII / paraphrase — what canonicalization cannot collapse). So the paper lives or dies on one question: **is the surviving tail small/expensive enough that forcing the attacker off the head still bends the aggregate ASR-vs-N slope (win), or can they relocate cheaply (constant shift → below the bar)?** This is resolvable by one cheap, decisive experiment — `canonicalize → guard`, an adaptive (tail-relocating) attacker, two benchmarks, and the ASR-vs-N slope as the work-factor metric. Intermediate judging = free WildGuard; the final reportable judge may be gpt-5-mini (owner-approved for a few final runs only). It has not been run.
+
+**The one caveat that stands.** The mechanism (`canonicalize → guard`) overlaps the decode-then-guard crowd (DecipherGuard, RLM-JB, SAID, DoubtProbe, …), so the novelty must live entirely in the *framing* — N-independence, the head-vs-tail carve, and the work-factor measurement — positioned as "principle + measurement," not "a new mechanism." A clearable bar (cf. R3), not a killer.
+
+**Status: LIVE, gated on the R4 experiment — not dead.** The broader generalization of the same idea to the whole meaning-preserving-perturbation class is a *separate* future direction (`text_docs/shared/future_work.md §4.4`); the gpt-5-mini-vs-WildGuard judge disagreement on best-of-N remains a seed for the judge-methodology paper (TODO item 8; partial scoop — Schwinn et al. showed BoN flips best→worst under judge correction).
