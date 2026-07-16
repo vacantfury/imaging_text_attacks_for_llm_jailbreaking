@@ -321,6 +321,45 @@ class AnalyzeResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class RejudgeResult(BaseModel):
+    """results.json for a `rejudge` run — a fresh judging of a prior
+    defense+evaluate dir's stored responses under a NEW judge, without
+    re-querying the target. The source dir and its original verdicts are left
+    untouched, so a judge switch never clobbers the historical numbers.
+
+    Field names mirror DefenseEvaluateResult where they overlap so the existing
+    results-doc / analysis tooling reads a rejudge dir the same way.
+    """
+    model_config = {"extra": "allow"}   # absorb provenance_fields() (git_sha, timestamp, …)
+
+    mode: Literal["rejudge"] = "rejudge"
+    rejudge_of: str                       # the source defense+evaluate dir
+    upstream_ref: Optional[dict] = None   # {source_dir, results_sha256} pointer
+    campaign: Optional[str] = None
+    # carried through from the source result so downstream tables/joins keep working
+    target_model: Optional[str] = None
+    defense: Optional[str] = None
+    is_multimodal: bool = False
+    benchmark: Optional[str] = None
+    encoding: Optional[str] = None
+    transformation_list: list[str] = Field(default_factory=list)
+    prompt_range: Optional[list[int]] = None
+    # the fresh judging under the new judge
+    judge_model: Optional[str] = None
+    judge_method: Optional[str] = None
+    count: int = 0
+    asr: Optional[float] = None
+    refusal_rate: Optional[float] = None
+    metrics: dict[str, float] = Field(default_factory=dict)
+    primary_metric: Optional[str] = None
+    eval_stats: Optional[dict] = None
+    judge_config_hash: Optional[str] = None
+    elapsed_seconds: Optional[float] = None
+    output_dir: Optional[str] = None
+    status: str = "success"
+    warnings: list[str] = Field(default_factory=list)
+
+
 # ====================================================================
 # Task configs — what experiment.yaml's `tasks:` list contains
 # ====================================================================
@@ -418,9 +457,27 @@ class AnalyzeTask(_TaskBase):
         return self
 
 
+class RejudgeTask(_TaskBase):
+    """Re-judge mode: re-score a stored `defense+evaluate` dir's saved responses
+    with a different judge, WITHOUT re-querying the target model.
+
+    Reads `responses_from`'s raw_results.jsonl (the target responses a prior
+    defense+evaluate run saved), runs ONLY the judging step with `judge_model`
+    (+ optional `judge_method` override; else the benchmark's canonical
+    evaluator), and writes a NEW result dir under `outputs/<paper>/rejudge/`.
+    Used to move the coverage grid from one judge to another (e.g.
+    gpt-5-nano -> gpt-5-mini, or a WildGuard robustness pass) with zero target
+    regeneration. Judges every within-budget, correctly-processed row.
+    """
+    mode: Literal["rejudge"]
+    responses_from: str          # a stored defense+evaluate output dir
+    judge_model: str             # judge LLM to apply (e.g. gpt-5-mini, wildguard)
+    judge_method: Optional[str] = None  # evaluator override; else benchmark->evaluator
+
+
 # Discriminated union: Pydantic dispatches by `mode`.
 TaskConfig = Annotated[
-    Union[PromptTransformTask, DefenseEvaluateTask, AnalyzeTask],
+    Union[PromptTransformTask, DefenseEvaluateTask, AnalyzeTask, RejudgeTask],
     Discriminator("mode"),
 ]
 

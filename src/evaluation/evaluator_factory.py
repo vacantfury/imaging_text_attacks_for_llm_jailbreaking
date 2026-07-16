@@ -5,6 +5,7 @@ from .harmbench_evaluation.evaluator import HarmBenchEvaluator
 from .jailbreakbench_evaluation.evaluator import JailbreakBenchEvaluator
 from .jailbreakbench_refusal_evaluation.evaluator import JailbreakBenchRefusalEvaluator
 from .orbench_evaluation.evaluator import ORBenchEvaluator
+from .wildguard_evaluation.evaluator import WildGuardEvaluator
 
 
 # Benchmark → canonical evaluator(s). For most benchmarks this is a single
@@ -111,10 +112,15 @@ class EvaluatorFactory:
             return JailbreakBenchRefusalEvaluator(**kwargs)
         if method == "orbench":
             return ORBenchEvaluator(**kwargs)
+        if method == "wildguard":
+            # Response-harm own-policy judge (rejudge panel/robustness view).
+            # Not in create_from_benchmark: it is a judge_method override, never
+            # a benchmark's canonical judge.
+            return WildGuardEvaluator(**kwargs)
 
         raise ValueError(
             f"Unknown evaluation method: {method}. "
-            "Supported: 'harmbench', 'jailbreakbench', 'jbb_refusal', 'orbench'"
+            "Supported: 'harmbench', 'jailbreakbench', 'jbb_refusal', 'orbench', 'wildguard'"
         )
 
 

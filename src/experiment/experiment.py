@@ -93,11 +93,21 @@ def _target_model_for_task(task) -> Optional[str]:
 
 def _infer_task_type(task) -> TaskType:
     """Infer task type from a typed TaskConfig variant."""
-    from .schemas import PromptTransformTask
+    from .schemas import PromptTransformTask, RejudgeTask
     if isinstance(task, PromptTransformTask):
         # prompt_transform may make LLM calls inside encoders, but those go
         # through API-based encoder LLMs (gpt-4.1-mini etc.) — not cluster.
         return TaskType.NO_MODEL
+
+    if isinstance(task, RejudgeTask):
+        # No target; the judge may be cluster-served (WildGuard) or API (gpt-5-mini).
+        from src.llm_utils import LLMModel, Provider
+        try:
+            m = LLMModel.from_string(task.judge_model)
+            return (TaskType.CLUSTER_MODEL if m.provider == Provider.NU_CLUSTER
+                    else TaskType.API_MODEL)
+        except ValueError:
+            return TaskType.NO_MODEL
 
     model_str = _target_model_for_task(task)
     if model_str:
@@ -184,12 +194,22 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
     sizing a round with multiple concurrent cluster-guard tasks).
     """
     from src.llm_utils import Provider
-    from .schemas import DefenseEvaluateTask
+    from .schemas import DefenseEvaluateTask, RejudgeTask
     from .task import _infer_benchmark
     from src.evaluation.evaluator_factory import judge_methods_for_benchmark
 
     task = info.task
     required: set = set()
+
+    # rejudge: no target/defense to serve — only the judge, which may itself be
+    # cluster-served (e.g. WildGuard). Unlike defense+evaluate's benchmark-based
+    # judge discovery (which reads the YAML default), the rejudge judge is the
+    # task's OWN judge_model, so resolve it directly.
+    if isinstance(task, RejudgeTask):
+        judge = _resolve_model(task.judge_model)
+        if judge is not None and judge.provider == Provider.NU_CLUSTER:
+            required.add(judge)
+        return required
 
     # Target model (only meaningful for defense+evaluate)
     target = _target_model_for_task(task)
