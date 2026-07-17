@@ -45,13 +45,16 @@ class CanonicalizeGuardDefense(GuardBaseline):
 
     def __init__(self, guard_model: str, nfkc: bool = True,
                  strip_control: bool = True, case_fold: bool = True,
-                 normalize_whitespace: bool = True, **kwargs):
+                 normalize_whitespace: bool = True, unscramble: bool = False,
+                 **kwargs):
         super().__init__(guard_model=guard_model, nfkc=nfkc,
                          strip_control=strip_control, case_fold=case_fold,
-                         normalize_whitespace=normalize_whitespace, **kwargs)
+                         normalize_whitespace=normalize_whitespace,
+                         unscramble=unscramble, **kwargs)
         self._canon_opts = dict(nfkc=nfkc, strip_control=strip_control,
                                 case_fold=case_fold,
-                                normalize_whitespace=normalize_whitespace)
+                                normalize_whitespace=normalize_whitespace,
+                                unscramble=unscramble)
 
     def query(
         self,

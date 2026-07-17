@@ -10,3 +10,6 @@ nfkc: true                 # Unicode NFKC — collapses homoglyph / compatibilit
 strip_control: true        # remove control + zero-width / BOM / bidi chars
 case_fold: true            # collapse random capitalization (the canonicalizable head)
 normalize_whitespace: true # collapse whitespace runs to single spaces
+unscramble: false          # R4 refinement: anagram-unscramble + spell-recover the tail
+                           #   (word-scramble / ASCII-noise) so the guard reads harm
+                           #   through the noise. Needs pyspellchecker. Default OFF.
