@@ -144,14 +144,26 @@ class ClusterModelServerManager:
                         logger.debug(f"Acquired endpoint {entry['endpoint']}")
                         return entry["endpoint"]
 
+            # Fail fast if NO server was ever submitted for this model — a
+            # serve-discovery miss (e.g. a cluster judge selected via judge_model
+            # that the orchestrator never added to its cluster-model set). Without
+            # this, acquire blocks the full cluster_server_endpoint_timeout (~2.8h)
+            # on a pool that can never fill (2026-07-16 wildguard-judge hang).
+            jobs = self._jobs.get(model, [])
+            if not jobs:
+                raise RuntimeError(
+                    f"No vLLM server was ever started for {model.model_id}: a task "
+                    f"requested it (e.g. as a judge/guard) but the orchestrator did "
+                    f"not add it to its cluster-model set (serve-discovery miss). "
+                    f"Check judge_model/guard_model serve wiring in "
+                    f"_required_cluster_models_for_task.")
             # Short-circuit on all-failed: if every submitted job for this
             # model is already discovered (resolved by monitor) and the pool
             # is still empty, every one of them failed — no point waiting.
             # Mirrors wait_for_first_server's check; lets tasks fail fast
             # when their judge can't start (e.g. QoS-blocked) instead of
             # hanging up to cluster_server_endpoint_timeout (10000s default).
-            jobs = self._jobs.get(model, [])
-            if jobs and all(j["discovered"] for j in jobs):
+            if all(j["discovered"] for j in jobs):
                 with self._pool_lock:
                     pool_empty = not self._pool.get(model)
                 if pool_empty:
@@ -225,11 +237,19 @@ class ClusterModelServerManager:
                     logger.info(f"First server ready: {first_endpoint}")
                     return first_endpoint
 
+            # Fail fast if NO server was ever submitted for this model
+            # (serve-discovery miss) — never block the full timeout on a pool
+            # that can never fill. Parallels acquire_endpoint's guard.
+            jobs = self._jobs.get(model, [])
+            if not jobs:
+                raise RuntimeError(
+                    f"No vLLM server was ever started for {model.model_id} "
+                    f"(serve-discovery miss). Check judge_model/guard_model "
+                    f"serve wiring in _required_cluster_models_for_task.")
             # Short-circuit on all-failed: if every submitted job for this
             # model is already discovered (resolved by monitor) and the pool
             # is still empty, every one of them failed — no point waiting.
-            jobs = self._jobs.get(model, [])
-            if jobs and all(j["discovered"] for j in jobs):
+            if all(j["discovered"] for j in jobs):
                 with self._pool_lock:
                     pool_empty = not self._pool.get(model)
                 if pool_empty:

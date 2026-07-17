@@ -220,7 +220,17 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
 
     # Judge model(s) for defense+evaluate
     if isinstance(task, DefenseEvaluateTask):
-        if task.judge_method:
+        # Explicit per-task judge_model override wins (mirrors the rejudge path
+        # above). The judge_method → conf/evaluation default resolution below
+        # IGNORES a per-task judge_model, so a cluster judge selected only via
+        # judge_model (e.g. `judge_model: wildguard`) would go UNSERVED and the
+        # judge step would hang on acquire_endpoint() (2026-07-16 wildguard-judge
+        # hang). Resolve it directly here so the vLLM server actually starts.
+        if task.judge_model:
+            judge = _resolve_model(task.judge_model)
+            if judge is not None and judge.provider == Provider.NU_CLUSTER:
+                required.add(judge)
+        elif task.judge_method:
             judge = _judge_model_for_method(task.judge_method)
             if judge is not None and judge.provider == Provider.NU_CLUSTER:
                 required.add(judge)
