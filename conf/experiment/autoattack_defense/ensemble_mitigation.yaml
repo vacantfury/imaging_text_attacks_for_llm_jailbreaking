@@ -43,9 +43,9 @@ _ben: &ben
   mode: defense+evaluate
   target_model: qwen2_5_vl_7b
   prompt_range: [0, 19]
-  benchmark: jailbreakbench_benign
-  judge_method: refusal
-  judge_model: qwen2_5_vl_7b
+  benchmark: orbench_benign_hard        # OR-Bench-Hard = the standard over-refusal benchmark
+  judge_method: orbench                 # ORBench 3-class rubric (refuse/indirect/comply)
+  judge_model: qwen2_5_vl_7b            # free pilot judge; gpt-5-mini rejudge for the final number
   campaign: paper_c_mitigation_pilot
 
 # ── existing harmful ensemble render dirs (from mj_8412009 stage-1) ──
@@ -56,8 +56,8 @@ _occluded: &occluded outputs/autoattack_defense/prompt_transform/harmbench/ir_oc
 _mmtypo:   &mmtypo   outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260716_194203_32634422/ir_mm_typo
 _distract: &distract outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260716_194203_7625970/ir_distraction_grid
 _camoimg:  &camoimg  outputs/autoattack_defense/prompt_transform/harmbench/semantic_camo_ir_plain_20260716_194205_29992788/ir_plain
-# ── existing benign render dir (from mj_8413087) ──
-_ben_img:  &ben_img  outputs/autoattack_defense/prompt_transform/jailbreakbench_benign/ir_plain_20260717_011251_92087856/ir_plain
+# ── OR-Bench-Hard render dir — FILL from orbench_render.yaml output ──
+_ben_img:  &ben_img  outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_<FILL_TS>/ir_plain
 
 tasks:
   # ── HARMFUL: amplifier+wildguard (catch?) + guard-alone (lift baseline) per attack ──
