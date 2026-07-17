@@ -19,8 +19,9 @@ python main.py autoattack_defense/experiment                 # main run — read
 python main.py <preset>                   # any conf/experiment/<preset>.yaml
 
 # Cluster (NURC)
-sbatch scripts/run_experiment.sbatch autoattack_defense/experiment       # auto-cleans old logs
-sbatch scripts/run_experiment.sbatch test --keep
+sbatch scripts/run_experiment.sbatch autoattack_defense/experiment       # keeps old logs by default (owner 2026-07-16)
+sbatch scripts/run_experiment.sbatch autoattack_defense/experiment --clean-logs   # opt in to purging old logs
+sbatch scripts/run_experiment.sbatch test
 
 # Cluster (AICR) — same, via the AICR profile wrapper
 sbatch scripts/run_experiment_aicr.sbatch autoattack_defense/experiment
