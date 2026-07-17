@@ -1,0 +1,53 @@
+# ============================================================
+# Paper C · Stage 1 — render the TEXT-ENCODING half of the mixed ensemble  (2026-07-17)
+# ============================================================
+# Produces the text-channel encoded prompt dirs the comprehensive defense pilot
+# (ensemble_full.yaml) consumes via source_transform_subdir. TEXT delivery only
+# (no ir_ image step) — these are the encoding attacks that demonstrate the
+# "decode gap" (the payload is still encoded even as plain text, so a guard that
+# doesn't decode misses it). The IMAGE half (6 established attacks) already exists.
+#
+# Rendered here (the two that don't already exist at [0,19] text delivery):
+#   - set_theory                 (symbolic set/logic notation; llm_set_theory,
+#                                 default.yaml merged -> encoder model gpt-4.1-mini)
+#   - classical_chinese_simplified (文言文; llm_classical_language — needs an
+#                                 EXPLICIT model, default.yaml not merged for the
+#                                 classical-language autoresolve path, see
+#                                 gen_encoders.yaml NOTE)
+#   - cipher (base64)            (deterministic CipherChat port; NO model, FREE)
+# REUSED as-is (already rendered, HarmBench [0,19] aligned, same first behavior
+#   korean_war_north_defensive):  formal_logic (n=100), code_attack (n=100).
+#
+# Encoder = gpt-4.1-mini (API) for the two llm encoders — owner-approved 2026-07-17
+#   (~40 calls, <$0.05; the established cheap encoder, consistent with how
+#   formal_logic/code_attack were built). cipher is deterministic/free.
+# Stage 1 only: no target queries, no judging, no cluster GPU servers.
+# ============================================================
+
+num_main_job_threads: 4
+
+tasks:
+  # ── set_theory (symbolic set/logic notation) ──
+  - mode: prompt_transform
+    source_file: data/harmbench_prompts.jsonl
+    prompt_range: [0, 19]
+    transformation_list:
+      - type: set_theory                     # alias → llm_set_theory (default.yaml merged)
+
+  # ── classical Chinese (文言文, low-resource-language attack) ──
+  - mode: prompt_transform
+    source_file: data/harmbench_prompts.jsonl
+    prompt_range: [0, 19]
+    transformation_list:
+      - type: classical_chinese_simplified   # autoresolve → llm_classical_language
+        params:
+          model: gpt-4.1-mini                # explicit — default.yaml not merged for this path
+
+  # ── cipher (base64, deterministic / free) ──
+  - mode: prompt_transform
+    source_file: data/harmbench_prompts.jsonl
+    prompt_range: [0, 19]
+    transformation_list:
+      - type: cipher                         # alias → non_llm_cipher
+        params:
+          cipher: base64
