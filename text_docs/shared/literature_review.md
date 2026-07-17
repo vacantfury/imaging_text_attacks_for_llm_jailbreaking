@@ -672,6 +672,64 @@ Nothing here touches modality coverage, encoding, or the decode-gap — it is an
 
 ---
 
+## 13. Variance-Channel Best-of-N — attack-side prior art (bestofn_attack / Paper D, added 2026-07-17)
+
+> Added for the **attack-primary** paper `bestofn_attack` (Paper D; the earlier defense-framed line is now Paper E, suspended). This section is the S4 prior-art record — the make-or-break gate for the paper's core claim: *move Best-of-N's variance out of the surface channel (scramble/caps/ASCII) into a **semantic-paraphrase or sampled-attack-family** channel, and show it beats vanilla BoN especially **against input-normalization defenses**.* Search pass 2026-07-17 (three parallel scoped searches; log `outputs/lit_review/2026-07-17/`). **Gate verdict: the paper survives, but the novelty narrows** — the budget-BoN *operator* is already claimed, so the contribution must be reframed as **channel-depth + measured defense-survival**, not "best-of-N over a distribution." Citations use live `bibkey`s from `paper/literature/my_base.bib`.
+
+### 13.1 The budget/Best-of-N operator is already claimed — and only on the surface channel
+
+Best-of-N jailbreaking (Hughes et al., NeurIPS 2025; `NEURIPS2025_69f3eb24`) is the reference black-box **budget** attack: draw N stochastic variants of one request, succeed if *any* lands, with ASR a power-law in N. Its variance is purely **surface** — word-scrambling, random capitalization, ASCII/Unicode noise — which is exactly what an input-normalization defense strips. Two facts bound how much of "BoN over a distribution" is available to claim:
+
+- **The distribution-BoN operator itself is taken.** *Plentiful Jailbreaks with String Compositions* (B. Huang, NeurIPS SoLaR Workshop 2024; `huang2024plentiful`) is explicitly "an automated best-of-n attack that samples from a combinatorially large number of string compositions," reporting competitive ASR on HarmBench. Crucially its composition space is **surface-only** (leetspeak, rotary ciphers, Base64, ASCII, composed sequentially) and it tests **no** normalization defense. This is the single most important precedent: it means *sampling a best-of-N over a distribution of transforms is not itself novel* — the novelty must live in **which channel** the distribution spans (semantic/strategy, not surface) and in the **defense-survival** measurement.
+- **Cross-suite aggregation is non-novel** (already established in §9.1): best-of-suite over distinct attacks = AutoAttack's worst-case-over-ensemble; HarmBench/JailbreakBench aggregate ASR over methods by default. So neither the cross-sample nor the cross-method "any-of-N succeeds" operator carries novelty.
+- **LIAR** (Beetham et al., 2024; `beetham2025liarleveraginginferencetime`) is the nearest name/framing collision: it self-labels "a fast, black-box, best-of-N sampling attack," matches SOTA ASR while "reducing perplexity by 10× and Time-to-Attack from hours to seconds," and stakes the perplexity-evasion ground our paper claims. But (verified against source) its variance is on the **output continuations** (sampled from a weak/reference model — closer to reward-model best-of-n selection), *not* the input prompt, and the perplexity-evasion is **asserted, never measured against a defense**. A reviewer will ask "isn't this LIAR?"; the delta is (i) input-side semantic/strategy variance vs output-continuation sampling and (ii) a *measured* defense-survival characterization vs an asserted low-perplexity number.
+
+### 13.2 Semantic variance is a real, deeper channel — but prior work stops short of the budget framing
+
+Independent evidence confirms the paper's central *mechanism* (semantic variance boosts ASR and survives normalization better than surface noise) while leaving the **budget/effective-N** framing and the **defense-survival measurement** open:
+
+- **Say It Differently** (Panda & Rai, 2025; `panda2025saydifferentlylinguisticstyles`) rewrites the *same* request across **11 meaning-preserving linguistic styles** and raises ASR by up to **+57 percentage points** across 16 open/closed models. This is a clean "style is a variance channel" result — but it is a **fixed one-shot benchmark** (no ASR-vs-N curve, no power-law, no any-of-N budget) and it tests only its own bespoke style-neutralization defense, not generic input-normalization. It is our strongest motivating baseline; we distinguish on the budget framing and the defense-survival axis.
+- **PAP — "How Johnny Can Persuade LLMs to Jailbreak Them"** (Zeng et al., ACL 2024; `zeng-etal-2024-johnny`) fine-tunes a persuasive paraphraser over a 40-technique persuasion taxonomy and reaches **>92% ASR on Llama-2-7B-Chat, GPT-3.5, and GPT-4 in 10 trials**, optimization-free. The "10 trials" is itself a small best-of-10 over paraphrases — the closest existing thing to a paraphrase-channel budget attack — but it is framed as persuasion-taxonomy coverage, not a variance-channel/effective-N budget attack, and again no normalization-defense test. Origin of the paraphrase-attack-taxonomy line; a required related-work anchor. Adjacent rewrite pipelines (DrAttack, `li2024drattack` — decompose+reconstruct+synonym search; and fluency-optimized attacks like Zhu et al.'s AutoDAN, `zhu2023autodan`) round out the "stay semantic/fluent" family.
+
+### 13.3 Attack-distribution / strategy generators exist — but they are optimizer-class, which is our carve
+
+The paper's strongest variant *samples the attack family per draw* from a fixed bank. Every existing "diverse attack" system that could collide with this is an **optimizer with feedback**, not a pure-sampling budget attack — placing them in a different paper class (the boundary the proposal itself draws: adding feedback → PAIR/TAP class):
+
+- **Rainbow Teaming** (Samvelyan et al., NeurIPS 2024; `3737916.3740145`) — quality-diversity (MAP-Elites) evolutionary search with an elite archive; the field's canonical "optimizer, not sampler."
+- **WildTeaming** (Jiang et al., NeurIPS 2024; `NEURIPS2024_54024fca`) — mines 5.7K in-the-wild tactic clusters and **composes several tactics into one prompt** (combinatorial construction), not per-draw sampling with any-of-N semantics.
+- **h4rm3l** (Doumbouya et al., ICLR 2025; `ICLR2025_904aac1c`) — a DSL of composable primitives (structurally the closest to our "attack bank") but searched by a **bandit synthesizer with per-target feedback**; optimizer, not budget.
+- **AutoDAN-Turbo** (learned strategy library via lifelong feedback) and its **AutoDAN-Reasoning** test-time-scaling variant (`autodanreasoning2025`, not yet downloaded — full-text read owed) share the "strategy library" noun but discover the library via feedback and select top-1 via a scorer, not any-of-N over a fixed bank.
+- **Diversity Helps Jailbreak LLMs** (Zhao et al., NAACL 2025; `zhao-etal-2025-diversity`) is a closed-loop optimizer — the attacker LLM is shown prior *failed* attempts and told to differ — squarely inside our carve-out. Cite as "diversity helps" evidence, distinguish on blind-sampling vs feedback.
+
+None of these is a pure-sampling budget/power-law attack over a fixed distribution, and **none tests against input-normalization/rendering defenses.**
+
+### 13.4 Scaling-curve measurement grounds the effective-N lens but leaves the defense side open
+
+The effective-N / work-factor lens is externally grounded (see also §7.6): *Jailbreak Scaling Laws* (`halder2026jailbreakscalinglawslarge`) and *Risk Under Pressure* (`ehghaghi2026riskpressurecomputeawareevaluation`) both establish budget-parameterized ASR curves but propose no defense. Two additions from this pass:
+
+- **SABER — Statistical Estimation of Adversarial Risk under Best-of-N Sampling** (Feng et al., 2026; `feng2026statisticalestimationadversarialrisk`) is a Beta-model estimator for extrapolating large-N BoN ASR from small samples — orthogonal (measurement efficiency), sits on single-attack BoN, no defense test. Complementary machinery for our effective-N meter, not a competitor.
+- **Systematic Scaling Analysis of Jailbreak Attacks** (Wang et al., 2026; `wang2026systematicscalinganalysisjailbreak`) fits saturating-exponential success curves across four paradigms; verified that its "BoN" paradigm is **single-attack-family only** (surface augmentations) and it **explicitly excludes defense evaluation**. This hands us the framing gap directly: *prior scaling-law work treats BoN as single-attack-family and defense-free.*
+- **The Attacker Moves Second** (Nasr, Carlini, Tramèr et al., 2025; `nasr2025attackermovessecondstronger`) — cite only for the general "evaluate against adaptive, not static, attacks" methodology; verified caveat: none of its 12 broken defenses are paraphrase/SmoothLLM/normalization-type, so it is not direct normalization-evasion evidence.
+
+### 13.5 The defense-survival axis is empty — and existing defense papers already supply supporting numbers
+
+No surveyed attack measures BoN-variant survival against input-normalization defenses, yet two defense papers already publish the *shape* of the effect our attack predicts:
+
+- **SemanticSmooth** (Ji et al.; `ji-etal-2025-defending`) — its own Table 2 shows character-level **SmoothLLM leaves 46% ASR under PAIR and 54% under AutoDAN**, versus 20%/26% for their semantic defense. That is peer-reviewed evidence that *semantically-coherent* attacks survive surface-normalization far better than surface/GCG attacks — direct external support for "channel depth sets defense-survival."
+- **Baseline Defenses** (Jain et al., 2023; `DBLP:journals/corr/abs-2309-00614`) supplies the mechanism: paraphrase/perplexity defenses discard garbled GCG suffixes but do nothing to already-fluent prompts. **LatentBreak** (`mura2025latentbreakjailbreakinglargelanguage`) is the white-box cousin — semantic word substitution to evade perplexity filters. Together they establish *why* semantic ≠ surface for this defense class, without ever running the budget/best-of-N-vs-normalization measurement the paper proposes.
+
+The BoN-specific defense side is otherwise occupied only by **DATDP** (`armstrong2025defensedarkpromptsmitigating`), a repeated-judge gate that is a constant-multiplier on the ASR-vs-N law, not a channel-aware normalization defense (see §7.6 discussion).
+
+### 13.6 Positioning verdict (S4 gate: SURVIVES, NARROWED)
+
+Neither make-or-break check is pre-empted, but the search reshapes the claim:
+
+- **What to DROP:** any claim that "best-of-N over a distribution" is itself novel — Plentiful owns the surface-composition form and best-of-suite (§9.1) owns the fixed-max form.
+- **What the paper CAN claim** (the sharpened lane): (1) moving BoN's variance into the **semantic-paraphrase / sampled-attack-family channel**, *deeper than* Plentiful's surface compositions and framed as a genuine budget/power-law attack; (2) the **channel-depth → effective-N characterization** (surface < paraphrase < strategy), with the coined framing "variance channel / channel depth" unclaimed in the literature; (3) **measured defense-survival against input-normalization defenses** — the empty axis, with SemanticSmooth's Table 2 as corroborating prior evidence.
+- **Must-distinguish trio in related work:** Plentiful (surface-only distribution-BoN), LIAR (output-continuation BoN, unmeasured evasion), Say It Differently (semantic variance, no budget, no defense) — each covers exactly one of the three crux axes; the paper is the first to combine all three. Full-text reads of LIAR, Plentiful, Say It Differently, and AutoDAN-Reasoning are owed before the camera-ready related-work paragraph.
+
+---
+
 ## References
 
 - Anthropic. *The Claude 3 Model Family.* Technical Report, 2024.

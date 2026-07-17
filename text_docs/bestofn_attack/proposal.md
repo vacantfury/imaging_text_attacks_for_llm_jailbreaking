@@ -1,6 +1,6 @@
 # Research Proposal — Variance Channels: Best-of-N Jailbreaking Beyond Surface Noise (`bestofn_attack`)
 
-**Workflow stage:** S4 · Literature loop (as of 2026-07-17) — founded this session; the S4 **prior-art check is the make-or-break gate** (§4). S1 external idea-check (cspaper, owner hands) is pending as a parallel gate. Nothing runs without the owner's go.
+**Workflow stage:** S4 · Literature loop essentially COMPLETE (as of 2026-07-17) — search done, owner downloaded the 10 core papers, bib verified, and the full attack-side synthesis is written into `literature_review.md` §13. **Gate verdict = SURVIVES, NARROWED** (see §4 → S4 findings + review §13.6). **Open before S5:** owner ratification of the reframed novelty (channel-depth + defense-survival; DROP "distribution-BoN is novel"). Deferred: full-text reads of the must-distinguish trio (LIAR / Plentiful / Say-It-Differently) + AutoDAN-Reasoning at camera-ready; S1 cspaper idea-check (owner hands, parallel). Nothing runs without the owner's go.
 
 *Origin: pivoted 2026-07-17 from the defense-framed `bestofn_defense` (Paper D). Over that session the framing flipped from defense-primary to **attack-primary**; a new subfolder was the clean home. Running name is a WORKING title (refined at writing). Full design was co-developed with the owner in the 2026-07-17 session.*
 
@@ -53,6 +53,21 @@ A Best-of-N wrapper **parameterized by its variance channel**. Two *uniform* var
 
 If either exists → re-scope or kill. **Boundary:** adding feedback (reweight toward families that worked) turns this into an optimizer (PAIR/TAP class) = a different paper — keep the pure-sampling budget framing.
 
+### S4 findings (2026-07-17 search pass — gate verdict: SURVIVES, NARROWED)
+
+Three parallel searches (log: `outputs/lit_review/2026-07-17/`). Neither make-or-break check is pre-empted, but two close-prior-art papers **narrow and sharpen** the novelty — the framing must change.
+
+- **Check #1 (semantic/strategy BoN vs normalization defenses) — OPEN.** No paper does all three halves (semantic/strategy channel + budget/power-law + measured-vs-normalization-defense). Closest: **Say It Differently** (2511.10519 — semantic-style variance +57pp, but no budget, no defense test) and **LIAR** (2412.05232 — self-labels a "best-of-N attack" and claims perplexity-evasion, but varies *output* continuations from a weak model, not input paraphrase/strategy, and only *asserts* evasion, never measures it vs a defense).
+- **Check #2 (BoN over an attack distribution) — the operator itself is NOT novel.** **Plentiful Jailbreaks with String Compositions** (2411.01084) is already "an automated best-of-N attack that samples from a combinatorially large space of string compositions" — but **surface-only** (leetspeak/cipher/base64), no defense test. Combined with the base's §9.1 ruling that best-of-suite (fixed max over an ensemble = AutoAttack) is non-novel, **we can no longer claim "best-of-N over a distribution" as the contribution.**
+- **The whole strategy/distribution space is OPTIMIZER-class** (h4rm3l bandit; AutoDAN-Turbo/-Reasoning learned library + scorer; Rainbow Teaming / RainbowPlus / Ferret QD; DAGR / AutoRISE / Babel feedback; "Average Jane" bandit) — none is a pure-sampling budget/power-law attack, and **not one tests against input-normalization/rendering defenses.** The defense-survival axis is empty ground.
+- **Coined framing** ("variance channel" / "channel depth") returns zero on-point hits — unclaimed.
+
+**Sharpened novelty lane (what to claim):** (1) moving BoN's variance into the **semantic-paraphrase / sampled-attack-family** channel — *deeper than* Plentiful's surface-string compositions; (2) the **channel-depth / effective-N characterization** (surface < paraphrase < strategy); (3) **measured defense-survival vs input-normalization defenses** — nobody has done this; SemanticSmooth's own Table 2 (semantic attacks leave 46%/54% ASR under SmoothLLM vs 20%/26% under SemanticSmooth) is published *supporting* evidence.
+
+**DROP/soften:** "best-of-N over a distribution is novel." Frame the contribution as **channel-depth + defense-survival**, not the distribution-BoN operator.
+
+**Must-read full text before commit:** LIAR (2412.05232), Plentiful (2411.01084), Say It Differently (2511.10519), AutoDAN-Reasoning (2510.05379); PAP (2401.06373) + h4rm3l (in base) for related work. Candidates staged (unverified) in `paper/literature/my_base.bib`.
+
 ## 5. Contributions (provisional)
 
 1. The **variance-channel framing** of Best-of-N (surface / paraphrase / strategy) + the effective-N / work-factor characterization.
@@ -78,14 +93,14 @@ Same as Papers B/C/D — do NOT re-run judge selection. **Headline:** `gpt-5-min
 
 **New code owed (S7):** a stochastic **paraphrase** transform (open served model, meaning-preserving) · the **variance-channel wrapper / orchestration** (the two knobs) · *optional* ReNeLLM-generator port (surviving-ops-only, seeded — the native-variance booster).
 
-## 9. Publication strategy (candidates + criteria; deadlines from `text_docs/shared/conference_timeline.md`, last verified 2026-07-16 — LIVE re-check owed at S10)
+## 9. Publication strategy (owner-directed 2026-07-17: AAAI-PRIMARY; deadlines from `text_docs/shared/conference_timeline.md`, last verified 2026-07-16 — LIVE re-check owed at S10)
 
-Scope (prior-art + build + a models×defenses matrix) rules out **AAAI-27** (abstract 7/21 — too tight).
+**Target: AAAI-27 (main + AI Alignment track — Rep 9.0, Fit 9.0).** Abstract **2026-07-21** (register by **7/20** — a FREE, non-binding placeholder → costs nothing, preserves the option); full paper **2026-07-28**. The claim is committable now for an honest abstract (*"variance-channel best-of-N beats vanilla BoN against input-normalization defenses"*).
 
-- **Primary candidates:** **IEEE SaTML 2027** (full paper **2026-09-29**; Fit 10 — dedicated secure/trustworthy-ML, the natural home) · **ICLR 2027** (abstract ~9/19, full ~9/24 — EXPECTED; Rep 9.5, safety/robustness fit).
-- **Aggressive option:** ARR August cycle → EACL 2027 (full **2026-08-03**) *if* the matrix moves fast — likely too tight.
-- **Early non-archival outlet (optional):** NeurIPS 2026 workshops (late Aug–early Sep) — EvoRobust (8/30, robustness eval) / VLM4RWD (8/31) — a workshop version while the conference version cooks.
-- **Pick criterion:** default **SaTML** (perfect fit + comfortable 9/29 timeline) unless the result is strong enough to reach for ICLR. Venue pick **DEFERRED**; re-verify deadlines live at S10.
+- **Sprint plan (11 days):** clear **S4 prior-art FAST** (make-or-break) → build (paraphrase transform + variance-channel wrapper) → aggressively-scoped models×defenses matrix → decide ~**7/26** (TODO item-1 ④) whether results back the claim → submit 7/28 or fall back.
+- **Clean fallback (no loss — same work, later deadline):** **IEEE SaTML 2027** (full **2026-09-29**, Fit 10 — the natural home) · or **ICLR 2027** (~9/24 EXPECTED, Rep 9.5).
+- **Optional early non-archival outlet:** NeurIPS 2026 workshops (late Aug) — EvoRobust (8/30) / VLM4RWD (8/31).
+- **Honest caveat (once):** 11 days from an un-run prior-art check to a full experimental paper is a genuine sprint, and S4 could still kill it — but the free abstract + the SaTML fallback cap the downside (cheap-option play). Check the AAAI **AI Alignment track** CFP for a possibly-distinct deadline/rubric (TODO item-1 ②).
 
 ## 10. Next actions (gates)
 
