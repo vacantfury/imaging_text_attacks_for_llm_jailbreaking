@@ -25,18 +25,22 @@ ANTHROPIC_API_KEY: Optional[str] = os.getenv("ANTHROPIC_API_KEY")
 GOOGLE_API_KEY: Optional[str] = os.getenv("GOOGLE_API_KEY")
 HUGGINGFACE_TOKEN: Optional[str] = os.getenv("HUGGINGFACE_TOKEN")
 # OpenAI-compatible third-party providers (added 2026-07-12, for judge/eval use).
-# DeepSeek + Z.AI are DIRECT MAINLAND endpoints — route ZERO personal data through
-# them (judge calls over public-benchmark responses only), per the global
-# data-jurisdiction rule. xAI (Grok) is US jurisdiction.
+# DeepSeek + Z.AI + Moonshot are DIRECT MAINLAND endpoints — route ZERO personal
+# data through them (judge/eval/attack-target calls over public-benchmark data
+# only), per the global data-jurisdiction rule. This public research repo runs
+# exactly that zero-personal-data work, so the mainland APIs are sanctioned here.
+# xAI (Grok) is US jurisdiction.
 DEEPSEEK_API_KEY: Optional[str] = os.getenv("DEEPSEEK_API_KEY")
 ZAI_API_KEY: Optional[str] = os.getenv("ZAI_API_KEY")
 XAI_API_KEY: Optional[str] = os.getenv("XAI_API_KEY")
+MOONSHOT_API_KEY: Optional[str] = os.getenv("MOONSHOT_API_KEY")
 
 # API endpoints
 OPENAI_API_URL: Final[str] = "https://api.openai.com/v1"
 DEEPSEEK_API_URL: Final[str] = "https://api.deepseek.com"          # direct mainland
 ZAI_API_URL: Final[str] = "https://api.z.ai/api/paas/v4"           # direct mainland
 XAI_API_URL: Final[str] = "https://api.x.ai/v1"                    # US jurisdiction
+MOONSHOT_API_URL: Final[str] = "https://api.moonshot.ai/v1"        # direct mainland (.ai = international)
 OLLAMA_BASE_URL: Final[str] = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_VERSION_URL: Final[str] = f"{OLLAMA_BASE_URL}/api/version"
 OLLAMA_CHAT_URL: Final[str] = f"{OLLAMA_BASE_URL}/api/chat"

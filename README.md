@@ -57,6 +57,7 @@ HUGGINGFACE_TOKEN=...     # gated HF model downloads (cluster vLLM serving)
 DEEPSEEK_API_KEY=...      # DeepSeek (OpenAI-compatible; judge/eval)
 ZAI_API_KEY=...           # Z.AI / GLM (OpenAI-compatible; judge/eval)
 XAI_API_KEY=...           # xAI / Grok (OpenAI-compatible)
+MOONSHOT_API_KEY=...      # Moonshot / Kimi (OpenAI-compatible; judge/eval/target)
 OLLAMA_BASE_URL=...       # optional; only for local Ollama-served models
 ```
 

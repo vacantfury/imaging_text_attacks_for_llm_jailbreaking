@@ -34,13 +34,17 @@ class Provider(str, Enum):
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
     # ── OpenAI-compatible third-party endpoints (added 2026-07-12; mirror of
-    # psyche llm_utils). DeepSeek + Z.AI are DIRECT MAINLAND endpoints — NEVER
-    # send personal data through them; for ZERO-personal-data bulk work only
-    # (LLM-judge calls / evals over public-benchmark responses), the sanctioned
-    # use under the global data-jurisdiction rule. xAI (Grok) is US jurisdiction.
+    # psyche llm_utils). DeepSeek + Z.AI + Moonshot are DIRECT MAINLAND
+    # endpoints — NEVER send personal data through them; for ZERO-personal-data
+    # bulk work only (LLM-judge calls / evals over public-benchmark responses),
+    # the sanctioned use under the global data-jurisdiction rule. This is a
+    # public research repo running exactly that zero-personal-data work, so the
+    # mainland APIs are fine here (no `_MAINLAND`-style block). xAI (Grok) is US
+    # jurisdiction.
     DEEPSEEK = "deepseek"
     ZAI = "zai"
     XAI = "xai"
+    MOONSHOT = "moonshot"
     LOCAL = "local"
     NU_CLUSTER = "nu_cluster"
 
@@ -173,6 +177,32 @@ class LLMModel(Enum):
     # ──────── xAI / Grok (US jurisdiction, OpenAI-compatible) ────────
     GROK_4_5      = ModelSpec("grok-4.5",      Provider.XAI, 2.00, 6.00, family="grok")
     GROK_4_3      = ModelSpec("grok-4.3",      Provider.XAI, 1.25, 2.50, family="grok")
+
+    # ──────── Moonshot / Kimi (direct mainland, OpenAI-compatible) — judge/eval
+    # /attack-target only, no personal data (added 2026-07-16). input_price is the
+    # cache-MISS $/1M; Moonshot's cache-hit is ~10x cheaper and unmodeled here, as
+    # with DeepSeek. Deprecated ids (kimi-k2-*-preview, kimi-k2-thinking,
+    # kimi-latest) and kimi-k2.5 (sunsets 2026-08-31) are deliberately omitted.
+    # The self-served open-weight KIMI_K2_INSTRUCT on Provider.NU_CLUSTER (a
+    # bake-off judge) is a separate row below and stays as-is. ────────
+    KIMI_K3 = ModelSpec(
+        # K3 (released 2026-07-16): 2.8T-param open-weight MoE, thinking always on.
+        # NO_CUSTOM_TEMPERATURE: always-on thinking rejects a custom temperature.
+        # ⚠️ its always-on thinking counts against max_tokens, so a small cap
+        # starves the visible reply (verified empty at max_tokens=64) — the
+        # default.yaml budget (16384) is a normal budget and is correct here.
+        "kimi-k3", Provider.MOONSHOT, 3.00, 15.00,
+        max_context_len=1_048_576, family="kimi",
+        quirks=frozenset({ModelQuirk.NO_CUSTOM_TEMPERATURE}))
+    KIMI_K2_7_CODE = ModelSpec(
+        "kimi-k2.7-code", Provider.MOONSHOT, 0.95, 4.00,
+        max_context_len=262_144, family="kimi")
+    KIMI_K2_7_CODE_HIGHSPEED = ModelSpec(
+        "kimi-k2.7-code-highspeed", Provider.MOONSHOT, 1.90, 8.00,
+        max_context_len=262_144, family="kimi")
+    KIMI_K2_6 = ModelSpec(
+        "kimi-k2.6", Provider.MOONSHOT, 0.95, 4.00,
+        max_context_len=262_144, family="kimi")
 
     # ──────── Local (HF transformers in-process) ────────
     LLAMA3       = ModelSpec("llama3",                                   Provider.LOCAL)

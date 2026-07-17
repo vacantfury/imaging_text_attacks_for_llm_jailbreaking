@@ -3,7 +3,9 @@ LLM service implementations for various providers.
 """
 
 from .openai_service import OpenAIService
-from .openai_compatible_services import DeepSeekService, ZAIService, XAIService
+from .openai_compatible_services import (
+    DeepSeekService, ZAIService, XAIService, MoonshotService,
+)
 from .claude_service import ClaudeService
 from .google_service import GoogleService
 from .local_lm_service import LocalLMService
@@ -14,6 +16,7 @@ __all__ = [
     'DeepSeekService',
     'ZAIService',
     'XAIService',
+    'MoonshotService',
     'ClaudeService',
     'GoogleService',
     'LocalLMService',

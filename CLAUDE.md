@@ -39,7 +39,7 @@ python scripts/cleanup_failed.py --recent 1h --delete
 mlflow ui                                 # http://localhost:5000
 ```
 
-There is no test framework — `python main.py test` runs the 4-task smoke preset end-to-end. API keys are read as plain environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `HUGGINGFACE_TOKEN`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `XAI_API_KEY`; see `.env.example`). Locally, prefer `./run <preset>` — a gitignored bootstrap that injects the keys from the maintainer's secret manager, so no plaintext `.env` is needed. Plain `python main.py <preset>` still works if the vars are exported or a gitignored `.env` is present at the repo root.
+There is no test framework — `python main.py test` runs the 4-task smoke preset end-to-end. API keys are read as plain environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `HUGGINGFACE_TOKEN`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `XAI_API_KEY`, `MOONSHOT_API_KEY`; see `.env.example`). Locally, prefer `./run <preset>` — a gitignored bootstrap that injects the keys from the maintainer's secret manager, so no plaintext `.env` is needed. Plain `python main.py <preset>` still works if the vars are exported or a gitignored `.env` is present at the repo root.
 
 ## Architecture
 
