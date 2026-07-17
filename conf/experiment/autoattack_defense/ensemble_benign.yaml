@@ -28,9 +28,9 @@ _qwen: &qwen
   judge_model: qwen2_5_vl_7b        # free; served once (= target)
   campaign: paper_c_ensemble_benign_pilot
 
-# ── Stage-1 sources — FILL from ensemble_benign_render.yaml output dirs ──
-_ben_img:  &ben_img  outputs/autoattack_defense/prompt_transform/jailbreakbench_benign/ir_plain_<FILL_TS>/ir_plain
-_ben_txt:  &ben_txt  outputs/autoattack_defense/prompt_transform/jailbreakbench_benign/non_llm_baseline_<FILL_TS>/non_llm_baseline
+# ── Stage-1 sources — FILLED from ensemble_benign_render.yaml (job mj_8413087) ──
+_ben_img:  &ben_img  outputs/autoattack_defense/prompt_transform/jailbreakbench_benign/ir_plain_20260717_011251_92087856/ir_plain
+_ben_txt:  &ben_txt  outputs/autoattack_defense/prompt_transform/jailbreakbench_benign/non_llm_baseline_20260717_011251_18926002/non_llm_baseline
 
 tasks:
   # benign IMAGE (ir_plain) × 4 defenses — the over-refusal test
