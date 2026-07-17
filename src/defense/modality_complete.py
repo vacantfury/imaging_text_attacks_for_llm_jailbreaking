@@ -49,6 +49,7 @@ or 1 with decode ablated. When guard_model is set, the guard call is a SEPARATE
 service (own usage, see get_usage()) and a successful verdict adds one more
 target call (the original-input query) on top of recover/decode.
 """
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -127,10 +128,15 @@ _UNION_TEMPLATE = (
 
 
 def _gate_says_obfuscated(resp: str) -> bool:
-    """Parse the GATE_PROMPT one-word verdict. Fail-CLOSED to obfuscated: on an
-    ambiguous / unparseable answer we decode anyway, so a mis-gated attack is
-    never silently skipped (a mis-gated benign prompt only costs some
-    over-refusal — safety is preserved over utility on ambiguity)."""
+    """Parse the GATE_PROMPT one-word verdict (gate_style="llm"). Fail-CLOSED to
+    obfuscated: on an ambiguous / unparseable answer we decode anyway, so a
+    mis-gated attack is never silently skipped (a mis-gated benign prompt only
+    costs some over-refusal — safety is preserved over utility on ambiguity).
+
+    NOTE (2026-07-17 gated-decode pilot): the LLM gate on a 7B model is biased
+    toward OBFUSCATED — it decoded ~14/20 benign OR-Bench-Hard prompts (conflates
+    "sensitive-sounding" with "obfuscated"), so it did NOT fix the over-refusal.
+    The deterministic gate_style="surface" below is the successor."""
     r = (resp or "").strip().upper()
     if r.startswith("PLAIN"):
         return False
@@ -139,6 +145,55 @@ def _gate_says_obfuscated(resp: str) -> bool:
     if "PLAIN" in r[:24]:
         return False
     return True  # fail-closed: unsure -> decode
+
+
+# Unicode blocks whose presence signals symbolic/mathematical encoding
+# (set theory, formal logic): Mathematical Operators (∀∃∈∧∨¬⊆…), Supplemental
+# Math Operators, Arrows (→↔), Mathematical Alphanumeric Symbols (𝒟…),
+# Letterlike Symbols.
+def _has_math_symbols(t: str) -> bool:
+    for c in t:
+        o = ord(c)
+        if (0x2200 <= o <= 0x22FF or 0x2A00 <= o <= 0x2AFF
+                or 0x2190 <= o <= 0x21FF or 0x1D400 <= o <= 0x1D7FF
+                or 0x2100 <= o <= 0x214F):
+            return True
+    return False
+
+
+_B64_RUN = re.compile(r"[A-Za-z0-9+/]{24,}={0,2}")
+_HEX_RUN = re.compile(r"(?:[0-9a-fA-F]{2}[\s:]){10,}[0-9a-fA-F]{2}")
+_CODE_SYNTAX = re.compile(
+    r"```|def\s+\w+\s*\(|from\s+\w+\s+import\s+\w|class\s+\w+\s*[:\(]|->\s*\w+\s*:")
+
+
+def _surface_says_obfuscated(text: str) -> bool:
+    """Deterministic obfuscation gate (gate_style="surface"). True iff the text
+    carries a SURFACE marker of encoding — a heavy non-Latin-script ratio
+    (rare/classical language, homoglyphs), symbolic math/logic notation, a long
+    base64/hex run (cipher), or code syntax (code_attack). Plain natural-language
+    text — benign prompts AND plainly-transcribed image attacks — returns False,
+    so it is NOT decoded and reaches the guard at its raw-input floor (the
+    over-refusal fix). No LLM call, so it cannot conflate "sensitive-sounding"
+    with "obfuscated" the way the 7B LLM gate did (2026-07-17 pilot)."""
+    t = text or ""
+    if not t.strip():
+        return False
+    # 1. rare-language / homoglyph: high ratio of letters beyond Latin Ext-B
+    #    (Greek/Cyrillic/CJK/Arabic/… count; accented Latin like é/ü does not)
+    letters = [c for c in t if c.isalpha()]
+    if letters and sum(1 for c in letters if ord(c) > 0x024F) / len(letters) > 0.15:
+        return True
+    # 2. symbolic math/logic notation (set_theory, formal_logic)
+    if _has_math_symbols(t):
+        return True
+    # 3. long base64 / hex runs (cipher)
+    if _B64_RUN.search(t) or _HEX_RUN.search(t):
+        return True
+    # 4. code syntax (code_attack)
+    if _CODE_SYNTAX.search(t):
+        return True
+    return False
 
 
 @register_defense
@@ -155,6 +210,7 @@ class ModalityComplete(Defense):
         guard_model: Optional[str] = None,
         decode_style: str = "recover",
         gate_decode: bool = False,
+        gate_style: str = "surface",
         **kwargs,
     ):
         """
@@ -170,15 +226,20 @@ class ModalityComplete(Defense):
                 = the suspicion-primed DECODE_PROMPT. "neutral" = the
                 over-refusal-mitigating NEUTRAL_DECODE_PROMPT (no harm-priming).
             gate_decode: Step 2.5 GATE toggle (default False = unchanged, decode
-                everything). When True, an obfuscation-gate LLM call decides per
-                prompt whether the DECODE step runs — obfuscated inputs are
-                decoded, plainly-worded inputs pass their union straight to the
-                guard (its raw-input floor). The over-refusal fix (see GATE_PROMPT
-                note); no effect unless decode_text is also True.
+                everything). When True, an obfuscation gate decides per prompt
+                whether the DECODE step runs — obfuscated inputs are decoded,
+                plainly-worded inputs pass their union straight to the guard (its
+                raw-input floor). The over-refusal fix; no effect unless
+                decode_text is also True.
+            gate_style: which gate decides (only when gate_decode=True).
+                "surface" (default) = the deterministic surface detector
+                (_surface_says_obfuscated; no LLM call — the 2026-07-17
+                successor). "llm" = the GATE_PROMPT model call
+                (_gate_says_obfuscated; biased toward OBFUSCATED on a 7B model).
         """
         super().__init__(decode_text=decode_text, guard_model=guard_model,
                          decode_style=decode_style, gate_decode=gate_decode,
-                         **kwargs)
+                         gate_style=gate_style, **kwargs)
         self._guard_model_name = guard_model
         self._guard_model: Optional[LLMModel] = (
             LLMModel.from_string(guard_model) if guard_model else None
@@ -232,14 +293,25 @@ class ModalityComplete(Defense):
         # over-refusal (2026-07-17 decode-ablation). gate_decode=False (default)
         # keeps the original "decode everything" behavior.
         gate_decode = bool(self._config.get("gate_decode", False))
+        gate_style = str(self._config.get("gate_style", "surface"))
         decode_ids: set[str] = {p.id for p in prompts}  # default: decode all
-        if decode_text and gate_decode:
+        if decode_text and gate_decode and gate_style == "surface":
+            # Deterministic — no LLM call; decide from the union's surface form.
+            decode_ids = {
+                p.id for p in prompts
+                if _surface_says_obfuscated(union_by_id[p.id])
+            }
+            logger.info(
+                f"ModalityComplete step 2.5 (GATE, surface): "
+                f"{len(decode_ids)}/{len(prompts)} obfuscated -> decode; the rest "
+                f"pass their raw union to the guard")
+        elif decode_text and gate_decode:  # gate_style == "llm"
             gate_convs = [
                 (p.id, [(GATE_PROMPT.format(content=union_by_id[p.id]), None)])
                 for p in prompts
             ]
             logger.info(
-                f"ModalityComplete step 2.5 (GATE): {len(gate_convs)} "
+                f"ModalityComplete step 2.5 (GATE, llm): {len(gate_convs)} "
                 f"obfuscation checks")
             gate_out = dict(target_service.batch_chat(
                 conversations=gate_convs, system_message=None, is_test=True,
@@ -249,8 +321,8 @@ class ModalityComplete(Defense):
                 if _gate_says_obfuscated(gate_out.get(p.id, ""))
             }
             logger.info(
-                f"ModalityComplete GATE: {len(decode_ids)}/{len(prompts)} judged "
-                f"OBFUSCATED -> decode; the rest pass their raw union to the guard")
+                f"ModalityComplete GATE (llm): {len(decode_ids)}/{len(prompts)} "
+                f"judged OBFUSCATED -> decode; the rest pass their raw union")
 
         # ---------- Step 3: DECODE the union to plaintext (gated) ----------
         # Decodes BOTH channels' content (recovered image transcription included),
