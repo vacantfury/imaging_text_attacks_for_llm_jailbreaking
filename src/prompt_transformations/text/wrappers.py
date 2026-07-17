@@ -26,6 +26,7 @@ from .encoders.non_llm_artprompt_encoder import ArtPromptEncoder
 from .encoders.non_llm_homoglyph_encoder import HomoglyphEncoder
 from .encoders.non_llm_cipher_encoder import CipherEncoder
 from .encoders.non_llm_best_of_n_encoder import BestOfNEncoder
+from .encoders.llm_paraphrase_encoder import ParaphraseLLMEncoder
 
 
 @register_transformation
@@ -56,6 +57,14 @@ class CipherTransformation(TextEncoderTransformation):
 class BestOfNTransformation(TextEncoderTransformation):
     type_name = "non_llm_best_of_n"
     encoder_class = BestOfNEncoder
+
+
+@register_transformation
+class ParaphraseTransformation(TextEncoderTransformation):
+    # Stochastic meaning-preserving paraphrase — the "which-paraphrase" variance
+    # knob for the Variance-Channel Best-of-N attack (Paper D).
+    type_name = "llm_paraphrase"
+    encoder_class = ParaphraseLLMEncoder
 
 
 @register_transformation

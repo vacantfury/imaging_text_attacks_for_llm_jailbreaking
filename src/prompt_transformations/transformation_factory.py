@@ -40,6 +40,10 @@ TRANSFORMATION_ALIASES: dict[str, str] = {
     "symbol_injection": "non_llm_symbol_injection",
     "semantic_camo": "llm_semantic_camo",
     "cipher": "non_llm_cipher",
+    # Variance-Channel Best-of-N (Paper D)
+    "paraphrase": "llm_paraphrase",
+    "variance_channel": "variance_channel_bon",
+    "bon_wrapper": "variance_channel_bon",
     # Established multimodal attacks (Paper C ensemble, added 2026-07-16)
     "low_contrast": "ir_low_contrast",
     "occluded": "ir_occluded",
