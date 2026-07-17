@@ -34,14 +34,14 @@ _qwen: &qwen
   judge_model: wildguard
   campaign: paper_c_ensemble_pilot
 
-# ── Stage-1 sources — FILL from ensemble_render.yaml output dirs (<FILL_TS>) ──
-_figstep:  &figstep  outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_<FILL_TS>/ir_figstep
-_fcflow:   &fcflow   outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_<FILL_TS>/ir_fc_flowchart
-_lowcon:   &lowcon   outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_<FILL_TS>/ir_low_contrast
-_occluded: &occluded outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_<FILL_TS>/ir_occluded
-_mmtypo:   &mmtypo   outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_<FILL_TS>/ir_mm_typo
-_distract: &distract outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_<FILL_TS>/ir_distraction_grid
-_camoimg:  &camoimg  outputs/autoattack_defense/prompt_transform/harmbench/llm_semantic_camo_ir_plain_<FILL_TS>/ir_plain
+# ── Stage-1 sources — FILLED from ensemble_render.yaml (NURC job mj_8406284, 2026-07-16) ──
+_figstep:  &figstep  outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260716_194159_70433849/ir_figstep
+_fcflow:   &fcflow   outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260716_194159_69181110/ir_fc_flowchart
+_lowcon:   &lowcon   outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260716_194159_9379140/ir_low_contrast
+_occluded: &occluded outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260716_194159_10657917/ir_occluded
+_mmtypo:   &mmtypo   outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260716_194203_32634422/ir_mm_typo
+_distract: &distract outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260716_194203_7625970/ir_distraction_grid
+_camoimg:  &camoimg  outputs/autoattack_defense/prompt_transform/harmbench/semantic_camo_ir_plain_20260716_194205_29992788/ir_plain
 
 tasks:
   # ── FigStep ──
