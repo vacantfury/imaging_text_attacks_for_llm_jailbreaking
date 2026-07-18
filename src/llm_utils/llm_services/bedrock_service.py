@@ -9,11 +9,10 @@ from-scratch ``BaseLLMService`` subclass — closest in shape to
 other services use, keeping the ``batch_chat`` seam identical.
 
 Credentials come from the standard AWS credential chain (a named profile / env
-``AWS_*`` / instance role) — NOT a bearer token. On Xiangchen's box the temporary
-``arise-beta`` profile resolves automatically when the run environment sets
-``AWS_PROFILE=arise-beta`` (see TODO item 2 / memory
-``reference_xiangchen_p4_instance``). Same code on every cluster; only the
-per-host AWS credential provisioning differs, exactly like the other API keys.
+``AWS_*`` / instance role) — NOT a bearer token. On the xc cluster the box's AWS
+profile resolves automatically when the run environment sets ``AWS_PROFILE`` (see
+TODO item 2). Same code on every cluster; only the per-host AWS credential
+provisioning differs, exactly like the other API keys.
 
 Config knobs (from ``conf/llm`` merge or kwargs), all optional:
   - ``aws_profile``  — named profile; else ``AWS_PROFILE`` env; else default chain.

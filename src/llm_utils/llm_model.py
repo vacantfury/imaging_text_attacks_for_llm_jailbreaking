@@ -47,7 +47,7 @@ class Provider(str, Enum):
     MOONSHOT = "moonshot"
     # AWS Bedrock (bedrock-runtime.converse) — US-hosted managed API (us-east-1)
     # fronting Claude / Kimi / DeepSeek / GLM / Qwen / Nova / …; boto3 auth via
-    # the AWS credential chain (the arise-beta profile on Xiangchen's box —
+    # the AWS credential chain (the xc cluster's AWS profile, via AWS_PROFILE —
     # TODO item 2). US-jurisdiction even for Chinese-origin weights (Bedrock
     # hosts them in us-east-1). NOT OpenAI-wire-compatible → its own
     # BedrockService (converse), not an OpenAIService subclass.
@@ -211,13 +211,13 @@ class LLMModel(Enum):
         "kimi-k2.6", Provider.MOONSHOT, 0.95, 4.00,
         max_context_len=262_144, family="kimi")
 
-    # ──────── AWS Bedrock (US-hosted us-east-1, via Xiangchen's arise-beta
-    # profile — TODO item 2 / memory reference_xiangchen_p4_instance). model_id
+    # ──────── AWS Bedrock (US-hosted us-east-1, via the xc cluster's AWS
+    # profile, set with AWS_PROFILE — TODO item 2). model_id
     # MUST be the exact Bedrock invocable id: Claude is INFERENCE_PROFILE-only →
     # the `us.`-prefixed cross-region profile; Qwen/DeepSeek/Nova invoke on the
     # bare ON_DEMAND id (verified 2026-07-18). ⚠️ input_price/output_price left
     # 0.0 = UNTRACKED: fill Bedrock us-east-1 per-model pricing before any billed
-    # sweep (project cost rule; the arise-beta allocation may be credit-backed).
+    # sweep (project cost rule; the allocation may be credit-backed).
     # Chinese-origin weights here are US-jurisdiction (Bedrock hosts in us-east-1),
     # unlike the direct-mainland Provider.MOONSHOT/ZAI/DEEPSEEK rows. ────────
     BEDROCK_CLAUDE_HAIKU_4_5 = ModelSpec(
