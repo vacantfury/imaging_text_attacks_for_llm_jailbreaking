@@ -83,13 +83,16 @@ GUARD_REFUSAL_TEXT = (
 # ---------------------------------------------------------------------------
 # Text-only guards — never forward an image channel, even when the upstream
 # prompt is multimodal. Hardcoded against the current guard roster in
-# llm_model.py (WILDGUARD / LLAMA_GUARD_3_8B are both text-only base
-# architectures per their ModelSpec comments there). Extend this set if a
-# new text-only guard is added to the registry.
+# llm_model.py (WILDGUARD / LLAMA_GUARD_3_8B / QWEN3GUARD_GEN_8B / THINKGUARD
+# are all text-only base architectures per their ModelSpec comments there;
+# GUARDREASONER_VL_7B and LLAMA_GUARD_4_12B are multimodal and stay OUT).
+# Extend this set if a new text-only guard is added to the registry.
 # ---------------------------------------------------------------------------
 TEXT_ONLY_GUARDS: frozenset = frozenset({
     LLMModel.WILDGUARD,
     LLMModel.LLAMA_GUARD_3_8B,
+    LLMModel.QWEN3GUARD_GEN_8B,
+    LLMModel.THINKGUARD,
 })
 
 
@@ -149,11 +152,63 @@ def parse_wildguard(raw_output: str) -> bool:
     return m.group(1).strip().lower() == "yes"
 
 
+def parse_qwen3guard(raw_output: str) -> bool:
+    """Qwen3Guard-Gen-8B: multi-line "Safety: Safe|Unsafe|Controversial\\n
+    Categories: ...". A THREE-way severity scale, collapsed to binary UNSAFE
+    iff the label is Unsafe OR Controversial — exactly the upstream eval
+    harness's own collapse (`is_pred_unsafe = "Safety: Unsafe" in pred or
+    "Safety: Controversial" in pred`, other_repos/Qwen3Guard/eval/eval_gen.py).
+    Regex mirrors the repo's own parser (README.md `safe_pattern`). Fails
+    closed: no parseable "Safety:" label -> unsafe.
+    """
+    m = re.search(
+        r"Safety:\s*(Safe|Unsafe|Controversial)", raw_output or "", re.IGNORECASE)
+    if not m:
+        logger.warning(
+            f"parse_qwen3guard: unparseable output, failing closed (unsafe). "
+            f"raw={raw_output!r}")
+        return True
+    return m.group(1).strip().lower() in ("unsafe", "controversial")
+
+
+def parse_thinkguard(raw_output: str) -> bool:
+    """ThinkGuard (Llama-Guard-3-8B + critique fine-tune): its trained output
+    leads with "- Safety Assessment: safe|unsafe", then "- Categories: ...",
+    then a multi-paragraph "- Explanation:" critique — verdict FIRST, verified
+    across all 15k rows of other_repos/ThinkGuard/data/beavertails_critiques_aug.json.
+    Primary match is that "Safety Assessment:" line. Robustness fallback: the
+    served model inherits Llama-Guard-3's baked-in S1-S14 chat template (verified
+    via its HF tokenizer_config.json), which could occasionally elicit a bare
+    LlamaGuard "safe"/"unsafe" first line instead — so we then reuse the
+    LlamaGuard first-non-empty-line check. Fails closed: neither form -> unsafe.
+    """
+    m = re.search(
+        r"Safety Assessment:\s*(safe|unsafe)", raw_output or "", re.IGNORECASE)
+    if m:
+        return m.group(1).strip().lower() == "unsafe"
+    # Fallback: bare LlamaGuard-style "safe"/"unsafe" first non-empty line.
+    for line in (raw_output or "").splitlines():
+        line = line.strip().lower()
+        if not line:
+            continue
+        if line == "unsafe":
+            return True
+        if line == "safe":
+            return False
+        break
+    logger.warning(
+        f"parse_thinkguard: unparseable output, failing closed (unsafe). "
+        f"raw={raw_output!r}")
+    return True
+
+
 PARSERS: dict[LLMModel, Callable[[str], bool]] = {
     LLMModel.LLAMA_GUARD_3_8B: parse_llama_guard,
     LLMModel.LLAMA_GUARD_4_12B: parse_llama_guard,
     LLMModel.GUARDREASONER_VL_7B: parse_guardreasoner_vl,
     LLMModel.WILDGUARD: parse_wildguard,
+    LLMModel.QWEN3GUARD_GEN_8B: parse_qwen3guard,
+    LLMModel.THINKGUARD: parse_thinkguard,
 }
 
 
@@ -255,9 +310,16 @@ def query_guard(
     system_message: Optional[str] = None
     conversations: list[tuple[str, list]] = []
 
-    if guard_model in (LLMModel.LLAMA_GUARD_3_8B, LLMModel.LLAMA_GUARD_4_12B):
+    if guard_model in (
+        LLMModel.LLAMA_GUARD_3_8B, LLMModel.LLAMA_GUARD_4_12B,
+        LLMModel.QWEN3GUARD_GEN_8B, LLMModel.THINKGUARD,
+    ):
         # Raw content verbatim — the model's own tokenizer chat template
-        # applies the safety-taxonomy wrap. No system message.
+        # applies the safety-taxonomy wrap. No system message. Qwen3Guard-Gen
+        # wraps a single user turn -> "Safety: ..."; ThinkGuard inherits
+        # Llama-Guard-3's baked-in S1-S14 taxonomy chat template (confirmed via
+        # its HF tokenizer_config.json). Both are text-only (TEXT_ONLY_GUARDS),
+        # so `image` is already None here.
         for cid, text, image in items:
             conversations.append((cid, [(text, image)]))
     elif guard_model == LLMModel.GUARDREASONER_VL_7B:
