@@ -164,6 +164,28 @@ def _judge_model_for_method(judge_method: str) -> Optional[Any]:
         return None
 
 
+def _collect_model_strings(obj) -> list:
+    """Recursively collect string values stored under a "model" key.
+
+    Used to discover cluster-hosted HELPER models referenced *inside* a
+    transformation's params (an LLM encoder's `model`, or the variance-channel
+    wrapper's paraphrase / attack-bank helper — possibly nested), so the
+    orchestrator serves them. Walks dicts/lists; returns every non-empty string
+    found under a `model` key.
+    """
+    found: list = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k == "model" and isinstance(v, str) and v:
+                found.append(v)
+            else:
+                found.extend(_collect_model_strings(v))
+    elif isinstance(obj, list):
+        for item in obj:
+            found.extend(_collect_model_strings(item))
+    return found
+
+
 def _required_cluster_models_for_task(info: "TaskInfo") -> set:
     """Return the set of cluster-hosted LLMModels this task needs.
 
@@ -194,7 +216,9 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
     sizing a round with multiple concurrent cluster-guard tasks).
     """
     from src.llm_utils import Provider
-    from .schemas import DefenseEvaluateTask, RejudgeTask
+    from .schemas import (
+        DefenseEvaluateTask, PromptTransformTask, RejudgeTask, TransformationSpec,
+    )
     from .task import _infer_benchmark
     from src.evaluation.evaluator_factory import judge_methods_for_benchmark
 
@@ -252,6 +276,21 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
         for key in ("guard_model", "perturbation_model"):
             model_str = task.defense_config.get(key)
             if model_str:
+                m = _resolve_model(model_str)
+                if m is not None and m.provider == Provider.NU_CLUSTER:
+                    required.add(m)
+
+    # Prompt-transform tasks may reference a cluster-hosted HELPER model INSIDE a
+    # transformation's params (an LLM encoder's `model`, or the variance-channel
+    # wrapper's paraphrase / attack-bank helper). Historically transforms used
+    # API helpers so this went unnoticed; a free cluster-served helper needs a
+    # vLLM server too, else the transform errors with "No ClusterModelServerManager
+    # registered". Scan every transformation spec's params for `model` values.
+    if isinstance(task, PromptTransformTask):
+        for spec in task.transformation_list:
+            params = (spec.params if isinstance(spec, TransformationSpec)
+                      else spec.get("params") if isinstance(spec, dict) else None)
+            for model_str in _collect_model_strings(params):
                 m = _resolve_model(model_str)
                 if m is not None and m.provider == Provider.NU_CLUSTER:
                     required.add(m)
