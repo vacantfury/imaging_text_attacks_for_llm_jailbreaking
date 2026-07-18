@@ -32,6 +32,8 @@ tasks:
   # verified on xc 2026-07-18 across Claude/Nova/Qwen/DeepSeek.
   - mode: prompt_transform
     source_file: data/smoke_innocuous.jsonl
+    benchmark: harmbench          # arbitrary — only used for the output subdir name;
+                                  # the innocuous path can't be auto-inferred.
     prompt_range: [0, 0]
     transformation_list:
       - type: set_theory
