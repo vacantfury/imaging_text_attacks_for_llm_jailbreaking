@@ -13,6 +13,7 @@ from .base_llm_service import BaseLLMService
 from .llm_services import (
     OpenAIService, DeepSeekService, ZAIService, XAIService, MoonshotService,
     ClaudeService, GoogleService, LocalLMService, NURCClusterService,
+    BedrockService,
 )
 
 
@@ -31,6 +32,7 @@ class LLMServiceFactory:
         Provider.ZAI: ZAIService,
         Provider.XAI: XAIService,
         Provider.MOONSHOT: MoonshotService,
+        Provider.BEDROCK: BedrockService,
         Provider.ANTHROPIC: ClaudeService,
         Provider.GOOGLE: GoogleService,
         Provider.LOCAL: LocalLMService,

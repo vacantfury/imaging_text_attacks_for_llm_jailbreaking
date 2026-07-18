@@ -10,6 +10,7 @@ from .claude_service import ClaudeService
 from .google_service import GoogleService
 from .local_lm_service import LocalLMService
 from .nurc_cluster_service import NURCClusterService
+from .bedrock_service import BedrockService
 
 __all__ = [
     'OpenAIService',
@@ -21,4 +22,5 @@ __all__ = [
     'GoogleService',
     'LocalLMService',
     'NURCClusterService',
+    'BedrockService',
 ]

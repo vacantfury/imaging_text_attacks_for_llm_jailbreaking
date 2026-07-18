@@ -45,6 +45,13 @@ class Provider(str, Enum):
     ZAI = "zai"
     XAI = "xai"
     MOONSHOT = "moonshot"
+    # AWS Bedrock (bedrock-runtime.converse) — US-hosted managed API (us-east-1)
+    # fronting Claude / Kimi / DeepSeek / GLM / Qwen / Nova / …; boto3 auth via
+    # the AWS credential chain (the arise-beta profile on Xiangchen's box —
+    # TODO item 2). US-jurisdiction even for Chinese-origin weights (Bedrock
+    # hosts them in us-east-1). NOT OpenAI-wire-compatible → its own
+    # BedrockService (converse), not an OpenAIService subclass.
+    BEDROCK = "bedrock"
     LOCAL = "local"
     NU_CLUSTER = "nu_cluster"
 
@@ -203,6 +210,31 @@ class LLMModel(Enum):
     KIMI_K2_6 = ModelSpec(
         "kimi-k2.6", Provider.MOONSHOT, 0.95, 4.00,
         max_context_len=262_144, family="kimi")
+
+    # ──────── AWS Bedrock (US-hosted us-east-1, via Xiangchen's arise-beta
+    # profile — TODO item 2 / memory reference_xiangchen_p4_instance). model_id
+    # MUST be the exact Bedrock invocable id: Claude is INFERENCE_PROFILE-only →
+    # the `us.`-prefixed cross-region profile; Qwen/DeepSeek/Nova invoke on the
+    # bare ON_DEMAND id (verified 2026-07-18). ⚠️ input_price/output_price left
+    # 0.0 = UNTRACKED: fill Bedrock us-east-1 per-model pricing before any billed
+    # sweep (project cost rule; the arise-beta allocation may be credit-backed).
+    # Chinese-origin weights here are US-jurisdiction (Bedrock hosts in us-east-1),
+    # unlike the direct-mainland Provider.MOONSHOT/ZAI/DEEPSEEK rows. ────────
+    BEDROCK_CLAUDE_HAIKU_4_5 = ModelSpec(
+        "us.anthropic.claude-haiku-4-5-20251001-v1:0", Provider.BEDROCK,
+        max_context_len=200_000, family="claude", alignment_tier="strong")
+    BEDROCK_CLAUDE_SONNET_5 = ModelSpec(
+        "us.anthropic.claude-sonnet-5", Provider.BEDROCK,
+        max_context_len=200_000, family="claude", alignment_tier="strong")
+    BEDROCK_QWEN3_VL_235B = ModelSpec(          # ON_DEMAND VLM target (bare id)
+        "qwen.qwen3-vl-235b-a22b", Provider.BEDROCK,
+        family="qwen", alignment_tier="mid")
+    BEDROCK_DEEPSEEK_V3_2 = ModelSpec(          # ON_DEMAND permissive capability/judge
+        "deepseek.v3.2", Provider.BEDROCK,
+        family="deepseek", alignment_tier="weak")
+    BEDROCK_NOVA_LITE = ModelSpec(              # cheap multimodal (ON_DEMAND)
+        "us.amazon.nova-lite-v1:0", Provider.BEDROCK,
+        family="nova")
 
     # ──────── Local (HF transformers in-process) ────────
     LLAMA3       = ModelSpec("llama3",                                   Provider.LOCAL)
