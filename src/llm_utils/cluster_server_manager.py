@@ -632,6 +632,13 @@ class ClusterModelServerManager:
         # HF cache + offline mode. NURC compute nodes have no internet (offline forced);
         # a cluster with online compute nodes sets hf_offline=false to pull weights live.
         hf_lines = [f"export HF_HOME=\"${{HF_HOME:-{config['hf_home']}}}\""]
+        # Gated-repo auth (wildguard, llama_guard_3, …): the HF libraries read
+        # HF_TOKEN, but the project's injected secret is named HUGGINGFACE_TOKEN
+        # (op run sets it on the orchestrator; sbatch's default env export carries
+        # it into this server job). Alias it so live weight pulls authenticate;
+        # harmless in offline mode. Without this, gated models 401 when
+        # hf_offline=false pulls weights (observed on AICR 2026-07-18).
+        hf_lines.append('export HF_TOKEN="${HF_TOKEN:-${HUGGINGFACE_TOKEN:-}}"')
         if config.get("hf_offline", True):
             hf_lines += ["export HF_HUB_OFFLINE=1", "export TRANSFORMERS_OFFLINE=1"]
 
