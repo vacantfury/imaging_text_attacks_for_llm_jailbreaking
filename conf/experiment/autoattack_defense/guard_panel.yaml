@@ -1,37 +1,33 @@
 # ============================================================
-# Paper C · 5-GUARD PANEL matrix — the decode-gap generalizes across guards.
-# Extends guard_swap.yaml (2 guards) to FIVE, holding the amplifier config
-# CONSTANT (recover + full-decode) and varying ONLY the Step-4 guard.  (2026-07-18)
+# Paper C · 5-GUARD PANEL matrix @ n=100 (REPORTABLE) — the decode-gap
+# generalizes across guards. Amplifier config held CONSTANT (recover + full-
+# decode); ONLY the Step-4 guard varies.  (2026-07-18)
 # ============================================================
-# GUARDS (all cluster-served, FREE): wildguard, llama_guard_3_8b,
-#   qwen3guard_gen_8b, thinkguard (both newly wired in guard_utils.py, commit
-#   480b78b — parsers unit-tested locally, PENDING a cluster serve-smoke), and
-#   guardreasoner_vl_7b (multimodal — sees the image in the gb condition).
-# Conditions per attack: guard-alone gb (the "gap" reference) vs amplifier mc,
-#   for EACH of the 5 guards -> 10 cells/attack x 11 attacks = 110 harmful cells.
+# GUARDS (all cluster-served, FREE): wildguard, llama_guard_3_8b, qwen3guard_gen_8b,
+#   thinkguard (both newly wired in guard_utils.py — parsers unit-tested; served-
+#   output serve-smoke gates the run), guardreasoner_vl_7b (multimodal — sees the
+#   image in the gb condition).
+# Conditions per attack: guard-alone gb (the "gap" reference) vs amplifier mc, for
+#   EACH of the 5 guards -> 10 cells/attack x 11 attacks = 110 harmful cells.
 # Benign (image + text): no_defense BASELINE + the 10 guard conditions each = 22.
-#   TOTAL = 132 cells.
+#   TOTAL = 132 cells @ n=100.
+#
+# RENDERS: all 13 anchors point at n=100 dirs — 4 text encoders (existing n=100)
+#   + 6 image attacks + cipher + 2 benign (freshly rendered by render_n100.yaml,
+#   job 167124, 2026-07-18). set_theory + classical re-pointed off their old n=20
+#   dirs to the n=100 versions.
 #
 # JUDGES: in-run judges are THROWAWAY (wildguard harm / qwen refusal, both free);
 #   keep only SAVED RESPONSES and gpt-5-mini REJUDGE them (HarmBench rubric for
 #   harm, OR-Bench 3-class for refusal; the sole API step, gated on owner OK).
-#
 # SERVERS: qwen (target) + 5 guards = 6 -> num_cluster_jobs = 7 (fits AICR budget 7).
-#
-# ⚠️ SCALE (prompt_range _rng): set to [0,19] here so it runs AS-IS against the
-#   current n=20 renders — a functional check of the full 5-guard pipeline + the
-#   2 new guards. THE REPORTABLE RUN IS n=100 (owner's fuller-data steer): to
-#   scale, flip _rng to [0,99] AND re-point the image/cipher/benign anchors to
-#   n=100 renders (only the 4 text attacks — set/flog/class/code — have n=100
-#   renders now; the 6 image attacks + cipher + 2 benign need a cheap re-render
-#   round first). See the n-decision handoff.
 # ============================================================
 
 num_main_job_threads: 6
 num_cluster_jobs: 7
 
-# ── shared range (flip to [0,99] for the reportable n=100 run) ──
-_rng: &rng [0, 19]
+# ── shared range: n=100 reportable ──
+_rng: &rng [0, 99]
 
 # ── guard anchors: gb = guard alone ; mc = amplifier(recover+decode)+guard ──
 _gbwg:  &gbwg  {guard_model: wildguard}
@@ -49,21 +45,21 @@ _mcgrvl:  &mcgrvl  {guard_model: guardreasoner_vl_7b, decode_text: true, decode_
 _harm: &harm {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng, judge_method: wildguard, judge_model: wildguard, campaign: paper_c_guard_panel}
 _ben:  &ben  {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng, benchmark: orbench_benign_hard, judge_method: orbench, judge_model: qwen2_5_vl_7b, campaign: paper_c_guard_panel}
 
-# ── attack render dirs (11 attacks; re-point image/cipher to n=100 for the reportable run) ──
-_set: &set outputs/autoattack_defense/prompt_transform/harmbench/set_theory_20260717_121526_20614086/llm_set_theory
+# ── attack render dirs (11 attacks, all n=100) ──
+_set: &set outputs/autoattack_defense/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory
 _flog: &flog outputs/autoattack_defense/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
-_class: &class outputs/autoattack_defense/prompt_transform/harmbench/classical_chinese_simplified_20260717_121526_53374039/llm_classical_language
-_cipher: &cipher outputs/autoattack_defense/prompt_transform/harmbench/cipher_20260717_121526_49330419/non_llm_cipher
+_class: &class outputs/autoattack_defense/prompt_transform/harmbench/classical_chinese_simplified_ir_constant_20260710_002424_56524373/llm_classical_language
+_cipher: &cipher outputs/autoattack_defense/prompt_transform/harmbench/non_llm_cipher_20260718_183504_42666777/non_llm_cipher
 _code: &code outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack
-_figstep: &figstep outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260716_194159_70433849/ir_figstep
-_fcflow: &fcflow outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260716_194159_69181110/ir_fc_flowchart
-_lowcon: &lowcon outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260716_194159_9379140/ir_low_contrast
-_occluded: &occluded outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260716_194159_10657917/ir_occluded
-_mmtypo: &mmtypo outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260716_194203_32634422/ir_mm_typo
-_distract: &distract outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260716_194203_7625970/ir_distraction_grid
-# ── benign render dirs: image + text ──
-_orbimg: &orbimg outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260717_020703_54610685/ir_plain
-_orbtxt: &orbtxt outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260717_020703_61565174/non_llm_baseline
+_figstep: &figstep outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260718_183457_7682501/ir_figstep
+_fcflow: &fcflow outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart
+_lowcon: &lowcon outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260718_183457_77423812/ir_low_contrast
+_occluded: &occluded outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260718_183457_84223144/ir_occluded
+_mmtypo: &mmtypo outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260718_183500_58590499/ir_mm_typo
+_distract: &distract outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid
+# ── benign render dirs: image + text (n=100) ──
+_orbimg: &orbimg outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260718_183504_7866920/ir_plain
+_orbtxt: &orbtxt outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260718_183505_52485516/non_llm_baseline
 
 tasks:
   # ══ HARMFUL: 11 attacks × {gb, mc} × 5 guards ══
