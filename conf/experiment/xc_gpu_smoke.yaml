@@ -6,16 +6,17 @@
 # vLLM server job to partition `main` (`--gres=gpu:1`), waits for the endpoint,
 # and dispatches a target query. Complements bedrock_smoke (pure-API, no GPU).
 #
-# 1 GPU only: target = Qwen2.5-VL-7B (served on xc); judge = a Bedrock model
-# (API, no server) so the run needs exactly one vLLM server.
+# CREDS-FREE by design: target = Qwen2.5-VL-7B AND judge = WildGuard, both
+# vLLM-SERVED on xc (2 GPUs). Deliberately uses NO Bedrock — so this smoke works
+# even when the xc arise-beta creds are expired (they expire every few hours and
+# aren't auto-refreshed). It validates xc's multi-server GPU path end-to-end.
 #
 # Usage (ON xc, after `scripts/setup_env.sh xc` built the torch+vLLM layer):
 #     sbatch scripts/run_experiment_xc.sbatch xc_gpu_smoke
 #
 # source_transform_subdir points at an existing prompt_transform output on the
-# box (produced by a prior bedrock_smoke run). Regenerate it first if absent:
-#     sbatch scripts/run_experiment_xc.sbatch bedrock_smoke
-# then update the path below to the new set_theory_* dir.
+# box. If absent, regenerate a text transform first (any non-Bedrock encoder), or
+# point it at any existing outputs/prompt_transform/.../llm_set_theory dir.
 
 num_main_job_threads: 1
 
@@ -24,4 +25,4 @@ tasks:
     source_transform_subdir: outputs/prompt_transform/harmbench/set_theory_20260718_190108_43951839/llm_set_theory
     target_model: qwen2_5_vl_7b          # served on xc via SLURM (--gres=gpu:1, partition main)
     defense: no_defense
-    judge_model: us.anthropic.claude-haiku-4-5-20251001-v1:0   # Bedrock judge → no 2nd GPU server
+    judge_model: wildguard               # served free 7B judge → 2nd vLLM server, no Bedrock/API keys
