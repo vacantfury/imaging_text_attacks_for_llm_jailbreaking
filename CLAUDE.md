@@ -108,6 +108,7 @@ Each subsystem follows the same pattern — a `@register_*` class-decorator popu
   - `Provider.GOOGLE` → native Batch API inline (50% cheaper)
   - `Provider.LOCAL` → `LocalLMService` (locally served models, e.g. Ollama)
   - `Provider.NU_CLUSTER` → `AsyncOpenAI` pointed at the vLLM endpoint registered by `ClusterModelServerManager` (supports image inputs as base64 `image_url`)
+  - `Provider.BEDROCK` → `BedrockService` (boto3 `bedrock-runtime.converse`, sync in `asyncio.to_thread`; image inputs supported). AWS Bedrock = a US-hosted managed API fronting Claude/Kimi/DeepSeek/GLM/Qwen/Nova/…; creds via the standard AWS chain (`AWS_PROFILE`, no bearer key). Used on the **xc cluster** (an AWS box, API-first) — runbook + how-to-run: gitignored `cluster_files/xc_cluster_properties.md`. Model ids: Claude is INFERENCE_PROFILE-only (`us.`-prefixed), qwen/deepseek/nova use the bare on-demand id. Registry rows `BEDROCK_*` in `llm_model.py`; smoke preset `conf/experiment/bedrock_smoke.yaml`.
 
 Unified call shape across providers: `service.batch_chat(conversations, system_message, is_test)`, where `conversations` is `[(conv_id, [(text, image_or_None), ...]), ...]` → `[(conv_id, response_text), ...]`. Model registry + pricing lives in `src/llm_utils/llm_model.py::LLMModel`; resolve a string with `LLMModel.from_string(...)`.
 
