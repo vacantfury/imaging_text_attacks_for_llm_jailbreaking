@@ -43,6 +43,23 @@ There is no test framework — `python main.py test` runs the 4-task smoke prese
 
 ## Architecture
 
+### Conceptual pipeline & component roles (READ THIS before touching defenses)
+
+End-to-end flow for ONE prompt, in order — the amplifier and the defense are TWO SEPARATE things; conflating them is the recurring confusion this section exists to prevent:
+
+1. **Attack** (`prompt_transform` mode) — the original input (harmful, or benign for the over-refusal axis) is encoded into an **attack-processed prompt**: a text encoding (set theory, cipher, formal logic, classical Chinese, code) and/or an image render (FigStep, flowchart, typography, …).
+2. **Defense** (`defense+evaluate` mode) — acts on the attack-processed prompt, and decomposes into two separable pieces:
+   - **Amplifier** = **recover + decode**, a module placed **before** the defense (before-vs-after is a design choice). *Recover*: the target VLM transcribes the image to text. *Decode*: the target VLM restates the encoding in plain English. It **transforms** the prompt into decoded plaintext so the defense can see the hidden payload — it is **not** a defense on its own.
+   - **Defense** = the safety mechanism that then acts on the (decoded) prompt. TWO KINDS:
+     - **Transform defense** (**SAGE**): rewrites the text into a safety-check prompt the target answers → produces a "defense-processed prompt".
+     - **Gate defense** (**WildGuard**, **LlamaGuard-3**, **Qwen3Guard**, …): a *classifier* that outputs harmful/not-harmful, then **blocks** (returns a canned refusal) or **passes the ORIGINAL prompt** to the target. A gate does **not** transform the prompt.
+3. **Target response** — the target VLM (`qwen2_5_vl_7b`, …) produces the answer (or the defense already returned a refusal). Note: the target model ALSO performs the amplifier's recover/decode calls, and — for a SAGE transform defense — the self-check itself.
+4. **Judge** (measurement, **external** to the defense) — **gpt-5-mini** scores the output: harm via the HarmBench rubric (→ ASR) and refusal via the OR-Bench 3-class rubric (→ over-refusal). The judge is NEVER the target model and NEVER a defense classifier. WildGuard-*as-judge* is a robustness-panel lens only — see `judge_model_issue/JUDGE_MODEL_REPORT.md` §7/§7b.
+
+Code mapping: **`guard_baseline`** = a defense ALONE (no amplifier). **`modality_complete`** = amplifier + defense (`guard_model=None` → the SAGE *transform* defense; `guard_model=<classifier>` → a *gate* defense). The amplifier's contribution is measured as `modality_complete` vs `guard_baseline` **holding the defense fixed**; the over-refusal is a property of the chosen **defense** (a gate classifier's own calibration), not of the amplifier.
+
+Role glossary (one line each): **target** = the VLM under attack (also runs recover/decode, and the SAGE self-check) · **amplifier** = recover+decode transform, sits before the defense · **defense** = SAGE (transform) *or* a classifier such as WildGuard/LlamaGuard-3 (gate) that blocks/passes · **judge** = gpt-5-mini, the external scorer.
+
 ### Pipeline modes (single dispatcher)
 
 `src/experiment/task.py::run_task` dispatches by `task.mode` (a discriminated Pydantic union — `PromptTransformTask` / `DefenseEvaluateTask` / `AnalyzeTask` in `schemas.py`):
