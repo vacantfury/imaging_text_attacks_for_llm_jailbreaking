@@ -22,5 +22,12 @@ cluster:
   hf_home: /home/ubuntu/huggingface_cache   # one big 5.7T disk; shared ubuntu account
   hf_offline: false                         # box has internet
   # uv venv activation REPLACES the module/conda default (no `module` command on the box).
+  # VLLM_USE_FLASHINFER_SAMPLER=0 is LOAD-BEARING on xc: the box has the GPU driver
+  # but NO CUDA dev toolkit (no nvcc), and vLLM 0.25.0's default FlashInfer sampler
+  # JIT-compiles a kernel at engine init → "Could not find nvcc" → EngineCore dies.
+  # Disabling it makes vLLM fall back to the prebuilt FLASH_ATTN attention backend
+  # (shipped in the wheel, no compile) — verified serving Qwen on an A100 2026-07-18.
+  # NURC/AICR don't need this (they `module load cuda/...`, so nvcc is present).
   env_setup:
+    - "export VLLM_USE_FLASHINFER_SAMPLER=0"
     - "source $HOME/projects/imaging_text_attacks_for_llm_jailbreaking/.venv/bin/activate"
