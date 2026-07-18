@@ -30,8 +30,10 @@ def _print_plan(result, submit: bool) -> None:
     print(f"distinct cluster-served models in preset: "
           f"{sorted(plan.total_cluster_models) or '(none — all API/no-model)'}")
     if not plan.total_cluster_models:
-        print("NOTE: no cluster-served models — a multi-cluster split is moot; "
-              "run this preset normally on one cluster.")
+        print("NOTE: no GPU-served models — no vLLM servers to split. The "
+              "assignment below still matters for CREDENTIALS: Bedrock tasks are "
+              "routed to the Bedrock cluster (xc), non-Bedrock API tasks to an "
+              "op-keys cluster (aicr/nurc).")
 
     active = [a for a in plan.assignments if a.active]
     for a in plan.assignments:
@@ -47,9 +49,10 @@ def _print_plan(result, submit: bool) -> None:
         print(f"  sub-preset:       conf/experiment/{result.subpresets[a.cluster.name]}.yaml")
 
     if len(active) <= 1:
-        print("\nNOTE: everything fit one cluster — AICR-first means the "
-              "preferred cluster absorbed it and the others stay idle. Expected "
-              "for matrices smaller than the preferred cluster's budget.")
+        print("\nNOTE: everything fit one cluster — routing sent it all to the "
+              f"first capable cluster ({active[0].cluster.name if active else 'none'}) "
+              "and the others stay idle. Expected when a matrix fits one cluster, "
+              "or when its creds (Bedrock / API keys) pin it to a single cluster.")
 
     # Duplicated servers (a model served on >1 cluster because tasks split).
     served_on: dict[str, list[str]] = {}

@@ -22,12 +22,17 @@ Split key = the full set of *cluster-served* models each task needs
     A cell is atomic: it runs on ONE cluster, which serves every model it
     touches — a pipeline is never split across clusters.
 
-Placement = greedy, pool-ordered. Pack whole tasks onto the first cluster whose
-    remaining server budget fits them (preset order), overflow the rest to the
-    next cluster. A model shared across a split is served once per cluster
-    (accepted duplication — the price of running two clusters at once). A
-    ``pins`` map forces every task needing a given model onto a named cluster —
-    use it to keep a big judge single instead of duplicated.
+Placement = greedy, pool-ordered, capability-filtered. Pack whole tasks onto the
+    first CAPABLE cluster whose remaining server budget fits them (preset order),
+    overflow the rest to the next. "Capable" = holds the credentials the task
+    needs (routing policy, 2026-07-18): a task's Bedrock models require a
+    ``bedrock`` cluster (xc), its non-Bedrock API models require an ``api_keys``
+    cluster (aicr/nurc), GPU-served models run anywhere. Because the pool lists
+    xc LAST, GPU work fills aicr->nurc->xc — xc's GPUs are the last-resort tier.
+    A model shared across a split is served once per cluster (accepted
+    duplication). A ``pins`` map forces every task needing a given model onto a
+    named cluster. A task needing both Bedrock and non-Bedrock API creds is
+    unsatisfiable (no cluster has both) and reported as a clear leftover.
 
 DRY-RUN by default: :func:`dispatch` writes the sub-presets locally and returns
     the plan + exact ssh commands, submitting nothing. Actual submission happens
@@ -61,6 +66,15 @@ class ClusterSpec:
     budget = max concurrent vLLM SERVERS the orchestrator may hold on this cluster
     (its GPU-QOS concurrent-job ceiling; the orchestrator runs on a separate CPU
     partition/QOS and does NOT count against it).
+
+    Capability flags gate WHICH tasks a cluster can run (routing, 2026-07-18):
+      bedrock  = can invoke AWS Bedrock (only xc, which holds the arise-beta creds).
+      api_keys = has the op-injected OpenAI/Anthropic/Google/... keys (aicr/nurc
+                 inject via `op run`; xc deliberately does NOT — shared box, no
+                 service-account token). A task's Bedrock models force it onto a
+                 bedrock cluster; its other-API models force it onto an api_keys
+                 cluster; a task needing BOTH is unsatisfiable (no cluster has
+                 both key sets) and surfaces as a clear leftover.
     """
     name: str
     ssh: str                 # ssh alias/target in ~/.ssh/config (private)
@@ -68,6 +82,8 @@ class ClusterSpec:
     sbatch: str              # sbatch wrapper, from conf/clusters/<name>.yaml
     budget: int              # max concurrent vLLM servers, from conf/clusters/<name>.yaml
     max_submit: int          # QOS submit cap, from conf/clusters/<name>.yaml
+    bedrock: bool = False    # can invoke AWS Bedrock (xc only)
+    api_keys: bool = True    # has op-injected non-Bedrock API keys (aicr/nurc; NOT xc)
 
 
 def load_pool(path: Path, conf_dir: Path) -> tuple[list[ClusterSpec], dict[str, str]]:
@@ -119,6 +135,11 @@ def load_pool(path: Path, conf_dir: Path) -> tuple[list[ClusterSpec], dict[str, 
             sbatch=str(sbatch),
             budget=int(budget),
             max_submit=int(prof.get("max_submit", MAX_SUBMIT_JOBS_PER_USER)),
+            # Capability flags default to a "normal SLURM cluster with op keys"
+            # (aicr/nurc): no Bedrock, has the API keys. xc overrides both in
+            # conf/clusters/xc.yaml (bedrock: true, api_keys: false).
+            bedrock=bool(prof.get("bedrock", False)),
+            api_keys=bool(prof.get("api_keys", True)),
         ))
 
     names = [c.name for c in clusters]
@@ -135,6 +156,27 @@ def load_pool(path: Path, conf_dir: Path) -> tuple[list[ClusterSpec], dict[str, 
 
 
 # ==================== Split plan ====================
+
+@dataclass(frozen=True)
+class TaskNeed:
+    """What one task needs, for routing. `gpu_models` are the vLLM-served model
+    ids (each consumes a server slot / budget); the two booleans are capability
+    demands that gate which cluster can run it (see ClusterSpec)."""
+    idx: int
+    gpu_models: frozenset          # NU_CLUSTER model ids needing a vLLM server
+    needs_bedrock: bool = False    # references ≥1 Bedrock model → bedrock cluster only
+    needs_other_api: bool = False  # references ≥1 non-Bedrock API model → api_keys cluster
+
+
+def _cluster_can_run(cluster: ClusterSpec, need: TaskNeed) -> bool:
+    """Capability gate: does this cluster hold the credentials the task needs?
+    (Budget is checked separately — this is the hard yes/no on keys.)"""
+    if need.needs_bedrock and not cluster.bedrock:
+        return False
+    if need.needs_other_api and not cluster.api_keys:
+        return False
+    return True
+
 
 @dataclass
 class ClusterAssignment:
@@ -157,40 +199,61 @@ class ClusterAssignment:
 class SplitPlan:
     assignments: list[ClusterAssignment]
     leftover: list[int]                 # task indices that fit no cluster
-    total_cluster_models: set[str]      # distinct served models across the whole preset
+    total_cluster_models: set            # distinct served models across the whole preset
+    leftover_reasons: dict = field(default_factory=dict)  # idx -> why it couldn't place
 
 
 def plan_split(
-    task_models: list[tuple[int, frozenset[str]]],
+    task_needs: list[TaskNeed],
     clusters: list[ClusterSpec],
     pins: dict[str, str],
 ) -> SplitPlan:
-    """Assign tasks to clusters, AICR-first (pool order).
+    """Assign tasks to clusters in POOL ORDER, honoring per-cluster capability.
 
-    task_models: (task_index, frozenset of cluster-served model_ids) per task.
-    Pure function — no I/O, no pipeline import — so the packing is unit-testable
-    with fabricated inputs.
+    The routing policy (owner spec 2026-07-18) reduces to exactly two rules on
+    top of the pool order:
+      1. CAPABILITY gate (`_cluster_can_run`): a task's Bedrock models force it
+         onto a `bedrock` cluster (xc); its non-Bedrock API models force it onto
+         an `api_keys` cluster (aicr/nurc). GPU-served models run anywhere.
+      2. POOL ORDER greedy: fill the first capable cluster whose server budget
+         fits the task, overflow to the next. Because the pool lists xc LAST,
+         GPU work naturally fills aicr→nurc→xc — i.e. xc's GPUs are the
+         last-resort tier, exactly as specified. Bedrock-only tasks have xc as
+         their only capable cluster, so they land there directly.
+    A task needing BOTH Bedrock and non-Bedrock API models is unsatisfiable (no
+    cluster holds both key sets) and surfaces as a clear leftover with a reason.
+
+    task_needs: one TaskNeed per task. Pure function — no I/O, no pipeline import
+    — so the routing is unit-testable with fabricated inputs.
     """
-    by_name = {c.name: c for c in clusters}
     assign: dict[str, list[int]] = {c.name: [] for c in clusters}
     servers: dict[str, set[str]] = {c.name: set() for c in clusters}
+    leftover_reasons: dict[int, str] = {}
 
-    # Phase 1 — pin-forced tasks. A task needing a pinned model goes to that
-    # cluster; needing two models pinned to DIFFERENT clusters is unsatisfiable.
-    pending: list[tuple[int, frozenset[str]]] = []
-    for idx, models in task_models:
-        pinned = {pins[m] for m in models if m in pins}
+    # Phase 1 — pin-forced tasks. A pin names the cluster for every task needing
+    # that model. Two models pinned to DIFFERENT clusters, or a pin to a cluster
+    # that lacks the task's credentials, is a user error surfaced loudly.
+    pending: list[TaskNeed] = []
+    for need in task_needs:
+        pinned = {pins[m] for m in need.gpu_models if m in pins}
         if len(pinned) > 1:
             raise DispatchError(
-                f"task #{idx} needs models pinned to different clusters "
+                f"task #{need.idx} needs models pinned to different clusters "
                 f"{sorted(pinned)}; a single pipeline cannot be split across "
                 f"clusters. Fix the pins so its models share one cluster.")
         if pinned:
             cname = next(iter(pinned))
-            assign[cname].append(idx)
-            servers[cname] |= models
+            by_name = {c.name: c for c in clusters}
+            if not _cluster_can_run(by_name[cname], need):
+                raise DispatchError(
+                    f"task #{need.idx} is pinned to '{cname}' but that cluster "
+                    f"lacks the credentials it needs (needs_bedrock="
+                    f"{need.needs_bedrock}, needs_other_api={need.needs_other_api}). "
+                    f"Repin to a capable cluster.")
+            assign[cname].append(need.idx)
+            servers[cname] |= need.gpu_models
         else:
-            pending.append((idx, models))
+            pending.append(need)
 
     # Pins may already overflow a cluster's budget — surface that clearly.
     for c in clusters:
@@ -200,19 +263,36 @@ def plan_split(
                 f"(budget {c.budget}): {sorted(servers[c.name])}. "
                 f"Raise its budget or repin.")
 
-    # Phase 2 — greedy pool-ordered fill (preset order within each cluster).
-    for c in clusters:
-        still: list[tuple[int, frozenset[str]]] = []
-        for idx, models in pending:
-            new = models - servers[c.name]
+    # Phase 2 — capability-filtered greedy fill, pool order (preset order within
+    # each cluster). For each still-pending task, walk clusters in pool order and
+    # take the first that (a) CAN run it (credentials) and (b) has server budget.
+    for need in list(pending):
+        capable = [c for c in clusters if _cluster_can_run(c, need)]
+        if not capable:
+            both = need.needs_bedrock and need.needs_other_api
+            leftover_reasons[need.idx] = (
+                "needs both Bedrock AND non-Bedrock API creds — no single "
+                "cluster has both (run the Bedrock and API stages separately)"
+                if both else
+                f"no cluster satisfies its credentials (needs_bedrock="
+                f"{need.needs_bedrock}, needs_other_api={need.needs_other_api})")
+            continue
+        placed = False
+        for c in capable:
+            new = need.gpu_models - servers[c.name]
             if len(servers[c.name]) + len(new) <= c.budget:
-                assign[c.name].append(idx)
-                servers[c.name] |= models
-            else:
-                still.append((idx, models))
-        pending = still
+                assign[c.name].append(need.idx)
+                servers[c.name] |= need.gpu_models
+                placed = True
+                break
+        if not placed:
+            leftover_reasons[need.idx] = (
+                f"needs {len(need.gpu_models)} server(s) but no capable cluster "
+                f"has room: "
+                + ", ".join(f"{c.name}(budget {c.budget}, "
+                            f"used {len(servers[c.name])})" for c in capable))
 
-    leftover = [idx for idx, _ in pending]
+    leftover = sorted(leftover_reasons)
     assignments = [
         ClusterAssignment(
             cluster=c,
@@ -221,11 +301,12 @@ def plan_split(
         )
         for c in clusters
     ]
-    total: set[str] = set()
-    for _, models in task_models:
-        total |= models
+    total: set = set()
+    for need in task_needs:
+        total |= need.gpu_models
     return SplitPlan(assignments=assignments, leftover=leftover,
-                     total_cluster_models=total)
+                     total_cluster_models=total,
+                     leftover_reasons=leftover_reasons)
 
 
 # ==================== Pipeline coupling ====================
@@ -235,21 +316,45 @@ def _model_key(m) -> str:
     return getattr(m, "model_id", None) or getattr(m, "name", None) or str(m)
 
 
-def compute_task_models(preset) -> list[tuple[int, frozenset[str]]]:
-    """Per task, the set of cluster-served model_ids it needs.
+def compute_task_needs(preset) -> list[TaskNeed]:
+    """Per task, its routing needs: GPU-served model ids + Bedrock / other-API
+    capability demands.
 
-    Reuses the orchestrator's own ``_required_cluster_models_for_task`` so the
-    split key stays exactly consistent with what the pipeline actually serves.
+    Reuses the orchestrator's own ``_referenced_models_for_task`` so the split
+    key stays exactly consistent with what the pipeline actually serves/calls.
+    A model is classed by provider: NU_CLUSTER → a GPU server slot; BEDROCK →
+    needs Bedrock creds (xc); any other non-local API provider → needs op keys
+    (aicr/nurc).
     """
     from .experiment import (
-        _required_cluster_models_for_task, TaskInfo, _get_task_name,
+        _referenced_models_for_task, TaskInfo, _get_task_name,
     )
-    out: list[tuple[int, frozenset[str]]] = []
+    from src.llm_utils import Provider
+
+    out: list[TaskNeed] = []
     for i, task in enumerate(preset.tasks):
         info = TaskInfo(index=i, task=task, name=_get_task_name(task, i))
-        models = _required_cluster_models_for_task(info)
-        out.append((i, frozenset(_model_key(m) for m in models)))
+        all_models = _referenced_models_for_task(info, None)
+        gpu = frozenset(
+            _model_key(m) for m in all_models if m.provider == Provider.NU_CLUSTER)
+        needs_bedrock = any(m.provider == Provider.BEDROCK for m in all_models)
+        # "other API" = anything needing a key that isn't Bedrock and isn't a
+        # GPU-served or in-process-local model (OpenAI/Anthropic/Google/DeepSeek/
+        # Z.AI/xAI/Moonshot). These need the op-injected keys → aicr/nurc.
+        needs_other_api = any(
+            m.provider not in (Provider.NU_CLUSTER, Provider.BEDROCK, Provider.LOCAL)
+            for m in all_models)
+        out.append(TaskNeed(idx=i, gpu_models=gpu,
+                            needs_bedrock=needs_bedrock,
+                            needs_other_api=needs_other_api))
     return out
+
+
+# Back-compat alias: old name returned (idx, gpu_models) tuples. Kept so any
+# external caller / test importing it still resolves; new code uses
+# compute_task_needs (richer, routing-aware).
+def compute_task_models(preset) -> list[tuple[int, frozenset]]:
+    return [(n.idx, n.gpu_models) for n in compute_task_needs(preset)]
 
 
 # ==================== Sub-preset rendering ====================
@@ -354,15 +459,17 @@ def dispatch(
 
     clusters, pins = load_pool(pool_path, conf_dir)
     preset = load_preset(preset_name, conf_dir)
-    task_models = compute_task_models(preset)
-    plan = plan_split(task_models, clusters, pins)
+    task_needs = compute_task_needs(preset)
+    plan = plan_split(task_needs, clusters, pins)
 
     if plan.leftover:
-        need = {i: sorted(dict(task_models)[i]) for i in plan.leftover}
+        detail = "; ".join(
+            f"task #{i}: {plan.leftover_reasons.get(i, 'unplaceable')}"
+            for i in plan.leftover)
         raise DispatchError(
-            f"{len(plan.leftover)} task(s) need more distinct servers than any "
-            f"cluster's budget and cannot be dispatched: {need}. "
-            f"Raise a cluster budget or reduce the task's model fan-out.")
+            f"{len(plan.leftover)} task(s) could not be dispatched — {detail}. "
+            f"Fix by: raising a cluster budget, reducing a task's model fan-out, "
+            f"or splitting a Bedrock+API task into separate stages.")
 
     subpresets: dict[str, str] = {}
     written: dict[str, Path] = {}

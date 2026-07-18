@@ -7,6 +7,11 @@
 #   API-first — AWS Bedrock via the box's AWS profile (no GPU, no server jobs).
 #   GPU last-resort — vLLM serving on the A100s only when Bedrock+AICR+NURC can't cover.
 cluster:
+  # --- routing capabilities (multi_cluster.plan_split; owner routing policy 2026-07-18) ---
+  bedrock: true                             # ONLY cluster that can invoke AWS Bedrock (arise-beta creds)
+  api_keys: false                           # NO op-injected OpenAI/Anthropic/Google keys (shared box —
+                                            # the service-account token is deliberately not installed).
+                                            # → non-Bedrock API tasks route to aicr/nurc, never here.
   # --- dispatch / limits ---
   sbatch: scripts/run_experiment_xc.sbatch
   budget: 6                                 # concurrent vLLM servers; 8 GPUs total but leave

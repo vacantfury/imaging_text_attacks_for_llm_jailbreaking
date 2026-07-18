@@ -187,12 +187,26 @@ def _collect_model_strings(obj) -> list:
 
 
 def _required_cluster_models_for_task(info: "TaskInfo") -> set:
-    """Return the set of cluster-hosted LLMModels this task needs.
+    """Cluster-hosted (vLLM / Provider.NU_CLUSTER) models a task needs.
 
-    Covers the target model (if cluster-hosted), the judge model(s) for the
-    evaluator(s) that will run, AND any cluster-hosted SECOND model a defense
-    itself references (Round-3 guard amplifier's `guard_model`, or
-    SemanticSmooth's `perturbation_model`). Judge discovery has two paths:
+    Thin wrapper over `_referenced_models_for_task` filtered to the cluster
+    provider — the historical name/behavior the scheduler relies on. To ask the
+    same question for another provider (e.g. Bedrock, for multi-cluster routing),
+    call `_referenced_models_for_task(info, {Provider.BEDROCK})`.
+    """
+    from src.llm_utils import Provider
+    return _referenced_models_for_task(info, {Provider.NU_CLUSTER})
+
+
+def _referenced_models_for_task(info: "TaskInfo", providers=None) -> set:
+    """Return the set of LLMModels this task references, optionally filtered.
+
+    `providers=None` returns every resolved model (any provider); passing a set
+    of `Provider`s keeps only those. Covers the target model, the judge model(s)
+    for the evaluator(s) that will run, AND any SECOND model a defense itself
+    references (Round-3 guard amplifier's `guard_model`, or SemanticSmooth's
+    `perturbation_model`), plus prompt-transform helper models. Judge discovery
+    has two paths:
 
       1. Explicit override: task.judge_method set in YAML.
       2. Canonical inference: derive judge_method list from the benchmark
@@ -215,7 +229,6 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
     second model directly consumes num_cluster_jobs — account for it when
     sizing a round with multiple concurrent cluster-guard tasks).
     """
-    from src.llm_utils import Provider
     from .schemas import (
         DefenseEvaluateTask, PromptTransformTask, RejudgeTask, TransformationSpec,
     )
@@ -225,13 +238,16 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
     task = info.task
     required: set = set()
 
+    def _keep(m) -> bool:
+        return m is not None and (providers is None or m.provider in providers)
+
     # rejudge: no target/defense to serve — only the judge, which may itself be
     # cluster-served (e.g. WildGuard). Unlike defense+evaluate's benchmark-based
     # judge discovery (which reads the YAML default), the rejudge judge is the
     # task's OWN judge_model, so resolve it directly.
     if isinstance(task, RejudgeTask):
         judge = _resolve_model(task.judge_model)
-        if judge is not None and judge.provider == Provider.NU_CLUSTER:
+        if _keep(judge):
             required.add(judge)
         return required
 
@@ -239,7 +255,7 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
     target = _target_model_for_task(task)
     if target:
         m = _resolve_model(target)
-        if m is not None and m.provider == Provider.NU_CLUSTER:
+        if _keep(m):
             required.add(m)
 
     # Judge model(s) for defense+evaluate
@@ -252,11 +268,11 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
         # hang). Resolve it directly here so the vLLM server actually starts.
         if task.judge_model:
             judge = _resolve_model(task.judge_model)
-            if judge is not None and judge.provider == Provider.NU_CLUSTER:
+            if _keep(judge):
                 required.add(judge)
         elif task.judge_method:
             judge = _judge_model_for_method(task.judge_method)
-            if judge is not None and judge.provider == Provider.NU_CLUSTER:
+            if _keep(judge):
                 required.add(judge)
         else:
             try:
@@ -267,7 +283,7 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
                 methods = []
             for method in methods:
                 judge = _judge_model_for_method(method)
-                if judge is not None and judge.provider == Provider.NU_CLUSTER:
+                if _keep(judge):
                     required.add(judge)
 
         # Defense-owned second model(s) — guard_baseline / modality_complete's
@@ -277,10 +293,10 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
             model_str = task.defense_config.get(key)
             if model_str:
                 m = _resolve_model(model_str)
-                if m is not None and m.provider == Provider.NU_CLUSTER:
+                if _keep(m):
                     required.add(m)
 
-    # Prompt-transform tasks may reference a cluster-hosted HELPER model INSIDE a
+    # Prompt-transform tasks may reference a HELPER model INSIDE a
     # transformation's params (an LLM encoder's `model`, or the variance-channel
     # wrapper's paraphrase / attack-bank helper). Historically transforms used
     # API helpers so this went unnoticed; a free cluster-served helper needs a
@@ -292,7 +308,7 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
                       else spec.get("params") if isinstance(spec, dict) else None)
             for model_str in _collect_model_strings(params):
                 m = _resolve_model(model_str)
-                if m is not None and m.provider == Provider.NU_CLUSTER:
+                if _keep(m):
                     required.add(m)
 
     return required

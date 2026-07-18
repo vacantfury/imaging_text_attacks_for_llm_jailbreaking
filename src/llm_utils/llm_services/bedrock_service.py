@@ -44,6 +44,32 @@ _BEDROCK_IMAGE_FORMATS = {
 # boto3 error substrings that mean "back off and retry" vs "fail this row".
 _THROTTLE_MARKERS = ("ThrottlingException", "TooManyRequests", "Throttling", "429")
 
+# Errors that mean the AWS CREDENTIALS are bad/expired — they will NOT recover
+# mid-run, so retrying every row is pointless (slow) and the right response is to
+# stop the whole run FAST with an actionable message. On the xc cluster the
+# `arise-beta` creds are temporary STS creds that expire every few hours and are
+# NOT auto-refreshed — they must be re-minted ON the box (only the box owner can,
+# via the Amazon-internal SSO/Kiro login). See cluster_files/xc_cluster_properties.md.
+_CREDENTIAL_MARKERS = (
+    "ExpiredToken", "ExpiredTokenException",
+    "UnrecognizedClientException", "InvalidClientTokenId",
+    "SignatureDoesNotMatch", "InvalidSignatureException",
+    "CredentialsError", "NoCredentialsError", "TokenRefreshRequired",
+)
+# Errors that mean this model isn't invocable with the current creds (not enabled
+# in the account / no invoke permission / wrong id) — also won't recover mid-run.
+_ACCESS_MARKERS = ("AccessDeniedException", "AccessDenied")
+
+
+class BedrockCredentialsError(RuntimeError):
+    """Raised (fail-fast) when Bedrock creds are expired/invalid, so a run stops
+    with a clear message instead of grinding every row into a cryptic error."""
+
+
+class BedrockAccessError(RuntimeError):
+    """Raised (fail-fast) when a Bedrock model can't be invoked with the current
+    account/creds (not enabled, no permission, or a bad model id)."""
+
 
 class BedrockService(BaseLLMService):
     """AWS Bedrock via bedrock-runtime.converse. Region/profile via config/env."""
@@ -179,6 +205,26 @@ class BedrockService(BaseLLMService):
 
                 except Exception as e:
                     err = str(e)
+                    # Fail FAST on dead creds / no-access — these never recover
+                    # mid-run, so raise once (aborts the whole batch) instead of
+                    # retrying every row into a cryptic MECHANISM_ERROR.
+                    if any(m in err for m in _CREDENTIAL_MARKERS):
+                        raise BedrockCredentialsError(
+                            f"AWS Bedrock credentials are expired/invalid "
+                            f"({self.model.model_id}): {err}\n"
+                            f"On the xc box these temp STS creds expire every few "
+                            f"hours and are NOT auto-refreshed — re-mint them ON "
+                            f"the box (box owner's Amazon SSO/Kiro login), then "
+                            f"re-run. See cluster_files/xc_cluster_properties.md."
+                        ) from e
+                    if any(m in err for m in _ACCESS_MARKERS):
+                        raise BedrockAccessError(
+                            f"AWS Bedrock model not invocable "
+                            f"({self.model.model_id}): {err}\n"
+                            f"Check the model is enabled in the account and the id "
+                            f"is exactly the invocable id (Claude = us.*-prefixed "
+                            f"inference profile; qwen/deepseek/nova = bare on-demand id)."
+                        ) from e
                     is_throttle = any(m in err for m in _THROTTLE_MARKERS)
                     if is_throttle and attempt < self.max_retries:
                         wait = (2 ** attempt) + random.random()
