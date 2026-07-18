@@ -217,29 +217,63 @@ class LLMModel(Enum):
         max_context_len=262_144, family="kimi")
 
     # ──────── AWS Bedrock (US-hosted us-east-1, via the xc cluster's AWS
-    # profile, set with AWS_PROFILE — TODO item 2). model_id
-    # MUST be the exact Bedrock invocable id: Claude is INFERENCE_PROFILE-only →
-    # the `us.`-prefixed cross-region profile; Qwen/DeepSeek/Nova invoke on the
-    # bare ON_DEMAND id (verified 2026-07-18). ⚠️ input_price/output_price left
-    # 0.0 = UNTRACKED: fill Bedrock us-east-1 per-model pricing before any billed
-    # sweep (project cost rule; the allocation may be credit-backed).
-    # Chinese-origin weights here are US-jurisdiction (Bedrock hosts in us-east-1),
-    # unlike the direct-mainland Provider.MOONSHOT/ZAI/DEEPSEEK rows. ────────
+    # profile, set with AWS_PROFILE — TODO item 2). model_id MUST be the exact
+    # Bedrock invocable id (captured from `aws bedrock list-*` on the box 2026-07-18):
+    # Claude is INFERENCE_PROFILE-only → the `us.`-prefixed cross-region profile;
+    # Qwen/DeepSeek/Nova/GLM/Kimi/Mistral/Gemma/GPT-OSS invoke on the bare
+    # ON_DEMAND id. Prices are us-east-1 list ($/1M tokens, verified 2026-07-18 via
+    # AWS Bedrock pricing) where known; 0.0 = UNTRACKED (new/exotic models whose
+    # list price isn't published). NOTE: the arise-beta allocation is a credit-
+    # backed internal beta, so real $ cost to us is likely ~0 — these prices are
+    # for cost-ESTIMATION/tracking parity with the other providers. Chinese-origin
+    # weights here are US-jurisdiction (Bedrock hosts in us-east-1), unlike the
+    # direct-mainland Provider.MOONSHOT/ZAI/DEEPSEEK rows. ────────
+    # -- Claude (inference-profile ids; prices = Anthropic list, match on Bedrock) --
     BEDROCK_CLAUDE_HAIKU_4_5 = ModelSpec(
-        "us.anthropic.claude-haiku-4-5-20251001-v1:0", Provider.BEDROCK,
+        "us.anthropic.claude-haiku-4-5-20251001-v1:0", Provider.BEDROCK, 1.00, 5.00,
         max_context_len=200_000, family="claude", alignment_tier="strong")
     BEDROCK_CLAUDE_SONNET_5 = ModelSpec(
-        "us.anthropic.claude-sonnet-5", Provider.BEDROCK,
+        "us.anthropic.claude-sonnet-5", Provider.BEDROCK, 3.00, 15.00,  # promo $2/$10 through 2026-08-31
         max_context_len=200_000, family="claude", alignment_tier="strong")
+    BEDROCK_CLAUDE_OPUS_4_8 = ModelSpec(        # flagship-tier target/judge
+        "us.anthropic.claude-opus-4-8", Provider.BEDROCK, 5.00, 25.00,
+        max_context_len=200_000, family="claude", alignment_tier="strong")
+    BEDROCK_CLAUDE_FABLE_5 = ModelSpec(         # newest flagship; list price unpublished → UNTRACKED
+        "us.anthropic.claude-fable-5", Provider.BEDROCK,
+        max_context_len=200_000, family="claude", alignment_tier="strong")
+    # -- Amazon Nova (inference-profile ids; Nova family caps output at 10000) --
+    BEDROCK_NOVA_MICRO = ModelSpec(             # cheapest text (fast judge candidate)
+        "us.amazon.nova-micro-v1:0", Provider.BEDROCK, 0.035, 0.14,
+        max_context_len=128_000, family="nova", max_output_tokens=5_000)
+    BEDROCK_NOVA_LITE = ModelSpec(              # cheap multimodal (ON_DEMAND)
+        "us.amazon.nova-lite-v1:0", Provider.BEDROCK, 0.06, 0.24,
+        family="nova", max_output_tokens=5_000)  # Nova hard cap 10000; clamp well under
+    BEDROCK_NOVA_PRO = ModelSpec(               # stronger multimodal
+        "us.amazon.nova-pro-v1:0", Provider.BEDROCK, 0.80, 3.20,
+        max_context_len=300_000, family="nova", max_output_tokens=5_000)
+    # -- Open-weight families on Bedrock (US-hosted → NOT PRC-jurisdiction). Prices
+    #    UNTRACKED (per-model list not published for these newer ids). --
     BEDROCK_QWEN3_VL_235B = ModelSpec(          # ON_DEMAND VLM target (bare id)
         "qwen.qwen3-vl-235b-a22b", Provider.BEDROCK,
         family="qwen", alignment_tier="mid")
     BEDROCK_DEEPSEEK_V3_2 = ModelSpec(          # ON_DEMAND permissive capability/judge
         "deepseek.v3.2", Provider.BEDROCK,
         family="deepseek", alignment_tier="weak")
-    BEDROCK_NOVA_LITE = ModelSpec(              # cheap multimodal (ON_DEMAND)
-        "us.amazon.nova-lite-v1:0", Provider.BEDROCK,
-        family="nova", max_output_tokens=5_000)  # Nova hard cap 10000; clamp well under
+    BEDROCK_GPT_OSS_120B = ModelSpec(           # OpenAI open-weight (120B)
+        "openai.gpt-oss-120b-1:0", Provider.BEDROCK,
+        max_context_len=128_000, family="gpt-oss")
+    BEDROCK_GLM_5 = ModelSpec(                  # Z.AI GLM-5 (US-hosted here)
+        "zai.glm-5", Provider.BEDROCK,
+        family="glm", alignment_tier="mid")
+    BEDROCK_KIMI_K2_5 = ModelSpec(              # Moonshot Kimi K2.5 (US-hosted here)
+        "moonshotai.kimi-k2.5", Provider.BEDROCK,
+        max_context_len=262_144, family="kimi")
+    BEDROCK_MISTRAL_LARGE_3 = ModelSpec(        # Mistral Large 3 (675B)
+        "mistral.mistral-large-3-675b-instruct", Provider.BEDROCK,
+        family="mistral", alignment_tier="mid")
+    BEDROCK_GEMMA_3_27B = ModelSpec(            # Google Gemma-3 27B (open weight)
+        "google.gemma-3-27b-it", Provider.BEDROCK,
+        max_context_len=128_000, family="gemma", alignment_tier="mid")
 
     # ──────── Local (HF transformers in-process) ────────
     LLAMA3       = ModelSpec("llama3",                                   Provider.LOCAL)
