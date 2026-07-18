@@ -60,8 +60,22 @@ SAFE_PROMPT_TEMPLATE = (
 
 
 def _is_yes(text: str) -> bool:
-    """ECSO's harm-detection verdict parser — case-insensitive 'yes'."""
-    return (text or "").strip().lower().startswith("yes")
+    """ECSO / JointVerify harm-detection verdict parser — returns True = UNSAFE.
+
+    FAILS CLOSED: a clear 'no' is the ONLY verdict treated as safe; 'yes' and
+    anything ambiguous / empty / unparseable return True (unsafe), so an
+    unreadable verdict never silently passes a (possibly harmful) response
+    through — matching the fail-closed convention in guard_utils.py. The prior
+    implementation returned startswith('yes'), which failed OPEN on every
+    non-'yes' output (verbose verdicts like "The response is harmful", empty
+    strings, errors): ecso silently kept the unmitigated response, joint_verify
+    silently allowed the request. Fixed 2026-07-18; the ecso runs produced under
+    the buggy parser were deleted (both local and cluster) and must be re-run.
+    """
+    t = (text or "").strip().lower()
+    if t.startswith("no"):
+        return False
+    return True
 
 
 @register_defense
