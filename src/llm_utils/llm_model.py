@@ -77,6 +77,11 @@ class ModelSpec:
     input_price: float = 0.0          # $/1M input tokens (0 for self-hosted)
     output_price: float = 0.0         # $/1M output tokens
     max_context_len: Optional[int] = None   # arch ceiling; None when unknown
+    # Provider-enforced OUTPUT ceiling (maxTokens). None = no known cap (use the
+    # global default). Bedrock rejects a maxTokens above the model's hard limit
+    # with a ValidationException (e.g. Amazon Nova caps at 10000 while the project
+    # default max_tokens is 16384) — BedrockService clamps its request to this.
+    max_output_tokens: Optional[int] = None
     quirks: frozenset = field(default_factory=frozenset)
     # Research-facing labels, stamped as first-class fields into results.json so
     # readers never recover them by archaeology. `family` is a static fact;
@@ -234,7 +239,7 @@ class LLMModel(Enum):
         family="deepseek", alignment_tier="weak")
     BEDROCK_NOVA_LITE = ModelSpec(              # cheap multimodal (ON_DEMAND)
         "us.amazon.nova-lite-v1:0", Provider.BEDROCK,
-        family="nova")
+        family="nova", max_output_tokens=5_000)  # Nova hard cap 10000; clamp well under
 
     # ──────── Local (HF transformers in-process) ────────
     LLAMA3       = ModelSpec("llama3",                                   Provider.LOCAL)
@@ -427,6 +432,16 @@ class LLMModel(Enum):
         Llama-2's RoPE positional encoding is undefined beyond 2048).
         """
         return self.value.max_context_len
+
+    @property
+    def max_output_tokens(self) -> Optional[int]:
+        """Provider-enforced output ceiling (maxTokens), None if uncapped.
+
+        BedrockService clamps its requested maxTokens to this so a model with
+        a hard output cap below the global default (e.g. Amazon Nova = 10000
+        vs the default 16384) doesn't 400 with a ValidationException.
+        """
+        return self.value.max_output_tokens
 
     @property
     def chat_template(self) -> Optional[str]:

@@ -1,0 +1,26 @@
+# xc cluster — single-node SLURM (installed 2026-07-18, box owner approved), 8×A100-SXM4-80GB.
+# Peer of nurc.yaml / aicr.yaml over conf/clusters/_defaults.yaml. Loaded when
+# CLUSTER_PROFILE=xc (scripts/run_experiment_xc.sbatch). Full facts + runbook:
+# cluster_files/xc_cluster_properties.md (gitignored; connection details stay private).
+#
+# Roles for this cluster (owner routing policy 2026-07-18):
+#   API-first — AWS Bedrock via the box's AWS profile (no GPU, no server jobs).
+#   GPU last-resort — vLLM serving on the A100s only when Bedrock+AICR+NURC can't cover.
+cluster:
+  # --- dispatch / limits ---
+  sbatch: scripts/run_experiment_xc.sbatch
+  budget: 6                                 # concurrent vLLM servers; 8 GPUs total but leave
+                                            # 2 for the box owner's direct (non-SLURM) use —
+                                            # SLURM can't see his processes, so stay polite.
+  max_submit: 8                             # no QOS on the box; match the code cap
+  max_slurm_time_limit: "24:00:00"
+  # --- xc-specific server params (rest inherit _defaults.yaml) ---
+  partition: main                           # the single partition of the single node
+  gpu_request_style: gres                   # slurm.conf uses GresTypes=gpu (gpu:a100:8)
+  excluded_nodes: []
+  time_limit: "08:00:00"                    # default vLLM server wall
+  hf_home: /home/ubuntu/huggingface_cache   # one big 5.7T disk; shared ubuntu account
+  hf_offline: false                         # box has internet
+  # uv venv activation REPLACES the module/conda default (no `module` command on the box).
+  env_setup:
+    - "source $HOME/projects/imaging_text_attacks_for_llm_jailbreaking/.venv/bin/activate"

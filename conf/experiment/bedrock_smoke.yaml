@@ -10,10 +10,10 @@
 # runbook cluster_files/xc_cluster_properties.md):
 #     AWS_PROFILE=<xc profile> AWS_REGION=us-east-1 python main.py bedrock_smoke
 #
-# ⚠️ UNVALIDATED: written 2026-07-18 while the xc box was unreachable, so it has
-# NOT been run. The FIRST run on xc IS its validation. If the per-step `model`
-# override below isn't picked up by the encoder, use the alt in the runbook
-# (a defense+evaluate task with a Bedrock target_model) instead.
+# VALIDATED on xc 2026-07-18. Gotcha this file originally hit: per-step encoder
+# overrides MUST be nested under `params:` (TransformationSpec = {type, params});
+# a top-level `model:` on the step is silently ignored → default gpt-4.1-mini →
+# "OpenAI API key not found" on a box that has no OpenAI key.
 
 num_main_job_threads: 1
 
@@ -22,9 +22,17 @@ tasks:
   # credential chain. Swap the model id for any Provider.BEDROCK row to smoke
   # another model (Claude ids are us.*-prefixed inference profiles; qwen/
   # deepseek/nova use the bare on-demand id).
+  # Encoder = Amazon Nova-Lite ON PURPOSE: an aligned Claude/aligned encoder
+  # refuses to math-encode even benign-labeled jailbreak-set prompts (observed on
+  # xc 2026-07-18: Claude-Haiku declined both the harmful row and the "benign"
+  # heroin-story row), which muddies an INVOKE smoke. Nova complies → a clean
+  # encoding output. Swap `model` to any Provider.BEDROCK row to smoke another
+  # family (Claude ids are us.*-prefixed inference profiles; qwen/deepseek/nova
+  # use the bare on-demand id). Invoke verified across Claude/Nova/Qwen/DeepSeek.
   - mode: prompt_transform
-    source_file: data/harmbench_prompts.jsonl
+    source_file: data/jbb_benign_prompts.jsonl
     prompt_range: [0, 0]
     transformation_list:
       - type: set_theory
-        model: us.anthropic.claude-haiku-4-5-20251001-v1:0
+        params:
+          model: us.amazon.nova-lite-v1:0

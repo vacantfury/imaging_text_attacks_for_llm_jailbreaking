@@ -205,6 +205,16 @@ class BedrockService(BaseLLMService):
     ) -> List[Tuple[str, str]]:
         temperature = kwargs.get("temperature", self.temperature)
         max_tokens = kwargs.get("max_tokens", self.max_tokens)
+        # Clamp to the model's provider-enforced output ceiling. Bedrock 400s if
+        # maxTokens exceeds a model's hard limit (Amazon Nova = 10000 vs the
+        # project default 16384); the registry carries the per-model cap.
+        cap = getattr(self.model, "max_output_tokens", None)
+        if cap is not None and max_tokens > cap:
+            logger.debug(
+                "Clamping maxTokens %d → %d (model cap for %s)",
+                max_tokens, cap, self.model.model_id,
+            )
+            max_tokens = cap
 
         prepared = [
             (cid, self._format_messages(msgs)) for cid, msgs in conversations

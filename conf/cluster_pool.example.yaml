@@ -21,6 +21,9 @@ clusters:
   - name: nurc        # conda; use name: nurc_uv (conf/clusters/nurc_uv.yaml) for the uv env
     ssh: <neu-id>@login.explorer.northeastern.edu
     repo: ~/projects/imaging_text_attacks_for_llm_jailbreaking
+  - name: xc          # single-node SLURM (conf/clusters/xc.yaml); GPU tier is LAST-RESORT
+    ssh: xc           # ssh alias in ~/.ssh/config
+    repo: ~/projects/imaging_text_attacks_for_llm_jailbreaking
 
 # Optional: pin a model (by model_id) onto a specific cluster, overriding the
 # automatic AICR-first packing. Every task needing that model is forced onto the
