@@ -27,6 +27,10 @@ CONF_DIR = Path(__file__).resolve().parent / "conf"
 def _print_plan(result, submit: bool) -> None:
     plan = result.plan
     print(f"\n=== multi-cluster split: {result.preset_name} ===")
+    if result.health_notes:
+        print("\n--- cluster health preflight (routing around live state) ---")
+        for note in result.health_notes:
+            print(f"  {note}")
     print(f"distinct cluster-served models in preset: "
           f"{sorted(plan.total_cluster_models) or '(none — all API/no-model)'}")
     if not plan.total_cluster_models:
@@ -90,10 +94,15 @@ def main() -> None:
     parser.add_argument("--submit", action="store_true",
                         help="actually ssh + sbatch (default: dry-run). "
                              "Sync the code to both clusters first.")
+    parser.add_argument("--no-probe", action="store_true",
+                        help="skip the cluster health preflight (ssh reachability / "
+                             "SLURM / Bedrock-creds liveness). Use offline or to "
+                             "route purely on declared capabilities.")
     args = parser.parse_args()
 
     try:
-        result = dispatch(args.preset, Path(args.pool), CONF_DIR, submit=args.submit)
+        result = dispatch(args.preset, Path(args.pool), CONF_DIR,
+                          submit=args.submit, probe=not args.no_probe)
     except (DispatchError, FileNotFoundError) as e:
         logger.error(str(e))
         sys.exit(1)

@@ -450,6 +450,41 @@ class Experiment:
             cluster_models |= _required_cluster_models_for_task(task)
         return cluster_models
 
+    def _bedrock_preflight(self, tasks: list[TaskInfo]) -> None:
+        """Fail fast BEFORE launching anything if the run needs Bedrock but its
+        creds are dead.
+
+        Single-cluster twin of the multi-cluster health preflight
+        (cluster_health.py). Bedrock on xc uses the box owner's arise-beta creds,
+        which expire every few hours and only he can re-mint — without this, a
+        Bedrock run would spin up orchestration and then fail every cell mid-run
+        on ExpiredToken. One cheap `sts` call up front turns that into a clear,
+        early abort. No-op when the run references no Bedrock model.
+        """
+        from src.llm_utils import Provider
+        needs_bedrock = any(
+            _referenced_models_for_task(t, {Provider.BEDROCK}) for t in tasks)
+        if not needs_bedrock:
+            return
+        try:
+            import boto3
+            from botocore.exceptions import BotoCoreError, ClientError
+        except ImportError:
+            logger.warning("Bedrock preflight skipped (boto3 not importable); "
+                           "per-call credential checks still apply.")
+            return
+        try:
+            boto3.client("sts").get_caller_identity()
+            logger.info("Bedrock preflight: creds live.")
+        except (ClientError, BotoCoreError) as e:
+            raise RuntimeError(
+                "Bedrock preflight FAILED — this run needs AWS Bedrock but the "
+                f"creds are not usable ({type(e).__name__}: {e}). On xc the "
+                "arise-beta creds expire every few hours and only the box owner "
+                "can re-mint them — ask him to re-mint on the box, then rerun. "
+                "Nothing was submitted."
+            ) from e
+
     def _load_cluster_config(self, model):
         """
         Load cluster server config for a model.
@@ -775,6 +810,10 @@ class Experiment:
         for task in tasks_to_run:
             for m in _required_cluster_models_for_task(task):
                 self._model_remaining[m] = self._model_remaining.get(m, 0) + 1
+
+        # Fail fast on dead Bedrock creds before submitting any server / running
+        # any task (raises RuntimeError with the re-mint fix; no-op if no Bedrock).
+        self._bedrock_preflight(tasks_to_run)
 
         try:
             # Submit vLLM servers for cluster models. Non-blocking: tasks

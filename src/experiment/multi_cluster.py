@@ -445,6 +445,7 @@ class DispatchResult:
     written: dict[str, Path]             # cluster name -> local sub-preset path
     commands: dict[str, list[str]]       # cluster name -> ssh command list
     submitted: dict[str, str] = field(default_factory=dict)  # cluster -> sbatch stdout
+    health_notes: list = field(default_factory=list)  # human lines: dropped clusters / disabled caps (empty = all healthy)
 
 
 def dispatch(
@@ -452,14 +453,42 @@ def dispatch(
     pool_path: Path,
     conf_dir: Path,
     submit: bool = False,
+    probe: bool = True,
 ) -> DispatchResult:
     """Plan the split, write sub-presets locally, and (only if submit=True)
-    ssh them to each cluster and sbatch. Dry-run otherwise."""
+    ssh them to each cluster and sbatch. Dry-run otherwise.
+
+    When ``probe`` (default), a runtime health preflight (cluster_health.py) runs
+    BEFORE routing: unreachable / SLURM-down clusters are dropped and dead
+    capabilities (e.g. xc's expired Bedrock creds) are flipped off, so the pure
+    router only places work where it can actually run — and a needed capability
+    that is dead everywhere aborts early with an actionable fix instead of failing
+    a launched matrix cell-by-cell. Pass ``probe=False`` to skip the ssh probes.
+    """
     from .experiment import load_preset
 
     clusters, pins = load_pool(pool_path, conf_dir)
     preset = load_preset(preset_name, conf_dir)
     task_needs = compute_task_needs(preset)
+
+    health_notes: list = []
+    if probe:
+        from .cluster_health import apply_health, probe_pool
+        need_bedrock = any(n.needs_bedrock for n in task_needs)
+        healths = probe_pool(clusters, need_bedrock)
+        clusters, health_notes = apply_health(clusters, healths)
+        # Early, actionable abort if a needed capability is now dead everywhere.
+        if not clusters:
+            raise DispatchError(
+                "cluster health preflight: every pool cluster is unreachable / "
+                "SLURM-down —\n  " + "\n  ".join(health_notes))
+        if need_bedrock and not any(c.bedrock for c in clusters):
+            raise DispatchError(
+                "cluster health preflight: this run needs Bedrock but no cluster "
+                "can invoke it right now —\n  " + "\n  ".join(health_notes)
+                + "\nFix: have the box owner re-mint the arise-beta creds on the "
+                "box, then rerun. (Pass probe=False / --no-probe to bypass.)")
+
     plan = plan_split(task_needs, clusters, pins)
 
     if plan.leftover:
@@ -489,4 +518,5 @@ def dispatch(
 
     return DispatchResult(
         preset_name=preset_name, plan=plan, subpresets=subpresets,
-        written=written, commands=commands, submitted=submitted)
+        written=written, commands=commands, submitted=submitted,
+        health_notes=health_notes)
