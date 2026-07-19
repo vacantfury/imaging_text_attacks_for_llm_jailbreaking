@@ -68,6 +68,10 @@ Paper B is under review in the ARR **May 2026** cycle (feeds EMNLP 2026 + AACL 2
 | Meta-reviews released | **July 30, 2026** |
 | Commitment deadline (EMNLP & AACL, same) | **August 2, 2026** |
 | Acceptance notification | August 20, 2026 |
+| Camera-ready (EMNLP long & short) | **August 30, 2026** |
+| EMNLP 2026 main conference | **October 24–29, 2026** (Workshops/Tutorials TBD) |
+
+*(EMNLP camera-ready + main-conference dates owner-provided 2026-07-19 — the ARR-May cycle feeds EMNLP, so these are Paper B's post-acceptance dates.)*
 
 **ARR timeline-email details (2026-07-13):**
 - **Discussion extended one day to July 15 AoE.** When it closes, reviewers re-check the forum for author responses and are asked to update assessments if a listed major weakness was sufficiently addressed or rested on a misunderstanding that a clarification resolved. Authors may point reviewers to the [ARR review guidelines](https://aclrollingreview.org/reviewerguidelines) in discussion; a well-justified guideline issue should prompt a review update.
