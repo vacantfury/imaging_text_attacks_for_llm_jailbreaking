@@ -1,6 +1,6 @@
 # Research Proposal — Blind Judges: Safety Evaluators Inherit the Decode Blind Spot (`judge_reliability`)
 
-**Workflow stage:** S3 · project-init (founding) — as of 2026-07-18. Next gates: **S4 literature / scoop loop — the make-or-break** (§4, UNRUN), then **S1 external idea-check** (owner hands; the ready package is `idea_check.md`). Paper E is **NOT on the July AAAI crunch** (that is Papers C and D); it targets a later cycle (§9).
+**Workflow stage:** S4 · literature/scoop gate **PASSED at MEDIUM overlap** (delta confirmed 2026-07-19; §4) — as of 2026-07-19. Next: **S5 main story** (lock the delta) + **S1 external idea-check** (owner hands; package = `idea_check.md`); the *standalone-focused-paper vs fold-into-Paper-C* direction is an OPEN owner decision (§4). Paper E is **NOT on the July AAAI crunch** (Papers C/D); it targets a later cycle (§9).
 
 *Codename: **Blind Judges** (Paper E, alias E). Full working title (refined at writing): "Blind Judges: Safety Evaluators Inherit the Decode Blind Spot on Encoded and Image-Rendered Jailbreaks." Origin: `text_docs/shared/future_work.md §9` + TODO item 8 + the cross-paper judge-model open problem (`project_paper_c_judge_model_open_problem`, `project_wildguard_invalid_as_asr_judge`). Seed evidence already in hand across Papers C and D.*
 
@@ -51,6 +51,18 @@ Ran `scoop-check` (3 search angles, ~47 queries) + the in-bib §7.5 analysis. **
 **Delta that survives (narrow):** (a) extend judge calibration to **semantic** encodings (set-theory/formal-logic/code/classical-Chinese) **+ image-rendered** — the alignment-sparse encodings no judge has been calibrated on (FigStep/MM-SafetyBench eval protocols confirmed to NOT decode-before-judging); (b) the **decode-blind-spot-shared-with-defenses** frame; (c) decode-then-judge **generalized + measured** across many judges.
 
 **Gate outcome = LOOP-BACK / reconsider scope (NOT clean advance).** Do not lead with the broad "first judge-reliability-on-encoded-harm" headline (reads as StrongREJECT/On-Calibration on more encodings). Owner-decision among: **(i)** narrow hard to the semantic+image+decode-blind-spot delta → workshop (NeurIPS JUDGe); **(ii)** FOLD into Paper C as its first-of-kind judge-validation methodology section (Round J already sets this up); **(iii)** reconsider the Paper E direction (e.g. the §2 unified-defense or §7.2 multi-agent runners-up). **Confirm-gate:** download+verify `liu2025calibration` / `jeon2026encoders` / `zaghouani2026chisafe` — if any reports a per-encoding JUDGE calibration on semantic/image encodings, this is **Level 1 (fully scooped)** → fold into C. Staged CANDIDATE entries in `paper/literature/my_base.bib`; full log `outputs/scoop_check/2026-07-18/scoop_check_log.md`.
+
+### S4 confirm-gate RESOLVED — 2026-07-19 (verdict upgraded to Medium; delta confirmed)
+
+Owner verified+downloaded the candidates; I read the 3 confirm-gate papers in full (+ HPAA). **None does a per-encoding JUDGE calibration on semantic/image encodings → NOT Level 1; verdict UPGRADES to Level 3 (Medium Overlap), delta confirmed.** Reads recorded in `text_docs/shared/literature_review.md §7.7`:
+- **On Calibration of Guard Models** (ICLR'25) — *confidence*-calibration (ECE) of 9 text guards under GCG/AutoDAN suffixes, broken down by response-model **not encoding**; no semantic/image, no decode-then-judge. Different axis.
+- **Do Encoders Suffice?** (ICANN'26) — judge comparison broken down by **conversational technique** (single-turn/decomposition/escalation/context-manip), not encoding. Orthogonal.
+- **ChiSafe-PAS** (LREC'26) — dataset paper; **proposes** per-obfuscation-accuracy but **defers the eval to future work**; surface-Chinese only (no 文言文 / cipher / semantic / image). Closest on the idea, doesn't execute it — its deferral is our opening.
+- **HPAA** (USENIX Sec'26) — attack on content-moderation of social posts via typography; not an LLM-response judge, not image-render. Motivation cite.
+
+**Ceiling = StrongREJECT** (§7.5): human-validated judge on SURFACE encodings only (Base64/ROT-13/disemvoweling/low-resource, text-only). **Clean delta:** extend judge calibration to SEMANTIC (set-theory/formal-logic/code/classical-Chinese) + IMAGE-rendered, unify under the decode-blind-spot frame, measure decode-then-judge across judges.
+
+**Gate outcome = ADVANCE as a FOCUSED paper** (workshop / ARR-Findings scale — not a blockbuster; matches its off-crunch timing). Low-regret path: run the measurement richly so it serves BOTH Paper C's Round J AND Paper E, and decide standalone-focused vs fold-into-C at S5 / writing time (§9's original dual-use plan). Owner direction still open.
 
 ## 5. Contributions (provisional)
 
