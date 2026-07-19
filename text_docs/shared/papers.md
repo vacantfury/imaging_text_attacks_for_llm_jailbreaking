@@ -15,7 +15,7 @@ repo, public-grade discipline).
 | **B** | ImgAug | *Image Augmentation Strengthens VLM Defenses Against Encoded Jailbreak Attacks* — adding an image (even a content-unrelated decoy) shifts a defense's behavior via coverage alignment | `imgaug_defense` | `text_docs/imgaug_defense/paper_b_rebuttal_results.md` | under review |
 | **C** | The Decode Gap | Black-box **recover→decode→guard** defense — deployed guards *inspect/reason about* content but never *decode* an obfuscated payload; `modality_complete` closes the decode gap | `autoattack_defense` | `text_docs/autoattack_defense/{proposal,experiments_plan,experiment_results}.md` | in progress |
 | **D** | Variance Channels | *Best-of-N Jailbreaking Beyond Surface Noise* — Best-of-N over a strong structural/encoding attack (code_attack) decisively beats vanilla surface-noise BoN, defended and undefended; the strategy channel survives a canonicalize→guard defense. Venue: **AAAI-27 primary** (abstract 7/21 / paper 7/28) | `bestofn_attack` | `text_docs/bestofn_attack/proposal.md` | in progress |
-| **E** | Blind Judges | Do safety **judges** share the defenses' *decode blind spot*? First per-judge × per-encoding × human-labeled miss/over-count calibration on encoded / image-rendered harm, + a decode-then-judge fix — the measurement mirror of Paper C | `judge_reliability` | `text_docs/judge_reliability/proposal.md` | founding (S3 → S4 scoop gate) |
+| **E** | Smuggled Actions | *Encoded Indirect Prompt Injection on LLM Agents* — this line's MathEnc/ImgAug transforms become **payloads** delivered through an agent's untrusted data channel; encoded payloads defeat injection-specific defenses (spotlighting, delimiter isolation, prompt-shield) tuned on natural-language injections; success = **action completion**. The coverage/decode-gap thesis lifted from models to agents. Attack-first (`future_work.md §5.1`) | `agent_injection` | `text_docs/agent_injection/proposal.md` | founding (S3 → next S4 scoop gate) |
 
 **Namespacing convention.** Each paper owns a subdir keyed by its **Namespace** above under `text_docs/`,
 `conf/experiment/`, and `outputs/`; `shared/` holds cross-paper material (venue facts, judge validation,
@@ -26,3 +26,11 @@ When a new paper starts, add its row here and create its namespace subdirs.
 canonicalize→guard defense sub-part — pivoted 2026-07-17 from a standalone paper into a section of the
 attack-primary Paper D (`bestofn_attack`). Any older doc calling `bestofn_defense` "Paper D" or "Paper E"
 is stale drift; the live aliases are the table above.
+
+**Note — `judge_reliability` ("Blind Judges") is NOT a standalone paper (PARKED 2026-07-19).** It was
+investigated as Paper E, but two independent scoop-checks returned Medium/High overlap (the neighborhood is
+crowded from two directions — judge-calibration = StrongREJECT/SORRY-Bench; capability-gap = the
+scalable-oversight scaling laws), so it was **not pursued standalone** and the **E alias moved to
+`agent_injection`**. Its measured judge-validation (Round-J human-κ, WildGuard FP, gpt-5-nano inflation) stays
+in Papers C/D where it already lives. Disposition record: `text_docs/judge_reliability/proposal.md §11`. Any
+doc calling `judge_reliability` "Paper E" is now stale drift.

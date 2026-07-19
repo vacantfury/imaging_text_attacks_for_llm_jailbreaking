@@ -1,8 +1,10 @@
 # Research Proposal — Blind Judges: Safety Evaluators Inherit the Decode Blind Spot (`judge_reliability`)
 
-**Workflow stage:** S4 · literature/scoop gate **PASSED at MEDIUM overlap** (delta confirmed 2026-07-19; §4) — as of 2026-07-19. Next: **S5 main story** (lock the delta) + **S1 external idea-check** (owner hands; package = `idea_check.md`); the *standalone-focused-paper vs fold-into-Paper-C* direction is an OPEN owner decision (§4). Paper E is **NOT on the July AAAI crunch** (Papers C/D); it targets a later cycle (§9).
+**Workflow stage:** **PARKED / dormant candidate** (as of 2026-07-19) — the S4 scoop gate returned **Medium/High overlap from two independent angles** (§4), so this is **NOT pursued as a standalone Paper E**. The Paper E slot moved to the agent-side line (`agent_injection`, codename "Smuggled Actions"). The measured judge-validation stays in Papers C/D; this direction is retained as a dormant candidate. Full disposition: **§11 Conclusion.**
 
-*Codename: **Blind Judges** (Paper E, alias E). Full working title (refined at writing): "Blind Judges: Safety Evaluators Inherit the Decode Blind Spot on Encoded and Image-Rendered Jailbreaks." Origin: `text_docs/shared/future_work.md §9` + TODO item 8 + the cross-paper judge-model open problem (`project_paper_c_judge_model_open_problem`, `project_wildguard_invalid_as_asr_judge`). Seed evidence already in hand across Papers C and D.*
+> **⚠️ SUPERSEDED — read §11 first.** This proposal is PARKED as of 2026-07-19; `judge_reliability` is no longer the standalone Paper E. Sections 1–10 are the founding record, retained for reference; the final disposition and reasoning are in **§11**.
+
+*Codename: **Blind Judges** (was Paper E; the alias **E moved to `agent_injection`** on 2026-07-19). Full working title (had it shipped): "Blind Judges: Safety Evaluators Inherit the Decode Blind Spot on Encoded and Image-Rendered Jailbreaks." Origin: `text_docs/shared/future_work.md §9` + the cross-paper judge-model open problem (`project_paper_c_judge_model_open_problem`, `project_wildguard_invalid_as_asr_judge`). Seed evidence already in hand across Papers C and D.*
 
 ---
 
@@ -110,3 +112,16 @@ Deadlines from `text_docs/shared/conference_timeline.md` (paper-agnostic, keep i
 - **S4 · Literature / scoop loop — the make-or-break (do FIRST).** `scoop-check` on the decode-blind-judge claim → `lit-review-loop` (stage → owner verify+download → read → write the review). Advance only if the delta survives.
 - **S1 · External idea-check (owner hands).** The package is `idea_check.md` → cspaper.org/idea-check; bring back verdict + critiques. Fallback = internal adversarial check (fresh-context `scientific-critical-thinking` + `peer-review` pass), marked `idea-check: internal-only (debt)`.
 - **S5/S6 (after the gates):** settle the main story + the measurement matrix design with a cost estimate; owner ratifies before any run. Nothing runs without the owner's go.
+
+## 11. Conclusion — final disposition (2026-07-19): PARKED, not the standalone Paper E
+
+**Decision.** `judge_reliability` is **not pursued as a standalone Paper E.** After two independent novelty gates, its standalone main-conference case does not clear the bar. The Paper E slot is reallocated to the agent-side line (`text_docs/shared/future_work.md §5`, codename **"Smuggled Actions"**, namespace `agent_injection`).
+
+**Why — two scoop angles, both crowded (the load-bearing evidence):**
+- **Scoop-check #1 — narrow per-encoding calibration → Medium overlap (§4, 2026-07-18/19).** The ceiling is **StrongREJECT** (NeurIPS'24) / **On Calibration of Guard Models** (ICLR'25) / **SORRY-Bench**: human-anchored judge calibration on *surface* encodings is already done. Only the *semantic+image* extension and the decode-blind-spot frame survive.
+- **Scoop-check #2 — the "capability-gap spine" → High overlap on the insight (§4, 2026-07-19).** The exciting hook — *the judge–target decode-capability gap governs measurement error, and it grows as targets strengthen* — is pre-owned by the **scalable-oversight scaling-laws** literature: **Engels et al.** (NeurIPS'25 Spotlight, 2504.18530), **Dorner et al.** (ICLR'25, 2410.13341), **Kenton et al.** (NeurIPS'24, 2407.04622). Only the safety-encoded-*decode* instantiation + decode-then-judge correction + plaintext control survives, at Medium.
+- **The pattern is the verdict.** Every time the claim is sharpened into something exciting, an adjacent subfield already owns it (calibration → StrongREJECT/SORRY-Bench; capability-gap → scalable oversight). Against a **main-conference-only** bar — workshops are fallback-only, never a target (owner rule 2026-07-19; `feedback_papers_target_main_conferences`) — a twice-Medium standalone sits below the line. The honest "encoded-attack ASR measurement is a scalable-oversight problem" framing is a *gift for positioning* but does not by itself lift the delta above Medium.
+
+**What is NOT wasted (low-regret).** The *measured* judge-validation Paper C needs anyway — the Round-J tri-judge human-κ study (gpt-5-mini κ=0.68 vs 100 human labels), the WildGuard 41–68% false-positive finding, the gpt-5-nano 2–3× inflation — **stays in Papers C and D where it already lives** and strengthens their ASR credibility. It is **NOT** expanded into a standalone study and is **NOT** force-folded as a large new section into Paper C (C's content is already too much to absorb it — owner 2026-07-19). The encoder × judge × human-label calibration table remains a real asset that could revive later (a richer-compute era, or if the scalable-oversight-for-encoded-safety framing earns a stronger-than-Medium delta).
+
+**Status.** Parked / dormant candidate. This proposal is retained as the record; the `judge_reliability` namespace stays (it holds the Round-J-adjacent analysis reused by C). The alias **E is now `agent_injection`** ("Smuggled Actions"; `text_docs/agent_injection/proposal.md`).
