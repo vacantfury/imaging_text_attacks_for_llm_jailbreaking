@@ -13,12 +13,16 @@
 # Qwen3-VL judge is an AD-HOC second served model chosen only to exercise the
 # 2-server orchestration; its verdicts are not meaningful, this is an infra check.
 #
-# ⚠️ REAL experiments judge with WildGuard (the project's decided free judge),
-# which is a GATED HuggingFace repo (allenai/wildguard). xc has NO HF token
-# (shared box, kept credential-clean), so serving WildGuard/LlamaGuard/other
-# GATED models needs an opt-in: add HUGGINGFACE_TOKEN to ~/.xc_env on the box
-# (owner decision — puts a read-token on the shared box). Non-gated models
-# (Qwen/InternVL/Nova targets, etc.) need nothing.
+# REAL experiments judge with WildGuard (the project's decided free judge), a
+# GATED HuggingFace repo (allenai/wildguard). That model — plus the other gated
+# repos (Llama-Guard-3/4, Pixtral, Llama-3.x) — is ALREADY downloaded to xc's HF
+# cache via the STANDARD op HF-token mechanism (transient `op read
+# op://dev/HuggingFace/credential` at download time; no token persisted on the
+# shared box), exactly as on AICR/NURC. vLLM serves from the local cache, so
+# serving needs no token at all. This smoke still uses non-gated Qwen models only
+# so it stays the minimal infra check (no HF cache prerequisite). To add a NEW
+# gated model later, download it once the same op way — never persist a token in
+# ~/.xc_env on the shared box.
 #
 # Usage (ON xc, after `scripts/setup_env.sh xc` built the torch+vLLM layer):
 #     sbatch scripts/run_experiment_xc.sbatch xc_gpu_smoke
