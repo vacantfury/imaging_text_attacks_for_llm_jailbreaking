@@ -1,0 +1,26 @@
+# bestofn_attack — BASELINE round, Stage 1 (transforms). Attack-paper baselines.
+#   (A) FLOOR      = raw prompt (non_llm_baseline, passthrough) — "does the wrapper do anything?"
+#   (B) SINGLE-BEST = code_attack ALONE (the strongest base attack) — the confound control:
+#        does bank-sampling (strategy channel) beat just committing to code_attack at matched N?
+# Both are BoN via TARGET TEMPERATURE: 100 behaviors x 100 identical draws (code_attack &
+# non_llm_baseline are static/deterministic, so the variance across draws is the target's
+# sampling temperature, exactly like vanilla BoN over a fixed prompt).
+# Both transforms are NON-LLM (static templates) -> Stage 1 is FREE, no helper model.
+num_main_job_threads: 8
+num_cluster_jobs: 1          # orchestrator only (non-LLM transforms, no vLLM server)
+
+_c: &c
+  source_file: data/harmbench_bon_100.jsonl
+  prompt_range: [0, 9999]
+
+tasks:
+  - <<: *c
+    mode: prompt_transform
+    transformation_list:
+      - type: non_llm_baseline        # (A) floor: raw harmful prompt, unchanged
+        params: {}
+  - <<: *c
+    mode: prompt_transform
+    transformation_list:
+      - type: code_attack             # (B) single-best structural attack, alone (no bank)
+        params: {}
