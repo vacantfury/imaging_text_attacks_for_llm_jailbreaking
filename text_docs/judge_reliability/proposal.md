@@ -64,6 +64,17 @@ Owner verified+downloaded the candidates; I read the 3 confirm-gate papers in fu
 
 **Gate outcome = delta confirmed (Medium overlap), but as a FOCUSED contribution its MAIN-CONFERENCE ceiling is the open question** — and workshops are fallback-only, not a target (owner rule 2026-07-19), so "focused → workshop" is NOT an acceptable landing. Low-regret path: run the measurement richly so it serves Paper C's Round J regardless; **current lean = fold the judge-validation into Paper C and give the Paper E slot to a stronger main-conference direction** (see the direction re-evaluation, 2026-07-19). Owner decision open.
 
+### S4 scoop-check #2 — the "capability-gap spine" — 2026-07-19 (Level 2, High Overlap on the INSIGHT)
+
+Scoop-checked the sharpened claim: *judge–target decode-capability gap governs ASR measurement bias; grows as targets strengthen; decode-then-judge corrects only when decoder ≥ target; plaintext control.* The adjacent-subfield search (scalable oversight / weak-to-strong) found the hazard.
+
+- **The "grows as the target gets stronger" hook is NOT novel — it is the general result of the scalable-oversight scaling-laws literature:** **Engels et al., "Scaling Laws For Scalable Oversight"** (NeurIPS'25 Spotlight, 2504.18530) models oversight success vs the capability gap and shows it *declines when overseeing stronger systems*; **Dorner et al.** (ICLR'25, 2410.13341) give the formal "a judge no more accurate than the model can't beat twice the data" bound; **Kenton et al.** (NeurIPS'24, 2407.04622) own the phrase "weak LLM judges strong LLM." All GENERAL-domain (games / ML-eval), not safety/encoded.
+- **Safety-domain analogues** (closer domain, different mechanism): **Jailbreak Paradox** (Rao, 2406.12702) proves a weaker model can't detect whether a stronger one is jailbroken (plaintext, theoretical); **JADES** (Chu, 2508.20848) notes obfuscation-specific judge misfires + a decompositional fix; **ACE/LACE/CipherBench** (Handa, 2402.10601) makes decode-capability the explicit variable but on the *target*, no judge.
+
+**Verdict: Level 2 (High Overlap) on the mechanism/insight** — the exciting "capability-gap predicts eval error, worse as models scale" framing is pre-owned (scalable oversight). **Delta that survives (Medium):** the *safety-encoded-decode* instantiation — the gap is a concrete **decode** gap on encoded/image payloads (not generic reasoning-complexity), with a **decode-then-judge correction bounded by decoder capability**, a **plaintext control**, and the **overturned published-ASR teeth**. Honest positioning: *"encoded-attack ASR measurement is a scalable-oversight problem"* — cite Engels/Dorner/Kenton as grounding, claim the safety-encoded instantiation + correction + control + overturned results as the contribution.
+
+**Pattern flag:** this is the SECOND judge-reliability angle to return Medium overlap (narrow calibration = StrongREJECT/SORRY-Bench; capability-gap = scalable oversight). The neighborhood is crowded from two directions. Staged CANDIDATEs: engels2025scalingoversight, dorner2024limitseval, kenton2024scalableoversight, rao2024jailbreakparadox, handa2024ciphercompetency, chu2025jades — owner verify+download, then a deep-read confirms High-vs-Medium.
+
 ## 5. Contributions (provisional)
 
 1. **The first systematic calibration** of automated safety-judge reliability on encoded / image-rendered harm — per-judge × per-encoding miss rate and over-count, against a human anchor.
