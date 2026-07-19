@@ -663,7 +663,20 @@ class Experiment:
         Lets the orchestrator free a heavy model's GPU allocation mid-experiment
         as soon as the last task needing it finishes — instead of holding
         4× A100s pinned for the entire experiment.
+
+        Escape hatch: set env DISABLE_MIDRUN_TEARDOWN=1 to skip this entirely and
+        hold every server until the final teardown. The remaining-count
+        optimization can race on a mixed-benchmark matrix — a model whose count
+        hits 0 is freed while a still-queued task (a different benchmark's tail,
+        e.g. benign ORBench cells after the harmful block) still needs it,
+        failing that task with a vanished endpoint. Use the flag when GPUs are
+        not the binding constraint (small runs comfortably under budget).
+        Observed 2026-07-18: 16 benign cells lost to qwen teardown after the
+        110 harmful cells finished.
         """
+        import os
+        if os.environ.get("DISABLE_MIDRUN_TEARDOWN"):
+            return
         if not self._model_remaining or model not in self._model_remaining:
             return
         remaining = self._model_remaining[model] - 1
