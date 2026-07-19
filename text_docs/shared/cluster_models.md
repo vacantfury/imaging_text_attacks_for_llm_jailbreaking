@@ -29,31 +29,40 @@ NURC/AICR snapshot **2026-07-15**; xc snapshot **2026-07-18**. ✓ = present, �
 | Qwen/Qwen2.5-VL-7B-Instruct | VLM workhorse (Paper C) | ✓ | — | ✓ |
 | OpenGVLab/InternVL3-8B | VLM | ✓ | — | ✓ |
 | mistralai/Pixtral-12B-2409 | VLM | ✓ | — | ✓ |
-| meta-llama/Llama-3.2-11B-Vision-Instruct | VLM (serve-blocked, text-restricted) | ✓ | — | ⏳ |
+| meta-llama/Llama-3.2-11B-Vision-Instruct | VLM (serve-blocked, text-restricted) | ✓ | — | ✓ |
 | Qwen/Qwen3-VL-8B-Instruct | VLM recency control | ✓ | — | ✓ |
-| cais/HarmBench-Llama-2-13b-cls | ASR judge / bake-off floor | ✓ | — | ⏳ |
+| cais/HarmBench-Llama-2-13b-cls | ASR judge / bake-off floor | ✓ | — | ✓ |
 | allenai/wildguard | guard | ✓ | — | ✓ |
 | meta-llama/Llama-Guard-3-8B | guard | ✓ | — | ✓ |
-| meta-llama/Llama-Guard-4-12B | guard (multimodal) | ✓ | — | ⏳ |
-| yueliu1999/GuardReasoner-VL-7B | reasoning guard | ✓ | — | ⏳ |
+| meta-llama/Llama-Guard-4-12B | guard (multimodal) | ✓ | — | ✓ |
+| yueliu1999/GuardReasoner-VL-7B | reasoning guard | ✓ | — | ✓ |
 | Qwen/Qwen3Guard-Gen-8B | guard (zh arm) | ✓ | — | ✓ |
-| thu-coai/ShieldLM-7B-internlm2 | guard (zh/en) | ✓ | — | ⏳ |
-| OpenSafetyLab/MD-Judge-v0.1 | judge classifier | ✓ | — | ⏳ |
-| Rakancorle1/ThinkGuard | reasoning guard | ✓ | — | ⏳ |
+| thu-coai/ShieldLM-7B-internlm2 | guard (zh/en) | ✓ | — | ✓ |
+| OpenSafetyLab/MD-Judge-v0.1 | judge classifier | ✓ | — | ✓ |
+| Rakancorle1/ThinkGuard | reasoning guard | ✓ | — | ✓ |
 | meta-llama/Llama-3.3-70B-Instruct | general judge (JBB-validated) | ✓ | — | — |
-| meta-llama/Llama-3.1-8B-Instruct | general | ✓ | — | ⏳ |
-| meta-llama/Meta-Llama-3-8B-Instruct | general | ✓ | — | ⏳ |
+| meta-llama/Llama-3.1-8B-Instruct | general | ✓ | — | ✓ |
+| meta-llama/Meta-Llama-3-8B-Instruct | general | ✓ | — | ✓ |
 | NousResearch/Hermes-4-70B | steerable judge | ✓ | — | — |
 | zai-org/GLM-4.5-Air | capability + zh judge | ✓ | — | — |
 | CohereLabs/c4ai-command-a-03-2025 | steerable judge (gated:auto) | ✓ | — | — |
 | Qwen/Qwen2.5-0.5B-Instruct | smoke-test model | ✓ | ✓ | ✓ |
 
-**xc set (2026-07-18):** ✓ = the small/mid target+guard core (present); ⏳ = the rest of the
-small/mid suite downloading now (Llama-Vision, Llama-Guard-4, GuardReasoner, ShieldLM, MD-Judge,
-ThinkGuard, HarmBench-cls, Llama-3.1-8B, Meta-Llama-3-8B) — flip to ✓ as `logs/dl_suite.progress`
-completes. The **70B+/200B general judges** (Llama-3.3-70B, Hermes-4-70B, GLM-4.5-Air, Command-A)
+**xc set (COMPLETE 2026-07-18):** all 17 small/mid targets+guards+judges present (~348 GB, well within
+the 1/3 budget). The **70B+/200B general judges** (Llama-3.3-70B, Hermes-4-70B, GLM-4.5-Air, Command-A)
 are `—` on xc by choice: xc is GPU last-resort, so pull them only if xc needs to serve overflow
 judge-bake-off runs (they fit its 8×A100 but are big; ~808 GB, still within the 1/3 budget if wanted).
+The HF token was injected the standard op way (`op read op://dev/HuggingFace/credential` piped over ssh
+stdin, transient — never persisted on the shared box). xc's venv lives at `~/venvs/imaging_xc`
+(OUTSIDE the repo → sync-proof; see below).
+
+### venv location — OUTSIDE the repo (2026-07-18, sync-proof)
+The Cursor local→remote sync operates on the repo dir and was silently clobbering each cluster's
+in-repo `.venv` with the local **macOS** venv (the `**/.venv` exclude fails; broke xc AND AICR). Fix:
+venvs now live OUTSIDE the repo — `~/venvs/imaging_aicr`, `~/venvs/imaging_xc` (NURC already on
+`/scratch/$USER/venvs/imaging_uv`) — so the sync structurally cannot touch them. `setup_env.sh`,
+the `env_setup` in `conf/clusters/{aicr,xc}.yaml`, and the `run_experiment_{aicr,xc}.sbatch` wrappers
+all point there. A bare `.venv/` sync-exclude was also added as defense-in-depth.
 
 **AICR: 20-model live set download PENDING** (this session, 2026-07-15) — mirror NURC's live
 set (everything above except the already-present 0.5B smoke model) via
