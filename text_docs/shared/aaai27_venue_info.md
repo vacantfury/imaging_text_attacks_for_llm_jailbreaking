@@ -1,6 +1,6 @@
 # AAAI-27 submission facts — venue reference for the Paper B / Paper C route decision
 
-*Compiled 2026-07-13 from the official AAAI-27 pages (see Sources). Shared across papers (Paper B/C/D submission timeline = TODO item 1; Paper C experiments = TODO item 6; Paper D = TODO item 9). This is the reference the "withdraw Paper B from ARR → submit to AAAI?" question turns on.*
+*Compiled 2026-07-13 from the official AAAI-27 pages (see Sources); **AAAI Phase-1 rejection date, the full ARR August 2026 (EACL 2027) cycle timeline, and the review-milestone withdrawal checkpoints added 2026-07-19 from the owner-provided official calendars.** Shared across papers (Paper B/C/D/E submission timeline = TODO item 1; Paper C = item 4; Paper D = item 7; Paper E = item 8). This is the reference the AAAI-vs-EACL routing + review-milestone withdrawal decisions turn on.*
 
 ## Conference
 - **AAAI-27** = 41st AAAI Conference on Artificial Intelligence, **Montréal, Canada, Feb 16–23, 2027**.
@@ -8,14 +8,19 @@
 ## Deadlines (main technical track; all 11:59 PM UTC-12 / AoE)
 | Milestone | Date |
 |---|---|
+| OpenReview opens — author registration | June 17, 2026 |
+| OpenReview opens — paper submission | June 30, 2026 |
 | Abstract (title + abstract) | **July 21, 2026** |
 | Full paper | **July 28, 2026** |
 | Supplementary material & code | July 31, 2026 |
-| Author response / rebuttal window | Oct 19–25, 2026 |
+| **Phase 1 rejection notification** ⚖️ | **Sept 24, 2026** |
+| Author feedback window (reviews released + response) ⚖️ | Oct 19–25, 2026 |
 | Final notification | Nov 30, 2026 |
 | Camera-ready | Dec 14, 2026 |
 
 The abstract deadline (7/21) is a **hard wall with no paper attached yet** — you must register title + abstract by 7/21 to be allowed to upload the paper on 7/28.
+
+**AAAI-27 runs a two-phase review with an early cull:** the **Phase 1 rejection notice (Sept 24)** removes a batch of papers before the author feedback window — a paper either survives into Oct 19–25 (reviews out + author response) or is culled here. ⚖️ = a withdrawal / redirect decision point (see §Withdrawal / redirect decision points at review milestones).
 
 ## Format
 - AAAI two-column camera-ready style (**AAAI-27 Author Kit**), high-resolution PDF, US Letter (8.5″×11″), Type 1 / TrueType fonts.
@@ -68,6 +73,29 @@ Paper B is under review in the ARR **May 2026** cycle (feeds EMNLP 2026 + AACL 2
 - **Discussion extended one day to July 15 AoE.** When it closes, reviewers re-check the forum for author responses and are asked to update assessments if a listed major weakness was sufficiently addressed or rested on a misunderstanding that a clarification resolved. Authors may point reviewers to the [ARR review guidelines](https://aclrollingreview.org/reviewerguidelines) in discussion; a well-justified guideline issue should prompt a review update.
 - **Review Issue Report — NEW author deliverable, due July 17 AoE.** A new kind of "official comment" on a review, filed in the OpenReview interface. Authors flag if a review seems seriously amiss. It (a) informs the AC's decision and (b) is analyzed program-wide for the quality distribution of peer reviews (feeding ARR process design). Details + screenshots: https://aclrollingreview.org/authors#step2.2. This is a companion lever to the discussion engagement — use it where a review genuinely departs from the guidelines, not routinely.
 - **Revised review form.** Now includes an **excitement score** = a reviewer's personal preference, which *may not* be backed by the review text (so it can't be challenged for lack of textual support). By contrast, **soundness** and **reproducibility** assessments *must* be backed by the review text — these are the dimensions a Review Issue Report can legitimately contest. Formulations of soundness and overall assessment were also revised.
+
+## ARR August 2026 cycle (EACL 2027) timeline
+The review route for Papers **C / D / E**, and for **B** if it revise-and-resubmits (TODO item 1 ⑥). Dates from the official EACL-2027 / ARR August-cycle calendar (owner-provided 2026-07-19).
+| Milestone | Date (AoE) |
+|---|---|
+| ARR submission (long & short) | **August 3, 2026** |
+| Reviewer registration (all authors) | August 5, 2026 |
+| Reviews released | ≈ before Sept 14 (author response opens 9/14) |
+| Author response period ⚖️ | Sept 14–19, 2026 |
+| Reviewer engagement & author-reviewer discussion ⚖️ | Sept 20–24, 2026 |
+| **Meta-review released** ⚖️ | **October 8, 2026** |
+| **EACL 2027 commitment deadline** | **October 11, 2026** |
+| Acceptance notification (long & short) | November 12, 2026 |
+| Camera-ready | November 26, 2026 |
+| EACL 2027 main conference | **March 9–14, 2027** (Workshops/Tutorials TBD) |
+
+⚖️ = withdrawal / redirect decision point (see next section).
+
+## Withdrawal / redirect decision points at review milestones (owner 2026-07-19)
+Standing rule: at **each review milestone — reviews released, rebuttal/discussion end, meta-review released — reassess the paper's acceptance trajectory and make an explicit stay-vs-exit call**, per venue. The exits differ:
+- **ARR August cycle (C/D/E, or B-resubmit):** the clean exit is the commitment stage, NOT a hard withdrawal. (a) reviews out (~9/12) + author response 9/14–19 → read the initial scores; (b) discussion end 9/24 → did reviewers move; (c) **meta-review 10/8 = the decisive signal → the 10/11 commit call:** commit to EACL, OR don't-commit-and **revise-and-resubmit to the next ARR cycle** (no penalty, reviews carry forward — the preferred redirect), OR submit elsewhere. A hard ARR withdrawal (OpenReview trash-can) is irreversible and makes those reviews ineligible for ANY commitment — reserve it for leaving ARR entirely, never as the routine redirect.
+- **AAAI-27:** no commit step — straight accept/reject with an early cull. (a) **Phase-1 rejection 9/24** — involuntary; if culled, the paper is free to redirect (a later ARR cycle / other venue / arXiv); if it survives, continue. (b) **Author feedback 10/19–25** (reviews out + response) — if the reviews clearly point to rejection, consider **withdrawing to redirect sooner** (you cannot submit the same paper elsewhere while it is under AAAI review) rather than waiting for the 11/30 final reject. (c) final notification 11/30 — decision, no choice left.
+- **Cross-venue:** a paper lives in EITHER AAAI or the ARR-August cycle, never both (dual-submission) → these are within-venue trajectory calls, EXCEPT the ⑥(b) case where a genuinely-distinct spin-off paper runs its own separate ARR-August track.
 
 ## EMNLP vs AACL — the choice was LOCKED at submission (May), not deferrable to commitment
 **Key finding (2026-07-13): the EMNLP-vs-AACL choice is single-select and was made at ARR submission in May — you CANNOT switch at commitment time.** Both venues carry the identical, symmetric gate:
