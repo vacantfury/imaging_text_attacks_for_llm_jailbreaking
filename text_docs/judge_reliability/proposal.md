@@ -1,0 +1,78 @@
+# Research Proposal — Blind Judges: Safety Evaluators Inherit the Decode Blind Spot (`judge_reliability`)
+
+**Workflow stage:** S3 · project-init (founding) — as of 2026-07-18. Next gates: **S4 literature / scoop loop — the make-or-break** (§4, UNRUN), then **S1 external idea-check** (owner hands; the ready package is `idea_check.md`). Paper E is **NOT on the July AAAI crunch** (that is Papers C and D); it targets a later cycle (§9).
+
+*Codename: **Blind Judges** (Paper E, alias E). Full working title (refined at writing): "Blind Judges: Safety Evaluators Inherit the Decode Blind Spot on Encoded and Image-Rendered Jailbreaks." Origin: `text_docs/shared/future_work.md §9` + TODO item 8 + the cross-paper judge-model open problem (`project_paper_c_judge_model_open_problem`, `project_wildguard_invalid_as_asr_judge`). Seed evidence already in hand across Papers C and D.*
+
+---
+
+## 1. Decision & posture (settled 2026-07-18 — do NOT relitigate)
+
+- **Paper E = an EVALUATION-METHODOLOGY paper**: measure — and fix — how much automated safety **judges** mis-score harm when the harmful content is **encoded** (cipher / base64 / set-theory / formal-logic / code / classical-Chinese) or **image-rendered**. It is **not** a new defense and **not** a new attack — it studies the *measurement instrument*.
+- **Home: THIS repo, `judge_reliability` namespace** (existing-repo paper, Paper-C precedent). It reuses the whole harness — the encoder suite, the judge/guard registry, the human-κ pipeline, the `verify_results_doc` integrity tooling. No new attack or defense work is owed.
+- **The one-line identity — the measurement mirror of Paper C.** C ("The Decode Gap") showed **defenses** inspect/reason about content but never *decode* an obfuscated payload. E shows the **judges** — the instruments everyone measures encoded-attack ASR with — share the *same* decode blind spot. C fixes the defense with recover→decode→guard; E fixes the measurement with **decode-then-judge**.
+- **Relationship to C and D (no relitigation):** E does not re-open C's defense claims or D's attack claims. It takes the *judge* as its object of study. D supplied the sharpest in-hand evidence (WildGuard 41–68% false-positive rate on the strategy/code channel; `project_wildguard_invalid_as_asr_judge`), and C supplied the tri-judge Round-J human-anchored study. Both become E's pilot data.
+- **Posture on scoop (honest, load-bearing):** the *mechanism* (LLM judges are fragile) is known; **the specific measured object — a per-judge × per-encoding × human-labeled miss/over-count calibration, framed as the judges inheriting the defenses' decode blind spot — is the unclaimed sliver.** §4 is the make-or-break gate; the paper does not commit until it clears.
+
+## 2. The idea (core claim)
+
+**Claim.** Automated safety judges — fine-tuned classifiers, reasoning guards, LLM-judges, multilingual guards — **systematically misjudge harm when it is encoded or image-rendered**, in *both* directions, because they score **surface form, not decoded behavior**. Consequently, encoded-attack ASR and defense-success numbers across the subfield are systematically miscalibrated: the evaluator is blind exactly where the evaluated system is.
+
+**One mechanism, two error directions (both already observed in-repo):**
+- **Under-count (false "safe").** The harm is genuinely present but encoded, so a judge that never decodes the payload scores the response safe → inflates apparent defense success / deflates attack ASR. (The §9 headline gap; qualitative notes in h4rm3l / CodeChameleon / cipher-vs-guardrails.)
+- **Over-count (false "harmful").** The judge anchors on *surface* malicious cues — a malicious-looking encoded string, the harmful task echoed as a **code literal/comment** with no steps completed, an ASCII-art word-ID — and fires without the behavior being completed → inflates attack ASR. (Directly measured: WildGuard **41–68%** FP on the strategy/code channel, `bestofn_attack` R3; gpt-5-nano **2–3×** absolute-ASR inflation vs stronger judges, `project_paper_c_judge_model_open_problem`; "Confusion is the Final Barrier" anchoring-on-tone.)
+
+**The fix — decode-then-judge.** Prepend a recover/decode step (transcribe the image, restate the encoding in plaintext), then apply the HarmBench-style *behavior-completion* rubric to the decoded content. This is the measurement-side twin of Paper C's recover→decode→guard, and it should shrink *both* error directions. The paper also yields a practical **which-judge + decode-first recommendation** for anyone evaluating encoded/rendered jailbreaks.
+
+## 3. The measurement design (judges × encodings × human ground truth)
+
+The core artifact is a calibration table, **N judges × M encodings**, against a **human-labeled** anchor, reporting per-cell **miss rate (under-count)** and **over-count**, then the same table **with a decode-then-judge step** to show the recovery.
+
+- **Judge axis (N).** Fine-tuned classifiers (HarmBench-cls, LlamaGuard-3, WildGuard, MD-Judge) · reasoning guards (GuardReasoner / ThinkGuard) · LLM-judges (gpt-5-mini — the validated headline; gpt-5-nano — retained as the inflation exemplar; a capable open model with a rubric) · multilingual guards (Qwen3Guard / PolyGuard / ShieldLM). Registry already in `src/llm_utils` + the guard rows.
+- **Encoding axis (M).** The repo's own encoders — set-theory / formal-logic / code / classical-Chinese / cipher / homoglyph — plus base64 and **image-rendered** (`ir_plain`), spanning the surface↔semantic range.
+- **Ground truth.** The **100-item human-anchored blind sheet** already built for Round J (70 stratified + 30 inter-judge-disagreement; `human_label/`, owner labeling in progress) is the pilot anchor; the full study extends the human-labeled set across the encoding axis.
+- **Metric.** Per (judge, encoding): miss rate and over-count vs human labels, κ agreement, and the **decode-then-judge delta**. Headline = the systematic *pattern* of which judges fail on which encodings, and that decode recovers it.
+
+## 4. Novelty & prior-art — THE gate (S4, UNRUN — make-or-break)
+
+**This is the paper's make-or-break gate, and it has not been run.** The *plain* framing ("LLM judges are unreliable / consensus of many judges") is **taken** — StrongREJECT (NeurIPS'24) owns the better-autograder framing, and there is a live 2026 judge-reliability literature. The paper survives only if its delta is the encoded-harm-specific, decode-blind-spot angle.
+
+- **Adjacent prior art to differentiate:** StrongREJECT (better autograder, plain jailbreaks) · Know Thy Judge (arXiv 2503.04474 — judges fragile to surface/style) · Confusion is the Final Barrier (arXiv 2508.16347, EMNLP'25 — anchoring on malicious *tone* → false positives) · A Coin Flip for Safety (arXiv 2603.06594 — judges degrade under distribution shift) · Schwinn et al. (**partial scoop** — BoN best↔worst flips under judge correction) · qualitative notes only in h4rm3l / CodeChameleon / cipher-vs-guardrails.
+- **Our delta (the unclaimed sliver):** nobody has run the **systematic per-judge × per-encoding × human-labeled** miss/over-count measurement, and nobody frames it as **judges sharing the defenses' decode blind spot** with a **decode-then-judge** remedy. That framing is uniquely ours because it is the evaluation coordinate of this repo's compositional-coverage identity (`future_work.md §7.1`).
+- **Gate procedure:** run `scoop-check` on the specific claim (dual-channel: signature terms + adjacent-subfield aliases), then the `lit-review-loop` (stage BibTeX → owner verify + download → read → write `text_docs/judge_reliability/literature_review.md` or extend the shared review). **Advance only if the delta survives.** If StrongREJECT-plus-a-2026-paper already covers the encoded-harm calibration, kill or narrow to the decode-then-judge-fix contribution.
+
+## 5. Contributions (provisional)
+
+1. **The first systematic calibration** of automated safety-judge reliability on encoded / image-rendered harm — per-judge × per-encoding miss rate and over-count, against a human anchor.
+2. **The unifying account** — judges score surface, not decoded behavior — that explains *both* the false-negatives (encoded harm missed) and the false-positives (surface cues over-flagged) with one mechanism.
+3. **Decode-then-judge**, a cheap remedy that measurably shrinks both error directions, plus a practical **which-judge / decode-first** recommendation for the field.
+4. **A validity correction with teeth:** a quantified statement of how much published encoded-attack ASR is distorted by the judge, not the defense — evidence in hand from Papers C and D.
+
+## 6. Threats to validity
+
+- **Scoop (§4)** — the dominant risk; gated before any commitment.
+- **Human-anchor scale** — 100 items is a pilot; the per-encoding cells thin out. The full study needs the human-labeled set widened across encodings (owner-hands labeling is the bottleneck).
+- **"Judge vs guard" conflation** — WildGuard/LlamaGuard are *input/response guards* with their own taxonomy, not HarmBench behavior-completion judges; a miss/over-count must be scored against a *fixed* rubric (HarmBench completion) so the finding is "wrong tool for the rubric," not an unfair comparison. (Exactly the `project_wildguard_invalid_as_asr_judge` lesson.)
+- **Circularity of the fix** — decode-then-judge uses a model to decode; if the decoder is itself a target-class model, note the dependency and bound it (the same recover-step honesty as C).
+
+## 7. Human-anchor & judge methodology (reuse Round-J)
+
+Reuse the **shared Round-J** resolution rather than re-deriving it: the 100-item human blind sheet + `human_label/compute_kappa.py` (κ vs each judge, sliced representative / disagreement), the validated **gpt-5-mini** headline judge (κ=0.68 vs human), and the retained **gpt-5-nano** inflation exemplar. Full report: `judge_model_issue/JUDGE_MODEL_REPORT.md`; sanitized artifact `text_docs/shared/judge_validation_sample.md`. Paper E *is* Round J run richly across the encoding axis — the design was deliberately built so it could spin out (owner flag 2026-07-12).
+
+## 8. Reused machinery + new code owed
+
+- **Reused (no new build):** the encoder factory (`src/prompt_transformations/text/`), the image renderer (`ir_plain`), the judge/guard registry (`src/llm_utils` + guard rows), the human-κ pipeline (`human_label/`), the rejudge mode (`RejudgeTask`) for decoupled re-scoring of saved responses, and `scripts/verify_results_doc.py` for numeric-fidelity.
+- **New (small):** a per-(judge, encoding) **miss/over-count analysis** in `src/analysis/` (against human labels, mirroring `bon_asr.py`'s standalone-CLI shape), and a **decode-then-judge** evaluation path (recover/decode → fixed completion rubric) reusing the existing decode step. No new attack, no new defense, no new target work.
+
+## 9. Publication strategy (candidate — LIVE deadline re-check owed at S10)
+
+Deadlines from `text_docs/shared/conference_timeline.md` (paper-agnostic, keep it as the single source). Paper E is off the July crunch, so it targets a later cycle:
+- **Early non-archival outlet (fits exactly):** the **NeurIPS 2026 JUDGe workshop** (LLM-as-judge reliability, ~9/5 AoE) — a natural first airing, and already flagged in TODO item 1 ⑧.
+- **Archival home (candidate):** an ARR cycle → EACL / ACL 2027, or a safety/eval venue; the pick stays deferred until the story and results firm up (EMNLP-vs-AACL precedent — record the settling criteria at S5/S10).
+- **Fit:** AI-safety *evaluation* is a distinct, active axis from the defense/attack contributions; the paper reuses built infra, so its cost is a measurement sweep (mostly free cluster judges + a bounded gpt-5-mini pass), not a new system.
+
+## 10. Next actions (gates)
+
+- **S4 · Literature / scoop loop — the make-or-break (do FIRST).** `scoop-check` on the decode-blind-judge claim → `lit-review-loop` (stage → owner verify+download → read → write the review). Advance only if the delta survives.
+- **S1 · External idea-check (owner hands).** The package is `idea_check.md` → cspaper.org/idea-check; bring back verdict + critiques. Fallback = internal adversarial check (fresh-context `scientific-critical-thinking` + `peer-review` pass), marked `idea-check: internal-only (debt)`.
+- **S5/S6 (after the gates):** settle the main story + the measurement matrix design with a cost estimate; owner ratifies before any run. Nothing runs without the owner's go.
