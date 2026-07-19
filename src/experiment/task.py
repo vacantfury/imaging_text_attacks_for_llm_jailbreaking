@@ -681,8 +681,16 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
     eval_stats, jhash, judge_errors = (
         judged["eval_stats"], judged["judge_config_hash"], judged["judge_errors"])
     judge_method_provenance = task.judge_method or benchmark
-    judge_model_used = _load_conf("evaluation").get(
-        "judge_llm_config", {}).get("model")
+    # Record the judge that ACTUALLY scored. A self-contained classifier judge
+    # (e.g. wildguard) IS the judge — recording the vestigial config-default LLM
+    # there falsely claims e.g. gpt-5-nano ran. An LLM-rubric judge uses the judge
+    # LLM, so record the per-task override or the evaluation default.
+    from src.evaluation.evaluator_factory import SELF_CONTAINED_JUDGE_METHODS
+    if task.judge_method in SELF_CONTAINED_JUDGE_METHODS:
+        judge_model_used = task.judge_method
+    else:
+        judge_model_used = task.judge_model or _load_conf("evaluation").get(
+            "judge_llm_config", {}).get("model")
 
     # Overwrite raw_results.jsonl now that verdict columns are filled.
     write_jsonl_atomic(

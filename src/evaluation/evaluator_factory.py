@@ -129,6 +129,12 @@ class EvaluatorFactory:
 # instead of string-matching on judge_method.
 REFUSAL_RATE_EVALUATORS = (JailbreakBenchRefusalEvaluator, ORBenchEvaluator)
 
+# Judge methods whose evaluator is a SELF-CONTAINED classifier: it scores on its
+# own and never calls the judge LLM, so the method name IS the effective judge.
+# Recording the config-default judge LLM for these (as task.py once did) is false
+# provenance — e.g. claiming gpt-5-nano judged a run that wildguard actually scored.
+SELF_CONTAINED_JUDGE_METHODS = frozenset({"wildguard"})
+
 
 # Benchmark → list of judge_method strings (the inverse of how task.py looks
 # up canonical evaluators). Each method name maps via the evaluator package's
