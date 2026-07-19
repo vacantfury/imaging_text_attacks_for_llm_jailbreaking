@@ -41,7 +41,7 @@ The remedy is the measurement-side mirror of Paper C: **decode-then-judge** — 
 
 ## Venue class
 
-AI-safety **evaluation methodology** — NeurIPS 2026 JUDGe workshop (early, non-archival, exact fit) as first airing; ARR → EACL/ACL 2027 or a safety/eval venue as the archival home. Off the July crunch.
+AI-safety **evaluation methodology** — target a MAIN conference (ARR → EACL/ACL 2027, AAAI, or SaTML/S&P). Workshops are fallback-only, never the target (owner rule 2026-07-19). Off the July crunch.
 
 ## The three things we most want the idea-check to stress-test
 
@@ -62,4 +62,4 @@ AI-safety **evaluation methodology** — NeurIPS 2026 JUDGe workshop (early, non
 - **The "over-count vs under-count" story risks being two half-papers.** The under-count (StrongREJECT-adjacent) and the over-count (WildGuard-FP) are unified only by the surface-not-decoded mechanism; if that mechanism does not hold up under scrutiny, the paper reads as a grab-bag. → Make the mechanism the spine, not the table.
 - **Judge-vs-guard fairness.** Scoring a WildGuard (own-taxonomy input guard) as if it were a HarmBench completion judge invites a "wrong tool" rebuttal. → Fix the rubric (HarmBench completion) and frame the finding as calibration-against-a-fixed-rubric, per `project_wildguard_invalid_as_asr_judge`.
 
-**Verdict (provisional, internal):** promising and de-risked on *results*, but its ceiling is set entirely by the S4 scoop gate. Advance to the literature/scoop loop first; commit only if the encoding-indexed calibration is unclaimed. If scooped on the calibration, pivot to the decode-then-judge fix as the contribution and target the workshop.
+**Verdict (provisional, internal):** promising and de-risked on *results*, but its ceiling is set entirely by the S4 scoop gate. Advance to the literature/scoop loop first; commit only if the encoding-indexed calibration is unclaimed. If scooped on the calibration, fold the judge-validation into Paper C (Round J) rather than run a weak standalone — do NOT downgrade to a workshop (owner rule 2026-07-19).

@@ -62,7 +62,7 @@ Owner verified+downloaded the candidates; I read the 3 confirm-gate papers in fu
 
 **Ceiling = StrongREJECT** (§7.5): human-validated judge on SURFACE encodings only (Base64/ROT-13/disemvoweling/low-resource, text-only). **Clean delta:** extend judge calibration to SEMANTIC (set-theory/formal-logic/code/classical-Chinese) + IMAGE-rendered, unify under the decode-blind-spot frame, measure decode-then-judge across judges.
 
-**Gate outcome = ADVANCE as a FOCUSED paper** (workshop / ARR-Findings scale — not a blockbuster; matches its off-crunch timing). Low-regret path: run the measurement richly so it serves BOTH Paper C's Round J AND Paper E, and decide standalone-focused vs fold-into-C at S5 / writing time (§9's original dual-use plan). Owner direction still open.
+**Gate outcome = delta confirmed (Medium overlap), but as a FOCUSED contribution its MAIN-CONFERENCE ceiling is the open question** — and workshops are fallback-only, not a target (owner rule 2026-07-19), so "focused → workshop" is NOT an acceptable landing. Low-regret path: run the measurement richly so it serves Paper C's Round J regardless; **current lean = fold the judge-validation into Paper C and give the Paper E slot to a stronger main-conference direction** (see the direction re-evaluation, 2026-07-19). Owner decision open.
 
 ## 5. Contributions (provisional)
 
@@ -90,8 +90,8 @@ Reuse the **shared Round-J** resolution rather than re-deriving it: the 100-item
 ## 9. Publication strategy (candidate — LIVE deadline re-check owed at S10)
 
 Deadlines from `text_docs/shared/conference_timeline.md` (paper-agnostic, keep it as the single source). Paper E is off the July crunch, so it targets a later cycle:
-- **Early non-archival outlet (fits exactly):** the **NeurIPS 2026 JUDGe workshop** (LLM-as-judge reliability, ~9/5 AoE) — a natural first airing, and already flagged in TODO item 1 ⑧.
-- **Archival home (candidate):** an ARR cycle → EACL / ACL 2027, or a safety/eval venue; the pick stays deferred until the story and results firm up (EMNLP-vs-AACL precedent — record the settling criteria at S5/S10).
+- **Target = a MAIN conference (if pursued standalone):** an ARR cycle → EACL / ACL 2027, AAAI, or a safety venue (IEEE SaTML / S&P). A top-venue submission is the target; the pick stays deferred until the story/results firm up (EMNLP-vs-AACL precedent — settling criteria at S5/S10). **Workshops (e.g. NeurIPS JUDGe) are FALLBACK ONLY, never the target** (owner rule 2026-07-19; memory `feedback_papers_target_main_conferences`).
+- **⚠️ Direction note:** the S4 confirm-gate (§4, Medium overlap = a *focused* contribution) plus the main-conference-only bar mean the *standalone* case is weak; the current lean is to **FOLD the judge-validation into Paper C's Round J** and reallocate the Paper E slot to a stronger main-conference direction. Open owner decision — see §4.
 - **Fit:** AI-safety *evaluation* is a distinct, active axis from the defense/attack contributions; the paper reuses built infra, so its cost is a measurement sweep (mostly free cluster judges + a bounded gpt-5-mini pass), not a new system.
 
 ## 10. Next actions (gates)
