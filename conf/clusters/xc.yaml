@@ -31,7 +31,7 @@ cluster:
   gpu_request_style: gres                   # slurm.conf uses GresTypes=gpu (gpu:a100:8)
   excluded_nodes: []
   time_limit: "08:00:00"                    # default vLLM server wall
-  hf_home: /home/ubuntu/huggingface_cache   # one big 5.7T disk; shared ubuntu account
+  hf_home: /home/thomas/huggingface_cache   # dedicated `thomas` user home (isolated; 2026-07-19)
   hf_offline: false                         # box has internet
   # uv venv activation REPLACES the module/conda default (no `module` command on the box).
   # VLLM_USE_FLASHINFER_SAMPLER=0 is LOAD-BEARING on xc: the box has the GPU driver

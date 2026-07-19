@@ -7,7 +7,7 @@ Three SLURM clusters serve this project's open-weight models from an HF cache.
 |---------|--------------------------------------------------|----------------------------------------------|-------|------------------|
 | NURC    | `/scratch/zhang.haoyu6/huggingface_cache/hub`    | `temporary_scripts/download_hf_model.sbatch` | conda | offline (pre-download) |
 | AICR    | `/scratch/zhang_haoyu6_neu/huggingface_cache/hub`| `scripts/download_hf_model_aicr.sbatch`      | uv    | online (`hf` pulls live) |
-| xc      | `/home/ubuntu/huggingface_cache/hub`             | direct `hf download` (single node, no sbatch)| uv    | online (`hf` pulls live) |
+| xc      | `/home/thomas/huggingface_cache/hub`             | direct `hf download` (single node, no sbatch)| uv    | online (`hf` pulls live) |
 
 NURC/AICR downloads run on a **compute node, never the login node** (NURC partition `short`,
 AICR partition `cpu`, 24h wall); the sbatch scripts route the cache to the path above, which MUST
