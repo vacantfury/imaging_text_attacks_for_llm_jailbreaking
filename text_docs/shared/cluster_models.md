@@ -1,46 +1,59 @@
 # Cluster model inventory (per-cluster open-weight downloads)
 
-Two SLURM clusters serve this project's open-weight models from a scratch HF cache.
+Three SLURM clusters serve this project's open-weight models from an HF cache.
 **Living inventory — update on every download/removal, per cluster.**
 
-| Cluster | HF cache (`hf_home`/hub)                          | Download script                              | Env   | Compute-node net |
+| Cluster | HF cache (`hf_home`/hub)                          | Download                                     | Env   | Compute-node net |
 |---------|--------------------------------------------------|----------------------------------------------|-------|------------------|
 | NURC    | `/scratch/zhang.haoyu6/huggingface_cache/hub`    | `temporary_scripts/download_hf_model.sbatch` | conda | offline (pre-download) |
 | AICR    | `/scratch/zhang_haoyu6_neu/huggingface_cache/hub`| `scripts/download_hf_model_aicr.sbatch`      | uv    | online (`hf` pulls live) |
+| xc      | `/home/ubuntu/huggingface_cache/hub`             | direct `hf download` (single node, no sbatch)| uv    | online (`hf` pulls live) |
 
-Download runs on a **compute node, never the login node** — NURC partition `short`, AICR
-partition `cpu` (24h wall). Both scripts take one or more HF ids and route the cache to the
-path above, which MUST match `cluster.hf_home` in `conf/clusters/<cluster>.yaml`.
+NURC/AICR downloads run on a **compute node, never the login node** (NURC partition `short`,
+AICR partition `cpu`, 24h wall); the sbatch scripts route the cache to the path above, which MUST
+match `cluster.hf_home` in `conf/clusters/<cluster>.yaml`. **xc** is single-node (no scratch, big
+home disk) so it downloads directly with `hf download` — the HF token is injected the standard op
+way (transient over ssh stdin for a one-off; `op://dev/HuggingFace/credential`, in `scripts/op_refs`).
 
-Disk headroom is ample on both: NURC `/scratch` had ~323 TB free; AICR `/scratch` = 10 TiB
-quota on a 2.6 PB filesystem (2026-07-15).
+Disk headroom: NURC `/scratch` ~323 TB free; AICR `/scratch` = 10 TiB quota on a 2.6 PB filesystem
+(2026-07-15). **xc** = 5.7 TB single disk, self-imposed ≤ 1/3 (~1.9 TB) for our weights (owner rule
+2026-07-18); shared with the box owner (~420 GB his). xc is the GPU LAST-RESORT tier → keep it to the
+small/mid targets+guards+judges that fit (its 8×A100-80G = 640 GB serves up to ~235B); the frontier
+capability arm (DeepSeek/Kimi) is AICR-only.
 
 ## Live set — presence per cluster
-Snapshot **2026-07-15** (`ls` of each scratch hub). ✓ = present, — = absent.
+NURC/AICR snapshot **2026-07-15**; xc snapshot **2026-07-18**. ✓ = present, ⏳ = downloading, — = absent.
 
-| Model | Role | NURC | AICR |
-|---|---|:--:|:--:|
-| Qwen/Qwen2.5-VL-7B-Instruct | VLM workhorse (Paper C) | ✓ | — |
-| OpenGVLab/InternVL3-8B | VLM | ✓ | — |
-| mistralai/Pixtral-12B-2409 | VLM | ✓ | — |
-| meta-llama/Llama-3.2-11B-Vision-Instruct | VLM (serve-blocked, text-restricted) | ✓ | — |
-| Qwen/Qwen3-VL-8B-Instruct | VLM recency control | ✓ | — |
-| cais/HarmBench-Llama-2-13b-cls | ASR judge / bake-off floor | ✓ | — |
-| allenai/wildguard | guard | ✓ | — |
-| meta-llama/Llama-Guard-3-8B | guard | ✓ | — |
-| meta-llama/Llama-Guard-4-12B | guard (multimodal) | ✓ | — |
-| yueliu1999/GuardReasoner-VL-7B | reasoning guard | ✓ | — |
-| Qwen/Qwen3Guard-Gen-8B | guard (zh arm) | ✓ | — |
-| thu-coai/ShieldLM-7B-internlm2 | guard (zh/en) | ✓ | — |
-| OpenSafetyLab/MD-Judge-v0.1 | judge classifier | ✓ | — |
-| Rakancorle1/ThinkGuard | reasoning guard | ✓ | — |
-| meta-llama/Llama-3.3-70B-Instruct | general judge (JBB-validated) | ✓ | — |
-| meta-llama/Llama-3.1-8B-Instruct | general | ✓ | — |
-| meta-llama/Meta-Llama-3-8B-Instruct | general | ✓ | — |
-| NousResearch/Hermes-4-70B | steerable judge | ✓ | — |
-| zai-org/GLM-4.5-Air | capability + zh judge | ✓ | — |
-| CohereLabs/c4ai-command-a-03-2025 | steerable judge (gated:auto) | ✓ | — |
-| Qwen/Qwen2.5-0.5B-Instruct | smoke-test model | ✓ | ✓ |
+| Model | Role | NURC | AICR | xc |
+|---|---|:--:|:--:|:--:|
+| Qwen/Qwen2.5-VL-7B-Instruct | VLM workhorse (Paper C) | ✓ | — | ✓ |
+| OpenGVLab/InternVL3-8B | VLM | ✓ | — | ✓ |
+| mistralai/Pixtral-12B-2409 | VLM | ✓ | — | ✓ |
+| meta-llama/Llama-3.2-11B-Vision-Instruct | VLM (serve-blocked, text-restricted) | ✓ | — | ⏳ |
+| Qwen/Qwen3-VL-8B-Instruct | VLM recency control | ✓ | — | ✓ |
+| cais/HarmBench-Llama-2-13b-cls | ASR judge / bake-off floor | ✓ | — | ⏳ |
+| allenai/wildguard | guard | ✓ | — | ✓ |
+| meta-llama/Llama-Guard-3-8B | guard | ✓ | — | ✓ |
+| meta-llama/Llama-Guard-4-12B | guard (multimodal) | ✓ | — | ⏳ |
+| yueliu1999/GuardReasoner-VL-7B | reasoning guard | ✓ | — | ⏳ |
+| Qwen/Qwen3Guard-Gen-8B | guard (zh arm) | ✓ | — | ✓ |
+| thu-coai/ShieldLM-7B-internlm2 | guard (zh/en) | ✓ | — | ⏳ |
+| OpenSafetyLab/MD-Judge-v0.1 | judge classifier | ✓ | — | ⏳ |
+| Rakancorle1/ThinkGuard | reasoning guard | ✓ | — | ⏳ |
+| meta-llama/Llama-3.3-70B-Instruct | general judge (JBB-validated) | ✓ | — | — |
+| meta-llama/Llama-3.1-8B-Instruct | general | ✓ | — | ⏳ |
+| meta-llama/Meta-Llama-3-8B-Instruct | general | ✓ | — | ⏳ |
+| NousResearch/Hermes-4-70B | steerable judge | ✓ | — | — |
+| zai-org/GLM-4.5-Air | capability + zh judge | ✓ | — | — |
+| CohereLabs/c4ai-command-a-03-2025 | steerable judge (gated:auto) | ✓ | — | — |
+| Qwen/Qwen2.5-0.5B-Instruct | smoke-test model | ✓ | ✓ | ✓ |
+
+**xc set (2026-07-18):** ✓ = the small/mid target+guard core (present); ⏳ = the rest of the
+small/mid suite downloading now (Llama-Vision, Llama-Guard-4, GuardReasoner, ShieldLM, MD-Judge,
+ThinkGuard, HarmBench-cls, Llama-3.1-8B, Meta-Llama-3-8B) — flip to ✓ as `logs/dl_suite.progress`
+completes. The **70B+/200B general judges** (Llama-3.3-70B, Hermes-4-70B, GLM-4.5-Air, Command-A)
+are `—` on xc by choice: xc is GPU last-resort, so pull them only if xc needs to serve overflow
+judge-bake-off runs (they fit its 8×A100 but are big; ~808 GB, still within the 1/3 budget if wanted).
 
 **AICR: 20-model live set download PENDING** (this session, 2026-07-15) — mirror NURC's live
 set (everything above except the already-present 0.5B smoke model) via
