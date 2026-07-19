@@ -274,6 +274,53 @@ class LLMModel(Enum):
     BEDROCK_GEMMA_3_27B = ModelSpec(            # Google Gemma-3 27B (open weight)
         "google.gemma-3-27b-it", Provider.BEDROCK,
         max_context_len=128_000, family="gemma", alignment_tier="mid")
+    # ── Expansion 2026-07-19 (ids verified vs `aws bedrock list-inference-profiles`
+    #    / `list-foundation-models` on the box). Rule: a model WITH a us.-prefixed
+    #    inference profile invokes on that profile id (Claude/Nova/Llama/Pixtral);
+    #    models WITHOUT one invoke on the bare ON_DEMAND id (Gemma/GPT-OSS/Qwen/
+    #    GLM/Kimi/DeepSeek/Mistral-Large). max_output_tokens: Nova caps at 10000
+    #    (clamp 5000); Llama/Pixtral/Mistral cap output at 8192 on Bedrock. --
+    # -- MULTIMODAL (vision) targets across MORE vendors — the target diversity a
+    #    VLM-jailbreak paper wants (image-rendered attacks reach Claude/Nova/Qwen +
+    #    now Mistral-Pixtral / Meta-Llama-Vision / Meta-Llama-4 / Gemma). --
+    BEDROCK_PIXTRAL_LARGE = ModelSpec(          # Mistral Pixtral Large (multimodal; inference-profile)
+        "us.mistral.pixtral-large-2502-v1:0", Provider.BEDROCK,
+        max_context_len=128_000, max_output_tokens=8_192,
+        family="pixtral", alignment_tier="mid")
+    BEDROCK_LLAMA_3_2_90B_VISION = ModelSpec(   # Meta Llama 3.2 90B Vision (inference-profile)
+        "us.meta.llama3-2-90b-instruct-v1:0", Provider.BEDROCK,
+        max_context_len=128_000, max_output_tokens=8_192,
+        family="llama", alignment_tier="mid")
+    BEDROCK_LLAMA_3_2_11B_VISION = ModelSpec(   # Meta Llama 3.2 11B Vision (inference-profile)
+        "us.meta.llama3-2-11b-instruct-v1:0", Provider.BEDROCK,
+        max_context_len=128_000, max_output_tokens=8_192,
+        family="llama", alignment_tier="mid")
+    BEDROCK_LLAMA_4_MAVERICK = ModelSpec(       # Meta Llama 4 Maverick (multimodal MoE; inference-profile)
+        "us.meta.llama4-maverick-17b-instruct-v1:0", Provider.BEDROCK,
+        max_output_tokens=8_192, family="llama4", alignment_tier="mid")
+    BEDROCK_LLAMA_4_SCOUT = ModelSpec(          # Meta Llama 4 Scout (multimodal MoE; inference-profile)
+        "us.meta.llama4-scout-17b-instruct-v1:0", Provider.BEDROCK,
+        max_output_tokens=8_192, family="llama4", alignment_tier="mid")
+    BEDROCK_NOVA_PREMIER = ModelSpec(           # strongest Nova multimodal (inference-profile)
+        "us.amazon.nova-premier-v1:0", Provider.BEDROCK, 0.80, 3.20,
+        max_context_len=1_000_000, family="nova", max_output_tokens=5_000)
+    BEDROCK_GEMMA_3_12B = ModelSpec(            # Google Gemma-3 12B (open weight, multimodal)
+        "google.gemma-3-12b-it", Provider.BEDROCK,
+        max_context_len=128_000, family="gemma", alignment_tier="mid")
+    # -- Additional strong open-weight TEXT target (text-encoding attacks) --
+    BEDROCK_LLAMA_3_3_70B = ModelSpec(          # Meta Llama 3.3 70B (open text; inference-profile)
+        "us.meta.llama3-3-70b-instruct-v1:0", Provider.BEDROCK,
+        max_context_len=128_000, max_output_tokens=8_192,
+        family="llama", alignment_tier="mid")
+    # -- Safety-classifier (guard/judge) models on Bedrock — OpenAI open "safeguard"
+    #    reasoning models; candidates for a Bedrock-served input guard or a
+    #    judge-robustness lens (bare ON_DEMAND id). NOT attack targets. --
+    BEDROCK_GPT_OSS_SAFEGUARD_20B = ModelSpec(
+        "openai.gpt-oss-safeguard-20b", Provider.BEDROCK,
+        max_context_len=128_000, family="gpt-oss-safeguard")
+    BEDROCK_GPT_OSS_SAFEGUARD_120B = ModelSpec(
+        "openai.gpt-oss-safeguard-120b", Provider.BEDROCK,
+        max_context_len=128_000, family="gpt-oss-safeguard")
 
     # ──────── Local (HF transformers in-process) ────────
     LLAMA3       = ModelSpec("llama3",                                   Provider.LOCAL)
