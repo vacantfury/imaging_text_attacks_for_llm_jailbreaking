@@ -42,4 +42,4 @@ cluster:
   # NURC/AICR don't need this (they `module load cuda/...`, so nvcc is present).
   env_setup:
     - "export VLLM_USE_FLASHINFER_SAMPLER=0"
-    - "source $HOME/projects/imaging_text_attacks_for_llm_jailbreaking/.venv/bin/activate"
+    - "source $HOME/venvs/imaging_xc/bin/activate"   # venv OUTSIDE the repo (sync-proof; 2026-07-18)

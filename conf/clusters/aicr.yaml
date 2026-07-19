@@ -19,4 +19,4 @@ cluster:
   # is set PER-MODEL in conf/llm/<model>.yaml; gpu_request_style: gpus makes `--gpus=N` work.
   env_setup:
     - "module load cuda/13.1.1"
-    - "source $HOME/projects/imaging_text_attacks_for_llm_jailbreaking/.venv/bin/activate"
+    - "source $HOME/venvs/imaging_aicr/bin/activate"   # venv OUTSIDE the repo (sync-proof; 2026-07-18)
