@@ -17,9 +17,20 @@ way (transient over ssh stdin for a one-off; `op://dev/HuggingFace/credential`, 
 
 Disk headroom: NURC `/scratch` ~323 TB free; AICR `/scratch` = 10 TiB quota on a 2.6 PB filesystem
 (2026-07-15). **xc** = 5.7 TB single disk, self-imposed ≤ 1/3 (~1.9 TB) for our weights (owner rule
-2026-07-18); shared with the box owner (~420 GB his). xc is the GPU LAST-RESORT tier → keep it to the
-small/mid targets+guards+judges that fit (its 8×A100-80G = 640 GB serves up to ~235B); the frontier
-capability arm (DeepSeek/Kimi) is AICR-only.
+2026-07-18); the disk is shared with the box owner (~420 GB his) but as of 2026-07-19 our files live
+under a **dedicated `thomas` user** (isolated home, mode 750 — see below), no longer the shared
+`ubuntu` account. xc is the GPU LAST-RESORT tier → keep it to the small/mid targets+guards+judges that
+fit (its 8×A100-80G = 640 GB serves up to ~235B); the frontier capability arm (DeepSeek/Kimi) is AICR-only.
+
+### xc runs under a dedicated `thomas` user (2026-07-19)
+xc was a single shared `ubuntu` account (no isolation — same UID for everyone). Xiangchen permitted a
+dedicated Linux user, so our work now runs as **`thomas`** (uid 1001, home `/home/thomas` mode 750 —
+the box owner can't read it). Migrated there: repo (`~/projects/...`), venv (`~/venvs/imaging_xc`,
+rebuilt), models (`~/huggingface_cache`, 348 GB), outputs. SSH: the `xc` alias = thomas; `xc-admin`
+= ubuntu (kept for sudo + the Bedrock `arise-beta` creds, which live in ubuntu's `~/.aws` and are his).
+The sync `remotePath` (`xc:~/...`) auto-resolves to `/home/thomas` via the thomas alias — no settings
+change needed. Bedrock from thomas needs a cred path to ubuntu's `~/.aws` (handled when needed); GPU
+serving / downloads work fully as thomas.
 
 ## Live set — presence per cluster
 NURC/AICR snapshot **2026-07-15**; xc snapshot **2026-07-18**. ✓ = present, ⏳ = downloading, — = absent.
@@ -63,6 +74,22 @@ venvs now live OUTSIDE the repo — `~/venvs/imaging_aicr`, `~/venvs/imaging_xc`
 `/scratch/$USER/venvs/imaging_uv`) — so the sync structurally cannot touch them. `setup_env.sh`,
 the `env_setup` in `conf/clusters/{aicr,xc}.yaml`, and the `run_experiment_{aicr,xc}.sbatch` wrappers
 all point there. A bare `.venv/` sync-exclude was also added as defense-in-depth.
+
+### Cross-cluster OUTPUTS workflow (STANDARD — via local as the hub)
+Clusters can't reach each other directly for our data; **local is the hub**. Each cluster's Cursor
+sync has an UP-sync (local→cluster, `outputs/` normally EXCLUDED — results only flow DOWN) and
+DOWN-syncs (cluster→local for `outputs/` `logs/` `mlruns/`). So `outputs/` normally moves cluster→local
+only. To move outputs FROM one cluster TO another (e.g. a prompt_transform produced on NURC that xc's
+defense+evaluate must consume):
+1. **Down-sync A→local:** Cursor "Sync-Rsync: Sync Down" pulls A's `outputs/` into local `outputs/`.
+2. **Temporarily un-exclude `outputs/` on B's UP-sync** (remove the `outputs/` line from B's up-sync
+   `exclude` in `settings.json`).
+3. **Up-sync local→B:** "Sync-Rsync: Sync Up" pushes `outputs/` up to B (only B's up-sync carries it;
+   the others still exclude it).
+4. **RE-EXCLUDE `outputs/` on B's up-sync** immediately after (back to normal — outputs must not
+   routinely sync UP, or a stale local outputs/ could overwrite a cluster's fresh results).
+This is a DELIBERATE, temporary un-exclude each time — never leave `outputs/` un-excluded on an
+up-sync. (Done once already 2026-07-18: pushed local `outputs/` up to xc so it had the upstream data.)
 
 **AICR: 20-model live set download PENDING** (this session, 2026-07-15) — mirror NURC's live
 set (everything above except the already-present 0.5B smoke model) via
