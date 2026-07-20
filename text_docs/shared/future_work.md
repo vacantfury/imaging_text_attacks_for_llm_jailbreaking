@@ -101,6 +101,16 @@ Best-of-N is one instance of a broader class — **meaning-preserving perturbati
 
 The genuinely open, distinct piece is the **measurement**, not the defense: (a) the **effective-N / work-factor lens generalized across the whole budget/resampling attack class** (best-of-N, random-restart search, resampling variants), and (b) the **canonicalizable-vs-irreducible carve mapped across attacks** — which obfuscation axes collapse to ~zero effective budget under canonicalization and which survive. These are characterization / methodology contributions nobody has done cleanly. If this broader line is pursued, anchor it on the measurement + carve, with an explicit pointer that the defense mechanism belongs to §2 / Paper C — never as "yet another recover-then-guard defense." (The core best-of-N defense itself — canonicalize→guard, gated on the R4 experiment — is the §4 body above, *not* this broader generalization.)
 
+### 4.5 Multimodal best-of-N ATTACK — the Paper-1 → Paper-2 follow-on (⭐ TOP-PRIORITY future direction, owner 2026-07-20)
+
+The `bestofn_attack` line is split into **two papers** (owner decision 2026-07-20). §4.1–4.4 above are the earlier *defense* framing; the line is now attack-first, split as:
+
+- **Paper 1 (this cycle, text-only):** BoN over a single strong STRUCTURAL encoding (`code_attack`) beats surface-noise BoN and is **~8–17× more query-efficient** (median QtFS ~1–2 vs ~9–30) across 3 VLM targets, defended and undefended. Contribution = the **queries-to-first-success (QtFS) attack-cost metric + "structural depth beats surface breadth"** finding, vs **published** defenses (SemanticSmooth [AACL 2025], SAGE [ACL Findings 2025]) + a canonicalize→guard steelman. Text-channel only → realistic main venue (EACL/AACL-class). Deliberately does NOT claim VLM-modality novelty (deferred to Paper 2).
+
+- **Paper 2 (⭐ TOP-PRIORITY of ALL future directions, owner 2026-07-20):** the coherent, VLM-specific, AAAI-tier version of the same method. **BoN is inherently multimodal** (Hughes et al.: text + vision + audio); extend the structural-BoN method to the **image channel** — render the encoded/structural attack as an image, BoN-augment the image (font/position/color/noise), and exploit the VLM's weaker **image-side safety** (the repo's modality-gap thesis). **Must be done PROPERLY to be convincing (owner 2026-07-20): established multimodal attacks (FigStep, MM-SafetyBench, HADES) as baselines, wrapped in BoN — NOT a single home-grown image "kicker" — plus established multimodal defenses (ECSO, LlamaGuard-3-Vision).** Headline candidates: the **modality gap under BoN** (image channel more query-efficient than text) and **text-side defenses (SemanticSmooth/SAGE) being architecturally BLIND** to the image-channel attack.
+
+**Salami guard (owner 2026-07-20):** the two must each stand alone — Paper 1 = QtFS metric + structural depth on text; Paper 2 = the multimodal attack program + modality gap; Paper 2 cites and builds on Paper 1. Paper 2 is a **large experimental program** (established attacks × BoN × multimodal defenses × targets × modality) — weeks of runs; that cost is exactly why it is a *separate* paper, not scope-creep on Paper 1.
+
 ---
 
 ## 5. Agent-side line — from models to agents (a separate line, not a follow-on)
