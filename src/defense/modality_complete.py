@@ -211,6 +211,7 @@ class ModalityComplete(Defense):
         decode_style: str = "recover",
         gate_decode: bool = False,
         gate_style: str = "surface",
+        reguard_original: bool = False,
         **kwargs,
     ):
         """
@@ -236,10 +237,21 @@ class ModalityComplete(Defense):
                 (_surface_says_obfuscated; no LLM call — the 2026-07-17
                 successor). "llm" = the GATE_PROMPT model call
                 (_gate_says_obfuscated; biased toward OBFUSCATED on a 7B model).
+            reguard_original: PATCH (Paper C RQ4 honest-arc defense vs the
+                decode-evasion adaptive attack; guard_model condition only).
+                Default False = unchanged. When True, Step 4 guards the FULL
+                original union text IN ADDITION to the decoded (compressed) gist,
+                and blocks if EITHER is flagged. Counters the compression attack —
+                where the 1-2 sentence decode surfaces a benign gist while the
+                harmful specifics survive to the answer — by never letting the
+                guard see only the lossy summary. Cost: benign prompts are
+                double-checked, re-introducing over-refusal (the fundamental
+                tension the RQ4 result exposes).
         """
         super().__init__(decode_text=decode_text, guard_model=guard_model,
                          decode_style=decode_style, gate_decode=gate_decode,
-                         gate_style=gate_style, **kwargs)
+                         gate_style=gate_style, reguard_original=reguard_original,
+                         **kwargs)
         self._guard_model_name = guard_model
         self._guard_model: Optional[LLMModel] = (
             LLMModel.from_string(guard_model) if guard_model else None
@@ -388,9 +400,25 @@ class ModalityComplete(Defense):
         verdicts = query_guard(
             guard_service, self._guard_model, guard_items, is_test=True)
 
+        # PATCH (reguard_original): also guard the FULL original union text, not
+        # just the (possibly lossy) decoded gist. Blocks if EITHER is flagged —
+        # the honest-arc defense vs the decode-evasion compression attack.
+        reguard_original = bool(self._config.get("reguard_original", False))
+        verdicts_orig: dict = {}
+        if reguard_original:
+            orig_items = [(p.id, union_by_id[p.id], None) for p in prompts]
+            logger.info(
+                f"ModalityComplete step 4 (REGUARD-ORIGINAL patch): "
+                f"{len(orig_items)} full-text verdicts via {self._guard_model_name}")
+            verdicts_orig = query_guard(
+                guard_service, self._guard_model, orig_items, is_test=True)
+
         target_convs: list[tuple[str, list]] = []
         for p in prompts:
-            if not verdicts.get(p.id, True):  # fail-closed default
+            harmful = verdicts.get(p.id, True)  # fail-closed default
+            if reguard_original:
+                harmful = harmful or verdicts_orig.get(p.id, True)
+            if not harmful:
                 messages = build_conversation_message(p, is_multimodal, source_dir)
                 target_convs.append((p.id, messages))
 
