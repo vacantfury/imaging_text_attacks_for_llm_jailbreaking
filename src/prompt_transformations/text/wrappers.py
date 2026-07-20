@@ -22,6 +22,7 @@ from .encoders.llm_formal_logic_encoder import FormalLogicLLMEncoder
 from .encoders.llm_quantum_mechanics_encoder import QuantumMechanicsLLMEncoder
 from .encoders.llm_classical_language_encoder import LLMClassicalLanguageEncoder
 from .encoders.llm_semantic_camo_encoder import SemanticCamoEncoder
+from .encoders.llm_decode_evasion_encoder import DecodeEvasionEncoder
 from .encoders.non_llm_artprompt_encoder import ArtPromptEncoder
 from .encoders.non_llm_homoglyph_encoder import HomoglyphEncoder
 from .encoders.non_llm_cipher_encoder import CipherEncoder
@@ -113,3 +114,11 @@ class ClassicalLanguageTransformation(TextEncoderTransformation):
 class SemanticCamoTransformation(TextEncoderTransformation):
     type_name = "llm_semantic_camo"
     encoder_class = SemanticCamoEncoder
+
+
+@register_transformation
+class DecodeEvasionTransformation(TextEncoderTransformation):
+    # Adaptive attack (Paper C RQ4): reframe so the amplifier's 1-2 sentence decode
+    # reads benign while the full answer stays harmful. See llm_decode_evasion_encoder.py.
+    type_name = "llm_decode_evasion"
+    encoder_class = DecodeEvasionEncoder

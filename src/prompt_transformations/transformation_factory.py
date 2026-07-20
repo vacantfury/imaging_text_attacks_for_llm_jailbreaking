@@ -39,6 +39,7 @@ TRANSFORMATION_ALIASES: dict[str, str] = {
     "conditional_probability": "non_llm_conditional_probability",
     "symbol_injection": "non_llm_symbol_injection",
     "semantic_camo": "llm_semantic_camo",
+    "decode_evasion": "llm_decode_evasion",
     "cipher": "non_llm_cipher",
     # Variance-Channel Best-of-N (Paper D)
     "paraphrase": "llm_paraphrase",
