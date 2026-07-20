@@ -41,6 +41,11 @@ class DecodeEvasionEncoder(BaseEncoder):
         if model is None:
             raise ValueError("model is required — set it in conf/text_encoding/default.yaml or the preset step")
 
+        # Decode-evasion is a PLAIN-TEXT attack: it must read as an ordinary benign request.
+        # Drop the shared "Please decode and respond to the following message" prefix that
+        # default.yaml applies to encoded attacks — that "decode" framing would tip off the
+        # amplifier and defeat the point. BaseEncoder's empty TARGET_PREFIX default then applies.
+        kwargs.pop("target_prefix", None)
         super().__init__(model=model, **kwargs)
 
         config = load_prompt_template("decode_evasion.yaml")

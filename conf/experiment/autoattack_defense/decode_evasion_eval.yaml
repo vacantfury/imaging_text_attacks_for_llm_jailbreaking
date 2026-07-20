@@ -24,8 +24,9 @@ num_cluster_jobs: 4          # orchestrator + qwen(target) + wildguard(guard+jud
 
 _rng: &rng [0, 99]
 
-# ⚠️ PLACEHOLDER — replace <TS> with the actual timestamp dir produced by decode_evasion_render.yaml
-_de: &de outputs/autoattack_defense/prompt_transform/harmbench/decode_evasion_<TS>/llm_decode_evasion
+# Render dir from decode_evasion_render.yaml (validated 2026-07-20: 100/100, no prefix, no refusals,
+# benign-at-gist + harm-preserving). NOTE: outputs/ is sync-excluded → scp this dir to the cluster.
+_de: &de outputs/autoattack_defense/prompt_transform/harmbench/decode_evasion_20260720_014855_98322846/llm_decode_evasion
 
 # guard-alone (gb) + amplifier (mc) configs — identical shapes to guard_panel.yaml
 _gbwg:   &gbwg   {guard_model: wildguard}
