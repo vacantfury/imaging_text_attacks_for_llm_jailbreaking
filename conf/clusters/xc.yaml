@@ -43,3 +43,4 @@ cluster:
   env_setup:
     - "export VLLM_USE_FLASHINFER_SAMPLER=0"
     - "source $HOME/venvs/imaging_xc/bin/activate"   # venv OUTSIDE the repo (sync-proof; 2026-07-18)
+    - "test -f $HOME/.xc_env && source $HOME/.xc_env || true"   # gated-HF token (HUGGINGFACE_TOKEN) into SERVER jobs; op-sourced, chmod 600 (2026-07-21) — needed for WildGuard/LlamaGuard gated downloads
