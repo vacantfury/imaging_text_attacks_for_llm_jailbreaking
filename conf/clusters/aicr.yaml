@@ -11,7 +11,10 @@ cluster:
   partition: rtx-batch                      # use b200-batch for the biggest models
   gpu_request_style: gpus                   # homogeneous partitions -> `--gpus=N`
   excluded_nodes: []
-  time_limit: "08:00:00"                    # default vLLM server wall (raise per-model up to 24h now)
+  time_limit: "24:00:00"                    # default vLLM server wall = AICR's 24h cap (raised 2026-07-21:
+                                            # big multi-target rounds with SemanticSmooth's 5x overhead on
+                                            # 10k-draw cells exceed 8h per target; servers auto-shut when their
+                                            # cells finish, so 24h is a ceiling not a floor).
   cuda_module: "cuda/13.1.1"
   hf_home: /scratch/zhang_haoyu6_neu/huggingface_cache
   hf_offline: false                         # AICR compute nodes have internet
