@@ -1,0 +1,11 @@
+# Gemma-2-9B-it (google) — Paper-1 (BoN-wrapped CodeAttack) text-LLM target.
+# Gemma-2's architectural ceiling is 8192 (sliding-window attention), so the
+# cluster default max_model_len=20480 would be rejected — cap it here. Prompts
+# that exceed 8192 tokens are excluded via is_correctly_processed (same as the
+# _defaults overflow handling), not a crash. 9B @ bf16 ≈ 18 GB fits one GPU on
+# the shared defaults (no fp8). Text-only target — no trust_remote_code / mm flags.
+model:
+  model: google/gemma-2-9b-it
+
+cluster:
+  max_model_len: 8192
