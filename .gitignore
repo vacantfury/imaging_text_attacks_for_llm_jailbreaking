@@ -126,3 +126,6 @@ text_docs/shared/auto_research_charter.md
 
 # roadmap/planning doc — local-only (kept out of the public repo)
 text_docs/shared/future_work.md
+
+# web-research notes (visualization tools, etc.) — local only, not papers
+knowledge/
