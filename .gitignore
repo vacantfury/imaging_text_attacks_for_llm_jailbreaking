@@ -123,3 +123,6 @@ conf/experiment/**/_mc_*.yaml
 # Auto-research strategy docs — personal strategy content (charter, blueprint), local-only like TODO.md
 text_docs/shared/auto_research_pattern.md
 text_docs/shared/auto_research_charter.md
+
+# roadmap/planning doc — local-only (kept out of the public repo)
+text_docs/shared/future_work.md
