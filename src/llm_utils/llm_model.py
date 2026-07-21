@@ -341,6 +341,14 @@ class LLMModel(Enum):
     VICUNA_13B_CLUSTER = ModelSpec(
         "lmsys/vicuna-13b-v1.5", Provider.NU_CLUSTER,
         max_context_len=4_096)                 # Vicuna v1.5 (4K)
+    # ── Paper-1 (BoN-wrapped CodeAttack) text-LLM targets — safety-tuned, cross
+    #    family: Meta Llama-3.1-8B (above) + Alibaba Qwen2.5-7B + Google Gemma-2-9B.
+    QWEN2_5_7B_INSTRUCT = ModelSpec(
+        "Qwen/Qwen2.5-7B-Instruct", Provider.NU_CLUSTER,
+        max_context_len=32_768, family="qwen", alignment_tier="mid")
+    GEMMA2_9B_IT = ModelSpec(
+        "google/gemma-2-9b-it", Provider.NU_CLUSTER,
+        max_context_len=8_192, family="gemma", alignment_tier="mid")
     PIXTRAL_12B  = ModelSpec("mistralai/Pixtral-12B-2409",      Provider.NU_CLUSTER,
         family="mistral", alignment_tier="weak")
     LLAVA_7B     = ModelSpec("llava-hf/llava-1.5-7b-hf",        Provider.NU_CLUSTER)
