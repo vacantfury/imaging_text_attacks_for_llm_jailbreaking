@@ -19,7 +19,11 @@
 # SemanticSmooth API defaults (perturbation gemini, internal judge gpt-5-nano) are
 # OVERRIDDEN to perturbation_model=null (paraphrase with the target) + judge_model=
 # wildguard, so the whole matrix is free.
-num_main_job_threads: 6
+num_main_job_threads: 18     # ALL 18 cells in flight at once, so all 3 target GPUs run in PARALLEL.
+                             # With the tasks ordered [llama x6, qwen x6, gemma x6], a smaller semaphore
+                             # (e.g. 6) would run only llama's 6 cells first, leaving qwen+gemma servers
+                             # IDLE -> targets serialize (~3x wall-clock, risks the 24h wall). 18 saturates
+                             # all 3 servers concurrently; each vLLM server batches its own target's load.
 num_cluster_jobs: 5          # orchestrator + llama-3.1-8b + qwen2.5-7b + gemma2-9b + wildguard (4 servers <= AICR budget 7)
 
 _e: &e
