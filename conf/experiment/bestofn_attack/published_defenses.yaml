@@ -1,0 +1,36 @@
+# bestofn_attack Paper-1 — PUBLISHED-defense axis, FULL round (primary target).
+# The "we beat PUBLISHED defenses" result: SAGE (Ding et al., ACL Findings 2025) +
+# SemanticSmooth (Ji et al., AACL-IJCNLP 2025), on qwen (primary), full 100 behaviors
+# x {code_attack (structural hero), surface (vanilla BoN)}. 4 cells, N=100 draws each.
+#
+# Scope = qwen only (owner-approved return-on-effort): the 3-target generalization is
+# already carried by no_defense + canonicalize_guard; the published-defense comparison
+# on the primary target is the essential claim. (Smoke job 8506137: both defenses work,
+# 0 API leak; SAGE slow ~1750s/200-draw, SemanticSmooth fast — SAGE is why we don't pack
+# 6 slow SAGE cells into one 8h-wall job.)
+#
+# FREE — served models only: SemanticSmooth's API defaults (perturbation gemini,
+# internal judge gpt-5-nano) OVERRIDDEN to perturbation_model=null (paraphrase with the
+# qwen target) + judge_model=wildguard. ASR judge = wildguard first-pass; a gpt-5-mini
+# rejudge of these cells is a SEPARATE gated step afterward.
+num_main_job_threads: 2      # SAGE outputs are long; cap concurrency on the 1 qwen server (avoid endpoint contention)
+num_cluster_jobs: 3          # orchestrator + qwen + wildguard (SS internal vote + ASR judge)
+
+_e: &e
+  mode: defense+evaluate
+  target_model: qwen2_5_vl_7b
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_p1_pubdef
+
+_CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260718_213010_40825967/code_attack
+_SURF: &surf outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_20260718_050205_56951903/variance_channel_bon
+
+_SS: &ss {n_copies: 5, perturbation_model: null, judge_model: wildguard}   # null -> paraphrase with the target; free served vote
+
+tasks:
+  - {<<: *e, source_transform_subdir: *code, defense: sage}
+  - {<<: *e, source_transform_subdir: *surf, defense: sage}
+  - {<<: *e, source_transform_subdir: *code, defense: semantic_smooth, defense_config: *ss}
+  - {<<: *e, source_transform_subdir: *surf, defense: semantic_smooth, defense_config: *ss}
