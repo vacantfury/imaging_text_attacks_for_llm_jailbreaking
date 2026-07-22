@@ -18,6 +18,11 @@ cluster:
   cuda_module: "cuda/13.1.1"
   hf_home: /scratch/zhang_haoyu6_neu/huggingface_cache
   hf_offline: false                         # AICR compute nodes have internet
+  # Big multi-cell rounds share 1 server/target; a cell waits (exclusive-ish acquire)
+  # for its turn. The _defaults 10000s (2.7h) endpoint-wait was too short — cells queued
+  # behind others on a busy server timed out and FAILED (job 173095, 2026-07-21). Raise
+  # to 72000s (20h, under the 24h walls) so a queued cell waits for its slot instead of failing.
+  cluster_server_endpoint_timeout: 72000
   # uv-venv activation REPLACES the conda default. Multi-GPU tensor-parallel (num_gpus>1)
   # is set PER-MODEL in conf/llm/<model>.yaml; gpu_request_style: gpus makes `--gpus=N` work.
   env_setup:
