@@ -364,6 +364,27 @@ class ModalityComplete(Defense):
         else:
             guard_content_by_id = dict(union_by_id)
 
+        # ---------- (optional) SAVE decode trace for qualitative analysis ----------
+        # Persists the recover/union/decode intermediates (otherwise only logged),
+        # so failure modes (e.g. CodeAttack, distraction) can be inspected. Off by
+        # default; enable with `save_trace: true` + `trace_path: <file>` in the config.
+        if self._config.get("save_trace"):
+            import json as _json
+            import os as _os
+            _tp = self._config.get("trace_path") or _os.path.join(source_dir, "decode_trace.jsonl")
+            _os.makedirs(_os.path.dirname(_tp) or ".", exist_ok=True)
+            with open(_tp, "w") as _f:
+                for p in prompts:
+                    _f.write(_json.dumps({
+                        "id": p.id,
+                        "original_encoded": (p.encoded or "")[:4000],
+                        "recovered": recovered_by_id.get(p.id, ""),
+                        "union": union_by_id.get(p.id, ""),
+                        "decoded": (decoded_by_id.get(p.id, "") if decode_text else ""),
+                        "guard_content": guard_content_by_id.get(p.id, ""),
+                    }, ensure_ascii=False) + "\n")
+            logger.info(f"ModalityComplete: wrote decode trace ({len(prompts)} rows) to {_tp}")
+
         # ---------- Step 4: GUARD over the decoded union ----------
         if self._guard_model is None:
             # ORIGINAL behavior, UNCHANGED: SAGE self-check on the target,

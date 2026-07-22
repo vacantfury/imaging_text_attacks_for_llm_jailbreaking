@@ -1,0 +1,42 @@
+# Decode-trace capture for the cspaper-review-1 response (qualitative decode-failure examples).
+# Runs the recover+decode amplifier on 10 CodeAttack + 10 distraction-grid behaviors and SAVES the
+# intermediate recover/union/decode text (via the new `save_trace` flag) so we can show, in the appendix,
+# WHAT the VLM outputs when decoding the two ensemble-residual attacks — answering the reviewer's
+# "what exactly does the VLM output for a CodeAttack payload?" con. Target Qwen2.5-VL-7B; guard/judge =
+# WildGuard (FREE, cheap-first — we only need the trace, not the ASR). n=10 each. Watch: trace files land
+# under outputs/autoattack_defense/decode_traces/ (sync back with the run's outputs/).
+num_cluster_jobs: 3
+num_main_job_threads: 2
+
+_target: &target qwen2_5_vl_7b
+
+tasks:
+  - mode: defense+evaluate
+    target_model: *target
+    prompt_range: [0, 9]
+    judge_method: wildguard
+    judge_model: wildguard
+    campaign: paper_c_decode_trace
+    defense: modality_complete
+    defense_config:
+      guard_model: wildguard
+      decode_text: true
+      decode_style: recover
+      save_trace: true
+      trace_path: outputs/autoattack_defense/decode_traces/code_attack_trace.jsonl
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack
+
+  - mode: defense+evaluate
+    target_model: *target
+    prompt_range: [0, 9]
+    judge_method: wildguard
+    judge_model: wildguard
+    campaign: paper_c_decode_trace
+    defense: modality_complete
+    defense_config:
+      guard_model: wildguard
+      decode_text: true
+      decode_style: recover
+      save_trace: true
+      trace_path: outputs/autoattack_defense/decode_traces/distraction_trace.jsonl
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid
