@@ -20,6 +20,11 @@ Usage (called by task.py — not directly):
 import os
 from typing import Any, Optional
 
+# Newer MLflow puts the local file-store backend in "maintenance mode" and refuses
+# writes unless this opt-out is set; keep local runs (e.g. gpt-5-mini rejudge passes)
+# working without migrating to a DB backend. Set before importing mlflow.
+os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
+
 import mlflow
 
 from src.paths import PROJECT_ROOT
