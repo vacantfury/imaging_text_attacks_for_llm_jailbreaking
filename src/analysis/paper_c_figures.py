@@ -24,6 +24,14 @@ MCRG = [43,43,58]                   # + reguard layer
 MC_OR   = [64,59,59.5]              # benign over-refusal %, avg(text,image), mc
 MCRG_OR = [84,80.5,86.5]            #                                        mc+reguard
 
+# ---- DATA (InternVL3-8B, gpt-5-mini, n=100) — same 3 guards, generalization ----
+FLOOR2 = 91
+GB2   = [81,81,90]
+MC2   = [63,69,67]
+MCRG2 = [48,56,65]
+MC_OR2   = [84,80,82]
+MCRG_OR2 = [90,86,92]
+
 # ---- Fig 1: ensemble ASR grouped bars ----
 fig, ax = plt.subplots(figsize=(3.5,2.6))
 x = np.arange(len(GUARDS)); w = 0.26
@@ -38,17 +46,26 @@ ax.legend(frameon=False, fontsize=6, loc='lower left', ncol=1)
 ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
 fig.tight_layout(); fig.savefig(FIGS+"/ensemble_bars.pdf"); fig.savefig(FIGS+"/ensemble_bars.png", dpi=300)
 
-# ---- Fig 2: safety-utility tradeoff frontier ----
-fig, ax = plt.subplots(figsize=(3.5,2.8))
-for i,g in enumerate(GUARDS):
-    ax.annotate('', xy=(MCRG_OR[i],MCRG[i]), xytext=(MC_OR[i],MC[i]),
-                arrowprops=dict(arrowstyle='->', color=OI[i], lw=1.3, alpha=0.9))
-    ax.scatter(MC_OR[i],   MC[i],   color=OI[i], marker='o', s=34, zorder=3, label=g)
-    ax.scatter(MCRG_OR[i], MCRG[i], color=OI[i], marker='s', s=34, zorder=3)
+# ---- Fig 2: safety-utility tradeoff frontier (BOTH models) ----
+from matplotlib.lines import Line2D
+fig, ax = plt.subplots(figsize=(3.5,3.0))
+def plot_model(MCv, MCRGv, ORv, ORrgv, m_mc, m_rg, ls):
+    for i in range(len(GUARDS)):
+        ax.annotate('', xy=(ORrgv[i],MCRGv[i]), xytext=(ORv[i],MCv[i]),
+                    arrowprops=dict(arrowstyle='->', color=OI[i], lw=1.2, alpha=0.85, linestyle=ls))
+        ax.scatter(ORv[i],   MCv[i],   facecolors='none', edgecolors=OI[i], marker=m_mc, s=34, zorder=3, lw=1.3)
+        ax.scatter(ORrgv[i], MCRGv[i], color=OI[i],       marker=m_rg, s=34, zorder=3)
+plot_model(MC,  MCRG,  MC_OR,  MCRG_OR,  'o', 's', '-')    # Qwen2.5-VL
+plot_model(MC2, MCRG2, MC_OR2, MCRG_OR2, '^', 'D', '--')   # InternVL3
 ax.set_xlabel('Benign over-refusal (%)  →  worse utility')
 ax.set_ylabel('Ensemble ASR (%)  →  worse safety')
-ax.legend(frameon=False, fontsize=6, title='guard', title_fontsize=6, loc='upper left')
-ax.text(0.98,0.02,'○ amplifier    □ +reguard', transform=ax.transAxes, fontsize=6, ha='right')
+guard_handles=[Line2D([0],[0],color=OI[i],lw=2.4,label=g) for i,g in enumerate(GUARDS)]
+model_handles=[Line2D([0],[0],color='0.35',marker='o',mfc='none',ls='-', label='Qwen2.5-VL'),
+               Line2D([0],[0],color='0.35',marker='^',mfc='none',ls='--',label='InternVL3')]
+leg1=ax.legend(handles=guard_handles, frameon=False, fontsize=6, loc='upper left', title='guard', title_fontsize=6)
+ax.add_artist(leg1)
+ax.legend(handles=model_handles, frameon=False, fontsize=6, loc='lower right')
+ax.text(0.02,0.02,'open = amplifier → filled = +reguard', transform=ax.transAxes, fontsize=5.5, ha='left')
 ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
 fig.tight_layout(); fig.savefig(FIGS+"/tradeoff_frontier.pdf"); fig.savefig(FIGS+"/tradeoff_frontier.png", dpi=300)
 print("wrote:", os.listdir(FIGS))
