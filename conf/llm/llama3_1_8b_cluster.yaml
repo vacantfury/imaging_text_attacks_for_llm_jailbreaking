@@ -1,0 +1,12 @@
+# Llama-3.1-8B-Instruct (meta) — Paper-1 (BoN-wrapped CodeAttack) text-LLM target.
+# num_instances=3: serve THREE replicas so heavy cells (esp. SemanticSmooth, ~16h each
+# at 10k draws) run in PARALLEL on dedicated endpoints instead of starving each other on
+# one server (the failure mode in round 174759, 2026-07-21: SS monopolized the single
+# Llama server → the no-defense cell timed out after 20h). Budget-capped automatically by
+# Experiment._load_cluster_config when other models need slots. 8B @ bf16 ≈ 16 GB, fits
+# one 96GB AICR GPU per replica. Standard serve — no trust_remote_code / mm flags.
+model:
+  model: meta-llama/Llama-3.1-8B-Instruct
+
+cluster:
+  num_instances: 3
