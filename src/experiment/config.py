@@ -88,7 +88,11 @@ def load_conf(subdir: str, override_name: Optional[str] = None, *,
             config = _deep_merge(config, _load_yaml(override_path))
     elif match_field and match_value is not None:
         for yaml_file in sorted(conf_path.glob("*.yaml")):
-            if yaml_file.stem == "default":
+            # Skip macOS AppleDouble sidecars (._<name>.yaml): pathlib's glob
+            # matches these dotfiles, and they are binary resource-fork junk that
+            # yaml.safe_load chokes on ("UnicodeDecodeError: 0xa3"). They appear
+            # whenever a config file is carried from a Mac to a cluster. (2026-07-22)
+            if yaml_file.name.startswith("._") or yaml_file.stem == "default":
                 continue
             candidate = _load_yaml(yaml_file)
             if _select(candidate, match_field) == match_value:
