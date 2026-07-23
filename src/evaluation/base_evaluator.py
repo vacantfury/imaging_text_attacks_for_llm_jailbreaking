@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
-from src.llm_utils import LLMModel
+from llm_utils import LLMModel
 
 
 class BaseEvaluator(ABC):

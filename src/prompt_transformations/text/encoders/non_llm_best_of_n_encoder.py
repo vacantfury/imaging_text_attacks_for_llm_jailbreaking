@@ -16,7 +16,7 @@ batch, so (seed + stable row order) makes a run reproducible.
 import random
 from typing import Optional
 
-from src.llm_utils import LLMModel
+from llm_utils import LLMModel
 from src.utils.logger import get_logger
 from ..base_encoder import BaseEncoder
 

@@ -6,7 +6,7 @@ Prompts, few-shot demonstrations, and target prefix are loaded from:
   conf/text_encoding/quantum_mechanics.yaml
 """
 from typing import Optional, List
-from src.llm_utils import LLMServiceFactory, BaseLLMService
+from llm_utils import LLMServiceFactory, BaseLLMService
 from src.utils.logger import get_logger
 from ..base_encoder import BaseEncoder, strip_delimiter_tags
 from ..prompt_loader import load_prompt_template

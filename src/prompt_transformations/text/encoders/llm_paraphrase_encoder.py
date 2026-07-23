@@ -22,7 +22,7 @@ Prompt template: conf/text_encoding/paraphrase.yaml.
 """
 from typing import List, Optional
 
-from src.llm_utils import BaseLLMService, LLMServiceFactory
+from llm_utils import BaseLLMService, LLMServiceFactory
 from src.utils.logger import get_logger
 from ..base_encoder import BaseEncoder
 from ..prompt_loader import load_prompt_template

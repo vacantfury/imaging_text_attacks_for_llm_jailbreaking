@@ -5,7 +5,7 @@ import re
 from abc import ABC, abstractmethod
 from typing import Optional, List
 
-from src.llm_utils import LLMModel
+from llm_utils import LLMModel
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)

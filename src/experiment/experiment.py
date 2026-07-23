@@ -36,7 +36,7 @@ import yaml
 
 from .task import run_task
 from .constants import MAX_SUBMIT_JOBS_PER_USER
-from src.utils.exceptions import AccountFatalError
+from llm_utils import AccountFatalError
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -102,7 +102,7 @@ def _infer_task_type(task) -> TaskType:
 
     if isinstance(task, RejudgeTask):
         # No target; the judge may be cluster-served (WildGuard) or API (gpt-5-mini).
-        from src.llm_utils import LLMModel, Provider
+        from llm_utils import LLMModel, Provider
         try:
             m = LLMModel.from_string(task.judge_model)
             return (TaskType.CLUSTER_MODEL if m.provider == Provider.NU_CLUSTER
@@ -112,7 +112,7 @@ def _infer_task_type(task) -> TaskType:
 
     model_str = _target_model_for_task(task)
     if model_str:
-        from src.llm_utils import LLMModel, Provider
+        from llm_utils import LLMModel, Provider
         try:
             m = LLMModel.from_string(model_str)
             if m.provider == Provider.NU_CLUSTER:
@@ -126,7 +126,7 @@ def _infer_task_type(task) -> TaskType:
 
 def _resolve_model(model_str: str) -> Optional[Any]:
     """Resolve model string to LLMModel enum, or None."""
-    from src.llm_utils import LLMModel
+    from llm_utils import LLMModel
     try:
         return LLMModel.from_string(model_str)
     except ValueError:
@@ -154,7 +154,7 @@ def _judge_model_for_method(judge_method: str) -> Optional[Any]:
         return None
     try:
         from .config import load_conf
-        from src.llm_utils import LLMModel
+        from llm_utils import LLMModel
         eval_config = load_conf("evaluation")
         judge_cfg = eval_config.get("judge_llm_config", {})
         model_str = judge_cfg.get("model")
@@ -195,7 +195,7 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
     same question for another provider (e.g. Bedrock, for multi-cluster routing),
     call `_referenced_models_for_task(info, {Provider.BEDROCK})`.
     """
-    from src.llm_utils import Provider
+    from llm_utils import Provider
     return _referenced_models_for_task(info, {Provider.NU_CLUSTER})
 
 
@@ -462,7 +462,7 @@ class Experiment:
         on ExpiredToken. One cheap `sts` call up front turns that into a clear,
         early abort. No-op when the run references no Bedrock model.
         """
-        from src.llm_utils import Provider
+        from llm_utils import Provider
         needs_bedrock = any(
             _referenced_models_for_task(t, {Provider.BEDROCK}) for t in tasks)
         if not needs_bedrock:
@@ -601,8 +601,8 @@ class Experiment:
         (sorted by model_id) — prevents collisions with mixed num_instances
         and keeps assignments reproducible across runs.
         """
-        from src.llm_utils.cluster_server_manager import ClusterModelServerManager
-        from src.llm_utils import LLMServiceFactory
+        from llm_utils.cluster_server_manager import ClusterModelServerManager
+        from llm_utils import LLMServiceFactory
 
         self._server_manager = ClusterModelServerManager()
 
@@ -690,7 +690,7 @@ class Experiment:
             self._server_manager = None
         # Clear the factory's class-level singleton so subsequent Experiment
         # runs in the same process don't see a stale (shut-down) manager.
-        from src.llm_utils import LLMServiceFactory
+        from llm_utils import LLMServiceFactory
         LLMServiceFactory.clear_server_manager()
 
     def _maybe_release_model(self, model) -> None:

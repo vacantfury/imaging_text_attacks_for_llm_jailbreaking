@@ -16,7 +16,7 @@ Reference:
   Prompt Optimization via Bio-Inspired Search." ICLR 2026.
 """
 from typing import Optional, List
-from src.llm_utils import LLMServiceFactory, BaseLLMService
+from llm_utils import LLMServiceFactory, BaseLLMService
 from src.utils.logger import get_logger
 from ..base_encoder import BaseEncoder
 from ..prompt_loader import load_prompt_template

@@ -28,7 +28,7 @@ import pandas as pd
 
 from src.defense.guard_utils import format_wildguard_input
 from src.evaluation.base_evaluator import BaseEvaluator
-from src.llm_utils import BaseLLMService, LLMModel, LLMServiceFactory
+from llm_utils import BaseLLMService, LLMModel, LLMServiceFactory
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)

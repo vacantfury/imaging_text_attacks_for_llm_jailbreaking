@@ -564,7 +564,7 @@ class LLMConfig(BaseModel):
 
     @model_validator(mode="after")
     def _check_max_model_len_against_arch_ceiling(self) -> "LLMConfig":
-        from src.llm_utils.llm_model import LLMModel
+        from llm_utils.llm_model import LLMModel
         try:
             m = LLMModel.from_string(self.model.model)
         except ValueError:
@@ -582,7 +582,8 @@ class LLMConfig(BaseModel):
     @model_validator(mode="after")
     def _check_chat_template_file_exists(self) -> "LLMConfig":
         from pathlib import Path
-        from src.llm_utils.llm_model import LLMModel
+        import llm_utils as _llm_utils_pkg
+        from llm_utils.llm_model import LLMModel
         try:
             m = LLMModel.from_string(self.model.model)
         except ValueError:
@@ -591,8 +592,7 @@ class LLMConfig(BaseModel):
         if not chat_template:
             return self
         templates_dir = (
-            Path(__file__).resolve().parent.parent
-            / "llm_utils" / "chat_templates")
+            Path(_llm_utils_pkg.__file__).resolve().parent / "chat_templates")
         template_file = templates_dir / f"{chat_template}.jinja"
         if not template_file.exists():
             raise ValueError(

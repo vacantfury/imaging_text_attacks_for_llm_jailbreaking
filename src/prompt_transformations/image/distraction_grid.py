@@ -21,7 +21,7 @@ from typing import Optional
 from PIL import Image, ImageDraw
 
 from src.experiment.schemas import Prompt
-from src.llm_utils import BaseLLMService, LLMServiceFactory
+from llm_utils import BaseLLMService, LLMServiceFactory
 from src.prompt_transformations.base import Modality, PromptTransformation
 from src.prompt_transformations.transformation_factory import register_transformation
 from src.utils.logger import get_logger

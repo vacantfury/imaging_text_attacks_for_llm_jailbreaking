@@ -7,7 +7,7 @@ to obfuscate content while maintaining readability.
 import random
 from typing import Optional, List
 
-from src.llm_utils import LLMModel
+from llm_utils import LLMModel
 from src.utils.logger import get_logger
 from ..base_encoder import BaseEncoder
 from .constants import DEFAULT_INJECTION_SYMBOLS

@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.experiment.schemas import Prompt
-from src.llm_utils import BaseLLMService, LLMServiceFactory
+from llm_utils import BaseLLMService, LLMServiceFactory
 from src.prompt_transformations.transformation_factory import register_transformation
 from src.utils.logger import get_logger
 from .base_transformation import ImageRendererTransformation

@@ -31,9 +31,9 @@ from src.experiment.schemas import (
     PromptTransformStepResult, RawPrompt, RejudgeResult, TargetModelConfig,
     TransformationSpec,
 )
-from src.llm_utils import LLMServiceFactory
-from src.llm_utils.base_llm_service import is_mechanism_error, strip_mechanism_error
-from src.llm_utils.llm_model import LLMModel
+from llm_utils import LLMServiceFactory
+from llm_utils.base_llm_service import is_mechanism_error, strip_mechanism_error
+from llm_utils.llm_model import LLMModel
 from src.prompt_transformations import (
     Modality, create_transformation, resolve_transformation_name,
 )

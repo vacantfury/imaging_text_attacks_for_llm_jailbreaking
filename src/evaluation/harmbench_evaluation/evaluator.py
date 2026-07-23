@@ -17,7 +17,7 @@ import json_repair
 import pandas as pd
 
 from src.evaluation.base_evaluator import BaseEvaluator
-from src.llm_utils import LLMServiceFactory, LLMModel, BaseLLMService
+from llm_utils import LLMServiceFactory, LLMModel, BaseLLMService
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)

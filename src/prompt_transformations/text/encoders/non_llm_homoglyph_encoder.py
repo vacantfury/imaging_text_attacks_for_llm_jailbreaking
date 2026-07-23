@@ -24,7 +24,7 @@ Form notes (see text_docs/shared/code_dev_plan.md "Pipeline-fit"):
 import string
 from typing import Optional, Dict
 
-from src.llm_utils import LLMModel
+from llm_utils import LLMModel
 from src.utils.logger import get_logger
 from ..base_encoder import BaseEncoder
 

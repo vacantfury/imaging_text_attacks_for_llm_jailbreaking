@@ -63,8 +63,8 @@ attack through.
 import re
 from typing import Callable, Optional
 
-from src.llm_utils.base_llm_service import BaseLLMService
-from src.llm_utils.llm_model import LLMModel
+from llm_utils.base_llm_service import BaseLLMService
+from llm_utils.llm_model import LLMModel
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -253,7 +253,7 @@ def format_guardreasoner_vl_input(prompt_text: str, response_text: str = "None")
 
 # Verbatim from other_repos/wildguard/wildguard/utils.py::WILDGUARD_INPUT_FORMAT
 # (NO leading "<s>" — see module docstring). Served under chat_template:
-# passthrough (src/llm_utils/chat_templates/passthrough.jinja emits message
+# passthrough (the llm_utils package's chat_templates/passthrough.jinja emits message
 # content verbatim, no role wrappers), so this whole string is sent as ONE
 # user message — no separate system message.
 WILDGUARD_INPUT_TEMPLATE = (

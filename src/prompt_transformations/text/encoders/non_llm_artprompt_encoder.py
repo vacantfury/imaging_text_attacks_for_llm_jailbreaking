@@ -22,7 +22,7 @@ import string
 from collections import defaultdict
 from typing import Optional, List, Tuple
 
-from src.llm_utils import LLMModel
+from llm_utils import LLMModel
 from src.utils.logger import get_logger
 from ..base_encoder import BaseEncoder
 

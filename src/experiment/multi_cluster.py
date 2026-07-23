@@ -329,7 +329,7 @@ def compute_task_needs(preset) -> list[TaskNeed]:
     from .experiment import (
         _referenced_models_for_task, TaskInfo, _get_task_name,
     )
-    from src.llm_utils import Provider
+    from llm_utils import Provider
 
     out: list[TaskNeed] = []
     for i, task in enumerate(preset.tasks):

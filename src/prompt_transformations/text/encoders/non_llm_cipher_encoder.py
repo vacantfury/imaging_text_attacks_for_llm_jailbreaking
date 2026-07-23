@@ -52,7 +52,7 @@ dispatch dict, so adding one later is a small diff, not a restructure):
 import base64 as _base64
 from typing import Optional
 
-from src.llm_utils import LLMModel
+from llm_utils import LLMModel
 from src.utils.logger import get_logger
 from ..base_encoder import BaseEncoder
 

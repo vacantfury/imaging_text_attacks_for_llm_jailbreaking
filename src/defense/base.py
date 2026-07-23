@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.experiment.schemas import Prompt
-from src.llm_utils.base_llm_service import BaseLLMService
+from llm_utils.base_llm_service import BaseLLMService
 
 
 class Defense(ABC):
