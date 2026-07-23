@@ -36,6 +36,7 @@ import yaml
 
 from .task import run_task
 from .constants import MAX_SUBMIT_JOBS_PER_USER
+from src.utils.exceptions import AccountFatalError
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -764,6 +765,16 @@ class Experiment:
 
                 logger.info(f"[{queue_name}] Completed: {task.name} ({elapsed:.1f}s)")
                 return result
+            except AccountFatalError as e:
+                # Account-global failure (invalid key / no credits): every
+                # remaining task on this provider would fail identically, so
+                # re-raise to ABORT the whole run fast with the actionable
+                # message — do NOT record a degenerate 'failed' cell and let the
+                # rest of the matrix grind on. (Per-model/other errors below stay
+                # task-local.)
+                logger.error(
+                    f"[{queue_name}] ABORTING RUN — account-fatal on {task.name}: {e}")
+                raise
             except Exception as e:
                 elapsed = time.time() - t0
                 err_str = str(e)

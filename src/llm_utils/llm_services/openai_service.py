@@ -139,6 +139,11 @@ class OpenAIService(BaseLLMService):
 
                 except Exception as e:
                     err = str(e)
+                    # Account-global failures (invalid key / no credits) can't
+                    # recover mid-run — abort the whole run fast instead of
+                    # retrying every cell. Checked BEFORE the rate-limit branch
+                    # because OpenAI returns `insufficient_quota` as a 429.
+                    self._raise_if_account_fatal(e)
                     if ("429" in err or "rate" in err.lower()) and attempt < self.max_retries:
                         wait = (2 ** attempt) + random.random()
                         logger.warning(

@@ -113,14 +113,20 @@ class GoogleService(BaseLLMService):
 
     def _submit_batch(self, inline_requests: list):
         logger.info(f"Submitting Google batch with {len(inline_requests)} inline requests")
-        return self._retry_rate_limit_sync(
-            lambda: self.client.batches.create(
-                model=self.model.model_id,
-                src=inline_requests,
-                config={"display_name": f"batch-{self.model.model_id}"},
-            ),
-            label=f"Google batches.create ({self.model.model_id})",
-        )
+        try:
+            return self._retry_rate_limit_sync(
+                lambda: self.client.batches.create(
+                    model=self.model.model_id,
+                    src=inline_requests,
+                    config={"display_name": f"batch-{self.model.model_id}"},
+                ),
+                label=f"Google batches.create ({self.model.model_id})",
+            )
+        except Exception as e:
+            # Bad key ("API key not valid") / disabled billing surfaces here at
+            # submit time and dooms every request — abort fast, don't fail one task.
+            self._raise_if_account_fatal(e)
+            raise
 
     def _poll_until_done(self, batch_job):
         elapsed = 0

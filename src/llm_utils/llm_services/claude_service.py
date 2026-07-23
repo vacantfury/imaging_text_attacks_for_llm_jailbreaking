@@ -106,10 +106,16 @@ class ClaudeService(BaseLLMService):
             requests.append({"custom_id": item_id, "params": params})
 
         logger.info(f"Submitting Claude batch with {len(requests)} requests")
-        return self._retry_rate_limit_sync(
-            lambda: self.client.messages.batches.create(requests=requests),
-            label=f"Anthropic batches.create ({self.model.model_id})",
-        )
+        try:
+            return self._retry_rate_limit_sync(
+                lambda: self.client.messages.batches.create(requests=requests),
+                label=f"Anthropic batches.create ({self.model.model_id})",
+            )
+        except Exception as e:
+            # Bad key / empty credit balance surfaces here at submit time and
+            # dooms every request in the run — abort fast, don't fail one task.
+            self._raise_if_account_fatal(e)
+            raise
 
     def _poll_until_done(self, batch):
         elapsed = 0

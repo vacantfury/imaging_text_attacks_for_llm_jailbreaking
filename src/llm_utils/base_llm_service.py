@@ -45,6 +45,65 @@ def is_rate_limit_error(exc: BaseException) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Account-fatal error detection (bad key / no credits)
+# ---------------------------------------------------------------------------
+# These are ACCOUNT-GLOBAL failures: the API key is invalid, or the account is
+# out of credits. They will NOT recover mid-run, so a service must fail-fast
+# (raise an AccountFatalError that aborts the whole run) instead of retrying
+# every cell and grinding each into a mechanism-error. See exceptions.py.
+
+# Substrings that mean the API KEY itself is bad (invalid / revoked / 401).
+# Case-insensitive. Kept phrase-specific: a false positive here ABORTS the run.
+_INVALID_CREDENTIAL_PATTERNS = (
+    "invalid_api_key",
+    "invalid api key",
+    "incorrect api key",          # OpenAI: "Incorrect API key provided"
+    "invalid x-api-key",          # Anthropic
+    "api key not valid",          # Google: "API key not valid. Please pass a valid API key."
+    "api_key_invalid",            # Google error status
+    "authentication_error",
+    "authentication error",
+    "error code: 401",
+    "http 401",
+    "status code 401",
+)
+
+# Substrings that mean the account is OUT OF CREDITS / over its billing quota.
+# NOTE: several providers surface this as an HTTP 429 (same status as a transient
+# rate-limit), so `is_credit_exhausted_error` MUST be consulted BEFORE the
+# rate-limit retry branch, or an exhausted account gets pointlessly retried and
+# then mechanism-errored. Case-insensitive; phrase-specific to avoid false hits.
+_CREDIT_EXHAUSTED_PATTERNS = (
+    "insufficient_quota",             # OpenAI billing (code; comes back as a 429)
+    "exceeded your current quota",    # OpenAI billing (message)
+    "credit balance is too low",      # Anthropic
+    "insufficient balance",           # DeepSeek ("Insufficient Balance")
+    "payment required",               # generic HTTP 402
+    "error code: 402",
+    "billing_not_active",             # some OpenAI-compatible endpoints
+    "billing_hard_limit_reached",     # OpenAI hard billing cap
+    "account is not active",          # xAI / some compatible endpoints
+    "arrearage",                      # Z.AI / some CN endpoints (owed balance)
+)
+
+
+def is_invalid_credential_error(exc: BaseException) -> bool:
+    """Heuristic: did the provider reject the API key (invalid / revoked / 401)?"""
+    err = str(exc).lower()
+    return any(p in err for p in _INVALID_CREDENTIAL_PATTERNS)
+
+
+def is_credit_exhausted_error(exc: BaseException) -> bool:
+    """Heuristic: is the account out of credits / over its billing quota?
+
+    Consulted BEFORE `is_rate_limit_error` because several providers report this
+    as a 429 that would otherwise be mistaken for a transient rate-limit.
+    """
+    err = str(exc).lower()
+    return any(p in err for p in _CREDIT_EXHAUSTED_PATTERNS)
+
+
+# ---------------------------------------------------------------------------
 # Mechanism-error sentinel
 # ---------------------------------------------------------------------------
 # A response wrapped with this sentinel marks a genuine MECHANISM / processing
@@ -138,6 +197,34 @@ class BaseLLMService(ABC):
         if "not found" in error_str or "does not exist" in error_str or "404" in str(error):
             from src.utils.exceptions import FatalModelError
             raise FatalModelError(f"Model {model_id} not found") from error
+
+    def _raise_if_account_fatal(self, error: BaseException) -> None:
+        """Convert an account-global failure into a fatal exception that ABORTS
+        the whole run. Call this from a service's error handler BEFORE the
+        rate-limit retry branch (credit-exhaustion arrives as a 429 for several
+        providers, so it must be caught first). No-op for any other error.
+
+        Distinct from ``_check_fatal_error`` (per-MODEL 404): a bad key or an
+        empty balance dooms every task on this provider, so retrying other cells
+        is wasted wall-clock and the run should stop with an actionable message.
+        """
+        provider = getattr(self.model, "provider", None)
+        provider_name = getattr(provider, "value", None) or self.__class__.__name__
+        detail = str(error)[:200]
+        if is_credit_exhausted_error(error):
+            from src.utils.exceptions import CreditsExhaustedError
+            raise CreditsExhaustedError(
+                f"{provider_name}: account is out of credits / over billing quota "
+                f"({detail}). Top up this provider's account, then rerun — the run "
+                f"was aborted so no cells are miscounted as defeated attacks."
+            ) from error
+        if is_invalid_credential_error(error):
+            from src.utils.exceptions import InvalidCredentialError
+            raise InvalidCredentialError(
+                f"{provider_name}: API key rejected — invalid or revoked "
+                f"({detail}). Fix the key (check the env var / 1Password entry) "
+                f"for this provider, then rerun — the run was aborted."
+            ) from error
 
     def get_usage(self) -> dict:
         return {

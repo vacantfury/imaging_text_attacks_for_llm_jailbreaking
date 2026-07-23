@@ -205,6 +205,10 @@ class BedrockService(BaseLLMService):
 
                 except Exception as e:
                     err = str(e)
+                    # Fail FAST on an exhausted credit balance / billing quota —
+                    # account-global, never recovers mid-run (Bedrock creds are
+                    # handled by the AWS-specific markers below).
+                    self._raise_if_account_fatal(e)
                     # Fail FAST on dead creds / no-access — these never recover
                     # mid-run, so raise once (aborts the whole batch) instead of
                     # retrying every row into a cryptic MECHANISM_ERROR.
