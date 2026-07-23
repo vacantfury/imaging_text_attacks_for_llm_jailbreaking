@@ -1,0 +1,15 @@
+# con-4 benign re-run (AICR saturation aborted the first attempt's servers).
+# Over-refusal (mc, +rg) for LlamaGuard-3 + ThinkGuard on Qwen, plain text+image.
+num_main_job_threads: 4
+num_cluster_jobs: 4        # orchestrator + qwen + llama_guard_3_8b + thinkguard
+_txt: &txt outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260718_183505_52485516/non_llm_baseline
+_img: &img outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260718_183504_7866920/ir_plain
+tasks:
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,99], campaign: paper_c_reguard_5guard_benign, defense: modality_complete, judge_model: gpt-5-mini, defense_config: {guard_model: llama_guard_3_8b, decode_text: true, decode_style: recover}, source_transform_subdir: *txt}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,99], campaign: paper_c_reguard_5guard_benign, defense: modality_complete, judge_model: gpt-5-mini, defense_config: {guard_model: llama_guard_3_8b, decode_text: true, decode_style: recover, reguard_original: true}, source_transform_subdir: *txt}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,99], campaign: paper_c_reguard_5guard_benign, defense: modality_complete, judge_model: gpt-5-mini, defense_config: {guard_model: llama_guard_3_8b, decode_text: true, decode_style: recover}, source_transform_subdir: *img}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,99], campaign: paper_c_reguard_5guard_benign, defense: modality_complete, judge_model: gpt-5-mini, defense_config: {guard_model: llama_guard_3_8b, decode_text: true, decode_style: recover, reguard_original: true}, source_transform_subdir: *img}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,99], campaign: paper_c_reguard_5guard_benign, defense: modality_complete, judge_model: gpt-5-mini, defense_config: {guard_model: thinkguard, decode_text: true, decode_style: recover}, source_transform_subdir: *txt}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,99], campaign: paper_c_reguard_5guard_benign, defense: modality_complete, judge_model: gpt-5-mini, defense_config: {guard_model: thinkguard, decode_text: true, decode_style: recover, reguard_original: true}, source_transform_subdir: *txt}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,99], campaign: paper_c_reguard_5guard_benign, defense: modality_complete, judge_model: gpt-5-mini, defense_config: {guard_model: thinkguard, decode_text: true, decode_style: recover}, source_transform_subdir: *img}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,99], campaign: paper_c_reguard_5guard_benign, defense: modality_complete, judge_model: gpt-5-mini, defense_config: {guard_model: thinkguard, decode_text: true, decode_style: recover, reguard_original: true}, source_transform_subdir: *img}

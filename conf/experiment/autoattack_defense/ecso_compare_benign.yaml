@@ -1,0 +1,12 @@
+# ECSO benign / over-refusal axis (review-4 con 1) — ECSO over benign OR-Bench-Hard,
+# plain text + plain image channels (matches the paper's "avg of text/image" protocol).
+# gpt-5-mini refusal judge (approved). GPU serve qwen + internvl3.
+num_main_job_threads: 4
+num_cluster_jobs: 3        # orchestrator + qwen + internvl3 (gpt-5-mini judge = API, no server)
+_txt: &txt outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260718_183505_52485516/non_llm_baseline
+_img: &img outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260718_183504_7866920/ir_plain
+tasks:
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0, 99], campaign: paper_c_ecso_compare_benign, defense: ecso, judge_model: gpt-5-mini, source_transform_subdir: *txt}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0, 99], campaign: paper_c_ecso_compare_benign, defense: ecso, judge_model: gpt-5-mini, source_transform_subdir: *img}
+  - {mode: defense+evaluate, target_model: internvl3_8b, prompt_range: [0, 99], campaign: paper_c_ecso_compare_benign, defense: ecso, judge_model: gpt-5-mini, source_transform_subdir: *txt}
+  - {mode: defense+evaluate, target_model: internvl3_8b, prompt_range: [0, 99], campaign: paper_c_ecso_compare_benign, defense: ecso, judge_model: gpt-5-mini, source_transform_subdir: *img}
