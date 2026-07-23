@@ -1,0 +1,23 @@
+# bestofn_attack Paper-1 — recover ONLY the fast Llama no-defense+code cell (1 of the 3
+# missing). Split out to run on NURC: it's a single-query-per-draw cell (~1-2h, no
+# SemanticSmooth), so it fits NURC's 8h GPU wall easily — unlike the two SS cells, which
+# are ~16h each and need AICR's 24h wall. NURC is empty + its Llama cache was re-downloaded
+# + verified 2026-07-22 (job 8588354), so servers start immediately (no AICR queue wait).
+# Full N=100 (100 behaviors x 100 draws), wildguard first-pass (FREE), same campaign so it
+# joins the round. The two SS cells (semantic_smooth code+surf) stay on AICR when it frees.
+#   sbatch scripts/run_experiment.sbatch bestofn_attack/text_targets_recover_llama_nodef
+num_main_job_threads: 1
+num_cluster_jobs: 5          # orch + 3 llama replicas (llama3_1_8b_cluster) + wildguard; NURC budget 4 servers
+
+_e: &e
+  mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_p1_text_full   # same campaign as the main round
+
+_CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260718_213010_40825967/code_attack
+
+tasks:
+  - {<<: *e, source_transform_subdir: *code, defense: no_defense}   # failed in 174759 (20h timeout on the contended single server)
