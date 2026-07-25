@@ -103,21 +103,26 @@ def ens_flags(sel, cond, g):
     return u
 
 
-for target in ['qwen2_5_vl_7b', 'internvl3_8b']:
-    sel = build(target)
-    print(f'\n=== {target} — ensemble ASR with Wilson 95% CI + paired McNemar ===')
-    print(f'{"guard":16}{"gb [CI]":>18}{"mc [CI]":>18}{"+rg [CI]":>18}   gb>mc p    mc>+rg p')
-    for g in GUARDS:
-        fg = {c: ens_flags(sel, c, g) for c in ['gb', 'mc', 'mcrg']}
-        n = len(fg['gb']) or 100
-        cells = {}
-        for c in ['gb', 'mc', 'mcrg']:
-            k = sum(fg[c].values())
-            lo, hi = wilson(k, len(fg[c]) or 100)
-            cells[c] = f'{100*k/(len(fg[c]) or 100):.0f} [{lo:.0f}-{hi:.0f}]'
-        ids = set(fg['gb']) & set(fg['mc']) & set(fg['mcrg'])
-        b1 = sum(1 for i in ids if fg['gb'][i] and not fg['mc'][i]); c1 = sum(1 for i in ids if fg['mc'][i] and not fg['gb'][i])
-        b2 = sum(1 for i in ids if fg['mc'][i] and not fg['mcrg'][i]); c2 = sum(1 for i in ids if fg['mcrg'][i] and not fg['mc'][i])
-        p1 = mcnemar_exact(b1, c1); p2 = mcnemar_exact(b2, c2)
-        print(f'{g:16}{cells["gb"]:>18}{cells["mc"]:>18}{cells["mcrg"]:>18}   {p1:.1e}   {p2:.1e}')
-print('\nWilson CI = 95%; McNemar = exact two-sided on paired (same-100-prompt) ensemble flags. n=100.')
+def main() -> None:
+    for target in ['qwen2_5_vl_7b', 'internvl3_8b']:
+        sel = build(target)
+        print(f'\n=== {target} — ensemble ASR with Wilson 95% CI + paired McNemar ===')
+        print(f'{"guard":16}{"gb [CI]":>18}{"mc [CI]":>18}{"+rg [CI]":>18}   gb>mc p    mc>+rg p')
+        for g in GUARDS:
+            fg = {c: ens_flags(sel, c, g) for c in ['gb', 'mc', 'mcrg']}
+            n = len(fg['gb']) or 100
+            cells = {}
+            for c in ['gb', 'mc', 'mcrg']:
+                k = sum(fg[c].values())
+                lo, hi = wilson(k, len(fg[c]) or 100)
+                cells[c] = f'{100*k/(len(fg[c]) or 100):.0f} [{lo:.0f}-{hi:.0f}]'
+            ids = set(fg['gb']) & set(fg['mc']) & set(fg['mcrg'])
+            b1 = sum(1 for i in ids if fg['gb'][i] and not fg['mc'][i]); c1 = sum(1 for i in ids if fg['mc'][i] and not fg['gb'][i])
+            b2 = sum(1 for i in ids if fg['mc'][i] and not fg['mcrg'][i]); c2 = sum(1 for i in ids if fg['mcrg'][i] and not fg['mc'][i])
+            p1 = mcnemar_exact(b1, c1); p2 = mcnemar_exact(b2, c2)
+            print(f'{g:16}{cells["gb"]:>18}{cells["mc"]:>18}{cells["mcrg"]:>18}   {p1:.1e}   {p2:.1e}')
+    print('\nWilson CI = 95%; McNemar = exact two-sided on paired (same-100-prompt) ensemble flags. n=100.')
+
+
+if __name__ == "__main__":
+    main()

@@ -37,40 +37,6 @@ def ids(d):
     return out
 
 
-sel = {}          # (cond, guard, chain) -> (ts, dir)   ; guard='none' for floor
-for d in glob.glob('outputs/autoattack_defense/rejudge/harmbench/*gpt-5-mini*'):
-    r = lj(d + '/results.json')
-    if not r or r.get('asr') is None:
-        continue
-    src = (r.get('upstream_ref') or {}).get('source_dir', '')
-    s = lj(src + '/results.json') or {}
-    if s.get('target_model') != TARGET or s.get('campaign') != CAMPAIGN:
-        continue
-    enc = r.get('encoding')
-    chain = enc if enc in CHAINS else next((c for c in CHAINS if f'_{c}_' in src or src.endswith('/' + c)), None)
-    if chain is None:
-        continue
-    dc = s.get('defense_config') or {}
-    guard = dc.get('guard_model', 'none')
-    defense = r.get('defense') or s.get('defense')
-    reguard = bool(dc.get('reguard_original'))
-    if defense == 'no_defense':
-        cond, gkey = 'floor', 'none'
-    elif defense == 'guard_baseline' and guard in GUARDS:
-        cond, gkey = 'gb', guard
-    elif defense == 'modality_complete' and guard in GUARDS and not reguard \
-            and dc.get('decode_text') is True and dc.get('decode_style') == 'recover':
-        cond, gkey = 'mc', guard
-    elif defense == 'modality_complete' and guard in GUARDS and reguard:
-        cond, gkey = 'mcrg', guard
-    else:
-        continue
-    k = (cond, gkey, chain)
-    t = ts(os.path.basename(d))
-    if k not in sel or t > sel[k][0]:
-        sel[k] = (t, d)
-
-
 def ens(cond, g):
     u = {}
     per = {}
@@ -85,17 +51,56 @@ def ens(cond, g):
     return (100.0 * sum(u.values()) / len(u) if u else float('nan')), per, len(per)
 
 
-efloor, pfloor, nfloor = ens('floor', 'none')
-print(f'TARGET={TARGET}  campaign={CAMPAIGN}')
-print(f'FLOOR (no_defense) ensemble ASR: {efloor:.0f}%   (n attacks={nfloor})')
-print()
-print(f'{"guard":22}{"gb":>6}{"mc":>6}{"mc+rg":>7}   code_attack cov gb/mc/mcrg   n(gb/mc/mcrg)')
-print('-' * 92)
-for g in GUARDS:
-    egb, pgb, ngb = ens('gb', g)
-    emc, pmc, nmc = ens('mc', g)
-    erg, prg, nrg = ens('mcrg', g)
-    code = '%.0f/%.0f/%.0f' % (pgb.get('code_attack', -1), pmc.get('code_attack', -1), prg.get('code_attack', -1))
-    print(f'{g:22}{egb:5.0f}%{emc:5.0f}%{erg:6.0f}%   {code:>22}   {ngb}/{nmc}/{nrg}')
-print()
-print('ENSEMBLE = fraction of 100 behaviors broken by ANY of the 11 attacks (gpt-5-mini judge). Lower=better.')
+def main() -> None:
+    global sel
+    sel = {}          # (cond, guard, chain) -> (ts, dir)   ; guard='none' for floor
+    for d in glob.glob('outputs/autoattack_defense/rejudge/harmbench/*gpt-5-mini*'):
+        r = lj(d + '/results.json')
+        if not r or r.get('asr') is None:
+            continue
+        src = (r.get('upstream_ref') or {}).get('source_dir', '')
+        s = lj(src + '/results.json') or {}
+        if s.get('target_model') != TARGET or s.get('campaign') != CAMPAIGN:
+            continue
+        enc = r.get('encoding')
+        chain = enc if enc in CHAINS else next((c for c in CHAINS if f'_{c}_' in src or src.endswith('/' + c)), None)
+        if chain is None:
+            continue
+        dc = s.get('defense_config') or {}
+        guard = dc.get('guard_model', 'none')
+        defense = r.get('defense') or s.get('defense')
+        reguard = bool(dc.get('reguard_original'))
+        if defense == 'no_defense':
+            cond, gkey = 'floor', 'none'
+        elif defense == 'guard_baseline' and guard in GUARDS:
+            cond, gkey = 'gb', guard
+        elif defense == 'modality_complete' and guard in GUARDS and not reguard \
+                and dc.get('decode_text') is True and dc.get('decode_style') == 'recover':
+            cond, gkey = 'mc', guard
+        elif defense == 'modality_complete' and guard in GUARDS and reguard:
+            cond, gkey = 'mcrg', guard
+        else:
+            continue
+        k = (cond, gkey, chain)
+        t = ts(os.path.basename(d))
+        if k not in sel or t > sel[k][0]:
+            sel[k] = (t, d)
+
+    efloor, pfloor, nfloor = ens('floor', 'none')
+    print(f'TARGET={TARGET}  campaign={CAMPAIGN}')
+    print(f'FLOOR (no_defense) ensemble ASR: {efloor:.0f}%   (n attacks={nfloor})')
+    print()
+    print(f'{"guard":22}{"gb":>6}{"mc":>6}{"mc+rg":>7}   code_attack cov gb/mc/mcrg   n(gb/mc/mcrg)')
+    print('-' * 92)
+    for g in GUARDS:
+        egb, pgb, ngb = ens('gb', g)
+        emc, pmc, nmc = ens('mc', g)
+        erg, prg, nrg = ens('mcrg', g)
+        code = '%.0f/%.0f/%.0f' % (pgb.get('code_attack', -1), pmc.get('code_attack', -1), prg.get('code_attack', -1))
+        print(f'{g:22}{egb:5.0f}%{emc:5.0f}%{erg:6.0f}%   {code:>22}   {ngb}/{nmc}/{nrg}')
+    print()
+    print('ENSEMBLE = fraction of 100 behaviors broken by ANY of the 11 attacks (gpt-5-mini judge). Lower=better.')
+
+
+if __name__ == "__main__":
+    main()

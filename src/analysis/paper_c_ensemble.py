@@ -10,27 +10,6 @@ def ts(n):
 def lj(p):
     try: return json.load(open(p))
     except: return None
-# gather candidate rejudge dirs -> canonical cell
-cells={}  # (cond, guard, chain) -> (ts, dir)
-for d in glob.glob('outputs/autoattack_defense/rejudge/harmbench/qwen2_5_vl_7b_*_gpt-5-mini_*'):
-    r=lj(os.path.join(d,'results.json'))
-    if not r or r.get('asr') is None: continue
-    defense=r.get('defense'); enc=r.get('encoding'); src=(r.get('upstream_ref') or {}).get('source_dir','')
-    chain=enc if enc in CHAINS else next((c for c in CHAINS if f'_{c}_' in src),None)
-    if chain is None: continue
-    s=lj(os.path.join(src,'results.json')) or {}
-    dc=s.get('defense_config') or {}; guard=dc.get('guard_model','none'); camp=s.get('campaign')
-    dtext=dc.get('decode_text'); dstyle=dc.get('decode_style')
-    if defense=='no_defense' and camp=='paper_c_guard_panel_floor':
-        cond='floor'; g='none'
-    elif defense=='guard_baseline' and camp=='paper_c_guard_panel' and guard in GUARDS:
-        cond='gb'; g=guard
-    elif defense=='modality_complete' and camp=='paper_c_guard_panel' and guard in GUARDS and dtext==True and dstyle=='recover':
-        cond='mc'; g=guard
-    else:
-        continue
-    key=(cond,g,chain); t=ts(os.path.basename(d))
-    if key not in cells or t>cells[key][0]: cells[key]=(t,d)
 def ids(d):
     out={}
     for l in open(os.path.join(d,'raw_results.jsonl')):
@@ -47,22 +26,49 @@ def ensemble(cond,guard):
     ens=100.0*sum(union.values())/len(union) if union else float('nan')
     mean=sum(per)/len(per) if per else float('nan')
     return ens,mean,len(per),len(union),miss
-# checksum + ensemble
-print("=== CHECKSUM: per-attack MEAN (mine vs recorded) ===")
-ok=True
-ens_floor,mean_floor,np_,nid_,miss_=ensemble('floor','none')
-print(f"  floor         mean={mean_floor:5.1f}  recorded=28.0   attacks={np_} ids={nid_} miss={miss_}")
-for g in GUARDS:
-    for cond,lbl in [('gb','gb'),('mc','mc')]:
-        ens,mean,np_,nid_,miss_=ensemble(cond,g)
-        rec=RECORDED.get((g,cond))
-        flag='' if (rec and abs(mean-rec)<=0.6) else '  <-- MISMATCH'
-        if flag: ok=False
-        print(f"  {g:20} {cond}  mean={mean:5.1f}  recorded={rec}  ({np_} attacks, ids={nid_}){flag}")
-print("\nCHECKSUM", "PASS ✅" if ok else "FAIL ❌")
-print("\n=== ENSEMBLE (best-of-N over 11 attacks) ASR — gpt-5-mini VALIDATED ===")
-print(f"  no_defense (floor):  {ens_floor:5.1f}%   (guard-independent)")
-print(f"  {'guard':20} {'gb (guard alone)':>18} {'mc (guard+amplifier)':>22}  {'amplifier Δ':>12}")
-for g in GUARDS:
-    egb,_,_,_,_=ensemble('gb',g); emc,_,_,_,_=ensemble('mc',g)
-    print(f"  {g:20} {egb:17.1f}% {emc:21.1f}%  {emc-egb:11.1f}")
+def main() -> None:
+    global cells
+    # gather candidate rejudge dirs -> canonical cell
+    cells={}  # (cond, guard, chain) -> (ts, dir)
+    for d in glob.glob('outputs/autoattack_defense/rejudge/harmbench/qwen2_5_vl_7b_*_gpt-5-mini_*'):
+        r=lj(os.path.join(d,'results.json'))
+        if not r or r.get('asr') is None: continue
+        defense=r.get('defense'); enc=r.get('encoding'); src=(r.get('upstream_ref') or {}).get('source_dir','')
+        chain=enc if enc in CHAINS else next((c for c in CHAINS if f'_{c}_' in src),None)
+        if chain is None: continue
+        s=lj(os.path.join(src,'results.json')) or {}
+        dc=s.get('defense_config') or {}; guard=dc.get('guard_model','none'); camp=s.get('campaign')
+        dtext=dc.get('decode_text'); dstyle=dc.get('decode_style')
+        if defense=='no_defense' and camp=='paper_c_guard_panel_floor':
+            cond='floor'; g='none'
+        elif defense=='guard_baseline' and camp=='paper_c_guard_panel' and guard in GUARDS:
+            cond='gb'; g=guard
+        elif defense=='modality_complete' and camp=='paper_c_guard_panel' and guard in GUARDS and dtext==True and dstyle=='recover':
+            cond='mc'; g=guard
+        else:
+            continue
+        key=(cond,g,chain); t=ts(os.path.basename(d))
+        if key not in cells or t>cells[key][0]: cells[key]=(t,d)
+    # checksum + ensemble
+    print("=== CHECKSUM: per-attack MEAN (mine vs recorded) ===")
+    ok=True
+    ens_floor,mean_floor,np_,nid_,miss_=ensemble('floor','none')
+    print(f"  floor         mean={mean_floor:5.1f}  recorded=28.0   attacks={np_} ids={nid_} miss={miss_}")
+    for g in GUARDS:
+        for cond,lbl in [('gb','gb'),('mc','mc')]:
+            ens,mean,np_,nid_,miss_=ensemble(cond,g)
+            rec=RECORDED.get((g,cond))
+            flag='' if (rec and abs(mean-rec)<=0.6) else '  <-- MISMATCH'
+            if flag: ok=False
+            print(f"  {g:20} {cond}  mean={mean:5.1f}  recorded={rec}  ({np_} attacks, ids={nid_}){flag}")
+    print("\nCHECKSUM", "PASS ✅" if ok else "FAIL ❌")
+    print("\n=== ENSEMBLE (best-of-N over 11 attacks) ASR — gpt-5-mini VALIDATED ===")
+    print(f"  no_defense (floor):  {ens_floor:5.1f}%   (guard-independent)")
+    print(f"  {'guard':20} {'gb (guard alone)':>18} {'mc (guard+amplifier)':>22}  {'amplifier Δ':>12}")
+    for g in GUARDS:
+        egb,_,_,_,_=ensemble('gb',g); emc,_,_,_,_=ensemble('mc',g)
+        print(f"  {g:20} {egb:17.1f}% {emc:21.1f}%  {emc-egb:11.1f}")
+
+
+if __name__ == "__main__":
+    main()
