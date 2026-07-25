@@ -12,7 +12,15 @@ from math import comb
 CHAINS = ['llm_set_theory', 'llm_formal_logic', 'llm_classical_language', 'non_llm_cipher',
           'code_attack', 'ir_figstep', 'ir_fc_flowchart', 'ir_low_contrast', 'ir_occluded',
           'ir_mm_typo', 'ir_distraction_grid']
-GUARDS = ['wildguard', 'qwen3guard_gen_8b', 'guardreasoner_vl_7b']
+GUARDS = ['wildguard', 'llama_guard_3_8b', 'qwen3guard_gen_8b', 'thinkguard',
+          'guardreasoner_vl_7b']
+
+# Bootstrap over BEHAVIORS (review-6 con 7 asks for "variation over prompts …
+# samples"). Resampling the 100 behaviors with replacement gives an uncertainty
+# that makes no normal-approximation assumption, unlike the Wilson interval, and
+# it is the right unit: the ensemble flag is defined per behavior.
+BOOTSTRAP_N = 10000
+BOOTSTRAP_SEED = 20260725      # fixed so the reported interval is reproducible
 
 
 def lj(p):
@@ -76,6 +84,18 @@ def build(target):
         reg = bool(dc.get('reguard_original'))
         panel = 'paper_c_gen2_internvl3' if target == 'internvl3_8b' else 'paper_c_guard_panel'
         rgcamp = 'paper_c_gen2_internvl3' if target == 'internvl3_8b' else 'paper_c_reguard_ablation'
+        floorcamp = ('paper_c_gen2_internvl3' if target == 'internvl3_8b'
+                     else 'paper_c_guard_panel_floor')
+        # The undefended floor is guard-independent, but every contrast against
+        # it is paired per behavior, so it is stored under each guard's key to
+        # keep the downstream lookup uniform.
+        if camp == floorcamp and r.get('defense') == 'no_defense':
+            for g in GUARDS:
+                k0 = ('floor', g, chain)
+                t0 = ts(os.path.basename(d))
+                if k0 not in sel or t0 > sel[k0][0]:
+                    sel[k0] = (t0, d)
+            continue
         if camp == panel and r.get('defense') == 'guard_baseline' and guard in GUARDS:
             cond = 'gb'
         elif camp == panel and r.get('defense') == 'modality_complete' and guard in GUARDS and not reg \
@@ -103,25 +123,90 @@ def ens_flags(sel, cond, g):
     return u
 
 
+def bootstrap_ci(flags_by_id, n_boot=BOOTSTRAP_N, seed=BOOTSTRAP_SEED, alpha=0.05):
+    """Percentile CI for an ensemble rate, resampling BEHAVIORS with replacement."""
+    import random
+    vals = [1 if v else 0 for v in flags_by_id.values()]
+    n = len(vals)
+    if n == 0:
+        return (0.0, 0.0)
+    rng = random.Random(seed)
+    rates = []
+    for _ in range(n_boot):
+        rates.append(sum(vals[rng.randrange(n)] for _ in range(n)) / n)
+    rates.sort()
+    return (100 * rates[int(alpha / 2 * n_boot)],
+            100 * rates[min(n_boot - 1, int((1 - alpha / 2) * n_boot))])
+
+
+def contrast(fa, fb):
+    """Paired discordant counts + exact McNemar p for ensemble flags A vs B.
+
+    Returns (b, c, p) where b = broken under A but NOT B (the contrast's gain)
+    and c = broken under B but not A (its cost). Reporting b and c — not just p —
+    is the point: review-6 con 7 says the paper "does not provide the paired
+    contingency counts needed to assess why some contrasts are significant and
+    others are not". They were computed all along and simply not printed.
+    """
+    ids = set(fa) & set(fb)
+    b = sum(1 for i in ids if fa[i] and not fb[i])
+    c = sum(1 for i in ids if fb[i] and not fa[i])
+    return b, c, mcnemar_exact(b, c)
+
+
 def main() -> None:
     for target in ['qwen2_5_vl_7b', 'internvl3_8b']:
         sel = build(target)
-        print(f'\n=== {target} — ensemble ASR with Wilson 95% CI + paired McNemar ===')
-        print(f'{"guard":16}{"gb [CI]":>18}{"mc [CI]":>18}{"+rg [CI]":>18}   gb>mc p    mc>+rg p')
+        print(f'\n{"=" * 104}')
+        print(f'=== {target} — ensemble ASR: Wilson + behavior-bootstrap CIs ===')
+        print(f'{"guard":20}{"floor":>16}{"gb":>16}{"mc":>16}{"+rg":>16}'
+              f'   (rate [Wilson] {{bootstrap}})')
+        any_row = False
         for g in GUARDS:
-            fg = {c: ens_flags(sel, c, g) for c in ['gb', 'mc', 'mcrg']}
-            n = len(fg['gb']) or 100
+            fg = {c: ens_flags(sel, c, g) for c in ['floor', 'gb', 'mc', 'mcrg']}
+            if not fg['gb']:
+                continue
+            any_row = True
             cells = {}
-            for c in ['gb', 'mc', 'mcrg']:
+            for c in ['floor', 'gb', 'mc', 'mcrg']:
+                n = len(fg[c])
+                if not n:
+                    cells[c] = '—'
+                    continue
                 k = sum(fg[c].values())
-                lo, hi = wilson(k, len(fg[c]) or 100)
-                cells[c] = f'{100*k/(len(fg[c]) or 100):.0f} [{lo:.0f}-{hi:.0f}]'
-            ids = set(fg['gb']) & set(fg['mc']) & set(fg['mcrg'])
-            b1 = sum(1 for i in ids if fg['gb'][i] and not fg['mc'][i]); c1 = sum(1 for i in ids if fg['mc'][i] and not fg['gb'][i])
-            b2 = sum(1 for i in ids if fg['mc'][i] and not fg['mcrg'][i]); c2 = sum(1 for i in ids if fg['mcrg'][i] and not fg['mc'][i])
-            p1 = mcnemar_exact(b1, c1); p2 = mcnemar_exact(b2, c2)
-            print(f'{g:16}{cells["gb"]:>18}{cells["mc"]:>18}{cells["mcrg"]:>18}   {p1:.1e}   {p2:.1e}')
-    print('\nWilson CI = 95%; McNemar = exact two-sided on paired (same-100-prompt) ensemble flags. n=100.')
+                lo, hi = wilson(k, n)
+                blo, bhi = bootstrap_ci(fg[c])
+                cells[c] = f'{100*k/n:.0f} [{lo:.0f}-{hi:.0f}] {{{blo:.0f}-{bhi:.0f}}}'
+            print(f'{g:20}' + ''.join(f'{cells[c]:>16}'
+                                      for c in ['floor', 'gb', 'mc', 'mcrg']))
+        if not any_row:
+            continue
+
+        print(f'\n--- PAIRED CONTINGENCY COUNTS (con 7 asked for these explicitly) ---')
+        print(f'{"guard":20}{"contrast":14}{"b = A-only":>12}{"c = B-only":>12}'
+              f'{"discordant":>12}{"McNemar p":>12}   reading')
+        for g in GUARDS:
+            fg = {c: ens_flags(sel, c, g) for c in ['floor', 'gb', 'mc', 'mcrg']}
+            if not fg['gb']:
+                continue
+            for name, a, b_ in [('floor->gb', 'floor', 'gb'),
+                                ('gb->mc', 'gb', 'mc'),
+                                ('mc->+rg', 'mc', 'mcrg')]:
+                if not fg[a] or not fg[b_]:
+                    continue
+                bb, cc, p = contrast(fg[a], fg[b_])
+                # A contrast can only be resolved by the behaviors that DISAGREE;
+                # a small discordant total is why some contrasts miss significance
+                # despite a visible rate gap. That is the reviewer's question.
+                note = ('significant' if p < 0.05 else
+                        f'n.s. — only {bb + cc} discordant behaviors')
+                print(f'{g:20}{name:14}{bb:>12}{cc:>12}{bb + cc:>12}{p:>12.1e}   {note}')
+
+    print(f'\nWilson = normal-approx 95%; {{bootstrap}} = percentile 95% over '
+          f'{BOOTSTRAP_N} resamples of the 100 BEHAVIORS (seed {BOOTSTRAP_SEED}).')
+    print('McNemar = exact two-sided on paired same-behavior ensemble flags. '
+          'b = broken under A only, c = broken under B only;')
+    print('only discordant behaviors carry information about the contrast.')
 
 
 if __name__ == "__main__":
