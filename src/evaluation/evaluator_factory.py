@@ -27,12 +27,12 @@ class EvaluatorFactory:
     """
     Factory for creating canonical benchmark evaluators.
 
-    Each evaluator hard-binds its own canonical judge model via its own
-    `constants.py`. The factory does NOT accept a `model` argument — passing one
-    would be a methodological error (e.g. using a generic GPT judge for HarmBench
-    prompts). Extra kwargs flow through to the LLM service for non-canonical
-    settings (timeouts, retries) but `model`, `temperature`, and `max_tokens` are
-    stripped inside each evaluator.
+    The judge model is CALLER-INJECTED: task.py::_resolve_evaluators passes
+    `model=judge_model` (resolved from conf/evaluation/default.yaml, or the
+    task's judge override) into every evaluator constructor. Evaluators do not
+    hard-bind a judge — the explicit-model contract (see
+    src/evaluation/constants.py) is what lets the rejudge mode re-score saved
+    responses under a different judge without re-querying the target.
 
     Prefer `create_from_benchmark(benchmark)` — it returns the full canonical
     set of evaluators for that dataset (one or two), driven by `_infer_benchmark`
@@ -93,8 +93,8 @@ class EvaluatorFactory:
 
         Args:
             method: Evaluation method ('harmbench', 'jailbreakbench', 'jbb_refusal', 'orbench').
-            **kwargs: Forwarded to the evaluator; canonical params (model, temperature,
-                max_tokens) are ignored inside the evaluator and replaced with constants.
+            **kwargs: Forwarded to the evaluator's constructor (including the
+                explicit `model=` judge — see the class docstring).
 
         Returns:
             An instance of a class inheriting from BaseEvaluator.
@@ -152,8 +152,9 @@ def judge_methods_for_benchmark(benchmark: str) -> list[str]:
     """List the canonical judge_method names a given benchmark uses.
 
     Returns names compatible with `_judge_model_for_method` in experiment.py
-    (which maps them to LLMModel instances via each evaluator's
-    constants.JUDGE_MODEL).
+    (which resolves each method's judge LLM from
+    conf/evaluation/default.yaml::judge_llm_config, or the task override —
+    there is no per-evaluator JUDGE_MODEL constant).
 
     Raises:
         ValueError: If the benchmark is unknown.

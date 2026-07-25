@@ -8,13 +8,15 @@ class BaseEvaluator(ABC):
     """
     Abstract base class for evaluators.
 
-    Concrete evaluators (HarmBench, JailbreakBench, ORBench, JBB-Refusal) hard-bind
-    their canonical judge model in their own `constants.py` and do NOT accept a
-    `model` argument from the caller. This prevents methodologically incorrect
-    judge substitutions (e.g. using a generic GPT model as the HarmBench judge).
-
-    The base accepts a `model` parameter only for the abstract API; subclasses
-    ignore it and assign their own model in `__init__`.
+    Concrete evaluators (HarmBench, JailbreakBench, ORBench, JBB-Refusal) take
+    the judge model as an EXPLICIT constructor argument — there is no hard-bound
+    per-evaluator judge constant. In production, task.py::_resolve_evaluators
+    injects the project judge (conf/evaluation/default.yaml, currently
+    gpt-5-mini) via EvaluatorFactory.create_from_benchmark(benchmark,
+    model=judge_model, ...). This caller-injection is deliberate: it is what
+    lets the rejudge mode swap judges over saved responses without re-querying
+    the target. Judge choice is a methodology decision made at the config
+    layer, not inside evaluator classes.
     """
 
     def __init__(self, model: Optional[LLMModel] = None, **kwargs):
