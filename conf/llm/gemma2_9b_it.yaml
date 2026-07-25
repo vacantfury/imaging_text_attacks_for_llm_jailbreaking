@@ -4,8 +4,21 @@
 # that exceed 8192 tokens are excluded via is_correctly_processed (same as the
 # _defaults overflow handling), not a crash. 9B @ bf16 ≈ 18 GB fits one GPU on
 # the shared defaults (no fp8). Text-only target — no trust_remote_code / mm flags.
+#
+# max_tokens MUST be capped alongside max_model_len. vLLM rejects any request with
+# max_tokens > max_model_len (HTTP 400), and conf/llm/default.yaml sets max_tokens=16384
+# for the 20480-window targets. Without this override EVERY Gemma call 400s and the
+# judge scores the error string as "not harmful" -> a silent, fully-fake ASR 0.00
+# (this is exactly what happened to all 6 Gemma cells of round 174759, 2026-07-21..24).
+# 4096 is data-derived, not a guess: the longest CodeAttack prompt in the Paper-1 suite
+# is ~3.6k tokens, so 3637+4096=7733 < 8192 fits worst case; and 4096 covers the p95 of
+# observed response lengths on Llama/Qwen (~4.0k tokens). CAVEAT for the paper: Gemma
+# therefore gets a 4096-token generation budget vs 16384 for Llama/Qwen -- the >4096 tail
+# on those targets is dominated by degenerate repetition, but the asymmetry is real and
+# belongs in Limitations. Retune if the attack suite gains longer prompts.
 model:
   model: google/gemma-2-9b-it
+  max_tokens: 4096
 
 cluster:
   max_model_len: 8192
