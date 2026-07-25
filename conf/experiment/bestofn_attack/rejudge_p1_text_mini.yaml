@@ -1,0 +1,114 @@
+# bestofn_attack Paper-1 — FINAL gpt-5-mini rejudge of the 18-cell text-LLM round.
+#
+# WHY: the round's first-pass judge was wildguard (free, cluster-served). Spot-reading the
+# raw responses on 2026-07-25 showed wildguard flags responses that merely REPRODUCE the
+# request text without fulfilling it — Gemma's no-defense CodeAttack cell "complies" only by
+# rebuilding the deque word by word (my_stack.appendleft("defensive") ...), which is a
+# non-answer under the HarmBench rubric. That is wildguard's documented failure mode in this
+# project (flags intent/strings, not completion; 41-68% FPs on encoding/code attacks), and it
+# also explains the SemanticSmooth outlier: SS paraphrases the prompt, the verbatim scaffold
+# disappears, and the flag rate collapses 68.89% -> 7.37% without any demonstrated defense
+# effect. Echo rate by verdict, gemma code cells: no_defense 100.0/93.6 (harm/safe),
+# SS 22.3/41.4, SAGE 0/0. So the code cells are unusable even directionally under wildguard.
+#
+# gpt-5-mini is this project's DECIDED reportable ASR judge. This pass re-scores the SAVED
+# responses only — no target queries, no vLLM servers, no GPUs.
+#
+# SCOPE: the canonical 18 cells (3 targets x 3 defenses x 2 attacks), pinned 2026-07-25 after
+# quarantining 8 FAKE Gemma cells (10000/10000 responses were the `Error code: 400` string,
+# 255 chars, all reporting ASR 0.00) to outputs/_quarantine/bestofn_p1_fake_400_20260721/.
+# Two accidental duplicates are deliberately NOT rejudged; they are kept as a run-to-run
+# variance datapoint (qwen no-def surf 18.35 vs 18.24; llama sage surf 0.02 vs 0.02).
+#
+# FOOTPRINT (owner-approved 2026-07-25):
+#   Dollar cost  ~$140-170  = 180,000 judge calls x ~$0.0008-0.0009
+#                             (code cells mean 2,981 chars ~745 tok; surface 1,404 ~351 tok;
+#                              + HarmBench rubric ~450 tok in, ~300 tok reasoning out,
+#                              at $0.25/$2.00 per 1M; cross-checks vs this repo's measured
+#                              $47 / 60k calls)
+#   GPU count    0          = rejudge reads saved responses; API judge only
+#   Wall time    ~2-5h      = API-throughput bound
+#   SLURM jobs   1 CPU orchestrator
+#
+# WATCH (memory `project_api_judge_run_gotchas`): the HB evaluator silently scores FAILED API
+# calls as "safe", so a dead account reads as a clean ASR 0.00. The key was verified live on
+# AICR before submit (HTTP 200 + real usage). After the run, grep the log for insufficient_quota
+# / RateLimit and confirm eval_stats.total_evaluated == 10000 in every cell.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/rejudge_p1_text_mini
+num_cluster_jobs: 2          # orchestrator only (gpt-5-mini is API; no vLLM servers)
+num_main_job_threads: 6      # 6 cells in flight; 18 cells => 3 waves, keeps OpenAI rate-limit headroom
+
+tasks:
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_no_defense_code_attack_20260724_234322_38272941
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_no_defense_variance_channel_bon_20260724_234321_44012297
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_sage_code_attack_20260724_234322_54590867
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_sage_variance_channel_bon_20260724_234321_16207029
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_semantic_smooth_code_attack_20260724_234322_25605369
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_semantic_smooth_variance_channel_bon_20260724_234321_79304365
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_no_defense_code_attack_20260723_140429_4154043
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_no_defense_variance_channel_bon_20260721_215736_11417757
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_sage_code_attack_20260721_215738_61347108
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_sage_variance_channel_bon_20260721_215736_42845228
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_semantic_smooth_code_attack_20260723_140429_81506272
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_semantic_smooth_variance_channel_bon_20260723_140428_624958
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_no_defense_code_attack_20260721_215738_81217695
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_no_defense_variance_channel_bon_20260721_215737_89671063
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_sage_code_attack_20260721_215737_69755062
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_sage_variance_channel_bon_20260721_215737_40848037
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_semantic_smooth_code_attack_20260721_215739_97310058
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
+  - mode: rejudge
+    responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_semantic_smooth_variance_channel_bon_20260721_215736_17620558
+    judge_model: gpt-5-mini
+    campaign: bestofn_attack_p1_text_full_mini
