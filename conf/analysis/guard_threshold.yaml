@@ -40,20 +40,40 @@ severity:
 # tier 2 answer the same question at different resolutions.
 # NOTE: every token is QUOTED. YAML 1.1 parses bare `yes`/`no` as booleans, so
 # WildGuard's vocabulary would silently become [True]/[False] and match nothing.
+#
+# ✅ VERIFIED against the 2026-07-25 capture (n=1200/guard) by
+# `check_logprob_agreement.py`, which compares each record's parsed verdict
+# against the P(unsafe) derived here. Observed token streams:
+#   llama_guard_3_8b    "\n\n|safe|<eot>"      -> 100.0% resolved, 100.00% agree
+#   thinkguard          "...|safe|..."          -> 100.0% resolved,  99.33% agree
+#   wildguard           "H|arm|ful| request|:| no" -> 100.0% resolved, 99.17% agree
+#   qwen3guard_gen_8b   "Safety|:| Safe"        -> see the `cont` entry below
+# The residual sub-1% disagreements are knife-edge records (P(unsafe) a hair
+# over 0.50 while greedy decoding picked the safe token) plus three degenerate
+# WildGuard generations that broke its own output format and hit the parser's
+# fail-closed branch — not vocabulary errors. Both are logged in the sweep's
+# provenance rather than silently dropped.
 verdict_tokens:
   llama_guard_3_8b:    {safe: ["safe"], unsafe: ["unsafe"]}
   thinkguard:          {safe: ["safe"], unsafe: ["unsafe"]}
-  qwen3guard_gen_8b:   {safe: ["safe"], unsafe: ["unsafe", "controversial"]}
+  # "Controversial" TOKENIZES AS `Cont` + `roversial` — the spelled-out word
+  # matches nothing, so before `cont` was added here all 220 controversial
+  # records (18% of this guard's data) resolved to None and silently fell back
+  # to the ordinal tier. That is exactly the middle band the sweep exists to
+  # explore, so losing it would have flattened this guard's curve to binary.
+  # `cont` also has to be present for the Safe/Unsafe records: it is a live
+  # alternative in their top_logprobs, and an unlisted alternative is dropped
+  # from the renormalisation denominator, biasing every probability.
+  qwen3guard_gen_8b:   {safe: ["safe"], unsafe: ["unsafe", "controversial", "cont"]}
   wildguard:           {safe: ["no"],   unsafe: ["yes"]}
   guardreasoner_vl_7b: {safe: ["unharmful"], unsafe: ["harmful"]}
-# ⚠️ VERIFY ON THE FIRST REAL CAPTURE (guardreasoner_vl_7b only): matching is on
-# EXACT token text, so "unharmful" != "harmful" — but if the tokenizer splits
-# "unharmful" into "un" + "harmful", the first matching token is "harmful" and
-# the record would be scored unsafe when the guard actually said unharmful. The
-# capture pass persists the raw completion alongside the logprobs precisely so
-# this is checkable: compare the parsed verdict against the derived P(unsafe)
-# and confirm they agree before trusting that guard's continuous curve. The
-# other four guards emit single-word verdicts with no such prefix hazard.
+# ⚠️ STILL UNVERIFIED (guardreasoner_vl_7b): its capture had not finished when
+# the other four were checked. Matching is on EXACT token text, and the
+# WildGuard stream above proves this tokenizer splits "Harmful" into `H|arm|ful`
+# at a sequence start — so "unharmful"/"harmful" will very likely NOT appear as
+# whole tokens either. Re-run `check_logprob_agreement.py` against this guard
+# and set the vocabulary from the token stream it prints (UNRESOLVED heads) —
+# do NOT trust a continuous curve for it until that check reports OK.
 
 # ------------------------------------------------------------------- sweep
 sweep:
