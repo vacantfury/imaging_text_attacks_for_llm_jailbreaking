@@ -64,49 +64,89 @@ def mcnemar_exact(b, c):
     return min(1.0, 2 * p)
 
 
-def build(target):
-    sel = {}
-    for d in glob.glob('outputs/autoattack_defense/rejudge/harmbench/*gpt-5-mini*'):
-        r = lj(d + '/results.json')
+REJUDGE_GLOB = 'outputs/autoattack_defense/rejudge/harmbench/*gpt-5-mini*'
+DIRECT_GLOB = 'outputs/autoattack_defense/defense+evaluate/harmbench/*'
+JUDGE = 'gpt-5-mini'
+
+
+def cells():
+    """Yield (cell_dir, source_results, defense, encoding, match_path) for every
+    gpt-5-mini-judged harmful cell, from BOTH trees that hold them.
+
+    Most cells were rescored by a `rejudge` pass, so reading the rejudge tree
+    alone looks sufficient — but some rounds ran gpt-5-mini as the judge at RUN
+    time and therefore never produced a rejudge dir. That silently dropped the
+    Qwen reguard arm for LlamaGuard-3 and ThinkGuard (campaign
+    paper_c_reguard_5guard, 22 cells, 2026-07-23), which is why the reguard
+    layer appeared to cover 3 of the 5 guards rather than all 5. The data was
+    on disk and judged the whole time; only this glob was too narrow.
+
+    Where BOTH exist for one cell the rejudge wins: it is the deliberate
+    rescoring pass, and the run-time score may predate a judge change.
+    """
+    covered, out = set(), []
+    for d in glob.glob(REJUDGE_GLOB):
+        r = lj(os.path.join(d, 'results.json'))
         if not r or r.get('asr') is None:
             continue
         src = (r.get('upstream_ref') or {}).get('source_dir', '')
-        s = lj(src + '/results.json') or {}
+        s = lj(os.path.join(src, 'results.json'))
+        if not s:
+            continue
+        covered.add(os.path.normpath(src))
+        out.append((d, s, r.get('defense'), r.get('encoding'), src))
+    for d in glob.glob(DIRECT_GLOB):
+        s = lj(os.path.join(d, 'results.json'))
+        if not s or s.get('asr') is None or s.get('judge_model') != JUDGE:
+            continue
+        if os.path.normpath(d) in covered:
+            continue
+        out.append((d, s, s.get('defense'), s.get('encoding'), d))
+    return out
+
+
+def build(target):
+    if target == 'internvl3_8b':
+        panels = rgcamps = floorcamps = {'paper_c_gen2_internvl3'}
+    else:
+        panels = {'paper_c_guard_panel'}
+        # Two campaigns carry the reguard arm: the original 3-guard ablation and
+        # the later 5-guard completion. Both are the same condition.
+        rgcamps = {'paper_c_reguard_ablation', 'paper_c_reguard_5guard'}
+        floorcamps = {'paper_c_guard_panel_floor'}
+
+    sel = {}
+    for d, s, defense, enc, mpath in cells():
         if s.get('target_model') != target:
             continue
-        enc = r.get('encoding')
-        chain = enc if enc in CHAINS else next((c for c in CHAINS if f'_{c}_' in src or src.endswith('/' + c)), None)
+        chain = enc if enc in CHAINS else next(
+            (c for c in CHAINS if f'_{c}_' in mpath or mpath.endswith('/' + c)), None)
         if chain is None:
             continue
         dc = s.get('defense_config') or {}
         guard = dc.get('guard_model', 'none')
         camp = s.get('campaign')
         reg = bool(dc.get('reguard_original'))
-        panel = 'paper_c_gen2_internvl3' if target == 'internvl3_8b' else 'paper_c_guard_panel'
-        rgcamp = 'paper_c_gen2_internvl3' if target == 'internvl3_8b' else 'paper_c_reguard_ablation'
-        floorcamp = ('paper_c_gen2_internvl3' if target == 'internvl3_8b'
-                     else 'paper_c_guard_panel_floor')
+        t = ts(os.path.basename(d))
         # The undefended floor is guard-independent, but every contrast against
         # it is paired per behavior, so it is stored under each guard's key to
         # keep the downstream lookup uniform.
-        if camp == floorcamp and r.get('defense') == 'no_defense':
+        if camp in floorcamps and defense == 'no_defense':
             for g in GUARDS:
                 k0 = ('floor', g, chain)
-                t0 = ts(os.path.basename(d))
-                if k0 not in sel or t0 > sel[k0][0]:
-                    sel[k0] = (t0, d)
+                if k0 not in sel or t > sel[k0][0]:
+                    sel[k0] = (t, d)
             continue
-        if camp == panel and r.get('defense') == 'guard_baseline' and guard in GUARDS:
+        if camp in panels and defense == 'guard_baseline' and guard in GUARDS:
             cond = 'gb'
-        elif camp == panel and r.get('defense') == 'modality_complete' and guard in GUARDS and not reg \
+        elif camp in panels and defense == 'modality_complete' and guard in GUARDS and not reg \
                 and dc.get('decode_text') is True and dc.get('decode_style') == 'recover':
             cond = 'mc'
-        elif camp == rgcamp and guard in GUARDS and reg:
+        elif camp in rgcamps and guard in GUARDS and reg:
             cond = 'mcrg'
         else:
             continue
         k = (cond, guard, chain)
-        t = ts(os.path.basename(d))
         if k not in sel or t > sel[k][0]:
             sel[k] = (t, d)
     return sel
@@ -154,9 +194,35 @@ def contrast(fa, fb):
     return b, c, mcnemar_exact(b, c)
 
 
+def coverage(sel) -> list[str]:
+    """Report chains present per (condition, guard) so a missing arm is LOUD.
+
+    Written after a silent one: 22 Qwen reguard cells sat on disk, judged, and
+    were invisible because build() read only the rejudge tree — so the reguard
+    layer looked like a 3-guard result when it was a 5-guard one. A contrast
+    that is absent and a contrast that is non-significant read identically in
+    the table below, which is exactly the confusion that hid it. Anything short
+    of the full 11-chain suite is now printed, and a fully absent arm is named.
+    """
+    lines = []
+    for cond in ['floor', 'gb', 'mc', 'mcrg']:
+        for g in GUARDS:
+            n = sum(1 for c in CHAINS if (cond, g, c) in sel)
+            if n == len(CHAINS):
+                continue
+            lines.append(f'  {cond:6}{g:22}{n:>3}/{len(CHAINS)} chains'
+                         + ('   <-- ARM ABSENT' if n == 0 else '   <-- PARTIAL'))
+    return lines
+
+
 def main() -> None:
     for target in ['qwen2_5_vl_7b', 'internvl3_8b']:
         sel = build(target)
+        gaps = coverage(sel)
+        if gaps:
+            print(f'\n### {target}: INCOMPLETE CELLS (contrasts below are missing, '
+                  f'not non-significant) ###')
+            print('\n'.join(gaps))
         print(f'\n{"=" * 104}')
         print(f'=== {target} — ensemble ASR: Wilson + behavior-bootstrap CIs ===')
         print(f'{"guard":20}{"floor":>16}{"gb":>16}{"mc":>16}{"+rg":>16}'
