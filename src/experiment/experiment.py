@@ -282,15 +282,23 @@ class Experiment:
 
         return _deep_merge(base, per_model)
 
-    def _count_existing_slurm_jobs(self) -> int:
-        """Count this user's existing SLURM jobs that count against the QOS budget.
+    def _count_existing_gpu_jobs(self) -> int:
+        """Count this user's existing GPU-holding SLURM jobs.
 
-        Used as a pre-flight check before submitting vLLM server jobs, so we
-        don't over-submit when the user already has unrelated jobs queued
-        (HF downloads, prior experiments, etc.).
+        The binding limit is on GPUs, not on jobs. NURC's `gpu` PARTITION
+        enforces the `gpu` QOS (MaxJobsPU=4, MaxTRESPU=gres/gpu=4) even though
+        jobs report QOS `normal`; AICR's `rtx-batch` allows gres/gpu=32. So the
+        pre-flight must compare GPU jobs against a GPU cap.
 
-        Excludes the orchestrator's own job (if running under SLURM, identified
-        via SLURM_JOB_ID) — that one is what we're sitting in.
+        Counting *every* job (the old behaviour) was wrong in both directions:
+        it charged CPU-only jobs — including this orchestrator and unrelated
+        `mj` runs — against a GPU quota (which crippled legitimate submissions
+        on AICR), while letting a 5th GPU server through on NURC where only 4
+        fit. A server left PENDING deadlocks the run, because the orchestrator
+        waits for one endpoint per model.
+
+        Excludes the orchestrator's own job (via SLURM_JOB_ID) and any job that
+        requests no GRES.
         """
         import os
         import subprocess
@@ -300,7 +308,7 @@ class Experiment:
             return 0
         try:
             result = subprocess.run(
-                ["squeue", "-u", user, "-h", "-o", "%i"],
+                ["squeue", "-u", user, "-h", "-o", "%i|%b"],
                 capture_output=True, text=True, timeout=15)
         except (subprocess.TimeoutExpired, FileNotFoundError):
             logger.debug("squeue unavailable; skipping pre-flight budget check.")
@@ -308,10 +316,18 @@ class Experiment:
         if result.returncode != 0:
             return 0
         own_job = os.environ.get("SLURM_JOB_ID")
-        job_ids = [line.strip() for line in result.stdout.splitlines() if line.strip()]
-        if own_job:
-            job_ids = [j for j in job_ids if j != own_job]
-        return len(job_ids)
+        n = 0
+        for line in result.stdout.splitlines():
+            if not line.strip():
+                continue
+            job_id, _, tres = line.partition("|")
+            job_id = job_id.strip()
+            if own_job and job_id == own_job:
+                continue
+            # `%b` is TRES_PER_NODE: "gres/gpu:1" for GPU jobs, "N/A" for CPU-only.
+            if "gpu" in tres.lower():
+                n += 1
+        return n
 
     def _wait_for_servers_parallel(self, models: list) -> set:
         """Wait for the first server of each model to come up, in parallel.
@@ -379,37 +395,34 @@ class Experiment:
         cluster_models_sorted = sorted(cluster_models, key=lambda m: m.model_id)
         model_configs = {m: self._load_cluster_config(m) for m in cluster_models_sorted}
 
-        # Per-cluster QOS submit cap (conf/clusters/<profile>.yaml::max_submit);
-        # MAX_SUBMIT_JOBS_PER_USER stays as the fail-safe fallback.
+        # Per-cluster GPU-server cap (conf/clusters/<profile>.yaml::max_gpu_jobs,
+        # falling back to ::budget). This is a GPU quota, NOT a job quota — see
+        # _count_existing_gpu_jobs. MAX_SUBMIT_JOBS_PER_USER is the fail-safe.
         import os
         from .config import load_cluster_profile
         profile = os.environ.get("CLUSTER_PROFILE", "").strip() or "nurc"
         try:
-            cluster_max_submit = int(load_cluster_profile(profile, self.conf_dir)
-                                     .get("max_submit", MAX_SUBMIT_JOBS_PER_USER))
+            _prof = load_cluster_profile(profile, self.conf_dir)
+            gpu_cap = int(_prof.get("max_gpu_jobs",
+                                    _prof.get("budget", MAX_SUBMIT_JOBS_PER_USER)))
         except Exception:
-            cluster_max_submit = MAX_SUBMIT_JOBS_PER_USER
+            gpu_cap = MAX_SUBMIT_JOBS_PER_USER
 
-        # Pre-flight: account for any existing user SLURM jobs against QOS budget.
-        existing = self._count_existing_slurm_jobs()
-        if existing:
-            effective_budget = min(
-                self.num_cluster_jobs, cluster_max_submit - existing
-            )
-            logger.warning(
-                f"Pre-flight: user has {existing} existing SLURM job(s). "
-                f"Effective budget = min(num_cluster_jobs={self.num_cluster_jobs}, "
-                f"MAX={cluster_max_submit} - existing={existing}) "
-                f"= {effective_budget}")
-        else:
-            effective_budget = self.num_cluster_jobs
-
-        available_slots = effective_budget - 1  # 1 reserved for orchestrator
+        # The orchestrator itself holds no GPU (it runs on a CPU partition), so
+        # it is NOT charged against the GPU cap. `num_cluster_jobs` keeps its
+        # historical meaning — orchestrator + servers — hence the -1 here.
+        servers_wanted = self.num_cluster_jobs - 1
+        existing = self._count_existing_gpu_jobs()
+        available_slots = min(servers_wanted, gpu_cap - existing)
+        logger.info(
+            f"Pre-flight [{profile}]: gpu_cap={gpu_cap}, existing GPU jobs={existing}, "
+            f"servers_wanted={servers_wanted} -> available_slots={available_slots}")
         if available_slots < 1:
             raise RuntimeError(
-                f"No SLURM slots available after pre-flight: existing={existing}, "
-                f"num_cluster_jobs={self.num_cluster_jobs}, "
-                f"effective_budget={effective_budget}. Aborting before submission.")
+                f"No GPU slots available after pre-flight on '{profile}': "
+                f"existing GPU jobs={existing}, gpu_cap={gpu_cap}, "
+                f"num_cluster_jobs={self.num_cluster_jobs}. "
+                f"Aborting before submission (a PENDING server would deadlock the run).")
 
         # Cap num_instances proportionally if over budget — but never promote.
         requested = {m: cfg.get("num_instances", 1) for m, cfg in model_configs.items()}

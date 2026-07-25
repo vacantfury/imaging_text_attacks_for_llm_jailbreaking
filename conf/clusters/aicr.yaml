@@ -4,7 +4,13 @@
 cluster:
   # --- dispatch / limits ---
   sbatch: scripts/run_experiment_aicr.sbatch
-  budget: 7                                 # concurrent vLLM servers (gres/gpu=32/user, code cap 8 -> ~7)
+  budget: 7                                 # concurrent vLLM servers (multi_cluster placement)
+  # GPU quota, measured 2026-07-25: rtx-batch QOS allows MaxTRESPU=gres/gpu=32
+  # per user and sets NO per-user job cap — far looser than NURC. 12 leaves a
+  # wide margin under the 32 ceiling while still letting a 4-server round start
+  # alongside an unrelated 5-server run (the exact case that the old
+  # `max_submit - all_jobs` arithmetic wrongly reduced to a single server).
+  max_gpu_jobs: 12
   max_submit: 8
   max_slurm_time_limit: "24:00:00"          # AICR batch allows 24h (raises the old NURC-derived 8h clamp)
   # --- AICR-specific server params (rest inherit _defaults.yaml) ---

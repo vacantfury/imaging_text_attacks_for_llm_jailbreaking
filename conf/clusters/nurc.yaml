@@ -7,6 +7,13 @@ cluster:
   # --- dispatch / limits (read by multi_cluster.load_pool + the job-budget caps) ---
   sbatch: scripts/run_experiment.sbatch     # orchestrator wrapper for this cluster
   budget: 4                                 # max concurrent vLLM servers (QOS MaxJobsPU=4)
+  # The BINDING limit is on GPUs, not jobs. Jobs here report QOS `normal` (no
+  # limits), but the `gpu` PARTITION enforces the `gpu` QOS. Measured 2026-07-25:
+  #   sacctmgr show qos -> gpu | MaxJobsPU=4 | MaxTRESPU=gres/gpu=4
+  # A 5th GPU server therefore sits PENDING with QOSMaxJobsPerUserLimit, which
+  # DEADLOCKS the orchestrator (it waits for one endpoint per model). The CPU
+  # orchestrator (partition `short`) does not count against this.
+  max_gpu_jobs: 4
   max_submit: 8                             # QOS MaxSubmitPU (running + pending)
   max_slurm_time_limit: "08:00:00"          # gpu-partition QOS wall cap (clamps server time_limit)
   # --- NURC-specific server params (rest inherit _defaults.yaml) ---
