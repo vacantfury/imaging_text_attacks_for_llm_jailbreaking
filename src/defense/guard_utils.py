@@ -282,6 +282,54 @@ def format_wildguard_input(prompt_text: str, response_text: str = "") -> str:
 # query_guard — the single entry point.
 # ============================================================================
 
+def _build_guard_conversations(
+    guard_model: LLMModel,
+    items: list[tuple[str, str, Optional[object]]],
+) -> tuple[list[tuple[str, list]], Optional[str]]:
+    """Per-family input formatting, shared by every query_guard* entry point.
+
+    Extracted so the verdict-only, verbose, and scored paths cannot drift: a
+    guard's prompt formatting is provenance-critical (see the module
+    docstring), and two copies of it would eventually disagree.
+
+    Returns:
+        (conversations, system_message_or_None)
+    """
+    system_message: Optional[str] = None
+    conversations: list[tuple[str, list]] = []
+
+    if guard_model in (
+        LLMModel.LLAMA_GUARD_3_8B, LLMModel.LLAMA_GUARD_4_12B,
+        LLMModel.QWEN3GUARD_GEN_8B, LLMModel.THINKGUARD,
+    ):
+        # Raw content verbatim — the model's own tokenizer chat template
+        # applies the safety-taxonomy wrap. No system message. Qwen3Guard-Gen
+        # wraps a single user turn -> "Safety: ..."; ThinkGuard inherits
+        # Llama-Guard-3's baked-in S1-S14 taxonomy chat template (confirmed via
+        # its HF tokenizer_config.json). Both are text-only (TEXT_ONLY_GUARDS),
+        # so `image` is already None here.
+        for cid, text, image in items:
+            conversations.append((cid, [(text, image)]))
+    elif guard_model == LLMModel.GUARDREASONER_VL_7B:
+        system_message = GUARDREASONER_VL_SYSTEM_PROMPT
+        for cid, text, image in items:
+            wrapped = format_guardreasoner_vl_input(text)
+            conversations.append((cid, [(wrapped, image)]))
+    elif guard_model == LLMModel.WILDGUARD:
+        # Text-only; the full formatted template IS the single message, no
+        # separate system message (passthrough decoding).
+        for cid, text, _image in items:
+            wrapped = format_wildguard_input(text)
+            conversations.append((cid, [(wrapped, None)]))
+    else:
+        raise ValueError(
+            f"query_guard: no input-formatting rule for guard model "
+            f"{guard_model!r}. Known guards: "
+            f"{sorted(m.name for m in PARSERS)}")
+
+    return conversations, system_message
+
+
 def query_guard_verbose(
     guard_service: BaseLLMService,
     guard_model: LLMModel,
@@ -317,37 +365,8 @@ def query_guard_verbose(
         Fails closed (see each parser).
     """
     parser = _parser_for(guard_model)
-    system_message: Optional[str] = None
-    conversations: list[tuple[str, list]] = []
-
-    if guard_model in (
-        LLMModel.LLAMA_GUARD_3_8B, LLMModel.LLAMA_GUARD_4_12B,
-        LLMModel.QWEN3GUARD_GEN_8B, LLMModel.THINKGUARD,
-    ):
-        # Raw content verbatim — the model's own tokenizer chat template
-        # applies the safety-taxonomy wrap. No system message. Qwen3Guard-Gen
-        # wraps a single user turn -> "Safety: ..."; ThinkGuard inherits
-        # Llama-Guard-3's baked-in S1-S14 taxonomy chat template (confirmed via
-        # its HF tokenizer_config.json). Both are text-only (TEXT_ONLY_GUARDS),
-        # so `image` is already None here.
-        for cid, text, image in items:
-            conversations.append((cid, [(text, image)]))
-    elif guard_model == LLMModel.GUARDREASONER_VL_7B:
-        system_message = GUARDREASONER_VL_SYSTEM_PROMPT
-        for cid, text, image in items:
-            wrapped = format_guardreasoner_vl_input(text)
-            conversations.append((cid, [(wrapped, image)]))
-    elif guard_model == LLMModel.WILDGUARD:
-        # Text-only; the full formatted template IS the single message, no
-        # separate system message (passthrough decoding).
-        for cid, text, _image in items:
-            wrapped = format_wildguard_input(text)
-            conversations.append((cid, [(wrapped, None)]))
-    else:
-        raise ValueError(
-            f"query_guard: no input-formatting rule for guard model "
-            f"{guard_model!r}. Known guards: "
-            f"{sorted(m.name for m in PARSERS)}")
+    conversations, system_message = _build_guard_conversations(
+        guard_model, items)
 
     logger.info(
         f"query_guard: {guard_model.model_id} — {len(conversations)} verdicts")
@@ -357,6 +376,55 @@ def query_guard_verbose(
         is_test=is_test,
     )
     return {cid: (parser(text), text) for cid, text in results}
+
+
+def query_guard_scored(
+    guard_service: BaseLLMService,
+    guard_model: LLMModel,
+    items: list[tuple[str, str, Optional[object]]],
+    is_test: bool = True,
+    top_logprobs: int = 5,
+) -> dict[str, tuple[bool, str, Optional[dict]]]:
+    """Capture pass for the threshold sweep: verdict + raw + token logprobs.
+
+    Deliberately captures the logprob payload VERBATIM rather than reducing it
+    to a score here. Turning tokens into P(unsafe) is an analysis decision (which
+    token is the verdict, which alternatives count as unsafe) that we may want to
+    revise — and revising it must never require re-running the guards. So the
+    capture pass stores the raw evidence and
+    `src/analysis/guard_threshold.verdict_probability` interprets it offline.
+
+    Requires a serving route that exposes logprobs (the vLLM/OpenAI-compatible
+    cluster path — `llm_utils>=3.1.0`). Anthropic and Google do not expose them
+    at all, so those services raise NotImplementedError by design; callers should
+    fall back to `query_guard_verbose` (tier 1, ordinal) there.
+
+    Returns:
+        dict id -> (verdict, raw_completion, logprobs_or_None). verdict
+        True = UNSAFE, parsed exactly as in production so the sweep's binary
+        point reproduces the reported numbers.
+    """
+    parser = _parser_for(guard_model)
+    conversations, system_message = _build_guard_conversations(guard_model, items)
+
+    logger.info(
+        f"query_guard_scored: {guard_model.model_id} — {len(conversations)} "
+        f"verdicts with top_logprobs={top_logprobs}")
+    results = guard_service.batch_chat_with_logprobs(
+        conversations=conversations,
+        system_message=system_message,
+        is_test=is_test,
+        top_logprobs=top_logprobs,
+    )
+    out: dict[str, tuple[bool, str, Optional[dict]]] = {}
+    for cid, text, logprobs in results:
+        if logprobs is None:
+            logger.warning(
+                f"query_guard_scored: no logprobs returned for {cid!r} "
+                f"({guard_model.model_id}) — that cell falls back to the "
+                "ordinal (tier-1) severity.")
+        out[cid] = (parser(text), text, logprobs)
+    return out
 
 
 def query_guard(
