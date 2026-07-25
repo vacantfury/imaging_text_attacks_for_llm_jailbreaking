@@ -56,8 +56,8 @@ _occluded: &occluded outputs/autoattack_defense/prompt_transform/harmbench/ir_oc
 _mmtypo:   &mmtypo   outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260716_194203_32634422/ir_mm_typo
 _distract: &distract outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260716_194203_7625970/ir_distraction_grid
 _camoimg:  &camoimg  outputs/autoattack_defense/prompt_transform/harmbench/semantic_camo_ir_plain_20260716_194205_29992788/ir_plain
-# ── OR-Bench-Hard render dir — FILL from orbench_render.yaml output ──
-_ben_img:  &ben_img  outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_<FILL_TS>/ir_plain
+# ── OR-Bench-Hard render dir (FILLED from orbench_render.yaml, job mj_8414208) ──
+_ben_img:  &ben_img  outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260717_020703_54610685/ir_plain
 
 tasks:
   # ── HARMFUL: amplifier+wildguard (catch?) + guard-alone (lift baseline) per attack ──
