@@ -282,13 +282,22 @@ def format_wildguard_input(prompt_text: str, response_text: str = "") -> str:
 # query_guard — the single entry point.
 # ============================================================================
 
-def query_guard(
+def query_guard_verbose(
     guard_service: BaseLLMService,
     guard_model: LLMModel,
     items: list[tuple[str, str, Optional[object]]],
     is_test: bool = True,
-) -> dict[str, bool]:
+) -> dict[str, tuple[bool, str]]:
     """Query a guard model over raw (id, text, image_or_None) items.
+
+    Same as `query_guard`, but ALSO returns each guard's verbatim completion.
+    The raw text is what a threshold sweep needs: parsers here collapse a
+    guard's output to one bool, which discards genuine severity information —
+    notably Qwen3Guard-Gen's third level, "Controversial", which
+    `parse_qwen3guard` deliberately folds into unsafe to match the upstream
+    eval harness. Keeping the raw string lets
+    `src/analysis/guard_threshold.py` recover those levels offline, with no
+    extra model calls. See that module for why the sweep is cheap.
 
     Builds the per-family conversation + system message internally (see
     module docstring for provenance), calls `guard_service.batch_chat`, and
@@ -304,7 +313,8 @@ def query_guard(
         is_test: forwarded to batch_chat (usage accounting only).
 
     Returns:
-        dict id -> bool, True = UNSAFE. Fails closed (see each parser).
+        dict id -> (verdict, raw_completion). verdict True = UNSAFE.
+        Fails closed (see each parser).
     """
     parser = _parser_for(guard_model)
     system_message: Optional[str] = None
@@ -346,4 +356,26 @@ def query_guard(
         system_message=system_message,
         is_test=is_test,
     )
-    return {cid: parser(text) for cid, text in results}
+    return {cid: (parser(text), text) for cid, text in results}
+
+
+def query_guard(
+    guard_service: BaseLLMService,
+    guard_model: LLMModel,
+    items: list[tuple[str, str, Optional[object]]],
+    is_test: bool = True,
+) -> dict[str, bool]:
+    """Verdict-only view of `query_guard_verbose` — the production path.
+
+    Kept as the default so every existing defense keeps its narrow contract
+    (a guard decides block-or-pass, nothing more). Callers that need severity
+    for a calibration sweep should use `query_guard_verbose` directly.
+
+    Returns:
+        dict id -> bool, True = UNSAFE. Fails closed (see each parser).
+    """
+    return {
+        cid: verdict
+        for cid, (verdict, _raw) in query_guard_verbose(
+            guard_service, guard_model, items, is_test=is_test).items()
+    }
