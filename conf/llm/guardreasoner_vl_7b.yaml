@@ -23,4 +23,9 @@ model:
 
 # Same VRAM class as Qwen2.5-VL-7B (~16-20GB) — exclude small/old GPUs.
 cluster:
+  # Multimodal 7B: still capturing CUDA graphs ~9 min into startup, so the
+  # 30s default in conf/clusters/_defaults.yaml declared it failed during
+  # discovery (capture run 8695282, 2026-07-25). Waiting longer is free —
+  # it only delays declaring failure, it never slows a healthy server.
+  endpoint_wait_timeout: 1800
   gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]
