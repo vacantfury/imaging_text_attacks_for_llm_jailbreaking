@@ -276,18 +276,44 @@ def _run_judging(
             )
             _apply_verdict_columns(all_rows, detailed_df, is_refusal)
             value = stats.get(stat_key, 0.0)
+
+            # ---- coverage guard: never report a rate over rows we didn't judge ----
+            # Every evaluator computes `rate = hits/total if total > 0 else 0.0`, so a
+            # run whose responses ALL failed yields a confident-looking 0.00 that reads
+            # as a perfect defense instead of a dead cell. That is not hypothetical:
+            # round 174759's six Gemma-2-9B cells each shipped ASR 0.00 over 10000 draws
+            # where every single target call had 400'd (max_tokens 16384 > max_model_len
+            # 8192) and the judge scored the error strings as "not harmful"; the only
+            # tell was total_evaluated=0 sitting next to count=10000 in the metadata.
+            # A rate over zero rows is not a number — refuse to emit one.
+            expected = len(all_rows)
+            covered = stats.get("total_evaluated")
+            if covered is not None and expected and covered != expected:
+                msg = (f"{evaluator.__class__.__name__}: judged {covered}/{expected} "
+                       f"responses ({covered / expected:.1%} coverage) — "
+                       f"{stat_key} is computed over an incomplete set")
+                judge_errors.append(msg)
+                logger.error(f"[{stage_label}] COVERAGE FAILURE — {msg}")
+                if covered == 0:
+                    value = None
+
             if is_refusal:
                 refusal = value
             else:
                 asr = value
             eval_stats[evaluator.__class__.__name__] = stats
             # Record every scalar stat under its real name — no overloading.
-            for k, v in stats.items():
-                if isinstance(v, (int, float)):
-                    metrics[k] = float(v)
+            # When coverage collapsed to zero the rates are meaningless, so they are
+            # kept OUT of `metrics` (and therefore out of primary_metric): the results
+            # file then carries no headline number at all, which is the honest outcome.
+            if value is not None:
+                for k, v in stats.items():
+                    if isinstance(v, (int, float)):
+                        metrics[k] = float(v)
             logger.info(
                 f"[{stage_label}] {evaluator.__class__.__name__}: "
-                f"{stat_key}={value:.2f}%")
+                + (f"{stat_key}={value:.2f}%" if value is not None
+                   else f"{stat_key}=UNAVAILABLE (0/{expected} responses judged)"))
         except (ValueError, KeyError, FileNotFoundError) as e:
             judge_errors.append(f"{evaluator.__class__.__name__}: skipped ({e})")
             logger.warning(
