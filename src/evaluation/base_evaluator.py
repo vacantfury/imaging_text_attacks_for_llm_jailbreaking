@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
-from llm_utils import LLMModel
+from llm_utils import BaseLLMService, LLMModel, LLMServiceFactory
 
 
 class BaseEvaluator(ABC):
@@ -20,8 +20,27 @@ class BaseEvaluator(ABC):
     """
 
     def __init__(self, model: Optional[LLMModel] = None, **kwargs):
+        """
+        Args:
+            model: the judge LLM (caller-injected — see class docstring).
+            **kwargs: forwarded to LLMServiceFactory.create (max_tokens,
+                temperature, max_concurrency, etc.).
+        """
         self.model = model
-        self.kwargs = kwargs
+        self.kwargs = kwargs                 # legacy attribute, kept as-is
+        self.service_kwargs = kwargs
+        self._service: Optional[BaseLLMService] = None
+
+    @property
+    def service(self) -> BaseLLMService:
+        """Lazy judge service. Temperature defaults to 0.0 (deterministic
+        classification) unless the caller overrides it. Hoisted from the four
+        concrete evaluators at the 2026-07-24 audit — behavior unchanged."""
+        if self._service is None:
+            kwargs = dict(self.service_kwargs)
+            kwargs.setdefault("temperature", 0.0)
+            self._service = LLMServiceFactory.create(self.model, **kwargs)
+        return self._service
 
     @abstractmethod
     def evaluate(

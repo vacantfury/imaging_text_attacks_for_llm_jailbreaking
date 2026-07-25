@@ -111,20 +111,6 @@ class ORBenchEvaluator(BaseEvaluator):
     caller picks the appropriate metric based on benign vs harmful prompts.
     """
 
-    def __init__(self, model: Optional[LLMModel] = None, **kwargs):
-        super().__init__(model, **kwargs)
-        self.model = model
-        self.service_kwargs = kwargs
-        self._service: Optional[BaseLLMService] = None
-
-    @property
-    def service(self) -> BaseLLMService:
-        if self._service is None:
-            kwargs = dict(self.service_kwargs)
-            kwargs.setdefault("temperature", 0.0)
-            self._service = LLMServiceFactory.create(self.model, **kwargs)
-        return self._service
-
     def evaluate(
         self,
         prompts: List[Dict[str, Any]],
