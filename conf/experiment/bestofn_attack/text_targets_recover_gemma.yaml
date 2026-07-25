@@ -1,0 +1,56 @@
+# bestofn_attack Paper-1 — RECOVERY of ALL 6 Gemma-2-9B cells from round 174759.
+#
+# WHY: every one of round 174759's six Gemma cells was silently FAKE. `conf/llm/
+# gemma2_9b_it.yaml` capped cluster.max_model_len=8192 (Gemma-2's sliding-window
+# architectural ceiling) but did NOT override model.max_tokens, which inherits 16384
+# from conf/llm/default.yaml. vLLM 400s any request with max_tokens > max_model_len, so
+# all 10,000 draws in all 6 cells returned the error STRING, wildguard scored those
+# strings as "not harmful", and each cell reported a confident ASR 0.00 that read as a
+# perfect defense. Verified 2026-07-24 by spot-reading raw_results.jsonl (100% error
+# responses) with the tell `eval_stats.total_evaluated == 0` beside `count == 10000`.
+#
+# TWO FIXES ARE IN before this reruns:
+#   1be9968  conf/llm/gemma2_9b_it.yaml -> max_tokens: 4096 (data-derived: longest
+#            CodeAttack prompt ~3637 tok, so 3637+4096=7733 < 8192 worst case; and 4096
+#            covers the p95 of observed response lengths on Llama/Qwen, ~4035 tok).
+#   89a3eff  src/experiment/task.py -> judge COVERAGE GUARD: a cell whose judged-row
+#            count != handed-row count now flags a judge_error (status partial_judge)
+#            and, at zero coverage, emits asr=None with NO headline metric instead of a
+#            fake 0.00. This round therefore CANNOT repeat the silent failure.
+#
+# Full N=100 (100 behaviors x 100 draws = 10,000 target queries per cell) so the results
+# stay consistent with the Llama/Qwen cells already saved. Same campaign as 174759 so
+# these join the round. FREE (wildguard first-pass); the gpt-5-mini rejudge stays gated.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/text_targets_recover_gemma
+#
+# PAPER CAVEAT to carry into Limitations: Gemma runs with a 4096-token generation budget
+# vs 16384 for Llama/Qwen (its 8192 context makes 16384 impossible). The >4096 tail on
+# those targets is dominated by degenerate repetition, but the asymmetry is real.
+num_main_job_threads: 6      # all 6 cells in flight; 4 replicas serve them, 2 queue briefly
+num_cluster_jobs: 6          # orchestrator + 4 gemma replicas + wildguard (5 servers <= AICR budget 7,
+                             # deliberately leaving 2 server slots free for the Paper C work)
+
+_e: &e
+  mode: defense+evaluate
+  target_model: gemma2_9b_it
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_p1_text_full   # same campaign as 174759 so it joins the round
+
+_CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260718_213010_40825967/code_attack
+_SURF: &surf outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_20260718_050205_56951903/variance_channel_bon
+
+_SS: &ss {n_copies: 5, perturbation_model: null, judge_model: wildguard}   # null -> paraphrase with the target; free served vote
+
+# ORDER MATTERS: the two SemanticSmooth cells are the makespan drivers (SS+code ran 18.1h
+# on Llama, SS+surf 7.5h), so they are listed FIRST and grab replicas immediately. The
+# cheaper no_defense/sage cells fill in behind them as replicas free up.
+tasks:
+  - {<<: *e, source_transform_subdir: *code, defense: semantic_smooth, defense_config: *ss}
+  - {<<: *e, source_transform_subdir: *surf, defense: semantic_smooth, defense_config: *ss}
+  - {<<: *e, source_transform_subdir: *code, defense: no_defense}
+  - {<<: *e, source_transform_subdir: *surf, defense: no_defense}
+  - {<<: *e, source_transform_subdir: *code, defense: sage}
+  - {<<: *e, source_transform_subdir: *surf, defense: sage}

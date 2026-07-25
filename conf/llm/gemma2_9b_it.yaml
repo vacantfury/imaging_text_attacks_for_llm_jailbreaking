@@ -22,3 +22,10 @@ model:
 
 cluster:
   max_model_len: 8192
+  # num_instances=4: load-balancing is PER-CELL (acquire_endpoint hands one cell an
+  # exclusive replica for its whole duration), so replicas parallelize DIFFERENT cells
+  # and can never speed up a single one. The 6-cell recovery round's makespan is set by
+  # its slowest single cell (SemanticSmooth+CodeAttack: 18.1h on Llama), so 4 replicas
+  # is the point of diminishing returns -- enough that no cell queues behind another for
+  # long, few enough to leave server slots free under AICR's budget of 7.
+  num_instances: 4
