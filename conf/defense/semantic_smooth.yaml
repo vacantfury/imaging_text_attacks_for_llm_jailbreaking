@@ -9,7 +9,10 @@
 
 n_copies: 5                          # paper default
 perturbation_model: gemini-2.5-flash-lite
-judge_model: gpt-5-nano              # internal vote judge; same as project's ASR judge
+judge_model: gpt-5-nano              # internal vote judge ONLY (defense-internal
+                                     # paraphrase vote, cheap on purpose). NOT the
+                                     # project ASR judge — that is gpt-5-mini since
+                                     # 2026-07-15; this internal vote never feeds ASR.
 
 # Sampling params for the paraphrase step ONLY (target queries + harm
 # judge use the project's default temp=0.0, which gives reproducible

@@ -10,7 +10,10 @@
 # This file controls WHICH MODEL judges, not WHICH EVALUATOR is used.
 
 judge_llm_config:
-  model: gpt-5-nano       # frontier judge — replaces the canonical Llama-based
-                          # judges. Reasons documented in commit history.
+  model: gpt-5-mini       # project-wide headline ASR judge (RESOLVED 2026-07-15,
+                          # text_docs/autoattack_defense/experiments_plan.md §0).
+                          # NOT gpt-5-nano: nano inflates absolute ASR ~2-3x
+                          # (Round J); nano runs are traceability-only and must
+                          # opt in per task.
   max_tokens: 16384       # room for JSON-wrapped output with "reasoning" field
   temperature: 0.0        # deterministic classification
