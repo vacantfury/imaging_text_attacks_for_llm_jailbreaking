@@ -306,9 +306,18 @@ class Experiment:
         user = os.environ.get("USER")
         if not user:
             return 0
+        # BOTH TRES fields are needed, because the two clusters request GPUs
+        # differently and each populates only its own field (measured 2026-07-25):
+        #   NURC  `--gres=gpu:N` -> tres-per-node = "gres/gpu:1", tres-per-job = N/A
+        #   AICR  `--gpus=N`     -> tres-per-node = "N/A",        tres-per-job = "gres/gpu:1"
+        # The short `%b` code is tres-per-node ALONE, so keying on it counted zero
+        # GPU jobs on AICR. `tres-alloc` is not a substitute: it is empty while a
+        # job is still PENDING, and a pending server holds quota just as a running
+        # one does.
         try:
             result = subprocess.run(
-                ["squeue", "-u", user, "-h", "-o", "%i|%b"],
+                ["squeue", "-u", user, "-h",
+                 "-O", "JobID:.24,tres-per-node:.40,tres-per-job:.40"],
                 capture_output=True, text=True, timeout=15)
         except (subprocess.TimeoutExpired, FileNotFoundError):
             logger.debug("squeue unavailable; skipping pre-flight budget check.")
@@ -318,14 +327,13 @@ class Experiment:
         own_job = os.environ.get("SLURM_JOB_ID")
         n = 0
         for line in result.stdout.splitlines():
-            if not line.strip():
+            fields = line.split()
+            if not fields:
                 continue
-            job_id, _, tres = line.partition("|")
-            job_id = job_id.strip()
+            job_id, rest = fields[0], " ".join(fields[1:])
             if own_job and job_id == own_job:
                 continue
-            # `%b` is TRES_PER_NODE: "gres/gpu:1" for GPU jobs, "N/A" for CPU-only.
-            if "gpu" in tres.lower():
+            if "gpu" in rest.lower():
                 n += 1
         return n
 
