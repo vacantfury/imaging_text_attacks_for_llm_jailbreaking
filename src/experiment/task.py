@@ -239,12 +239,49 @@ def _apply_verdict_columns(stage_rows: list, detailed_df, is_refusal: bool) -> N
             row.judge_raw_response = raw_by_id.get(row.id)
 
 
+def _dropped_row_warnings(
+    all_rows: list[EvaluationRow], within_rows: list[EvaluationRow],
+    stage_label: str,
+) -> list[str]:
+    """Flag draws that never reached the judge, so a thinned denominator is loud.
+
+    Rows whose model call failed are marked is_correctly_processed=False and dropped
+    before judging, which silently shrinks the denominator: the reported rate is then
+    computed over the SURVIVORS while `count` still says how many were intended. For a
+    best-of-N attack that biases the union metric DOWNWARD -- fewer draws, fewer chances
+    for any draw to succeed -- so a defense looks stronger than it is.
+
+    This is not hypothetical. The 2026-07-24 Gemma recovery run lost 900/10000 draws per
+    code cell to `prompt_tokens + max_tokens > max_model_len` 400s and still wrote
+    `status: success, warnings: []` with ASR 0.00, because `_run_judging`'s own guard
+    compares against the already-filtered list and saw 9100 == 9100.
+
+    Returned strings land in the result's judge_errors -> `status: partial_judge`.
+    """
+    dropped = len(all_rows) - len(within_rows)
+    if dropped <= 0:
+        return []
+    total = len(all_rows)
+    over = sum(1 for r in all_rows if not r.is_within_maxlen)
+    failed = sum(1 for r in all_rows if not r.is_correctly_processed)
+    msg = (f"{dropped}/{total} rows ({dropped / total:.1%}) never reached the judge "
+           f"({failed} failed model calls, {over} over length budget) — the reported "
+           f"rate is computed over {len(within_rows)} surviving draws, not {total}")
+    logger.error(f"[{stage_label}] THINNED DENOMINATOR — {msg}")
+    return [msg]
+
+
 def _run_judging(
     prompts: list[Prompt], all_rows: list[EvaluationRow], benchmark: str,
     judge_method_override: Optional[str], stage_label: str,
     judge_model_override: Optional[str] = None,
 ) -> dict:
     """Single-stage judging: runs every canonical evaluator on `all_rows`.
+
+    NOTE: callers pass only the SURVIVING rows here (within-budget and correctly
+    processed), so this function's own coverage guard can only see judging losses.
+    Losses from failed model calls happen one level up and are caught by
+    `_dropped_row_warnings` — see the comment there before changing either.
 
     Returns a dict: asr, refusal, eval_stats, judge_config_hash, judge_errors,
     metrics (every named scalar metric), primary_metric (the headline metric's
@@ -706,6 +743,8 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
     asr, refusal = judged["asr"], judged["refusal"]
     eval_stats, jhash, judge_errors = (
         judged["eval_stats"], judged["judge_config_hash"], judged["judge_errors"])
+    judge_errors = list(judge_errors) + _dropped_row_warnings(
+        all_rows, within_rows, stage_label)
     judge_method_provenance = task.judge_method or benchmark
     # Record the judge that ACTUALLY scored. A self-contained classifier judge
     # (e.g. wildguard) IS the judge — recording the vestigial config-default LLM
@@ -853,6 +892,8 @@ def _run_rejudge(task) -> dict[str, Any]:
         judge_method_override=task.judge_method, stage_label=stage_label,
         judge_model_override=task.judge_model,
     )
+    judged["judge_errors"] = list(judged["judge_errors"]) + _dropped_row_warnings(
+        rows, within_rows, stage_label)
 
     out_dir = Path(get_new_experiment_data_dir(
         "outputs/rejudge", dataset=benchmark,

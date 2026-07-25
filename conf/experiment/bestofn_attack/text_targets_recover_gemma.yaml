@@ -10,13 +10,18 @@
 # responses) with the tell `eval_stats.total_evaluated == 0` beside `count == 10000`.
 #
 # TWO FIXES ARE IN before this reruns:
-#   1be9968  conf/llm/gemma2_9b_it.yaml -> max_tokens: 4096 (data-derived: longest
-#            CodeAttack prompt ~3637 tok, so 3637+4096=7733 < 8192 worst case; and 4096
-#            covers the p95 of observed response lengths on Llama/Qwen, ~4035 tok).
+#   1be9968+ conf/llm/gemma2_9b_it.yaml -> max_tokens: 3072 (TOKENIZER-MEASURED: longest
+#            CodeAttack prompt 4568 tok + worst wrapper 341 + chat ~20 = 4929 worst-case
+#            input; 8192-4929=3263 headroom, so 3072 leaves ~191 tok spare).
 #   89a3eff  src/experiment/task.py -> judge COVERAGE GUARD: a cell whose judged-row
 #            count != handed-row count now flags a judge_error (status partial_judge)
 #            and, at zero coverage, emits asr=None with NO headline metric instead of a
-#            fake 0.00. This round therefore CANNOT repeat the silent failure.
+#            fake 0.00.
+#   (+)      src/experiment/task.py -> THINNED-DENOMINATOR GUARD, the guard the first
+#            attempt still slipped past: failed calls are dropped BEFORE judging, so the
+#            coverage guard compared 9100 vs 9100 and stayed silent while 900 lost draws
+#            biased a best-of-N union metric downward. Any dropped row now forces
+#            status: partial_judge. Between the two, a thinned cell cannot look clean.
 #
 # Full N=100 (100 behaviors x 100 draws = 10,000 target queries per cell) so the results
 # stay consistent with the Llama/Qwen cells already saved. Same campaign as 174759 so

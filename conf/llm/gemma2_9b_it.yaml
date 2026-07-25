@@ -10,15 +10,24 @@
 # for the 20480-window targets. Without this override EVERY Gemma call 400s and the
 # judge scores the error string as "not harmful" -> a silent, fully-fake ASR 0.00
 # (this is exactly what happened to all 6 Gemma cells of round 174759, 2026-07-21..24).
-# 4096 is data-derived, not a guess: the longest CodeAttack prompt in the Paper-1 suite
-# is ~3.6k tokens, so 3637+4096=7733 < 8192 fits worst case; and 4096 covers the p95 of
-# observed response lengths on Llama/Qwen (~4.0k tokens). CAVEAT for the paper: Gemma
-# therefore gets a 4096-token generation budget vs 16384 for Llama/Qwen -- the >4096 tail
-# on those targets is dominated by degenerate repetition, but the asymmetry is real and
-# belongs in Limitations. Retune if the attack suite gains longer prompts.
+# 3072 is measured with Gemma's OWN tokenizer, not estimated. A first attempt used 4096
+# from a chars/3.7 heuristic; that heuristic underestimated the real max prompt by 26%
+# and 900/10000 draws per code cell still 400'd on
+#   "requested 4096 output tokens + prompt >= 4097 input tokens > 8192".
+# Measured budget (AutoTokenizer, google/gemma-2-9b-it, 2026-07-24):
+#   longest CodeAttack prompt      4568 tok   (p50 416, p95 4422)
+#   longest surface-BoN prompt     1506 tok
+#   worst defense wrapper           341 tok   (SemanticSmooth; SAGE 158)
+#   chat template                  ~ 20 tok
+#   => worst-case input 4929; 8192 - 4929 = 3263 headroom, so 3072 leaves ~191 spare.
+# CAVEAT for the paper: Gemma therefore gets a 3072-token generation budget vs 16384 for
+# Llama/Qwen (its 8192 context makes parity impossible). Median response is ~800 tok so
+# most are unaffected, and the long tail on Llama/Qwen is dominated by degenerate
+# repetition -- but the asymmetry is real and belongs in Limitations.
+# Retune (re-measure, do NOT estimate) if the attack suite gains longer prompts.
 model:
   model: google/gemma-2-9b-it
-  max_tokens: 4096
+  max_tokens: 3072
 
 cluster:
   max_model_len: 8192
