@@ -18,6 +18,12 @@ font_size: 28
 padding: 40
 line_spacing: 8
 
+# Pagination budget — max images per prompt for multimodal defense+evaluate;
+# prompts over this are excluded + flagged is_within_maxlen=False (never
+# truncated). Coupled to the served --max-model-len (20480): more pages =
+# more vision tokens. Read by task.py::_max_pages_per_prompt (code fallback 8).
+max_pages_per_prompt: 8
+
 # Readability constraint — renderers adapt to keep aspect ratio within this limit
 max_aspect_ratio: 3.0
 

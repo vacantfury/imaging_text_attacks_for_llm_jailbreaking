@@ -55,7 +55,20 @@ logger = get_logger(__name__)
 # at query time is excluded via is_correctly_processed (not miscounted), so this
 # page cap + the max-model-len are a best-effort reduction, not a guarantee.
 # Tune down if the re-probe shows requests erroring below this page count.
+# YAML home: conf/imaging/default.yaml `max_pages_per_prompt` (audit 2026-07-24);
+# this constant is the fail-safe default when the YAML key is absent/unreadable.
 MAX_PAGES_PER_PROMPT = 8
+
+
+def _max_pages_per_prompt() -> int:
+    """Resolve the page cap from conf/imaging/default.yaml, falling back to the
+    module constant."""
+    try:
+        from src.experiment.config import load_conf
+        return int(load_conf("imaging").get(
+            "max_pages_per_prompt", MAX_PAGES_PER_PROMPT))
+    except Exception:
+        return MAX_PAGES_PER_PROMPT
 
 
 # ======================== Shared helpers ========================
@@ -689,15 +702,16 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
     def _num_images(p) -> int:
         return len(p.image_encoded) if p.image_encoded else 0
 
+    max_pages = _max_pages_per_prompt()
     if is_multimodal:
-        within = [p for p in prompts if _num_images(p) <= MAX_PAGES_PER_PROMPT]
-        over = [p for p in prompts if _num_images(p) > MAX_PAGES_PER_PROMPT]
+        within = [p for p in prompts if _num_images(p) <= max_pages]
+        over = [p for p in prompts if _num_images(p) > max_pages]
     else:
         within, over = list(prompts), []
     if over:
         logger.warning(
             f"{len(over)}/{len(prompts)} prompts exceed "
-            f"MAX_PAGES_PER_PROMPT={MAX_PAGES_PER_PROMPT} — excluded from "
+            f"max_pages_per_prompt={max_pages} — excluded from "
             f"query+ASR (is_within_maxlen=False): {[p.id for p in over][:10]}")
 
     # Run defense on within-budget prompts only.

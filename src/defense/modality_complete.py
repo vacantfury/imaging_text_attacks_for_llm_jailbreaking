@@ -161,13 +161,26 @@ def _has_math_symbols(t: str) -> bool:
     return False
 
 
-_B64_RUN = re.compile(r"[A-Za-z0-9+/]{24,}={0,2}")
-_HEX_RUN = re.compile(r"(?:[0-9a-fA-F]{2}[\s:]){10,}[0-9a-fA-F]{2}")
 _CODE_SYNTAX = re.compile(
     r"```|def\s+\w+\s*\(|from\s+\w+\s+import\s+\w|class\s+\w+\s*[:\(]|->\s*\w+\s*:")
 
 
-def _surface_says_obfuscated(text: str) -> bool:
+def _build_surface_gate(nonlatin_ratio: float = 0.15, b64_run: int = 24,
+                        hex_run: int = 10) -> dict:
+    """Compile the surface-gate thresholds once. YAML-tunable via
+    conf/defense/modality_complete.yaml (surface_* keys); the defaults here are
+    the fail-safe mirror of that file's 2026-07-17 operating point."""
+    return {
+        "nonlatin_ratio": nonlatin_ratio,
+        "b64": re.compile(r"[A-Za-z0-9+/]{%d,}={0,2}" % b64_run),
+        "hex": re.compile(r"(?:[0-9a-fA-F]{2}[\s:]){%d,}[0-9a-fA-F]{2}" % hex_run),
+    }
+
+
+_DEFAULT_SURFACE_GATE = _build_surface_gate()
+
+
+def _surface_says_obfuscated(text: str, gate: dict = _DEFAULT_SURFACE_GATE) -> bool:
     """Deterministic obfuscation gate (gate_style="surface"). True iff the text
     carries a SURFACE marker of encoding — a heavy non-Latin-script ratio
     (rare/classical language, homoglyphs), symbolic math/logic notation, a long
@@ -182,13 +195,14 @@ def _surface_says_obfuscated(text: str) -> bool:
     # 1. rare-language / homoglyph: high ratio of letters beyond Latin Ext-B
     #    (Greek/Cyrillic/CJK/Arabic/… count; accented Latin like é/ü does not)
     letters = [c for c in t if c.isalpha()]
-    if letters and sum(1 for c in letters if ord(c) > 0x024F) / len(letters) > 0.15:
+    if letters and (sum(1 for c in letters if ord(c) > 0x024F) / len(letters)
+                    > gate["nonlatin_ratio"]):
         return True
     # 2. symbolic math/logic notation (set_theory, formal_logic)
     if _has_math_symbols(t):
         return True
     # 3. long base64 / hex runs (cipher)
-    if _B64_RUN.search(t) or _HEX_RUN.search(t):
+    if gate["b64"].search(t) or gate["hex"].search(t):
         return True
     # 4. code syntax (code_attack)
     if _CODE_SYNTAX.search(t):
@@ -212,6 +226,9 @@ class ModalityComplete(Defense):
         gate_decode: bool = False,
         gate_style: str = "surface",
         reguard_original: bool = False,
+        surface_nonlatin_ratio: float = 0.15,
+        surface_b64_run: int = 24,
+        surface_hex_run: int = 10,
         **kwargs,
     ):
         """
@@ -252,6 +269,8 @@ class ModalityComplete(Defense):
                          decode_style=decode_style, gate_decode=gate_decode,
                          gate_style=gate_style, reguard_original=reguard_original,
                          **kwargs)
+        self._surface_gate = _build_surface_gate(
+            surface_nonlatin_ratio, surface_b64_run, surface_hex_run)
         self._guard_model_name = guard_model
         self._guard_model: Optional[LLMModel] = (
             LLMModel.from_string(guard_model) if guard_model else None
@@ -311,7 +330,7 @@ class ModalityComplete(Defense):
             # Deterministic — no LLM call; decide from the union's surface form.
             decode_ids = {
                 p.id for p in prompts
-                if _surface_says_obfuscated(union_by_id[p.id])
+                if _surface_says_obfuscated(union_by_id[p.id], self._surface_gate)
             }
             logger.info(
                 f"ModalityComplete step 2.5 (GATE, surface): "

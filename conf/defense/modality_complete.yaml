@@ -1,0 +1,16 @@
+# ModalityComplete (the Paper-C contribution) — surface obfuscation-gate tunables.
+#
+# These three thresholds drive the deterministic surface gate
+# (gate_style="surface", gate_decode=true): they decide whether a prompt is
+# DECODED before the guard sees it. Values = the 2026-07-17 hand-picked
+# operating point (moved out of code at the 2026-07-24 audit per the
+# params-in-YAML law; code defaults mirror these as fail-safes).
+#
+# Tuning path (gather-and-cover): sweep these over the stored Paper-C
+# prompt_transform corpus, scoring gate precision/recall against the known
+# encoder label of each prompt (encoded vs plain/benign) — no model calls
+# needed. Companion task filed in TODO.md at the audit.
+
+surface_nonlatin_ratio: 0.15   # >15% of letters beyond Latin Ext-B → rare-language / homoglyph
+surface_b64_run: 24            # min base64-alphabet run length → cipher marker
+surface_hex_run: 10            # min hex-pair run count → cipher marker

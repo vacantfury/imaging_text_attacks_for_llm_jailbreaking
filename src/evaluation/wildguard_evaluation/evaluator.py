@@ -35,6 +35,9 @@ logger = get_logger(__name__)
 
 # Match Round-J (judge_model_issue/cluster_judge_rejudge.py): truncate the
 # response before judging; cap the (short) verdict length.
+# PROTOCOL-PINNED, deliberately NOT YAML-tunable (audit 2026-07-24): these must
+# stay identical to the Round-J validation protocol that selected WildGuard
+# (κ=0.641) — changing them silently invalidates that κ.
 _MAXLEN = 8000
 _MAX_TOKENS = 128
 
@@ -59,12 +62,9 @@ class WildGuardEvaluator(BaseEvaluator):
     """WildGuard as a response-harm ASR judge (panel / robustness view)."""
 
     def __init__(self, model: Optional[LLMModel] = None, **kwargs):
-        super().__init__(model, **kwargs)
         # The rejudge path passes LLMModel.WILDGUARD explicitly; fall back to the
         # canonical enum if a caller omits it (this judge IS WildGuard).
-        self.model = model or LLMModel.WILDGUARD
-        self.service_kwargs = kwargs
-        self._service: Optional[BaseLLMService] = None
+        super().__init__(model or LLMModel.WILDGUARD, **kwargs)
 
     @property
     def service(self) -> BaseLLMService:
