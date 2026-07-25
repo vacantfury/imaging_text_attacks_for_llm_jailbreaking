@@ -189,7 +189,14 @@ def main() -> None:
             fg = {c: ens_flags(sel, c, g) for c in ['floor', 'gb', 'mc', 'mcrg']}
             if not fg['gb']:
                 continue
+            # floor->* are the PIPELINE-level contrasts the paper's claims rest
+            # on; gb->mc is the MARGINAL one (does the amplifier add anything on
+            # top of a guard). Reporting both is what separates "the defense
+            # works" from "this component of it is what makes it work" — the
+            # distinction review-6 con 7 forces, and they answer differently.
             for name, a, b_ in [('floor->gb', 'floor', 'gb'),
+                                ('floor->mc', 'floor', 'mc'),
+                                ('floor->+rg', 'floor', 'mcrg'),
                                 ('gb->mc', 'gb', 'mc'),
                                 ('mc->+rg', 'mc', 'mcrg')]:
                 if not fg[a] or not fg[b_]:
