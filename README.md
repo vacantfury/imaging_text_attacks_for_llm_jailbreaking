@@ -6,9 +6,10 @@ This repo is the shared harness for a line of work:
 
 - **MathEnc** — *Exposing LLM Safety Gaps Through Mathematical Encoding* (published): text-side encoders (set theory, formal logic, code) that recast harmful queries into out-of-distribution surface forms.
 - **ImgAug** — *Image Augmentation Strengthens VLM Defenses Against Encoded Jailbreak Attacks* (under review): adding an image — even a content-unrelated decoy — changes a defense's behavior, because the defense's coverage happens to line up (or not) with where the encoded content lives.
-- **Current project** — *The Decode Gap* (in progress): deployed black-box defenses — including the new multimodal / reasoning guards — *inspect or reason about* content but never **decode** an obfuscated payload, so semantically-encoded harm (in text or rendered into an image) routes past them; we build the minimal black-box **recover→decode→guard** defense that closes this gap and quantify its over-refusal cost. Covering every input surface is the method; the decode step is the contribution. See `text_docs/proposal.md` and `text_docs/experiments_plan.md`.
+- **The Decode Gap** (in progress, `autoattack_defense/`): deployed black-box defenses — including the new multimodal / reasoning guards — *inspect or reason about* content but never **decode** an obfuscated payload, so semantically-encoded harm (in text or rendered into an image) routes past them; we build the minimal black-box **recover→decode→guard** defense that closes this gap and quantify its over-refusal cost. Covering every input surface is the method; the decode step is the contribution.
+- **Beyond Surface Noise** (in progress, `bestofn_attack/`): best-of-N jailbreaking with *structural* transformations (BoN-wrapped CodeAttack) instead of surface noise — structural BoN reaches the same behaviors far faster and survives input-transformation defenses (SAGE, SemanticSmooth) that collapse surface BoN.
 
-> This is an active research repo whose direction shifts; `text_docs/proposal.md`, `text_docs/experiments_plan.md`, and `text_docs/experiment_results.md` are the source of truth for what is currently in scope. Attack-side extensions (compound attacks, cross-modal splitting, mechanism) are **Future Work** (proposal §11).
+> This is an active **multi-paper** repo whose direction shifts; docs, presets, and outputs are namespaced per paper (`text_docs/<paper>/`, `conf/experiment/<paper>/`, `outputs/<paper>/` — see `text_docs/shared/papers.md` for the alias index). Each paper's `proposal.md` / `experiments_plan.md` / `experiment_results.md` under `text_docs/<paper>/` is the source of truth for what is currently in scope.
 
 ---
 
@@ -70,19 +71,19 @@ Non-Latin-script encoders and image rendering require Noto fonts under `fonts/` 
 ## Running
 
 ```bash
-python main.py test           # 4-task smoke test end-to-end (~$0.01); verifies install + keys
-python main.py experiment     # main run — reads conf/experiment/experiment.yaml
+python main.py test                   # 4-task smoke test end-to-end (~$0.01); verifies install + keys
+python main.py <paper>/<preset>       # any conf/experiment/<paper>/<preset>.yaml
 ```
 
-**Active-preset convention:** the run target is hard-coded to `experiment`. For each round, **overwrite `conf/experiment/experiment.yaml`** with that round's tasks rather than creating per-round preset files. Prior rounds live in git history.
+**Preset convention:** each experiment round is its own named preset under its paper dir (e.g. `conf/experiment/autoattack_defense/reguard_5guard.yaml`); retired presets carry a `HISTORICAL` header banner rather than being deleted, so provenance stays greppable.
 
-### Cluster (NU / SLURM)
+### Cluster (SLURM)
 
 Open-weight targets are served as separate vLLM SLURM jobs by the orchestrator:
 
 ```bash
-sbatch scripts/run_experiment.sbatch experiment      # auto-serves vLLM targets, auto-cleans old logs
-sbatch scripts/run_experiment.sbatch test --keep
+sbatch scripts/run_experiment.sbatch <paper>/<preset>       # keeps old logs by default
+sbatch scripts/run_experiment.sbatch test
 ```
 
 ### OCR fidelity probe (gate before image-channel runs)
@@ -115,9 +116,10 @@ Provider routing behind one unified call shape `service.batch_chat(...)`:
 | OpenAI | `AsyncOpenAI` + `asyncio.gather` |
 | Anthropic | native Message Batches API |
 | Google | native Batch API (inline) |
-| NU cluster (vLLM) | `AsyncOpenAI` against the vLLM endpoint registered by the server manager; base64 `image_url` for image input |
+| SLURM cluster (vLLM) | `AsyncOpenAI` against the vLLM endpoint registered by the server manager; base64 `image_url` for image input |
+| AWS Bedrock | boto3 `bedrock-runtime.converse` (Claude / Qwen / DeepSeek / Nova / …) |
 
-Model registry + pricing: `src/llm_utils/llm_model.py`.
+Model registry + pricing live in the pinned external package [`llm_utils`](https://github.com/vacantfury/llm_utils) (`llm_utils.llm_model::LLMModel`).
 
 ---
 
@@ -125,29 +127,31 @@ Model registry + pricing: `src/llm_utils/llm_model.py`.
 
 ```
 conf/
-├── experiment/          # YAML task specs (experiment is the run target)
-├── llm/                 # model registry + per-provider config
-├── text_encoding/       # encoder configs (set_theory, formal_logic, code_attack, ...)
-├── imaging/             # renderer configs (ir_plain, figstep, ...)
-├── defense/             # sage, ecso, modality_complete, amia_ia, semantic_smooth, ...
-└── evaluation/          # judge configs (harmbench, jailbreakbench, orbench, refusal)
+├── experiment/<paper>/  # YAML task presets, namespaced per paper (one named preset per round)
+├── llm/                 # per-model request/serving overrides
+├── clusters/            # SLURM cluster profiles (server params, budgets)
+├── text_encoding/       # encoder configs (set_theory, formal_logic, cipher, classical_language/, ...)
+├── imaging/             # renderer configs (ir_plain, figstep, mm_typo, ...)
+├── defense/             # sage, semantic_smooth, canonicalize(_guard), amia_ia, ...
+├── evaluation/          # judge LLM config (evaluator choice derives from the benchmark)
+└── analysis/            # analysis-tool configs (guard-threshold sweep, ...)
 
 src/
-├── experiment/          # orchestrator (concurrent dispatch, cluster server manager) + Pydantic schemas
-├── text_encoding/       # LLM-based + rule-based encoders
-├── imaging/             # image renderers (ir_plain fixed-font paginated, ...)
-├── defense/             # all defenders incl. modality_complete (contribution) + joint_verify (future)
-├── prompt_transformations/  # attack transforms (ecso_evade, cross_modal_split — future-work)
-├── evaluation/          # HarmBench + JBB-refusal + OR-Bench judges
-├── llm_utils/           # provider services + model registry
-└── utils/               # logger, MLflow tracker
+├── experiment/          # orchestrator, task dispatcher (4 modes), Pydantic schemas, multi-cluster split
+├── prompt_transformations/  # ONE unified registry: text/ encoders + image/ renderers
+├── defense/             # all defenders incl. modality_complete (contribution) + shared guard_utils
+├── evaluation/          # HarmBench / JBB / JBB-refusal / OR-Bench judges (+ WildGuard robustness lens)
+├── analysis/            # portfolio (ensemble ASR), guard-threshold sweep, paper figure/stat scripts
+└── utils/               # logger, MLflow tracker, provenance helpers
 
-scripts/run_experiment.sbatch   # SLURM submission (canonical cluster runner)
-text_docs/              # proposal, experiments plan, results, findings, summary (source of truth)
+scripts/run_experiment.sbatch   # SLURM submission (canonical cluster runner; *_aicr / *_xc variants)
+text_docs/<paper>/      # per-paper proposal, experiments plan, results (source of truth) + shared/
 data/                   # prompt benchmarks (HarmBench, JBB, OR-Bench)
-outputs/                # experiment outputs (gitignored)
+outputs/<paper>/        # experiment outputs (gitignored)
 fonts/ · mlruns/        # fonts + MLflow tracking (gitignored)
 ```
+
+The LLM provider layer (services + model registry) is the pinned external package `llm_utils` — a git dependency, not vendored code.
 
 ---
 

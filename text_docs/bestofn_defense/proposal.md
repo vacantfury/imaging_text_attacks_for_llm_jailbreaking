@@ -1,6 +1,15 @@
-# Research Proposal — Paper D: Canonicalization Defense Against Best-of-N (`bestofn_defense`)
+# Research Proposal — Canonicalization Defense Against Best-of-N (`bestofn_defense`)
 
-**Workflow stage:** ⏳ **GATED on the R4 experiment (2026-07-16) — NOT dead.** An earlier same-day read called this dead; it was based on a pilot that ran the *wrong architecture* (canonicalize → target, no guard, no adaptive attacker) plus an over-strong read of the prior art. Corrected: the real thesis — canonicalize → **guard**, giving N-independent protection on the canonicalizable classes (a slope kill, not DATDP's constant ~500× multiplier) — is **unrun**. The paper turns on one cheap, decisive experiment: the R4 adaptive-carve gate (see §9). Pilot judging = free WildGuard; final reportable judge may be gpt-5-mini (owner-approved for a few final runs). Code + data live under the `bestofn_defense` namespace.
+> **🚩 SUPERSEDED AS "PAPER D" (2026-07-17 pivot; banner added at audit 2026-07-24).**
+> Paper D's live home is **`text_docs/bestofn_attack/`** (attack-primary framing,
+> "Beyond Surface Noise"); see `text_docs/shared/papers.md` — the canonical alias
+> index — which explicitly labels any doc calling `bestofn_defense` "Paper D" as
+> stale drift. The R4 gate below WAS run (results in TODO/`bestofn_attack` docs)
+> and its outcome drove the pivot. This file is retained as the defense-side
+> design record (the `canonicalize`/`canonicalize_guard` steelman used as Paper
+> D's weak-defense axis); do not treat its stage line or venue plan as live.
+
+**Workflow stage (HISTORICAL):** ⏳ **GATED on the R4 experiment (2026-07-16) — NOT dead.** An earlier same-day read called this dead; it was based on a pilot that ran the *wrong architecture* (canonicalize → target, no guard, no adaptive attacker) plus an over-strong read of the prior art. Corrected: the real thesis — canonicalize → **guard**, giving N-independent protection on the canonicalizable classes (a slope kill, not DATDP's constant ~500× multiplier) — is **unrun**. The paper turns on one cheap, decisive experiment: the R4 adaptive-carve gate (see §9). Pilot judging = free WildGuard; final reportable judge may be gpt-5-mini (owner-approved for a few final runs). Code + data live under the `bestofn_defense` namespace.
 
 *(Historical: S9 — code built (S7) + pilot prep 2026-07-15; the 2026-07-16 pilot tested canonicalize→target, the wrong architecture — see §8/§9.)*
 

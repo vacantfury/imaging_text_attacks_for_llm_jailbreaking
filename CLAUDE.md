@@ -15,12 +15,11 @@ See `README.md` for the research narrative and `text_docs/autoattack_defense/exp
 ```bash
 pip install -e .                          # install (uses pyproject.toml)
 python main.py test                       # smoke test (~$0.01)
-python main.py autoattack_defense/experiment                 # main run — reads conf/experiment/autoattack_defense/experiment.yaml
-python main.py <preset>                   # any conf/experiment/<preset>.yaml
+python main.py <preset>                   # any conf/experiment/<preset>.yaml (e.g. autoattack_defense/reguard_5guard)
 
 # Cluster (NURC)
-sbatch scripts/run_experiment.sbatch autoattack_defense/experiment       # keeps old logs by default (owner 2026-07-16)
-sbatch scripts/run_experiment.sbatch autoattack_defense/experiment --clean-logs   # opt in to purging old logs
+sbatch scripts/run_experiment.sbatch autoattack_defense/<preset>         # keeps old logs by default (owner 2026-07-16)
+sbatch scripts/run_experiment.sbatch autoattack_defense/<preset> --clean-logs   # opt in to purging old logs
 sbatch scripts/run_experiment.sbatch test
 
 # Cluster (AICR) — same, via the AICR profile wrapper
@@ -39,7 +38,9 @@ python scripts/cleanup_failed.py --recent 1h --delete
 mlflow ui                                 # http://localhost:5000
 ```
 
-There is no test framework — `python main.py test` runs the 4-task smoke preset end-to-end. API keys are read as plain environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `HUGGINGFACE_TOKEN`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `XAI_API_KEY`, `MOONSHOT_API_KEY`; see `.env.example`). Locally, prefer `./run <preset>` — a gitignored bootstrap that injects the keys from the maintainer's secret manager, so no plaintext `.env` is needed. Plain `python main.py <preset>` still works if the vars are exported or a gitignored `.env` is present at the repo root.
+**Preset convention (since ~2026-07-13): each experiment round gets its own NAMED preset** under its paper dir (`conf/experiment/autoattack_defense/…`, `conf/experiment/bestofn_attack/…`) — the old "overwrite `experiment.yaml` per round" rule is dead; `autoattack_defense/experiment.yaml` is frozen at Round 3 and is NOT the main-run file. Retired presets get a `HISTORICAL` header banner, not deletion. Note: presets placed at the top level of `conf/experiment/` (no paper subdir) write to the un-namespaced `outputs/prompt_transform/` / `outputs/defense+evaluate/` paths — paper work should always live in a paper subdir.
+
+There is no unit-test framework — `python main.py test` runs the 4-task smoke preset end-to-end (`tests/` holds only cluster-health/routing check scripts, not a pytest suite). API keys are read as plain environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `HUGGINGFACE_TOKEN`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `XAI_API_KEY`, `MOONSHOT_API_KEY`; see `.env.example`). Locally, prefer `./run <preset>` — a gitignored bootstrap that injects the keys from the maintainer's secret manager, so no plaintext `.env` is needed. Plain `python main.py <preset>` still works if the vars are exported or a gitignored `.env` is present at the repo root.
 
 ## Architecture
 
@@ -62,11 +63,12 @@ Role glossary (one line each): **target** = the VLM under attack (also runs reco
 
 ### Pipeline modes (single dispatcher)
 
-`src/experiment/task.py::run_task` dispatches by `task.mode` (a discriminated Pydantic union — `PromptTransformTask` / `DefenseEvaluateTask` / `AnalyzeTask` in `schemas.py`):
+`src/experiment/task.py::run_task` dispatches by `task.mode` (a discriminated Pydantic union — `PromptTransformTask` / `DefenseEvaluateTask` / `AnalyzeTask` / `RejudgeTask` in `schemas.py`):
 
 - `prompt_transform` — runs a chain of `PromptTransformation` steps (text encoders + image renderers, in order); writes one subfolder per step under `outputs/prompt_transform/...`, each with a cumulative `results.json`. Input is a raw dataset JSONL (`source_file`) or a prior step (`source_transform_subdir`, for chaining and for sharing one encoding across ablations).
 - `defense+evaluate` — defense + target-model query + judging, **fused into one mode** (there is no separate transform-only vs. coupled split anymore). Consumes a `prompt_transform` subfolder and writes to `outputs/defense+evaluate/<benchmark>/<target>_<defense>_<chain>_<ts>_<rand>/`.
 - `analyze` — pure post-processing, no model/judge I/O; fans **in** from many `defense+evaluate` dirs (e.g. portfolio / best-of-all ASR, `complementarity_gap`) via `src/analysis`.
+- `rejudge` — re-scores a stored `defense+evaluate` dir's saved responses with a different judge (`responses_from` + `judge_model`, optional `judge_method` override), WITHOUT re-querying the target; writes a fresh dir under `outputs/<paper>/rejudge/`. This is how the coverage grid moved gpt-5-nano → gpt-5-mini and how WildGuard robustness passes run at zero target cost.
 
 Each `results.json` carries an `upstream_ref: {source_dir, results_sha256}` pointer (drift-detecting hash; a legacy `upstream` dict is read for back-compat only), so the chain reconstructs full provenance. Where applicable a step also writes `prompts.jsonl` / `raw_results.jsonl` / `images/`.
 
