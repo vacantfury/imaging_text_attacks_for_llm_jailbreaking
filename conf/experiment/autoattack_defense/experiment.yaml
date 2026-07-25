@@ -1,3 +1,6 @@
+# ⚠️ FROZEN at Round 3 (2026-07-12) — NOT the main-run file (audit 2026-07-24).
+# The per-round overwrite convention is dead; current rounds are named presets in
+# this dir (see CLAUDE.md 'Preset convention'). Kept for provenance.
 # ============================================================
 # Paper C · ROUND 3 — recover+decode AMPLIFIER × off-the-shelf guard  (2026-07-12)
 # ============================================================
