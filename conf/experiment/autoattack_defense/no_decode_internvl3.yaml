@@ -1,0 +1,101 @@
+# Paper C — con-7 component ablation: RECOVER-ONLY on InternVL3 (2026-07-25).
+#
+# WHY. Table 2's recover-vs-decode ablation exists only for Qwen2.5-VL on the six IMAGE
+# attacks (campaign paper_c_no_decode_n100). Review-7 con 7 asks for the ablation across
+# all eleven attacks and BOTH targets, reported as mean AND ensemble. This preset supplies
+# the one genuinely missing piece: the six image chains on InternVL3.
+#
+# WHY ONLY SIX CELLS (verified in code, not assumed). For a TEXT-delivered attack screened
+# by a TEXT-ONLY guard, recover-only is identical to guard-alone BY CONSTRUCTION:
+#   guard_baseline.py:76   guard sees  p.encoded
+#   modality_complete.py:297  recover runs only `if is_multimodal`
+#   modality_complete.py:319  union = p.encoded   (non-multimodal)
+# and with decode_text:false there is no decode step. Both paths hand the guard the same
+# string and then query the target with the original input. So the five text chains need no
+# run — their recover-only column IS the gb column, and the 11-attack recover-only ensemble
+# is assembled as (6 measured image cells) OR (5 gb text cells) on each target.
+# This holds for WildGuard (text-only); it would NOT hold for the multimodal GuardReasoner-VL.
+#
+# COST. GPU only, 2 servers (internvl3 + wildguard). Judge is wildguard (free, throwaway)
+# -> gpt-5-mini rejudge afterwards for reported numbers (~600 calls, ~$0.50), same as Tier 2.
+num_main_job_threads: 3
+num_cluster_jobs: 3
+tasks:
+- mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range:
+  - 0
+  - 99
+  judge_method: wildguard
+  judge_model: wildguard
+  campaign: paper_c_no_decode_internvl3
+  defense: modality_complete
+  defense_config:
+    guard_model: wildguard
+    decode_text: false
+  source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260718_183457_7682501/ir_figstep
+- mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range:
+  - 0
+  - 99
+  judge_method: wildguard
+  judge_model: wildguard
+  campaign: paper_c_no_decode_internvl3
+  defense: modality_complete
+  defense_config:
+    guard_model: wildguard
+    decode_text: false
+  source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart
+- mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range:
+  - 0
+  - 99
+  judge_method: wildguard
+  judge_model: wildguard
+  campaign: paper_c_no_decode_internvl3
+  defense: modality_complete
+  defense_config:
+    guard_model: wildguard
+    decode_text: false
+  source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260718_183457_77423812/ir_low_contrast
+- mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range:
+  - 0
+  - 99
+  judge_method: wildguard
+  judge_model: wildguard
+  campaign: paper_c_no_decode_internvl3
+  defense: modality_complete
+  defense_config:
+    guard_model: wildguard
+    decode_text: false
+  source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260718_183457_84223144/ir_occluded
+- mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range:
+  - 0
+  - 99
+  judge_method: wildguard
+  judge_model: wildguard
+  campaign: paper_c_no_decode_internvl3
+  defense: modality_complete
+  defense_config:
+    guard_model: wildguard
+    decode_text: false
+  source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260718_183500_58590499/ir_mm_typo
+- mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range:
+  - 0
+  - 99
+  judge_method: wildguard
+  judge_model: wildguard
+  campaign: paper_c_no_decode_internvl3
+  defense: modality_complete
+  defense_config:
+    guard_model: wildguard
+    decode_text: false
+  source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid
