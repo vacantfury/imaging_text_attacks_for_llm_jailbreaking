@@ -806,6 +806,54 @@ Paper E ("Smuggled Actions") spun out to its **own repo `llm_agent_security`** o
 
 ---
 
+## 15. External safety leaderboards & ranking platforms — reference index (added 2026-07-24)
+
+**Status: PARKED REFERENCE, not in use.** None of this is wired into any current paper or experiment. Recorded so a future session can find these platforms without re-running the survey. Web addresses included deliberately — these are living sites whose contents change, so treat every status line below as of 2026-07-24 and re-verify before relying on it.
+
+**Why this section exists at all:** the survey's headline finding is a *negative* one worth remembering — **there is no well-known leaderboard website for VLM/multimodal safety.** The established safety leaderboards are text-LLM only; the multimodal niche has benchmark papers and manual red-team arenas, but no standing public ranking site. This is a structural gap in the field, and it is also why none of these platforms can externally validate this project's multimodal ASR numbers.
+
+### 15.1 Academic leaderboards (research-credible; a few accept submissions)
+
+| Platform | URL | What it ranks | Submission status (2026-07-24) |
+|---|---|---|---|
+| JailbreakBench | https://jailbreakbench.github.io/ | Jailbreak **attacks and defenses**, open + closed models, on JBB-Behaviors | **Open** — site states it welcomes new attack and defense contributions; text-only format |
+| Stanford HELM Safety / AIR-Bench | https://crfm.stanford.edu/helm/safety/latest/ | Holistic safety over 5 benchmarks (incl. HarmBench, XSTest, BBQ); AIR-Bench = regulation-grounded risk taxonomy | Closed — CRFM runs the evals in-house |
+| TrustLLM | https://trustllmbenchmark.github.io/TrustLLM-Website/leaderboard.html | 6 trust dimensions (safety is one slice) | Open but **self-reported** (asterisked entries) |
+| HAL — Holistic Agent Leaderboard (Princeton) | https://hal.cs.princeton.edu/ | Agents, cost-aware; safety slice = AgentHarm, Cybench | **Paused** to new submissions as of this check |
+| Hugging Face Spaces (leaderboard hub) | https://huggingface.co/spaces | Community-hosted safety boards: aiXamine Safety/Security/Privacy, CertX Trust-Safety-Robustness, AI-Secure (DecodingTrust) | Self-hosting is the realistic route; individual Spaces vary in freshness, several appear stale/sleeping |
+| Open VLM Leaderboard (OpenCompass) | https://huggingface.co/spaces/opencompass/open_vlm_leaderboard | 60+ VLMs over ~23 benchmarks | Live but **capability, not safety** — noted only to prevent re-checking it |
+
+### 15.2 Industry / vendor safety leaderboards (live, updated, generally closed to outside submission)
+
+- **F5 Labs — CASI + ARS.** https://www.f5.com/labs/casi — **the most directly relevant to this project's attack family.** CASI (Comprehensive AI Security Index) scores prompt-injection/jailbreak susceptibility; ARS (Agentic Resistance Score) covers multi-step autonomous-agent scenarios. Its named attack vectors are the same class this repo implements: WordGame (obfuscation), FlipAttack (homoglyph exploitation), MathPrompt (harmful request disguised as mathematics), Style Injection, Scenario Nesting. Updated monthly, historical versions retained by version number. Future use: an independent, frontier-model reference point for ASR magnitudes on obfuscation-class attacks, and external evidence that this attack family is commercially tracked.
+- **Enkrypt AI — LLM Safety Leaderboard.** https://www.enkryptai.com/llm-safety-leaderboard — 200+ models scored on jailbreak susceptibility, bias, malware, toxicity into a combined risk score; claims continuous (24/7) updating.
+- **Scale AI — SEAL leaderboards.** https://labs.scale.com/leaderboard — includes Adversarial Robustness and FORTRESS (frontier risk / national-security-oriented adversarial prompts). Prompt sets deliberately held private to prevent gaming, so results are not reproducible externally.
+- **MLCommons — AILuminate.** https://ailuminate.mlcommons.org/ — the standards-body entry (12–13 hazard categories, 24k+ prompts). Notably its **Jailbreak v0.5 includes a text+image multimodal slice** — the closest thing found to an official multimodal safety ranking, though results are published de-identified ("System 1..39") with no open submission path.
+- **Center for AI Safety — dashboard.** https://dashboard.safe.ai/ — Risk Index published alongside Text/Vision capability indices for frontier systems.
+- **Cisco AI Defense — LLM Security Leaderboard.** https://leaderboard.aidefense.cisco.com/rankings — single- and multi-turn adversarial susceptibility with per-attack-strategy drill-down.
+- **Adversa AI — AIRQ.** https://adversa.ai/ — self-described first independent **AI agent** security rating (100+ agents), methodology credited to OWASP / CoSAI / CSA / NIST contributors. Relevant to the sibling `llm_agent_security` line rather than to this repo.
+
+### 15.3 Live red-team arenas (human-only; pipelines cannot be submitted)
+
+All of these ban automated tooling — submissions must be human-crafted through the platform, so none can serve as an automated evaluation target for this repo's harness. Their value is as a live reference for which models/defenses are currently considered hard to break.
+
+- **Gray Swan Arena** — https://app.grayswan.ai/arena — has a dedicated multimodal-jailbreaks board plus agent red-teaming and safeguards tracks; runs sponsored time-boxed challenges.
+- **Lakera Gandalf / Agent Breaker** — https://gandalf.lakera.ai/ — long-running prompt-injection game; the agentic version (Agent Breaker) covers tool abuse, memory tampering, data leaks. Its crowdsourced attack corpus was released as the **b3 (Backbone Breaker) benchmark**, https://huggingface.co/datasets/Lakera/b3-agent-security-benchmark-weak.
+- **RedTeam Arena** — https://redarena.ai/ — LMSYS/LMArena spinoff, Elo-based, text-only.
+- **HackAPrompt** — https://www.hackaprompt.com/ — large time-boxed competition series (2.0 ran through ~mid-2025 with an agents track); check directly for whether a later edition is open.
+
+### 15.4 Living curated hubs worth re-checking before any future prior-art sweep
+
+- `ant-research/awesome-mllm-guardrails` — https://github.com/ant-research/awesome-mllm-guardrails — actively maintained, MLLM/VLM-guardrail-specific (guard models, benchmarks, attacks). The most on-topic living index found for this project.
+- `ydyjya/Awesome-LLM-Safety` — https://github.com/ydyjya/Awesome-LLM-Safety — broader LLM-safety datasets/benchmarks index.
+- SafetyPrompts.com — https://safetyprompts.com/ — catalog of ~149 safety datasets, but **archived as of May 2025**; useful for pre-2025 discovery only.
+
+### 15.5 Verification caveats
+
+Several sites are JavaScript-rendered or bot-protected and did not return full content to automated fetching: Gray Swan returned HTTP 429, HackAPrompt HTTP 403, and the HELM/Scale/JailbreakBench pages returned shells without their leaderboard tables. Statuses above therefore mix direct fetches with search-result summaries. Anything load-bearing for a paper claim must be re-checked by hand in a browser.
+
+---
+
 ## References
 
 - Anthropic. *The Claude 3 Model Family.* Technical Report, 2024.
