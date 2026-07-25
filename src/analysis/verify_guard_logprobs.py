@@ -44,7 +44,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
-from .guard_threshold import load_config, verdict_probability
+from .guard_threshold import load_config, locate_verdict, verdict_probability
 
 # A guard passes only if the vocabulary resolves nearly every record AND the
 # resolved ones agree with the parser. Both bars are deliberately just under
@@ -117,10 +117,6 @@ def check_guard(path: Path, cfg: dict) -> GuardCheck:
     guard = path.stem
     check = GuardCheck(guard)
 
-    vocab = (cfg.get("verdict_tokens") or {}).get(guard) or {}
-    words = {w.lower() for w in vocab.get("safe", [])}
-    words |= {w.lower() for w in vocab.get("unsafe", [])}
-
     with path.open(encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
@@ -143,10 +139,16 @@ def check_guard(path: Path, cfg: dict) -> GuardCheck:
             tokens = [(t.get("token") or "") for t in (logprobs.get("content") or [])]
             head = _head(tokens)
             check.heads[head] += 1
-            for tok in tokens:
-                if tok.strip().lower() in words:
-                    check.matched_tokens[tok.strip().lower()] += 1
-                    break
+
+            # Ask the sweep's own locator which token it scores, rather than
+            # re-deriving it here: a diagnostic that scans differently from the
+            # code under test reports confident nonsense (an earlier copy of
+            # this loop ignored the anchor and named a token from the middle of
+            # the model's reasoning trace).
+            found = locate_verdict(logprobs, guard, cfg)
+            if found is not None:
+                _idx, tok_text, tok_side = found
+                check.matched_tokens[f"{tok_text.strip().lower()}->{tok_side}"] += 1
 
             p_unsafe = verdict_probability(logprobs, guard, cfg)
             if p_unsafe is None:

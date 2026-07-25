@@ -66,14 +66,55 @@ verdict_tokens:
   # from the renormalisation denominator, biasing every probability.
   qwen3guard_gen_8b:   {safe: ["safe"], unsafe: ["unsafe", "controversial", "cont"]}
   wildguard:           {safe: ["no"],   unsafe: ["yes"]}
+  # GuardReasoner-VL emits `<think>…</think><result>Request: X\nResponse: Y</result>`.
+  # Two separate traps, both measured on the 2026-07-25 capture:
+  #  1. "unharmful" TOKENIZES AS ` unh` + `arm` + `ful`, so the spelled-out word
+  #     never matches; the real safe token is ` unh`. "harmful" IS one token.
+  #  2. The reasoning trace is full of the word "harmful" ("...would be
+  #     harmful..."), so the FIRST match landed ~90 tokens deep in the CoT.
+  #     Hence the `verdict_anchor` entry below — without it this guard scored
+  #     52% agreement with its own parser, i.e. noise.
+  # Observed alternatives at the true verdict position:
+  #   [' harmful' 1.0, ' Harm' 0.0, ' harm' 0.0, ' unh' 0.0, ' The' 0.0]
+  # so `harm` is listed too: it is a live alternative spelling of the unsafe
+  # verdict at that position, and an unlisted alternative silently leaves the
+  # renormalisation denominator.
+  # Under `verdict_match: prefix` these are whole WORDS, matched by prefix — so
+  # every observed fragment (':h' -> 'h', ' unh' -> 'unh', ':un' -> 'un') maps
+  # to the right side without enumerating tokenizer split points.
   guardreasoner_vl_7b: {safe: ["unharmful"], unsafe: ["harmful"]}
-# ⚠️ STILL UNVERIFIED (guardreasoner_vl_7b): its capture had not finished when
-# the other four were checked. Matching is on EXACT token text, and the
-# WildGuard stream above proves this tokenizer splits "Harmful" into `H|arm|ful`
-# at a sequence start — so "unharmful"/"harmful" will very likely NOT appear as
-# whole tokens either. Re-run `check_logprob_agreement.py` against this guard
-# and set the vocabulary from the token stream it prints (UNRESOLVED heads) —
-# do NOT trust a continuous curve for it until that check reports OK.
+
+# ------------------------------------------------------- verdict matching (tier 2)
+# `exact` (the default) requires the token text to BE a verdict word. `prefix`
+# accepts any fragment that could only begin one of them, and is needed when the
+# tokenizer does not give the verdict a token of its own. GuardReasoner-VL emits
+# `Request: harmful` as ':' + ' harmful' but `Request:harmful` as ':h' + 'arm' +
+# 'ful' — the colon merges with the first letter — so exact matching skipped
+# every no-space record. Opt-in per guard: the four guards verified at 99-100%
+# under exact matching stay on exact.
+verdict_match:
+  guardreasoner_vl_7b: prefix
+
+# ---------------------------------------------------------- verdict stop (tier 2)
+# Markers that END the field being graded. GuardReasoner-VL reports
+# `Request: X` then `Response: Y`; without a stop, a request verdict that failed
+# to match let the scan continue into the RESPONSE verdict and report that
+# instead — measured as p_unsafe=0.0 on requests the guard itself called
+# harmful. Hitting a stop yields None (fall back to the ordinal tier), never a
+# neighbouring field's answer.
+verdict_stop:
+  guardreasoner_vl_7b: ["response"]
+
+# ------------------------------------------------------- verdict anchor (tier 2)
+# For guards that REASON before deciding, the verdict token is not the first
+# vocabulary match — the chain of thought uses the same words. An anchor names
+# the marker the verdict follows; scanning starts after the marker's LAST
+# occurrence (the one in the final result block). Guards absent from this map
+# are scanned from the start, which is correct for the four that answer
+# immediately. A record whose anchor is missing resolves to None and falls back
+# to the ordinal tier rather than being scored from its reasoning trace.
+verdict_anchor:
+  guardreasoner_vl_7b: ["request"]
 
 # ------------------------------------------------------------------- sweep
 sweep:
