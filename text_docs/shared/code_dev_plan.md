@@ -10,7 +10,7 @@ Where it sits: this is the **secondary, normalization-decode axis** of the decod
 
 **Yes, on the text channel — verified.** The make-or-break risk for a homoglyph attack is silent Unicode normalization anywhere in the path; there is **none** in the encode→evaluate path:
 - The only `unicodedata` use is `unicodedata.category(ch)` (CJK *detection*) in the **flowchart image** renderer — classification, not normalization, and not on the text path.
-- The LLM services `.strip()` only the **response** to test emptiness (`nurc_cluster_service.py:108`, `openai_service.py:65`) — the input prompt is sent **verbatim**.
+- The LLM services `.strip()` only the **response** to test emptiness (`slurm_cluster_service.py:108`, `openai_service.py:65`; the cluster service was named `nurc_cluster_service.py` before llm_utils v3.0.0) — the input prompt is sent **verbatim**.
 - No `NFKC`/`NFKD`/`.normalize()`/`encode('ascii')` in `prompt_transformations` / `task.py` / `defense`.
 
 So homoglyph'd bytes reach the target intact. **Three hard constraints make the fit correct:**

@@ -105,7 +105,7 @@ def _infer_task_type(task) -> TaskType:
         from llm_utils import LLMModel, Provider
         try:
             m = LLMModel.from_string(task.judge_model)
-            return (TaskType.CLUSTER_MODEL if m.provider == Provider.NU_CLUSTER
+            return (TaskType.CLUSTER_MODEL if m.provider == Provider.SLURM_CLUSTER
                     else TaskType.API_MODEL)
         except ValueError:
             return TaskType.NO_MODEL
@@ -115,7 +115,7 @@ def _infer_task_type(task) -> TaskType:
         from llm_utils import LLMModel, Provider
         try:
             m = LLMModel.from_string(model_str)
-            if m.provider == Provider.NU_CLUSTER:
+            if m.provider == Provider.SLURM_CLUSTER:
                 return TaskType.CLUSTER_MODEL
         except ValueError:
             pass
@@ -188,7 +188,7 @@ def _collect_model_strings(obj) -> list:
 
 
 def _required_cluster_models_for_task(info: "TaskInfo") -> set:
-    """Cluster-hosted (vLLM / Provider.NU_CLUSTER) models a task needs.
+    """Cluster-hosted (vLLM / Provider.SLURM_CLUSTER) models a task needs.
 
     Thin wrapper over `_referenced_models_for_task` filtered to the cluster
     provider — the historical name/behavior the scheduler relies on. To ask the
@@ -196,7 +196,7 @@ def _required_cluster_models_for_task(info: "TaskInfo") -> set:
     call `_referenced_models_for_task(info, {Provider.BEDROCK})`.
     """
     from llm_utils import Provider
-    return _referenced_models_for_task(info, {Provider.NU_CLUSTER})
+    return _referenced_models_for_task(info, {Provider.SLURM_CLUSTER})
 
 
 def _referenced_models_for_task(info: "TaskInfo", providers=None) -> set:

@@ -163,7 +163,7 @@ class TaskNeed:
     ids (each consumes a server slot / budget); the two booleans are capability
     demands that gate which cluster can run it (see ClusterSpec)."""
     idx: int
-    gpu_models: frozenset          # NU_CLUSTER model ids needing a vLLM server
+    gpu_models: frozenset          # SLURM_CLUSTER model ids needing a vLLM server
     needs_bedrock: bool = False    # references ≥1 Bedrock model → bedrock cluster only
     needs_other_api: bool = False  # references ≥1 non-Bedrock API model → api_keys cluster
 
@@ -322,7 +322,7 @@ def compute_task_needs(preset) -> list[TaskNeed]:
 
     Reuses the orchestrator's own ``_referenced_models_for_task`` so the split
     key stays exactly consistent with what the pipeline actually serves/calls.
-    A model is classed by provider: NU_CLUSTER → a GPU server slot; BEDROCK →
+    A model is classed by provider: SLURM_CLUSTER → a GPU server slot; BEDROCK →
     needs Bedrock creds (xc); any other non-local API provider → needs op keys
     (aicr/nurc).
     """
@@ -336,13 +336,13 @@ def compute_task_needs(preset) -> list[TaskNeed]:
         info = TaskInfo(index=i, task=task, name=_get_task_name(task, i))
         all_models = _referenced_models_for_task(info, None)
         gpu = frozenset(
-            _model_key(m) for m in all_models if m.provider == Provider.NU_CLUSTER)
+            _model_key(m) for m in all_models if m.provider == Provider.SLURM_CLUSTER)
         needs_bedrock = any(m.provider == Provider.BEDROCK for m in all_models)
         # "other API" = anything needing a key that isn't Bedrock and isn't a
         # GPU-served or in-process-local model (OpenAI/Anthropic/Google/DeepSeek/
         # Z.AI/xAI/Moonshot). These need the op-injected keys → aicr/nurc.
         needs_other_api = any(
-            m.provider not in (Provider.NU_CLUSTER, Provider.BEDROCK, Provider.LOCAL)
+            m.provider not in (Provider.SLURM_CLUSTER, Provider.BEDROCK, Provider.LOCAL)
             for m in all_models)
         out.append(TaskNeed(idx=i, gpu_models=gpu,
                             needs_bedrock=needs_bedrock,
