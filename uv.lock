@@ -1191,7 +1191,7 @@ requires-dist = [
     { name = "graphviz", specifier = ">=0.21,<0.22" },
     { name = "homoglyphs", specifier = ">=2.0.4,<3.0.0" },
     { name = "json-repair", specifier = ">=0.56.0,<0.57.0" },
-    { name = "llm-utils", git = "https://github.com/vacantfury/llm_utils.git?rev=v3.0.0" },
+    { name = "llm-utils", git = "https://github.com/vacantfury/llm_utils.git?rev=v3.1.0" },
     { name = "mlflow", specifier = ">=3.10.0,<4.0.0" },
     { name = "numpy", specifier = ">=2.0,<2.3" },
     { name = "openai", specifier = ">=2.16.0,<3.0.0" },
@@ -1419,8 +1419,8 @@ wheels = [
 
 [[package]]
 name = "llm-utils"
-version = "3.0.0"
-source = { git = "https://github.com/vacantfury/llm_utils.git?rev=v3.0.0#9af5630797680f0ec7e6784549d0b9e0dfaa92f9" }
+version = "3.1.0"
+source = { git = "https://github.com/vacantfury/llm_utils.git?rev=v3.1.0#3f30a874febf9621b70967950f06873ca7a20046" }
 dependencies = [
     { name = "anthropic" },
     { name = "google-genai" },
