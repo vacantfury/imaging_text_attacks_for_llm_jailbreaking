@@ -1,3 +1,10 @@
+# ⚠️ HISTORICAL — NOT RUNNABLE AS-IS (audit 2026-07-24).
+# This preset ran 2026-07-19 as job 8470586 (results recorded in
+# text_docs/bestofn_attack/experiment_results.md, Round 4 "Baseline round
+# RESOLVED"). Its source_file `data/harmbench_bon_100.jsonl` no longer exists
+# in the repo; regenerate via scripts/expand_bon_dataset.py (or point at the
+# current data/harmbench_bon_r4.jsonl) before any re-run. Kept for provenance.
+#
 # bestofn_attack — BASELINE round, Stage 1 (transforms). Attack-paper baselines.
 #   (A) FLOOR      = raw prompt (non_llm_baseline, passthrough) — "does the wrapper do anything?"
 #   (B) SINGLE-BEST = code_attack ALONE (the strongest base attack) — the confound control:
