@@ -410,8 +410,13 @@ def _resolve_step_config(
     for new transformations (deep_inception, code_attack, ECSO defenses)
     that have no YAML defaults — avoids polluting the wrapper with unrelated
     subsystem defaults.
+
+    Classical-language configs live one level deeper
+    (conf/text_encoding/classical_language/<lang>.yaml); they merge as
+    default.yaml → <lang>.yaml → task_params, so encoder defaults like
+    `model:` apply without every task passing them explicitly.
     """
-    from src.experiment.config import CONF_DIR
+    from src.experiment.config import CONF_DIR, _deep_merge, _load_yaml
 
     canonical, _ = resolve_transformation_name(type_name)
     is_image = canonical.startswith("ir_")
@@ -432,6 +437,17 @@ def _resolve_step_config(
                 subsystem, override_name=name,
                 task_overrides=task_params or None,
             )
+
+    if canonical == "llm_classical_language":
+        lang = type_name[:-len("_literary")] if type_name.endswith("_literary") else type_name
+        deep_path = CONF_DIR / subsystem / "classical_language" / f"{lang}.yaml"
+        if deep_path.exists():
+            merged = _load_conf(subsystem)          # text_encoding/default.yaml
+            merged = _deep_merge(merged, _load_yaml(deep_path))
+            if task_params:
+                merged = _deep_merge(merged, task_params)
+            return merged
+
     return dict(task_params or {})
 
 
