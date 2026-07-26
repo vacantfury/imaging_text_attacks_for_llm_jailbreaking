@@ -132,3 +132,17 @@ knowledge/
 
 # Private career-weighted venue planning (personal strategy — never commit)
 text_docs/venue_value.md
+
+# ── Analyzed results — NOT published (owner 2026-07-26) ───────────────────────
+# The repo publishes CODE and DESIGN, never raw outputs or analyzed results.
+# `outputs/` (raw) was already ignored; these are the ANALYZED layer, which had
+# been tracked by oversight since the repo's early commits.
+text_docs/bestofn_attack/experiment_results.md
+text_docs/bestofn_attack/experiment_matrix.md
+text_docs/autoattack_defense/experiment_results.md
+text_docs/autoattack_defense/experiment_matrix.md
+text_docs/autoattack_defense/experiments_findings.md
+text_docs/autoattack_defense/progress_report.md
+text_docs/imgaug_defense/experiment_matrix.md
+text_docs/imgaug_defense/paper_b_rebuttal_results.md
+text_docs/bestofn_defense/r4_gate_record.md
