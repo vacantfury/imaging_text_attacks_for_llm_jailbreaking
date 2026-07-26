@@ -45,7 +45,7 @@ from src.utils.provenance import (
 )
 from src.experiment.judging import (  # noqa: F401  (re-exported for back-compat)
     BENCHMARK_ALIASES, KNOWN_BENCHMARKS, _apply_verdict_columns,
-    _dropped_row_warnings, _infer_benchmark, _is_refusal_evaluator,
+    _dropped_row_warnings, draw_diversity_stats, _infer_benchmark, _is_refusal_evaluator,
     _load_prompts, _load_results, _resolve_evaluators, _run_judging,
     _save_results, _upstream_ref,
 )
@@ -422,9 +422,16 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
         # No per-defense yaml exists → fall back to task.defense_config only.
         merged_defense_config = dict(task.defense_config or {})
     defense = create_defense(task.defense, **merged_defense_config)
-    target_service = LLMServiceFactory.create(task.target_model)
+    # Per-task target sampling overrides win over the model/global yaml defaults, and
+    # the RECORDED config is the merged (effective) one — results.json must never claim
+    # a temperature the run did not use.
+    target_overrides = dict(task.target_model_config or {})
+    target_service = LLMServiceFactory.create(task.target_model, **target_overrides)
     target_llm = LLMModel.from_string(task.target_model)
-    target_model_config = LLMServiceFactory._load_model_defaults(target_llm)
+    target_model_config = {
+        **LLMServiceFactory._load_model_defaults(target_llm),
+        **target_overrides,
+    }
 
     # Multi-image overflow guard: a paginated prompt can render to many images
     # and exceed the served context budget. Rather than drop pages (which
@@ -507,6 +514,9 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
         judged["eval_stats"], judged["judge_config_hash"], judged["judge_errors"])
     judge_errors = list(judge_errors) + _dropped_row_warnings(
         all_rows, within_rows, stage_label)
+    # Best-of-N validity: are the draws actually different? Reported, never fatal
+    # (uniform refusals are a legitimate low-diversity case). See draw_diversity_stats.
+    diversity_stats = draw_diversity_stats(all_rows, stage_label)
     judge_method_provenance = task.judge_method or benchmark
     # Record the judge that ACTUALLY scored. A self-contained classifier judge
     # (e.g. wildguard) IS the judge — recording the vestigial config-default LLM
@@ -548,7 +558,7 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
         count=len(all_rows),
         asr=asr,
         refusal_rate=refusal,
-        metrics=judged["metrics"],
+        metrics={**judged["metrics"], **diversity_stats},
         primary_metric=judged["primary_metric"],
         eval_stats=eval_stats,
         target_usage=target_service.get_usage(),

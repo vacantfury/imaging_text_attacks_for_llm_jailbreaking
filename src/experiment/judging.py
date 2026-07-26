@@ -9,6 +9,7 @@ without importing task.py (which would be a circular import). task.py re-exports
 every name below, so `from src.experiment.task import <name>` keeps working.
 """
 import json
+import statistics
 from pathlib import Path
 from typing import Any, Optional
 
@@ -197,6 +198,66 @@ def _dropped_row_warnings(
            f"rate is computed over {len(within_rows)} surviving draws, not {total}")
     logger.error(f"[{stage_label}] THINNED DENOMINATOR — {msg}")
     return [msg]
+
+
+def draw_diversity_stats(all_rows: list[EvaluationRow], stage_label: str) -> dict:
+    """Measure whether a best-of-N cell's draws are actually DIFFERENT.
+
+    A best-of-N number is only meaningful if the N draws are independent samples.
+    Two separate things can silently collapse them into one:
+      * a DETERMINISTIC transform (every draw of a behavior gets the same prompt), and
+      * a DETERMINISTIC target (temperature 0 / greedy decoding).
+    With both, the only thing separating draws is the serving stack's batching
+    nondeterminism, and `union ASR@N` degenerates into an OR over numerical noise.
+
+    This is not hypothetical: it is exactly what happened to 6 of Round 7's 18 cells
+    (2026-07-26). `code_attack` emits ONE encoded string per behavior and
+    conf/llm/default.yaml pinned temperature 0.0, so 100 "draws" produced a median of
+    2-37 distinct responses. Every response was valid, so neither the coverage guard
+    nor the thinned-denominator guard could see it -- they check that rows EXIST, not
+    that they DIFFER. See text_docs/bestofn_attack/experiment_results.md
+    §"R7 VALIDITY DEFECT".
+
+    Reported, never fatal. Low diversity is legitimate when a target refuses uniformly
+    (a well-defended cell genuinely emits the same refusal every time), so this cannot
+    be an error without false-positiving on the strongest defense results. It is a
+    number for a human to read next to the ASR.
+
+    Returns {} for single-draw runs (no `__bonK` ids), else the stats dict that gets
+    merged into the result's `metrics`.
+    """
+    by_behavior: dict[str, list[str]] = {}
+    for row in all_rows:
+        if "__" not in row.id:
+            continue
+        by_behavior.setdefault(row.id.rsplit("__", 1)[0], []).append(row.response or "")
+    if not by_behavior:
+        return {}
+    draws = [len(v) for v in by_behavior.values()]
+    if max(draws) < 2:
+        return {}          # not a multi-draw round
+
+    distinct = [len(set(v)) for v in by_behavior.values()]
+    med_draws = statistics.median(draws)
+    med_distinct = statistics.median(distinct)
+    ratio = (med_distinct / med_draws) if med_draws else 0.0
+    stats = {
+        "draws_per_behavior_median": med_draws,
+        "distinct_responses_per_behavior_median": med_distinct,
+        "draw_diversity_ratio": round(ratio, 4),
+    }
+    msg = (f"draw diversity: median {med_distinct:.0f} distinct responses per "
+           f"{med_draws:.0f} draws (ratio {ratio:.2f})")
+    if ratio < 0.5:
+        logger.warning(
+            f"[{stage_label}] LOW DRAW DIVERSITY — {msg}. If this cell is meant to be "
+            f"best-of-N, its draws are near-duplicates and union ASR@N / QtFS are not "
+            f"interpretable as a search. Check the target temperature (>0?) and whether "
+            f"the transform varies per draw. Legitimate only if the target refuses "
+            f"uniformly.")
+    else:
+        logger.info(f"[{stage_label}] {msg}")
+    return stats
 
 
 def _run_judging(

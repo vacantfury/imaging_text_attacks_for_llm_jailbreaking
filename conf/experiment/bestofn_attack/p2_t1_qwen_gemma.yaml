@@ -1,0 +1,73 @@
+# bestofn_attack Paper-D — P2 RE-RUN at target temperature 1.0, QWEN + GEMMA half (12 cells).
+#
+# Second half of the P2 re-run; the full rationale lives in the sibling preset
+# `p2_t1_llama.yaml` (read that header first) and in
+# text_docs/bestofn_attack/experiment_results.md §"R7 VALIDITY DEFECT". One line: Round 7's
+# code_attack arm had NO best-of-N variation channel (deterministic template + target
+# temperature 0.0 -> median 2-37 distinct responses per 100 draws), so union ASR@N and QtFS
+# were an OR over vLLM batching noise. The fix is `target_model_config: {temperature: 1.0}`.
+#
+# WHY THIS IS A SEPARATE JOB FROM LLAMA. All three targets cannot be served at once: the
+# repo caps SLURM submissions at MAX_SUBMIT_JOBS_PER_USER=8 and AICR's practical server
+# budget is 7. Sizing the replicas each target actually needs (per-cell load balancing means
+# a target's makespan floor is its LONGEST SINGLE cell) gives llama 4 + qwen 3 + gemma 2 = 9
+# replicas + wildguard + orchestrator = 11 jobs. Splitting into two chained runs keeps each
+# inside the budget AND leaves slots free for the Paper C work:
+#   this run = orchestrator + 3 qwen + 2 gemma + wildguard = 7 jobs.
+# Squeezing all three into one run at 2 replicas each would put llama at 51.0/2 = 25.5h,
+# over AICR's 24h cpu wall, and results write ONLY at cell end — a timeout loses the cell.
+#
+# SIZING (from R7's measured elapsed_seconds):
+#   qwen  six cells sum to 45.4h; longest = SemanticSmooth+surface 16.0h. 3 replicas ->
+#         45.4/3 = 15.1h < 16.0h, so qwen's makespan sits at its 16.0h floor.
+#   gemma six cells sum to 19.3h; longest = SemanticSmooth+code 9.7h. 2 replicas ->
+#         19.3/2 = 9.7h == the floor, so gemma costs nothing extra by sharing this run
+#         (4 replicas would finish no sooner) and frees its 2 slots for qwen.
+#   Run makespan = max(16.0h, 9.7h) = 16.0h, against AICR's 24h wall.
+#
+# GEMMA CAVEAT (unchanged, carry into Limitations): Gemma runs with a 3072-token generation
+# budget vs 16384 for Llama/Qwen — its 8192 sliding-window context makes parity impossible.
+# The budget is tokenizer-MEASURED, not estimated; see conf/llm/gemma2_9b_it.yaml.
+#
+#   sbatch --dependency=afterok:<llama_jobid> scripts/run_experiment_aicr.sbatch bestofn_attack/p2_t1_qwen_gemma
+#
+# SELF-VERIFYING: each cell emits `draw_diversity_ratio` into results.json metrics and logs
+# LOW DRAW DIVERSITY below 0.5. Expect the code cells to rise from ~0.37 (qwen) / ~0.06
+# (gemma) to near 1.0. If they do not, the fix failed — nothing here is reportable.
+num_main_job_threads: 12     # all 12 cells in flight across the two targets' replicas
+num_cluster_jobs: 7          # orchestrator + 3 qwen + 2 gemma + wildguard (6 servers <= AICR budget 7)
+
+_e: &e
+  mode: defense+evaluate
+  target_model_config: {temperature: 1.0}   # THE FIX — see p2_t1_llama.yaml header
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_p2_text_t1
+
+_q: &q {<<: *e, target_model: qwen2_5_7b_instruct}
+_g: &g {<<: *e, target_model: gemma2_9b_it}
+
+_CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260718_213010_40825967/code_attack
+_SURF: &surf outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_20260718_050205_56951903/variance_channel_bon
+
+_SS: &ss {n_copies: 5, perturbation_model: null, judge_model: wildguard}
+
+# ORDER MATTERS: each target's makespan drivers first, interleaved so both targets' servers
+# are saturated from t=0 rather than one target monopolising the semaphore.
+# R7 measured — qwen: SS+surf 16.0h, SS+code 12.9h, SAGE+code 6.9h, nodef+code 6.7h,
+# SAGE+surf 1.5h, nodef+surf 1.4h;  gemma: SS+code 9.7h, SS+surf 3.9h, nodef+code 4.0h,
+# nodef+surf 1.1h, SAGE+code 0.4h, SAGE+surf 0.3h.
+tasks:
+  - {<<: *q, source_transform_subdir: *surf, defense: semantic_smooth, defense_config: *ss}
+  - {<<: *g, source_transform_subdir: *code, defense: semantic_smooth, defense_config: *ss}
+  - {<<: *q, source_transform_subdir: *code, defense: semantic_smooth, defense_config: *ss}
+  - {<<: *g, source_transform_subdir: *surf, defense: semantic_smooth, defense_config: *ss}
+  - {<<: *q, source_transform_subdir: *code, defense: sage}
+  - {<<: *g, source_transform_subdir: *code, defense: no_defense}
+  - {<<: *q, source_transform_subdir: *code, defense: no_defense}
+  - {<<: *g, source_transform_subdir: *surf, defense: no_defense}
+  - {<<: *q, source_transform_subdir: *surf, defense: sage}
+  - {<<: *g, source_transform_subdir: *code, defense: sage}
+  - {<<: *q, source_transform_subdir: *surf, defense: no_defense}
+  - {<<: *g, source_transform_subdir: *surf, defense: sage}

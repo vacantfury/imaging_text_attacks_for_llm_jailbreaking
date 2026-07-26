@@ -1,0 +1,17 @@
+# Qwen2.5-7B-Instruct (alibaba) — Paper-D (BoN-wrapped CodeAttack) text-LLM target.
+#
+# Created 2026-07-26 for the P2 temperature-1.0 re-run. Until now this target ran on the
+# bare defaults (num_instances=1), which is why Round 7 serialized all six Qwen cells on a
+# single replica. Standard bf16 serve — 7B ≈ 15 GB, fits one AICR 96GB GPU per replica; no
+# trust_remote_code / mm flags, and the 20480 default context is within Qwen2.5's 32k
+# window so no max_model_len / max_tokens override is needed (contrast gemma2_9b_it.yaml,
+# whose 8192 sliding-window ceiling forces both).
+model:
+  model: Qwen/Qwen2.5-7B-Instruct
+
+cluster:
+  # 3 replicas: Qwen's six cells sum to 45.4h of measured work and its longest single cell
+  # is 16.0h (SemanticSmooth+surface), so 3 replicas put the makespan at that 16.0h floor
+  # (45.4/3 = 15.1h < 16.0h). Sharing a run with Gemma at 2: 5 replicas + wildguard +
+  # orchestrator = 7 jobs, exactly AICR's budget.
+  num_instances: 3

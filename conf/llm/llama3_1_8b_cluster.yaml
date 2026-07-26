@@ -9,4 +9,9 @@ model:
   model: meta-llama/Llama-3.1-8B-Instruct
 
 cluster:
-  num_instances: 3
+  # num_instances=4 for the P2 (temperature-1.0) re-run: llama's six cells sum to 51h of
+  # measured work, so 4 replicas bring the per-target makespan down to its longest SINGLE
+  # cell (SemanticSmooth+CodeAttack, 18.1h at T=0) — the floor, since load-balancing is
+  # per-cell. 4 replicas + wildguard + orchestrator = 6 jobs, inside AICR's budget of 7
+  # and the repo's MAX_SUBMIT_JOBS_PER_USER=8, leaving slots for the Paper C work.
+  num_instances: 4

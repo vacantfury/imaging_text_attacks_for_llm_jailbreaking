@@ -37,4 +37,8 @@ cluster:
   # its slowest single cell (SemanticSmooth+CodeAttack: 18.1h on Llama), so 4 replicas
   # is the point of diminishing returns -- enough that no cell queues behind another for
   # long, few enough to leave server slots free under AICR's budget of 7.
-  num_instances: 4
+  # 2 (was 4) for the P2 re-run, where Gemma shares a run with Qwen. Gemma's six cells sum
+  # to 19.3h and its longest single cell is 9.7h, so makespan is 9.7h at BOTH 2 and 4
+  # replicas (per-cell balancing means the longest cell is the floor) — the 2 freed slots
+  # go to Qwen, whose 45.4h total genuinely needs 3. Raise again if Gemma runs alone.
+  num_instances: 2

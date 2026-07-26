@@ -1,0 +1,68 @@
+# bestofn_attack Paper-D — P2 RE-RUN at target temperature 1.0, LLAMA half (6 cells).
+#
+# WHY THIS ROUND EXISTS. Round 7's best-of-N superstructure was invalid on 6 of its 18
+# cells. `code_attack` is a DETERMINISTIC template — the transform's prompts.jsonl carries
+# exactly ONE distinct encoded string per behavior (min=med=max=1 over all 100) — and the
+# target ran at conf/llm/default.yaml's `temperature: 0.0` with seed 42. Identical input +
+# greedy decoding means the 100 "BoN draws" had NO variation channel: measured median 2-37
+# distinct responses per 100 draws (llama 15, qwen 37, gemma 6 undefended; 14/4/2 under
+# SAGE). Union ASR@N and QtFS on those cells were an OR over vLLM batching noise, not over
+# an attacker's search. Full diagnosis: text_docs/bestofn_attack/experiment_results.md
+# §"R7 VALIDITY DEFECT". Sound in R7 and re-run here only for temperature UNIFORMITY: the
+# 6 surface cells (100 distinct prompts/behavior) and the 3 code x SemanticSmooth cells
+# (SS's own perturbation_temperature 0.7 supplied the channel: 100/100 distinct).
+#
+# THE FIX: `target_model_config: {temperature: 1.0}` — BoN's standard target temperature
+# (Hughes et al. 2024). Set HERE, in the preset, deliberately: a best-of-N round's target
+# temperature is an EXPERIMENT parameter, not a model property, and burying it in a global
+# default is precisely how the defect survived a full round. The knob is new
+# (DefenseEvaluateTask.target_model_config) and the EFFECTIVE merged value is recorded into
+# each results.json, so provenance can never again claim a temperature the run did not use.
+# SemanticSmooth's published perturbation_temperature (0.7) is untouched — it is passed
+# explicitly at the perturbation step; only the TARGET's generation temperature moves.
+#
+# UNCHANGED FROM R7 (so the comparison is clean): same stage-1 transform dirs (the encoded
+# prompts do not depend on target temperature — no stage-1 re-run needed), same defenses,
+# same 100 behaviors x 100 draws, same wildguard free first pass.
+#
+# SELF-VERIFYING: every cell now emits `draw_diversity_ratio` into results.json's metrics
+# and logs LOW DRAW DIVERSITY below 0.5 (src/experiment/judging.py::draw_diversity_stats).
+# Expect the code cells to jump from ~0.15 to near 1.0. If they do NOT, the fix failed and
+# nothing from this round is reportable — check that before reading any ASR.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/p2_t1_llama
+#
+# SIZING (from R7's measured elapsed_seconds; load-balancing is PER-CELL, so a target's
+# makespan floor is its LONGEST SINGLE cell and replicas only stop cells queueing):
+#   llama six cells sum to 51.0h; longest = SemanticSmooth+code at 18.1h.
+#   4 replicas -> 51.0/4 = 12.8h < 18.1h, so makespan = 18.1h against AICR's 24h cpu wall.
+# That is ~6h of slack. Results write ONLY at cell end, so a wall timeout loses the cell —
+# hence SS+code is ordered FIRST to start at t=0. T=1.0 may shift runtimes either way
+# (sampling escapes the degenerate-repetition tail that padded greedy responses).
+num_main_job_threads: 6      # all 6 cells in flight; 4 replicas serve them, 2 queue briefly
+num_cluster_jobs: 6          # orchestrator + 4 llama replicas + wildguard (5 servers <= AICR budget 7)
+
+_e: &e
+  mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  target_model_config: {temperature: 1.0}   # THE FIX — see header
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_p2_text_t1
+
+_CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260718_213010_40825967/code_attack
+_SURF: &surf outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_20260718_050205_56951903/variance_channel_bon
+
+_SS: &ss {n_copies: 5, perturbation_model: null, judge_model: wildguard}
+
+# ORDER MATTERS: heaviest first so the makespan drivers start at t=0 and the cheap cells
+# backfill as replicas free up (R7 measured: SS+code 18.1h, nodef+surf 12.3h, SAGE+code
+# 8.9h, SS+surf 7.5h, nodef+code 3.4h, SAGE+surf 0.8h).
+tasks:
+  - {<<: *e, source_transform_subdir: *code, defense: semantic_smooth, defense_config: *ss}
+  - {<<: *e, source_transform_subdir: *surf, defense: no_defense}
+  - {<<: *e, source_transform_subdir: *code, defense: sage}
+  - {<<: *e, source_transform_subdir: *surf, defense: semantic_smooth, defense_config: *ss}
+  - {<<: *e, source_transform_subdir: *code, defense: no_defense}
+  - {<<: *e, source_transform_subdir: *surf, defense: sage}

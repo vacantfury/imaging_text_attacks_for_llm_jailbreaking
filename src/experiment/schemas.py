@@ -420,6 +420,18 @@ class DefenseEvaluateTask(_TaskBase):
     defense: str = "no_defense"
     defense_config: dict[str, Any] = Field(default_factory=dict)
     target_model: str
+    # Per-task TARGET sampling overrides (temperature, max_tokens, seed, ...).
+    # Merged over conf/llm/default.yaml + conf/llm/<model>.yaml, and recorded into
+    # results.json's target_model_config so the saved provenance is the EFFECTIVE config.
+    #
+    # Exists because a best-of-N round's target temperature is an EXPERIMENT parameter,
+    # not a model property, and burying it in the global default is how R7's validity
+    # defect happened: `code_attack` emits one identical prompt per behavior, the global
+    # default pinned temperature 0.0, and so the "100 BoN draws" had no variation channel
+    # at all — only vLLM batching noise (2-37 distinct responses per 100 draws). Any
+    # preset whose draws are meant to differ MUST set the knob here, visibly.
+    # See text_docs/bestofn_attack/experiment_results.md §"R7 VALIDITY DEFECT".
+    target_model_config: dict[str, Any] = Field(default_factory=dict)
     judge_model: Optional[str] = None  # per-task judge LLM override; lets parallel papers use different judges (else conf/evaluation default)
     system_message: Optional[str] = None
     judge_method: Optional[str] = None    # override; usually None (canonical)
