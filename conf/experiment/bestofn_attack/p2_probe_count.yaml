@@ -1,0 +1,76 @@
+# bestofn_attack Paper-D — PROBE-COUNT mechanism test (4 cells, llama, T=1.0).
+#
+# TESTS THE MECHANISM, not the attack. Claim under test (recorded in
+# text_docs/bestofn_attack/experiment_results.md §MECHANISM): best-of-N's power against a
+# defense is the number of INDEPENDENT PROBES reaching the defense's decision boundary,
+# not N itself.
+#
+# WHY THESE FOUR CELLS. `canonicalize` and `canonicalize_guard` apply the IDENTICAL
+# deterministic rewrite (NFKC + strip-control + case-fold + whitespace, no LLM); the only
+# difference is that the _guard variant then screens the canonical form with a classifier.
+# A controlled contrast: same rewrite, +/- the decision boundary. Any difference in how
+# protection scales with N is attributable to the GATE alone. Crossing that with the two
+# attacks gives a 2x2 whose predicted pattern is sharp:
+#
+#   probe count reaching the boundary (MEASURED offline from the stored prompts):
+#     surface arm = 100 distinct canonical forms per behavior  (canonicalization collapses
+#                   0.0% -- case-fold works, but BoN's character scrambling + ASCII noise
+#                   survive it entirely)
+#     code arm    =   1 distinct form per behavior (code_attack is a deterministic template)
+#
+#   PREDICTIONS
+#     canonicalize      x surface -> N-invariant ratio  (transform, no boundary to search)
+#     canonicalize      x code    -> N-invariant ratio, near 1.0 (canonicalization is a
+#                                    near-no-op on plain-ASCII code prompts: a control)
+#     canonicalize_guard x surface -> ratio ERODES toward 1 (100 probes; the attacker
+#                                    searches around the classifier) -- reproduces the
+#                                    0.35->1.00 / 0.43->0.70 / 0.37->0.88 pattern already
+#                                    seen in R3/R5 at 100-behavior scale
+#     canonicalize_guard x code    -> ratio FLAT in N (ONE probe: the gate makes one
+#                                    decision per behavior, so no search is possible)
+#                                    *** THIS IS THE CRUX. A flat code-arm curve beside an
+#                                    eroding surface-arm curve, same defense, is the
+#                                    within-defense contrast that turns the mechanism from
+#                                    inferred into demonstrated. ***
+#
+# ALSO CLOSES A KNOWN WEAK LEG: "deterministic transforms are N-invariant" currently rests
+# on ONE 10-behavior cell. SAGE cannot settle it -- it is floor-pinned near ASR 0 on all
+# three targets, so it is incapable of exhibiting erosion either way. `canonicalize` is
+# unpinned (R2: ASR ~19-27% against ~26% undefended), so it can actually move.
+#
+# BASELINES come free from run A (P2 llama no_defense x {code, surface} at T=1.0) -- same
+# target, same temperature, same draws. No baseline cells needed here.
+#
+# T=1.0 for the same reason as the rest of P2: at temperature 0 the code arm has no
+# variation channel at all and every N-curve on it is an artifact. See §"R7 VALIDITY DEFECT".
+#
+#   sbatch --dependency=afterok:<run_B_jobid> scripts/run_experiment_aicr.sbatch bestofn_attack/p2_probe_count
+#
+# FOOTPRINT: $0 (canonicalize is a pure string transform, no LLM; target + wildguard only).
+# 4 llama replicas + wildguard = 6 jobs, inside AICR's budget of 7. Measured comparators
+# from run A: llama no_defense x code 2.7h, x surface 1.0h on a dedicated replica; the
+# _guard cells are CHEAPER than no_defense (blocked prompts never reach the target), so
+# makespan ~3h.
+num_main_job_threads: 4      # all 4 cells in flight, one replica each
+num_cluster_jobs: 6          # orchestrator + 4 llama replicas + wildguard (judge AND guard: one server)
+
+_e: &e
+  mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  target_model_config: {temperature: 1.0}
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_p2_probe_count
+
+_CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260718_213010_40825967/code_attack
+_SURF: &surf outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_20260718_050205_56951903/variance_channel_bon
+
+# guard_model is REQUIRED by CanonicalizeGuardDefense.__init__ and has no default.
+_G: &g {guard_model: wildguard}
+
+tasks:
+  - {<<: *e, source_transform_subdir: *surf, defense: canonicalize_guard, defense_config: *g}
+  - {<<: *e, source_transform_subdir: *code, defense: canonicalize_guard, defense_config: *g}
+  - {<<: *e, source_transform_subdir: *surf, defense: canonicalize}
+  - {<<: *e, source_transform_subdir: *code, defense: canonicalize}
