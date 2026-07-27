@@ -16,7 +16,16 @@ cluster:
   # --- AICR-specific server params (rest inherit _defaults.yaml) ---
   partition: rtx-batch                      # use b200-batch for the biggest models
   gpu_request_style: gpus                   # homogeneous partitions -> `--gpus=N`
-  excluded_nodes: []
+  # a0017 EXCLUDED 2026-07-26: it killed the entire P2 qwen+gemma round (job 210766).
+  # All 5 vLLM servers (3 qwen + 2 gemma) were placed on a0017 and every one died within
+  # ~60s with `RuntimeError: CUDA unknown error - this may be due to an incorrectly set up
+  # environment ... Setting the available devices to be zero`, so all 12 cells failed at
+  # server discovery. SLURM considered the node healthy throughout (State=MIXED+PLANNED,
+  # 3 GPUs free) — the classic "scheduler thinks the GPU is free but CUDA cannot init"
+  # state. The same round's llama half had run 15h clean on a0002/a0006/a0010 hours before,
+  # so this is node-local, not config. Re-test and remove this entry once the node is
+  # confirmed healthy; leaving it costs one node out of ~17.
+  excluded_nodes: [a0017]
   time_limit: "24:00:00"                    # default vLLM server wall = AICR's 24h cap (raised 2026-07-21:
                                             # big multi-target rounds with SemanticSmooth's 5x overhead on
                                             # 10k-draw cells exceed 8h per target; servers auto-shut when their
