@@ -169,10 +169,11 @@ def _referenced_models_for_task(info: "TaskInfo", providers=None) -> set:
     Without path (2), removing `judge_method` from task YAMLs would silently
     bypass cluster judge discovery — tasks would hang on acquire_endpoint().
 
-    Defense-config scan is DELIBERATELY narrow: only the two known
-    second-model keys (`guard_model`, `perturbation_model`) are looked up —
-    defense_config is a free-form dict and we don't want to guess at
-    arbitrary keys. Extend this tuple deliberately if a new defense adds
+    Defense-config scan is DELIBERATELY narrow: only the known second-model
+    keys (`guard_model`, `perturbation_model`, and modality_complete's
+    `amplifier_model` / `recover_model` / `gate_model` / `decode_model`) are
+    looked up — defense_config is a free-form dict and we don't want to guess
+    at arbitrary keys. Extend this tuple deliberately if a new defense adds
     another second-model config key.
 
     Budget note: a defense+evaluate task with a cluster target AND a cluster
@@ -239,9 +240,13 @@ def _referenced_models_for_task(info: "TaskInfo", providers=None) -> set:
                     required.add(judge)
 
         # Defense-owned second model(s) — guard_baseline / modality_complete's
-        # guard_model, and semantic_smooth's perturbation_model. Only these
-        # two keys are scanned (see docstring).
-        for key in ("guard_model", "perturbation_model"):
+        # guard_model, semantic_smooth's perturbation_model, and (2026-07-28)
+        # modality_complete's amplifier_model / per-step recover|gate|decode
+        # overrides. Only these keys are scanned (see docstring); a key missing
+        # here means its server is never submitted and the task hangs on
+        # acquire_endpoint().
+        for key in ("guard_model", "perturbation_model", "amplifier_model",
+                    "recover_model", "gate_model", "decode_model"):
             model_str = task.defense_config.get(key)
             if model_str:
                 m = _resolve_model(model_str)

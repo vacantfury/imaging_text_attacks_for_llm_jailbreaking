@@ -264,6 +264,19 @@ class ModalityComplete(Defense):
                 guard see only the lossy summary. Cost: benign prompts are
                 double-checked, re-introducing over-refusal (the fundamental
                 tension the RQ4 result exposes).
+
+        Passed through **kwargs (decoder-disentanglement, 2026-07-28):
+            amplifier_model: run the amplifier's OWN steps (recover, gate,
+                decode) on a SEPARATE model instead of the target. Default
+                None = self-amplification, the shipped behavior. The target
+                still answers the original prompt, so this changes only the
+                defense's recovery/decoding capacity, never the attack surface
+                being defended. Exists to answer whether the residual ASR
+                ceiling is fundamental or an artifact of a 7B self-decoding.
+            recover_model / gate_model / decode_model: per-step overrides that
+                win over `amplifier_model`. Recovery is the multimodal step
+                (needs a VLM); decode is text-only (any strong LLM will do), so
+                setting them separately isolates WHICH step bounds the ceiling.
         """
         super().__init__(decode_text=decode_text, guard_model=guard_model,
                          decode_style=decode_style, gate_decode=gate_decode,
@@ -276,11 +289,28 @@ class ModalityComplete(Defense):
             LLMModel.from_string(guard_model) if guard_model else None
         )
         self._guard_service: Optional[BaseLLMService] = None
+        self._amp_services: dict[str, BaseLLMService] = {}
 
     def _get_guard_service(self) -> BaseLLMService:
         if self._guard_service is None:
             self._guard_service = LLMServiceFactory.create(self._guard_model_name)
         return self._guard_service
+
+    def _amplifier_service(self, role: str,
+                           target_service: BaseLLMService) -> BaseLLMService:
+        """Service that performs one amplifier step (`recover` | `gate` | `decode`).
+
+        Defaults to the TARGET (self-amplification, the shipped behavior). A
+        per-role override wins over `amplifier_model`, which wins over the target.
+        """
+        name = (self._config.get(f"{role}_model")
+                or self._config.get("amplifier_model"))
+        if not name:
+            return target_service
+        if name not in self._amp_services:
+            logger.info(f"ModalityComplete: {role} runs on SEPARATE model {name}")
+            self._amp_services[name] = LLMServiceFactory.create(name)
+        return self._amp_services[name]
 
     def query(
         self,
@@ -302,9 +332,10 @@ class ModalityComplete(Defense):
                 recover_convs.append((p.id, [(RECOVER_PROMPT, img)]))
             logger.info(
                 f"ModalityComplete step 1 (RECOVER): {len(recover_convs)} images")
-            recovered_by_id = dict(target_service.batch_chat(
-                conversations=recover_convs, system_message=None, is_test=True,
-            ))
+            recovered_by_id = dict(
+                self._amplifier_service("recover", target_service).batch_chat(
+                    conversations=recover_convs, system_message=None, is_test=True,
+                ))
 
         # ---------- Step 2: UNION of both channels (either may be encoded) ----------
         union_by_id: dict[str, str] = {}
@@ -344,9 +375,10 @@ class ModalityComplete(Defense):
             logger.info(
                 f"ModalityComplete step 2.5 (GATE, llm): {len(gate_convs)} "
                 f"obfuscation checks")
-            gate_out = dict(target_service.batch_chat(
-                conversations=gate_convs, system_message=None, is_test=True,
-            ))
+            gate_out = dict(
+                self._amplifier_service("gate", target_service).batch_chat(
+                    conversations=gate_convs, system_message=None, is_test=True,
+                ))
             decode_ids = {
                 p.id for p in prompts
                 if _gate_says_obfuscated(gate_out.get(p.id, ""))
@@ -371,9 +403,10 @@ class ModalityComplete(Defense):
                 f"{len(decode_convs)} decodes"
                 + (f" (gated: {len(prompts) - len(decode_convs)} passed raw)"
                    if gate_decode else ""))
-            decoded_by_id = dict(target_service.batch_chat(
-                conversations=decode_convs, system_message=None, is_test=True,
-            )) if decode_convs else {}
+            decoded_by_id = dict(
+                self._amplifier_service("decode", target_service).batch_chat(
+                    conversations=decode_convs, system_message=None, is_test=True,
+                )) if decode_convs else {}
             # obfuscated -> decoded text; plain (gated out) -> raw union
             guard_content_by_id = {
                 p.id: (decoded_by_id.get(p.id, union_by_id[p.id])
@@ -483,6 +516,9 @@ class ModalityComplete(Defense):
         SEPARATE service from the target). None when guard_model=None (the
         original behavior has no second model — steps 1-4 all run on
         target_service, whose usage is tracked/surfaced separately)."""
+        usage: dict = {}
         if self._guard_service is not None:
-            return {"guard": self._guard_service.get_usage()}
-        return None
+            usage["guard"] = self._guard_service.get_usage()
+        for name, svc in self._amp_services.items():
+            usage[f"amplifier:{name}"] = svc.get_usage()
+        return usage or None
