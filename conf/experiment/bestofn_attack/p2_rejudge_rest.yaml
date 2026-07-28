@@ -1,0 +1,64 @@
+# bestofn_attack Paper-D — P2 REJUDGE, the remaining 16 cells, gpt-5-mini.
+#
+# Completes the reportable dataset: run A's 6 llama cells were rejudged by
+# p2_rejudge_llama (job 216776); this covers the 12 qwen+gemma cells from run B and
+# the 4 probe-count cells from run C. 16 x 10,000 = 160,000 calls.
+#
+# The 6 llama p2_text_t1 cells are DELIBERATELY ABSENT — they are the same stored
+# responses run A already rejudged. Rejudging them would spend ~$54 to recompute
+# numbers we hold.
+#
+# COST: $144 at the measured $0.00090/call (pilot, 510 calls, 0 errors).
+#
+# WHY NOT judge-until-first-success (owner asked 2026-07-27; measured, then rejected):
+# stopping at the first jailbreak per behavior would cut this to ~$53 (64% fewer calls),
+# and it is statistically sound — first-success position is geometric in the per-draw
+# rate, so it estimates the same ASR-vs-N curve. It was rejected because the saving sits
+# in the wrong cells: high-ASR cells save 92-97%, but SAGE x surface on qwen and gemma
+# save exactly 0% (100/100 behaviors never succeed, so all 100 draws get judged anyway).
+# The saving concentrates where precision matters least and vanishes where the paper's
+# headline lives. It would also cost per-draw ASR entirely (most draws never judged) and
+# swap the exact union estimator for a censored one — a bad trade for a paper whose
+# contribution IS careful measurement. Related precedent: an earlier round's gpt-5-mini
+# PREFILTER validation failed on code_attack specifically
+# (commit r5_gpt5mini_rejudge_prefilter_validation_failed_on_code_attack_full_judge_pending).
+# Twice now, judging-fewer-things has broken on the code arm.
+#
+# CPU PARTITION — gpt-5-mini is an API model, so ZERO vLLM servers are submitted and the
+# GPU budget is untouched.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/p2_rejudge_rest
+#
+# VERIFY AFTER (the silent-failure mode): a failed API call is scored "safe" by the
+# HarmBench evaluator, so a quota trip reads as a low ASR rather than an error. Confirm
+# every cell reports total_evaluated == 10000 and fallback_parse_count == 0 before
+# believing any number.
+num_cluster_jobs: 1          # orchestrator only; API judge needs no servers
+num_main_job_threads: 8
+
+_r: &r
+  mode: rejudge
+  judge_model: gpt-5-mini
+
+_D: &D outputs/bestofn_attack/defense+evaluate/harmbench
+
+tasks:
+  # ── run B: qwen ────────────────────────────────────────────────────────────
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_rest, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_no_defense_code_attack_20260727_000812_36776484}
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_rest, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_no_defense_variance_channel_bon_20260727_000811_19304969}
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_rest, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_sage_code_attack_20260727_000813_67168944}
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_rest, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_sage_variance_channel_bon_20260727_000811_96574218}
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_rest, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_semantic_smooth_code_attack_20260727_000812_78766997}
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_rest, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_semantic_smooth_variance_channel_bon_20260727_000811_32043748}
+  # ── run B: gemma ───────────────────────────────────────────────────────────
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_rest, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_no_defense_code_attack_20260727_000813_5925191}
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_rest, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_no_defense_variance_channel_bon_20260727_000811_917828}
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_rest, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_sage_code_attack_20260727_000813_34632562}
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_rest, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_sage_variance_channel_bon_20260727_000811_89808964}
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_rest, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_semantic_smooth_code_attack_20260727_000812_35345914}
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_rest, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_semantic_smooth_variance_channel_bon_20260727_000811_5774993}
+  # ── run C: probe count (llama) ─────────────────────────────────────────────
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_probe, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_canonicalize_code_attack_20260727_114940_97950623}
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_probe, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_canonicalize_variance_channel_bon_20260727_114939_90553095}
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_probe, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_canonicalize_guard_code_attack_20260727_114940_24730944}
+  - {<<: *r, campaign: bestofn_attack_p2_rejudge_probe, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_canonicalize_guard_variance_channel_bon_20260727_114939_94881649}
