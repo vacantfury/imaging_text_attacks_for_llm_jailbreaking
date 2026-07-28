@@ -1,0 +1,64 @@
+# bestofn_attack Paper-D — REVIEW-1 RESPONSE, LARGER TARGET (4 cells, T=1.0).
+#
+# Answers review 1's blocker (2): "evaluation limited to three small (7-9B) open models
+# with no frontier or large-model validation... Given that SAGE was evaluated on larger
+# models in its original publication, testing only small models creates an unfavorable
+# comparison baseline."
+#
+# TARGET: Llama-3.3-70B-Instruct — already in the AICR cache (132G, verified 2026-07-27),
+# so no download and no gated-license step. It is ~8x the parameter count of our current
+# panel and shares the Llama alignment lineage with our WEAKEST SAGE result, which makes
+# it the sharpest available test rather than the most flattering one.
+#
+# WHY FOUR CELLS AND NOT TWO. The composition claim needs three quantities on any new
+# target: code@N=1, original-BoN@N=100, and composed@N=100, all under SAGE. The two SAGE
+# cells supply all three (N=1 is read off the same stored draws). The two no_defense
+# cells are what make the number COMPARABLE — without an undefended baseline on this
+# target we cannot compute retained reach, and the cross-target contrast that carries
+# the borrowed-strength argument would be unavailable. Skipping them would produce a
+# number we could not interpret.
+#
+# WHAT THIS CAN SHOW, both ways:
+#   - If the composition still breaches SAGE at 70B, the limitation the reviewer flagged
+#     is answered directly and the mechanism gains a scale point.
+#   - If it does NOT, that is a real boundary on the claim and belongs in the paper. The
+#     borrowed-strength account makes a specific prediction we can check independently of
+#     ASR: measure the refusal rate SAGE induces on this target from raw text. A 70B that
+#     refuses itself like Qwen/Gemma (~96%) should resist; one that behaves like
+#     Llama-3.1-8B (~32%) should not. Either outcome is publishable; a null here is
+#     informative rather than a wasted run.
+#
+# JUDGE: wildguard first pass (free, on-cluster), gpt-5-mini rejudge afterwards.
+# NOTHING from the wildguard pass is reportable.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/p3_review1_70b
+#
+# FOOTPRINT: 4 cells x 10,000 = 40,000 generations on a 70B. Heaviest run of this batch.
+# Submit AFTER p3_review1_llama rather than alongside it — the two together would exceed
+# the 8-job per-user cap. Follow-on gpt-5-mini rejudge ~ $36, separate decision.
+#
+# VERIFY AFTER: count == 10000 and status success on every cell, and spot-read raw
+# responses before trusting any surprising number (a 70B refusing far more or far less
+# than the 8B panel is exactly the kind of result to check rather than report).
+num_main_job_threads: 2      # 70B replicas are expensive; two cells in flight
+num_cluster_jobs: 4          # orchestrator + 70B replicas + wildguard judge
+
+_e: &e
+  mode: defense+evaluate
+  target_model: llama_3_3_70b_instruct
+  target_model_config: {temperature: 1.0}
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_p3_review1_70b
+
+_CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260718_213010_40825967/code_attack
+_SURF: &surf outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_20260718_050205_56951903/variance_channel_bon
+
+tasks:
+  # undefended baselines on the new target — required to interpret the SAGE cells
+  - {<<: *e, source_transform_subdir: *code, defense: no_defense}
+  - {<<: *e, source_transform_subdir: *surf, defense: no_defense}
+  # the headline pair
+  - {<<: *e, source_transform_subdir: *code, defense: sage}
+  - {<<: *e, source_transform_subdir: *surf, defense: sage}

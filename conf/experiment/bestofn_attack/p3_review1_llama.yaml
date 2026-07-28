@@ -1,0 +1,80 @@
+# bestofn_attack Paper-D — REVIEW-1 RESPONSE, llama cells (4 cells, T varies).
+#
+# Answers two of review 1's four blockers. Owner authorised 2026-07-27 ("do all that
+# will help the paper") against a stated resource report.
+#
+# ── BLOCK A: a SECOND gate defense (review blocker 4) ────────────────────────────
+# The reviewer's words: "the probe-count account risks being post-hoc rationalization
+# rather than predictive theory" because it rests on ONE constructed gate, and
+# "if such an experiment is added and confirms the predicted ordering, my rating
+# would increase."
+#
+# Design: hold the defense ARCHITECTURE fixed (canonicalize_guard, identical
+# deterministic rewrite) and swap ONLY the classifier — wildguard -> llama_guard_3_8b.
+# That is the controlled way to ask whether the inversion is a property of gates or a
+# property of WildGuard. The published P2 panel used wildguard, so this is a genuine
+# second gate rather than a re-run.
+#
+# PRE-REGISTERED PREDICTION (recorded BEFORE the run, as with the P2 panel):
+#   the ordering must INVERT relative to the transform defenses — i.e. under a gate,
+#   original BoN (100 distinct probes) must retain MORE of its undefended reach than
+#   BoN-wrapped CodeAttack (1 probe). Under wildguard we measured 0.88 vs 0.61.
+#   Prediction: surface retention > code retention again, with the code arm eroding
+#   more slowly across N. A NON-inversion refutes the probe-count account as stated
+#   and must be reported as such — this preset exists to be able to fail.
+#
+# ── BLOCK B: temperature ablation (review's question 3) ──────────────────────────
+# The reviewer asks whether the superadditive effect survives at other temperatures,
+# since we identify target re-sampling as an independent gain channel. SAGE x code on
+# llama at T=0.5 and T=1.5; the T=1.0 cell already exists (P2 run A, 67.0 at N=100),
+# so the three together give the curve. The ENCODING is deterministic, so target
+# temperature is the only thing moving — this isolates target stochasticity exactly.
+#
+# BASELINES come free from P2 run A (llama no_defense x {code, surface} at T=1.0) for
+# block A; block B is read against the existing T=1.0 SAGE cell.
+#
+# JUDGE: wildguard first pass (free, on-cluster) then a gpt-5-mini rejudge, exactly as
+# P2 did. NOTHING from the wildguard pass is reportable — it over-flags the code arm by
+# 41-68% and disagreed with gpt-5-mini by up to 40 coverage points on these very cells.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/p3_review1_llama
+#
+# FOOTPRINT: 4 cells x 10,000 = 40,000 generations. GPU only (no API this stage).
+# Servers: llama replicas + wildguard (judge) + llama_guard_3_8b (guard) = 3 models.
+# Both guard models and the target are already in the AICR cache (verified 2026-07-27),
+# so there is no download step. Expected makespan ~3h from the P2 comparators
+# (no_defense x code 2.7h; the _guard cells are cheaper — blocked prompts never reach
+# the target). Follow-on gpt-5-mini rejudge of all 4 cells ~ $36 at the measured
+# $0.00090/call — that is a SEPARATE preset and a separate decision.
+#
+# VERIFY AFTER: every cell must report count == 10000, status success, and
+# draw_diversity_ratio ~1.0 on the surface arm. A low ratio on the _guard cells is the
+# documented gate exemption (canned refusals are byte-identical), not a defect.
+num_main_job_threads: 4      # all 4 cells in flight
+num_cluster_jobs: 7          # orchestrator + llama replicas + wildguard + llama_guard_3
+
+_e: &e
+  mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_p3_review1
+
+_CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260718_213010_40825967/code_attack
+_SURF: &surf outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_20260718_050205_56951903/variance_channel_bon
+
+# The second gate: same architecture as the published panel, different classifier.
+_G3: &g3 {guard_model: llama_guard_3_8b}
+
+tasks:
+  # ── Block A — second gate defense, T=1.0 to match the published panel ──────────
+  - {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *surf,
+     defense: canonicalize_guard, defense_config: *g3}
+  - {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *code,
+     defense: canonicalize_guard, defense_config: *g3}
+  # ── Block B — temperature ablation on the headline cell (SAGE x code) ──────────
+  - {<<: *e, target_model_config: {temperature: 0.5}, source_transform_subdir: *code,
+     defense: sage}
+  - {<<: *e, target_model_config: {temperature: 1.5}, source_transform_subdir: *code,
+     defense: sage}
