@@ -58,3 +58,13 @@ cluster:
       # margin. Three replicas bring the makespan to the longest single cell.
       # 3 replicas + wildguard = 4 GPU jobs, well inside AICR's max_gpu_jobs=12.
       num_instances: 3
+      # MUST be >= the request max_tokens or vLLM 400s EVERY request (see the same
+      # warning in conf/llm/gemma2_9b_it.yaml). 20480 matches the 8B panel exactly,
+      # which is what makes the generation budget comparable across targets — the
+      # 8B ran max_model_len=20480 / max_tokens=16384. Leaving this at the 8192
+      # default while the preset asked for 16384 tokens rejected all 40,000 requests
+      # and the run still reported "Successful: 4" (job 227537, 2026-07-28).
+      # 70B fp8 ~70 GB on a 96 GB card at utilization 0.92 leaves ~18 GB of KV cache;
+      # one full 20480-token sequence needs ~6.7 GB, so the server starts and vLLM
+      # simply bounds concurrency.
+      max_model_len: 20480
