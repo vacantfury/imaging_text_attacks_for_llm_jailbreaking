@@ -13,24 +13,41 @@ model:
   model: meta-llama/Llama-3.3-70B-Instruct
   max_tokens: 512
 
-# 70B weights ≈ 140 GB at FP16. Originally targeted 4× A100-40GB (TP=4)
-# but the cluster QoS limits GRES-per-job (QOSMaxGRESPerJob) which blocks
-# 4-GPU requests for this user. So we target 2× 80GB cards instead:
-# 2 × 80GB = 160GB → fits weights with KV-cache headroom.
+# 70B weights ≈ 140 GB at FP16, so every cluster here runs it fp8-quantized on a
+# SINGLE card (both NURC's `gpu` PartitionQOS and AICR's rtx-batch make 1 GPU/job
+# the path of least resistance; fp8 ≈ 70 GB fits an H200-141G or an AICR RTX PRO
+# 6000-96G with KV-cache headroom).
 #
-# `gpu_constraint: a100@80g` forces SLURM to schedule on the 80GB A100
-# nodes specifically (cluster has 2 such nodes). Without this constraint
-# a num_gpus=2 request could land on the a100:3 (40GB) node and OOM at
-# weight loading. SLURM constraint syntax also supports `|` for OR
-# (e.g., "a100@80g|h200") if you want to fall back to H200 nodes when
-# 80GB A100s are contended.
+# ── WHY THE `profiles:` SPLIT ────────────────────────────────────────────────
+# The keys under `cluster:` win over conf/clusters/<profile>.yaml on EVERY
+# cluster, so anything naming a node feature, partition, or QoS wall must NOT
+# live there. It did once: `gpu_constraint: cascadelake` (a NURC node feature)
+# reached AICR's rtx-batch partition, where sbatch rejected every server with
+# "Invalid feature specification" and the whole run died in 7 seconds
+# (job 225250, 2026-07-28). Cluster-INVARIANT sizing stays in `cluster:`;
+# cluster-SPECIFIC settings go under `profiles.<cluster>:`.
 cluster:
+  # --- cluster-invariant sizing ---
   num_gpus: 1
-  quantization: fp8           # 1 GPU/job cap (gpu PartitionQOS) → fit 70B on one H200 via fp8
-  time_limit: "01:00:00"      # short → SLURM can backfill this 1-GPU job into a gap
-  gpu_constraint: "cascadelake"   # H200 nodes (A100-80GB nodes are drained); no OR — sbatch chokes on `|`
+  quantization: fp8
   mem_gb: 128
   max_model_len: 8192
   gpu_memory_utilization: 0.92
   dtype: bfloat16
   gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]
+
+  profiles:
+    nurc:
+      # H200 nodes; the A100-80GB pair is drained. No `|` OR — sbatch chokes on it.
+      gpu_constraint: "cascadelake"
+      # Short wall so SLURM can backfill this 1-GPU job into a gap. Safe on NURC
+      # only because its own cap is 08:00:00 anyway.
+      time_limit: "01:00:00"
+    aicr:
+      # rtx-batch is homogeneous RTX PRO 6000 (~96 GB) — no feature to constrain
+      # on, and naming one is an sbatch error. null drops --constraint entirely.
+      gpu_constraint: null
+      # Inherit AICR's 24h wall rather than NURC's 1h backfill trick: a 70B
+      # serving 40k generations needs hours, and a server that dies at 01:00:00
+      # strands every cell still queued behind it.
+      time_limit: "24:00:00"

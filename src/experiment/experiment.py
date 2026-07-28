@@ -261,7 +261,19 @@ class Experiment:
         Layers: conf/clusters/_defaults.yaml → the CLUSTER_PROFILE's file
         (+ its `extends` chain) → the model-specific conf/llm/<model>.yaml
         `cluster` block (applied LAST — per-model wins, so e.g. a model's
-        `time_limit: 01:00:00` backfill override survives).
+        `time_limit: 01:00:00` backfill override survives) → that block's
+        `profiles.<CLUSTER_PROFILE>` sub-block, applied last of all.
+
+        The `profiles:` layer exists because a per-model `cluster` block is
+        written against ONE cluster's hardware but wins on EVERY cluster. That
+        silently leaks cluster-specific settings across clusters: the 70B's
+        NURC-tuned `gpu_constraint: cascadelake` reached AICR's rtx-batch
+        partition, where no such node feature exists, and sbatch rejected every
+        server with "Invalid feature specification" (job 225250, 2026-07-28).
+        Put cluster-invariant sizing (num_gpus, quantization, max_model_len) in
+        `cluster:`, and anything naming a partition, node feature, or QoS wall
+        under `profiles.<cluster>:`. A null there clears an inherited value
+        (`gpu_constraint: null` drops the --constraint line entirely).
 
         CLUSTER_PROFILE (env var, set by the per-cluster orchestrator sbatch —
         e.g. `CLUSTER_PROFILE=aicr` from run_experiment_aicr.sbatch) selects
@@ -280,7 +292,18 @@ class Experiment:
             "llm", section="cluster",
             match_field="model.model", match_value=model.model_id)
 
-        return _deep_merge(base, per_model)
+        # `profiles` is a routing table, never a server param — pull it out before
+        # merging so it can never reach the sbatch writer as a stray key.
+        per_model = dict(per_model or {})
+        profile_overrides = (per_model.pop("profiles", None) or {}).get(profile, {})
+
+        merged = _deep_merge(base, per_model)
+        if profile_overrides:
+            merged = _deep_merge(merged, profile_overrides)
+            logger.info(
+                f"Cluster config [{model.model_id}]: applied profiles.{profile} "
+                f"overrides {sorted(profile_overrides)}")
+        return merged
 
     def _count_existing_gpu_jobs(self) -> int:
         """Count this user's existing GPU-holding SLURM jobs.
