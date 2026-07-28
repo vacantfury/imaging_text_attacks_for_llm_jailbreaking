@@ -219,6 +219,59 @@ class Experiment:
             cluster_models |= _required_cluster_models_for_task(task)
         return cluster_models
 
+    def _context_budget_preflight(self, tasks: list[TaskInfo]) -> None:
+        """Fail fast if any task asks a cluster-served model for more tokens than
+        its vLLM server will accept.
+
+        vLLM rejects EVERY request whose `max_tokens` exceeds the server's
+        `max_model_len` with HTTP 400. That failure is INVISIBLE downstream: the
+        requests fail, responses come back empty, the harm judge scores empty
+        text as "safe", and the round reports success with ASR 0.0 on every
+        cell. Job 227537 (2026-07-28) did exactly this — 40,000/40,000 requests
+        rejected, orchestrator summary "Successful: 4", four cells of fabricated
+        zeros. A wrong number that looks like data is far worse than a crash, so
+        this aborts before a single server is submitted.
+
+        Checks the EFFECTIVE per-task budget (`target_model_config.max_tokens`,
+        already merged from conf/llm/default.yaml -> the model file -> the
+        preset's override), not the model file alone — the 227537 value came
+        from the preset.
+        """
+        from llm_utils import LLMModel, Provider
+        offenders = []
+        for t in tasks:
+            # TARGET only. `target_model_config.max_tokens` is the target's
+            # budget; judges and defense-side models carry their own and would
+            # false-positive against a small-context guard model.
+            cfg = getattr(t.task, "target_model_config", None)
+            target_name = getattr(t.task, "target_model", None)
+            req_max = getattr(cfg, "max_tokens", None)
+            if not req_max or not target_name:
+                continue
+            try:
+                m = LLMModel.from_string(target_name)
+            except Exception:
+                continue
+            if m.provider is not Provider.SLURM_CLUSTER:
+                continue
+            mml = (self._load_cluster_config(m) or {}).get("max_model_len")
+            if mml and int(req_max) > int(mml):
+                offenders.append((m.model_id, int(req_max), int(mml)))
+        if not offenders:
+            return
+        lines = "\n".join(
+            f"  - {mid}: max_tokens={rq} > max_model_len={mml}"
+            for mid, rq, mml in sorted(set(offenders)))
+        raise RuntimeError(
+            "Context-budget preflight FAILED — vLLM would reject every request "
+            "with HTTP 400 and the run would report a fabricated ASR of 0.0:\n"
+            f"{lines}\n"
+            "Fix: raise `max_model_len` for the model (conf/llm/<model>.yaml::"
+            "cluster, or its profiles.<cluster> block) above the requested "
+            "max_tokens, or lower the task's target_model_config.max_tokens. "
+            "Keep max_model_len consistent across targets you intend to COMPARE "
+            "— an unequal generation budget is not a comparable measurement.")
+
     def _bedrock_preflight(self, tasks: list[TaskInfo]) -> None:
         """Fail fast BEFORE launching anything if the run needs Bedrock but its
         creds are dead.
@@ -637,6 +690,10 @@ class Experiment:
         # Fail fast on dead Bedrock creds before submitting any server / running
         # any task (raises RuntimeError with the re-mint fix; no-op if no Bedrock).
         self._bedrock_preflight(tasks_to_run)
+
+        # Fail fast on an impossible context budget before any server is
+        # submitted (raises RuntimeError; no-op when every budget fits).
+        self._context_budget_preflight(tasks_to_run)
 
         try:
             # Submit vLLM servers for cluster models. Non-blocking: tasks
