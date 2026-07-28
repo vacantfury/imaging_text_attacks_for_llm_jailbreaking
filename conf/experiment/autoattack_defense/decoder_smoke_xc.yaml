@@ -1,0 +1,15 @@
+# STAGE 0 -- decode-compliance smoke for the decoder-disentanglement study
+# CLUSTER: xc -- decoder runs on BEDROCK (us.meta.llama3-3-70b-instruct-v1:0),
+# the SAME model that sat 2.5h unscheduled on NURC, but as an API endpoint so it
+# needs no GPU at all. Only the target + wildguard are served locally (2 of xc's
+# 8 A100s; 6 were idle at submit). AICR was 100% GPU-allocated with 731 pending.
+# (review-8 Q3). Cheap-first: FREE cluster judge (wildguard); the real numbers
+# come from the stage-1 preset with gpt-5-mini. n=20, 3 attacks x 2 candidate
+# decoders x 1 guard = 6 cells. save_trace ON: the deliverable is the decode
+# TEXT, which I read for refusals -- not the ASR.
+num_main_job_threads: 3
+num_cluster_jobs: 3   # orchestrator + qwen2_5_vl_7b + wildguard (decoder is API)
+tasks:
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,19], campaign: paper_c_decoder_smoke, defense: modality_complete, judge_model: wildguard, defense_config: {guard_model: wildguard, decode_text: true, decode_style: recover, reguard_original: true, decode_model: bedrock_llama_3_3_70b, save_trace: true, trace_path: outputs/decode_smoke/llama_3_3_70b_instruct_code_attack.jsonl}, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,19], campaign: paper_c_decoder_smoke, defense: modality_complete, judge_model: wildguard, defense_config: {guard_model: wildguard, decode_text: true, decode_style: recover, reguard_original: true, decode_model: bedrock_llama_3_3_70b, save_trace: true, trace_path: outputs/decode_smoke/llama_3_3_70b_instruct_ir_figstep.jsonl}, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260718_183457_7682501/ir_figstep}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,19], campaign: paper_c_decoder_smoke, defense: modality_complete, judge_model: wildguard, defense_config: {guard_model: wildguard, decode_text: true, decode_style: recover, reguard_original: true, decode_model: bedrock_llama_3_3_70b, save_trace: true, trace_path: outputs/decode_smoke/llama_3_3_70b_instruct_non_llm_cipher.jsonl}, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/non_llm_cipher_20260718_183504_42666777/non_llm_cipher}
