@@ -51,3 +51,10 @@ cluster:
       # serving 40k generations needs hours, and a server that dies at 01:00:00
       # strands every cell still queued behind it.
       time_limit: "24:00:00"
+      # Load-balancing is PER-CELL, so a single replica serialises all four cells
+      # of a round onto one endpoint. Measured reference: one 8B replica served a
+      # 10k-draw cell in 66 min; a 70B at fp8 is roughly 5-6x slower per token, so
+      # one replica would put a 4-cell round at ~24h — exactly the wall, with no
+      # margin. Three replicas bring the makespan to the longest single cell.
+      # 3 replicas + wildguard = 4 GPU jobs, well inside AICR's max_gpu_jobs=12.
+      num_instances: 3

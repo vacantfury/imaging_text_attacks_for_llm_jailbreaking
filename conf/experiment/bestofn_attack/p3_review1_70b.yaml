@@ -40,13 +40,33 @@
 # VERIFY AFTER: count == 10000 and status success on every cell, and spot-read raw
 # responses before trusting any surprising number (a 70B refusing far more or far less
 # than the 8B panel is exactly the kind of result to check rather than report).
-num_main_job_threads: 2      # 70B replicas are expensive; two cells in flight
-num_cluster_jobs: 4          # orchestrator + 70B replicas + wildguard judge
+# ── REVISION 2026-07-28, after the first submission (225250) died in 7 seconds ──
+# Two defects found and fixed before resubmitting; both would have corrupted or
+# stalled the run rather than announcing themselves.
+#
+# 1. CRASH: conf/llm/llama_3_3_70b_instruct.yaml carried NURC's node feature
+#    (gpu_constraint: cascadelake) in a block that wins on every cluster, so
+#    sbatch on AICR's rtx-batch rejected every server with "Invalid feature
+#    specification". Fixed in 06e9418 by moving cluster-specific keys under a
+#    `profiles.<cluster>:` sub-block; NURC behaviour is unchanged.
+#
+# 2. COMPARABILITY: that same file sets max_tokens=512 — correct for the model's
+#    JUDGE role (a short verdict), wrong for a TARGET. The published 8B panel ran
+#    at max_tokens=16384 (inherited from conf/llm/default.yaml), so a 512-capped
+#    70B would have its answers truncated mid-completion while the panel's ran to
+#    natural EOS. The HarmBench rubric scores an incomplete answer lower, so the
+#    70B would look more ALIGNED purely as a truncation artifact — and that number
+#    feeds the cross-target borrowed-strength argument directly. Pinned to 16384
+#    below to match the panel exactly. Pinned HERE rather than in the model file so
+#    the judge role keeps its 512.
+num_main_job_threads: 4      # all four cells in flight across the replicas
+num_cluster_jobs: 5          # orchestrator + 3x 70B replicas + wildguard judge
 
 _e: &e
   mode: defense+evaluate
   target_model: llama_3_3_70b_instruct
-  target_model_config: {temperature: 1.0}
+  # temperature matches the published panel; max_tokens pinned for comparability (see above)
+  target_model_config: {temperature: 1.0, max_tokens: 16384}
   judge_model: wildguard
   judge_method: wildguard
   benchmark: harmbench
