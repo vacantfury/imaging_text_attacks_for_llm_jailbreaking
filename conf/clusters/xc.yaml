@@ -31,6 +31,15 @@ cluster:
   gpu_request_style: gres                   # slurm.conf uses GresTypes=gpu (gpu:a100:8)
   excluded_nodes: []
   time_limit: "08:00:00"                    # default vLLM server wall
+  # PORT BASE — xc-specific and load-bearing (2026-07-28). Everywhere else each vLLM
+  # server owns its own NODE, so the 8000 default in _defaults.yaml never collides.
+  # xc is ONE node SHARED with the box owner, whose own service holds :8000 — our
+  # server died with `OSError: [Errno 98] Address already in use` before serving a
+  # single request, and the run reported "Successful: 0" (job 43). Ports are assigned
+  # contiguously from this base across models (experiment.py::_assign_ports), so this
+  # reserves 8400+ for us. Surveyed in use on the box: 22, 53, 6666, 6817-8, 8000,
+  # 16000 — 8400+ is clear. Re-check with `ss -ltn` if a server ever fails to bind.
+  port: 8400
   hf_home: /home/thomas/huggingface_cache   # dedicated `thomas` user home (isolated; 2026-07-19)
   hf_offline: false                         # box has internet
   # uv venv activation REPLACES the module/conda default (no `module` command on the box).
