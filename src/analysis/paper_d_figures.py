@@ -54,6 +54,7 @@ CAMPAIGNS = {
     "bestofn_attack_p2_rejudge_rest",   # run B: 12 qwen + gemma cells
     "bestofn_attack_p2_rejudge_probe",  # run C: 4 probe-count cells (llama)
     "bestofn_attack_p3_rejudge",        # run D: 2nd gate + T=0.5 + 4 Llama-3.3-70B cells
+    "bestofn_attack_p4_rejudge",        # run E: the PUBLISHED gate, no canonicalization prefix
 }
 REJUDGE_GLOB = "outputs/bestofn_attack/rejudge/**/*"
 DEFAULT_OUTDIR = "paper/bestofn_attack/latex/figs"
@@ -88,7 +89,8 @@ TARGET_SHORT = {
 }
 # Main matrix (fig2) vs the probe-count panel (fig1's gate facets).
 DEFENSES = ["no_defense", "sage", "semantic_smooth"]
-PROBE_DEFENSES = ["canonicalize", "canonicalize_guard", "canonicalize_guard3"]
+PROBE_DEFENSES = ["canonicalize", "canonicalize_guard", "canonicalize_guard3",
+                  "guard_baseline"]
 DEFENSE_LABEL = {
     "no_defense": "no defense",
     "sage": "SAGE",
@@ -97,6 +99,7 @@ DEFENSE_LABEL = {
     "canonicalize": "canonicalize",
     "canonicalize_guard": "canon.$+$WildGuard",
     "canonicalize_guard3": "canon.$+$LlamaGuard-3",
+    "guard_baseline": "LlamaGuard-3 (as published)",
 }
 # Colorblind-safe (Okabe-Ito): defense -> colour, attack -> linestyle/hatch.
 DEFENSE_COLOR = {
@@ -107,19 +110,22 @@ DEFENSE_COLOR = {
     "canonicalize": "#CC79A7",
     "canonicalize_guard": "#56B4E9",
     "canonicalize_guard3": "#E69F00",
+    "guard_baseline": "#8C564B",
 }
 ATTACK_LABEL = {"code": "BoN-wrapped CodeAttack", "surf": "original BoN"}
 ATTACK_COLOR = {"code": "#c0392b", "surf": "#2c6fb5"}
 N_GRID = [1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 70, 100]
 
-# fig1 facets: (title, defense key, targets to show). The two GATE facets sit last
-# and carry the paper's claim that the inversion is a property of gates rather than
-# of one classifier — same architecture, WildGuard vs LlamaGuard-3.
+# fig1 facets: (title, defense key, targets to show). The three GATE facets sit
+# last and carry the paper's claim that the inversion is a property of gates: the
+# first two hold the architecture fixed and swap the classifier, the third drops
+# our canonicalization prefix entirely and runs LlamaGuard-3 as it ships.
 INVERSION_PANELS = [
     ("SAGE  (transform)", "sage", TARGETS_WITH_70B),
     ("SemanticSmooth  (transform)", "semantic_smooth", TARGETS),
     ("canon.+WildGuard\n(gate)", "canonicalize_guard", ["llama"]),
     ("canon.+LlamaGuard-3\n(gate)", "canonicalize_guard3", ["llama"]),
+    ("LlamaGuard-3 as published\n(gate)", "guard_baseline", ["llama"]),
 ]
 
 
@@ -143,7 +149,7 @@ def _classify(meta: dict, upstream_meta: dict) -> tuple[str, str, str]:
 
     defense = meta.get("defense") or ""
     if defense not in ("no_defense", "sage", "semantic_smooth",
-                       "canonicalize", "canonicalize_guard"):
+                       "canonicalize", "canonicalize_guard", "guard_baseline"):
         raise ValueError(f"unrecognised defense {defense!r} in {meta.get('output_dir')}")
 
     # Split the gate by its CLASSIFIER: same defense architecture, different model.
@@ -153,6 +159,16 @@ def _classify(meta: dict, upstream_meta: dict) -> tuple[str, str, str]:
             defense = "canonicalize_guard3"
         elif guard and "wildguard" not in guard:
             raise ValueError(f"unrecognised guard_model {guard!r}; add a defense key")
+
+    # The PUBLISHED gate (no canonicalization prefix) was run on LlamaGuard-3 only.
+    # Fail rather than fold a future second classifier into the same key — that is
+    # exactly the silent overwrite the guard split above exists to prevent.
+    if defense == "guard_baseline":
+        guard = ((upstream_meta.get("defense_config") or {}).get("guard_model") or "")
+        if "llama_guard_3" not in guard:
+            raise ValueError(
+                f"guard_baseline with guard_model {guard!r}: only LlamaGuard-3 is "
+                f"published; add a distinct defense key before plotting it")
 
     # Split SAGE by target temperature so the ablation cannot overwrite the T=1.0 cell.
     if defense == "sage":
@@ -454,7 +470,7 @@ def main() -> None:
     #   P3   2  llama x canon.+LlamaGuard-3 x {code, surf}      (2nd gate)
     #   P3   1  llama x SAGE(T=0.5) x code                      (temperature ablation)
     #   P3   4  llama70 x {no_defense, sage} x {code, surf}     (scale)
-    EXPECTED_CELLS = 29
+    EXPECTED_CELLS = 31
     if len(cells) != EXPECTED_CELLS:
         missing = sorted(set(cells))
         raise SystemExit(
