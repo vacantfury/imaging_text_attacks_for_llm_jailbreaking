@@ -1,0 +1,30 @@
+# Paper C — FILL the InternVL3 benign gaps (Table 1's "---" cells) — 2026-07-29
+#
+# Why: Table 1 reports InternVL3 over-refusal for only 3 of 5 guards; LlamaGuard-3
+# and ThinkGuard were added to the InternVL3 panel on the harm axis only. cspaper
+# review 15 con 10 names this exactly ("the benign-utility component of the claimed
+# 'same frontier' is only directly measured for three of five guards on InternVL3").
+#
+# BLOCK B ONLY (block A lives in gen2_internvl3_benign_fill.yaml):
+#   A. mc + mc+reguard x {llama_guard_3_8b, thinkguard} x {text, image}   -> 8 cells
+#      Fills the four "---" in Table 1 (over-refusal, mc and +rg columns).
+#   B. guard_baseline x all 5 guards x {text, image} + no_defense floor    -> 12 cells
+#      InternVL3 currently has NO benign gb or floor cell at all, which is why the
+#      model-side hedging measure (indirect refusals among prompts the model was
+#      allowed to answer; gb -> mc delta) is Qwen-only. Block B makes it two-target.
+#
+# Judging: cheap-first — the run self-judges with internvl3_8b (throwaway, matching
+# the gen2 campaign's convention), then a gpt-5-mini rejudge pass over the stored
+# responses produces the reportable numbers at zero target cost.
+#
+# Same campaign as the original InternVL3 panel so the existing analysis scripts
+# (paper_c_benign_utility.py, paper_c_refusal_grade.py) pick these up with no edit.
+#
+# WAVE of block B: internvl3_8b + <=2 guards + orchestrator -> num_cluster_jobs 4,
+# sized to the 4 AICR slots free while job 231608 holds the other four.
+num_main_job_threads: 4
+num_cluster_jobs: 4
+
+tasks:
+  - {mode: defense+evaluate, target_model: internvl3_8b, prompt_range: [0,99], benchmark: orbench_benign_hard, judge_method: orbench, judge_model: internvl3_8b, campaign: paper_c_gen2_internvl3, defense: guard_baseline, defense_config: {guard_model: guardreasoner_vl_7b}, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260718_183505_52485516/non_llm_baseline}
+  - {mode: defense+evaluate, target_model: internvl3_8b, prompt_range: [0,99], benchmark: orbench_benign_hard, judge_method: orbench, judge_model: internvl3_8b, campaign: paper_c_gen2_internvl3, defense: guard_baseline, defense_config: {guard_model: guardreasoner_vl_7b}, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260718_183504_7866920/ir_plain}
