@@ -1,0 +1,32 @@
+# bestofn_attack Paper-D — P4 REJUDGE with the reportable judge (2 cells).
+#
+# Re-scores the stored responses of the p4_published_gate round with gpt-5-mini, the
+# DECIDED reportable ASR judge. No target regeneration.
+#
+# APPROVED as stage 2 of Run A, inside the resource report the owner approved
+# 2026-07-28 ("$18 — 20,000 gpt-5-mini rejudge calls @ $0.00090"). Not a new ask.
+# COST: 2 cells x 10,000 = 20,000 calls ~= $18.  GPU: none.  WALL: ~30-40 min.
+#
+# WHY. The p4 round ran wildguard as its free on-cluster first pass, and nothing from
+# that pass is reportable: across the 29 published cells wildguard reads higher in 24,
+# by up to +22 per-draw and +58 coverage points, on BOTH arms. The wildguard first pass
+# already shows the predicted inversion (surface coverage 25.0 vs code 13.0), but the
+# paper cannot cite that number.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/p4_rejudge_mini
+#
+# VERIFY AFTER: both cells must report count == 10000, status success,
+# fallback_parse_count == 0. Then recompute retention against the EXISTING undefended
+# llama cells (gpt-5-mini): code 95.0, surface 89.0 coverage at N=100.
+num_cluster_jobs: 1           # orchestrator only — gpt-5-mini is an API model
+num_main_job_threads: 2
+
+_r: &r
+  mode: rejudge
+  judge_model: gpt-5-mini
+  benchmark: harmbench
+  campaign: bestofn_attack_p4_rejudge
+
+tasks:
+  - {<<: *r, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_guard_baseline_variance_channel_bon_20260729_002035_89471694}
+  - {<<: *r, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_guard_baseline_code_attack_20260729_002035_740925}
