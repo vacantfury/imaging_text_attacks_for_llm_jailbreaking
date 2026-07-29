@@ -505,7 +505,7 @@ class ModalityComplete(Defense):
             verdicts_orig = query_guard(
                 guard_service, self._guard_model, orig_items, is_test=True)
             self._write_reguard_verdicts(prompts, verdicts, verdicts_orig,
-                                         source_dir)
+                                         source_dir, compose)
 
         target_convs: list[tuple[str, list]] = []
         for p in prompts:
@@ -534,9 +534,9 @@ class ModalityComplete(Defense):
             for p in prompts
         ]
 
-    @staticmethod
-    def _write_reguard_verdicts(prompts, verdicts: dict, verdicts_orig: dict,
-                                source_dir: str) -> None:
+    def _write_reguard_verdicts(self, prompts, verdicts: dict,
+                                verdicts_orig: dict, source_dir: str,
+                                compose: str) -> None:
         """Persist BOTH per-prompt reguard verdicts (decoded `d`, pre-decode `r`).
 
         Without this only the composed outcome survives, and the alternative
@@ -544,10 +544,18 @@ class ModalityComplete(Defense):
         OR blocks regardless of `r`, so `r` is unobservable. Written as one
         newline-delimited row per prompt next to the transform inputs; failures
         are logged and swallowed -- this is diagnostics, never the experiment.
+
+        The filename carries the GUARD and the COMPOSE mode because `source_dir`
+        is the shared prompt_transform folder: every guard evaluated against the
+        same attack points at it, so a fixed name lets the last cell to finish
+        silently clobber the others' verdicts.
         """
         import json as _json
         import os as _os
-        path = _os.path.join(source_dir, "reguard_verdicts.jsonl")
+        import re as _re
+        tag = _re.sub(r"[^A-Za-z0-9._-]", "_",
+                      f"{self._guard_model_name or 'selfcheck'}__{compose}")
+        path = _os.path.join(source_dir, f"reguard_verdicts__{tag}.jsonl")
         try:
             with open(path, "w") as fh:
                 for p in prompts:
