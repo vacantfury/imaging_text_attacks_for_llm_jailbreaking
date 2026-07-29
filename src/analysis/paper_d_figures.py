@@ -263,8 +263,12 @@ def fig_inversion(cells, outdir: str) -> str:
             panels.append((title, defense, avail))
     widths = [max(1.25, 1.0 * len(t)) for _, _, t in panels]
 
+    # Fixed page width: this is a full-width (two-column) float, so the figure must
+    # be ~7.6in regardless of how many facets there are — panel COUNT changes the
+    # width_ratios, never the total. A width that scales with the facet count would
+    # be silently downscaled by LaTeX and shrink every font below legibility.
     fig, axes = plt.subplots(
-        1, len(panels), figsize=(2.15 * sum(widths) ** 0.62 + 4.2, 2.45), sharey=True,
+        1, len(panels), figsize=(7.6, 2.45), sharey=True,
         gridspec_kw=dict(width_ratios=widths, wspace=0.12),
     )
     axes = np.atleast_1d(axes)
