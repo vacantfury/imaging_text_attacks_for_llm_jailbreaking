@@ -50,6 +50,7 @@ TRANSFORMATION_ALIASES: dict[str, str] = {
     "occluded": "ir_occluded",
     "mm_typo": "ir_mm_typo",
     "mm_safetybench": "ir_mm_typo",
+    "semantic_split": "ir_semantic_split",
     "distraction": "ir_distraction_grid",
     "distraction_grid": "ir_distraction_grid",
 }

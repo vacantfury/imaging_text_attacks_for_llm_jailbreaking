@@ -1,0 +1,41 @@
+# ============================================================
+# Paper C · ADAPTIVE ATTACK — render ir_semantic_split (2026-07-29)
+# ============================================================
+# OURS, not established literature. Targets cspaper review 16's G(d) ^ G(r)
+# conjunction, closing the gap between two attacks measured earlier today:
+#   ir_mm_typo (ESTABLISHED, MM-SafetyBench ECCV 2024) -- fluent carrier, but the
+#     harmful REQUEST stays in it, so text-only guards catch it (20 -> 5-10).
+#   cross_modal_split (OURS, positional 0.3) -- no request in the carrier, so
+#     WildGuard goes blind (blocks 10/100), but the fragmented carrier also breaks
+#     the target's own reassembly: only a 34% undefended floor vs 89% for the
+#     established 11-attack ensemble.
+# ir_semantic_split aims for mm_typo's FLUENCY with cross_modal_split's
+# EMPTINESS-OF-REQUEST, via one aux-LLM rewrite into two individually-benign,
+# individually-fluent halves.
+#
+# Encoder: gpt-4.1-mini (conf/imaging/semantic_split.yaml) -- the same default
+# every other panel attack was rendered with, so naive-vs-adaptive stays a
+# single-encoder comparison. 100 prompts x 1 rewrite call = a few cents.
+#
+# ⚠️ THIS IS A METHOD CHECK, NOT A RESULT. The whole experiment hinges on whether
+# the rewrite actually produces (a) a carrier with NO harmful request scaffold,
+# (b) an image half carrying the directive, (c) BOTH fluent, (d) jointly
+# reconstructible. Read the output before spending anything on an eval. The
+# transform counts parse failures and logs a warning -- check that too; a
+# degenerate fallback split would quietly look like a weak attack rather than a
+# broken render (the failure mode this repo has hit twice today).
+#
+# n=100 so the render is reusable directly for the eval if it passes; the cost is
+# a few cents either way, so a smaller pilot would buy nothing.
+# ============================================================
+
+num_main_job_threads: 1
+num_cluster_jobs: 1          # API encoder only — no GPU server
+
+tasks:
+  - mode: prompt_transform
+    source_file: data/harmbench_prompts.jsonl
+    prompt_range: [0, 99]
+    benchmark: harmbench
+    transformation_list:
+      - type: ir_semantic_split
