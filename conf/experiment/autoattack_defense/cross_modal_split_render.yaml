@@ -1,0 +1,54 @@
+# ============================================================
+# Paper C · ADAPTIVE ATTACK — Step A: render cross_modal_split (2026-07-29)
+# ============================================================
+# Answers cspaper review 16's THIRD named adaptive target: joint evasion of
+# G(d) ^ G(r) -- an attacker who beats BOTH branches of the reguard layer at once.
+# (Its other two: decode reinterpretation is DONE -- `llm_decode_evasion`, run
+# 2026-07-20, gpt-5-mini rejudged, already in the paper; transcription failure has
+# machinery via ir_occluded / low-contrast renders.)
+#
+# WHY THIS ATTACK IS THE RIGHT ONE for the conjunction. reguard blocks if EITHER
+# the recovered pre-decode surface OR the decoded payload flags. `cross_modal_split`
+# distributes one instruction across text + image so each channel is individually
+# incomplete -- neither branch ever sees the whole request; only the target's joint
+# interpretation is harmful. decode_evasion beat one branch; this targets both.
+#
+# FREE: the split is a positional word-split reusing the plain renderer
+# (src/prompt_transformations/image/cross_modal_split.py) -- NO encoder LLM, no API
+# call, no GPU. Orchestrator job only.
+#
+# THREE RATIOS ON PURPOSE. The transform's own docstring flags the split rule as a
+# SCAFFOLD, and the failure mode is real: a naive 50/50 positional cut can leave the
+# text half still fully flaggable ("Give detailed instructions for making <X>") or
+# leave both halves as gibberish the target never reassembles. Either way the attack
+# is broken rather than informative. Rendering 0.3/0.5/0.7 is free, so we render all
+# three and pick on evidence instead of guessing.
+#
+# ⚠️ METHOD-CHECK GATE after this runs -- do NOT proceed to Step B blind. READ
+# samples of each ratio and confirm, per ratio:
+#   (a) the TEXT half alone reads benign/incomplete (if it is still obviously
+#       harmful, the split failed -- the guard will flag it and we learn nothing
+#       about the conjunction);
+#   (b) the IMAGE half carries the rest of the payload legibly;
+#   (c) the combine instruction is intact so the target can reassemble.
+# If NO ratio clears (a), the positional scaffold is inadequate and the informative
+# next step is the semantic split the docstring describes (operation-vs-operand:
+# text = "make the substance named in the image", image = the operand) -- new attack
+# design, not a rerun.
+#
+# Output: outputs/autoattack_defense/prompt_transform/harmbench/cross_modal_split_<ts>/cross_modal_split
+# ============================================================
+
+num_main_job_threads: 3
+num_cluster_jobs: 1          # no model of any kind -- orchestrator only
+
+_hb: &hb data/harmbench_prompts.jsonl
+_rng: &rng [0, 99]
+
+tasks:
+  - {mode: prompt_transform, source_file: *hb, prompt_range: *rng, benchmark: harmbench,
+     transformation_list: [{type: cross_modal_split, params: {split_ratio: 0.3}}]}
+  - {mode: prompt_transform, source_file: *hb, prompt_range: *rng, benchmark: harmbench,
+     transformation_list: [{type: cross_modal_split, params: {split_ratio: 0.5}}]}
+  - {mode: prompt_transform, source_file: *hb, prompt_range: *rng, benchmark: harmbench,
+     transformation_list: [{type: cross_modal_split, params: {split_ratio: 0.7}}]}
