@@ -233,6 +233,49 @@ def union_asr_at_n(hits: collections.Counter, draws: collections.Counter, n: int
     return 100.0 * total / len(draws)
 
 
+def bootstrap_ci(hits: collections.Counter, draws: collections.Counter,
+                 n: int = 100, resamples: int = 10_000,
+                 seed: int = 20260728) -> tuple[float, float]:
+    """95% bootstrap interval for union ASR@n, matching the appendix Estimator note.
+
+    Two nested resampling axes, exactly as published: behaviors are resampled with
+    replacement, and WITHIN each resample each behavior's success count is redrawn
+    as Binomial(M, k_b/M). Union ASR is then recomputed by the exact estimator on
+    every resample; we report the 2.5th/97.5th percentiles.
+
+    Seeded so a rerun reproduces the published interval rather than jittering the
+    last digit of a number that is already in the paper.
+    """
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    behaviors = list(draws)
+    nb = len(behaviors)
+    ms = np.array([draws[b] for b in behaviors])
+    ks = np.array([hits[b] for b in behaviors])
+
+    # P(no success in a random N-subset) as a lookup over k, per distinct M. Vectorising
+    # this is what makes 10^4 x 100 x 100 tractable; the arithmetic is the same exact
+    # estimator, just precomputed instead of recomputed inside the loop.
+    surv = {}
+    for m in np.unique(ms):
+        m = int(m)
+        surv[m] = np.array([0.0 if m - k < n else comb(m - k, n) / comb(m, n)
+                            for k in range(m + 1)])
+
+    pick = rng.integers(0, nb, size=(resamples, nb))       # behavior axis
+    m_s, k_s = ms[pick], ks[pick]
+    k_re = rng.binomial(m_s, np.divide(k_s, m_s, out=np.zeros_like(k_s, dtype=float),
+                                       where=m_s > 0))     # draw axis
+    stats = np.zeros(resamples)
+    for m in np.unique(ms):                                # one pass per distinct M (here: 1)
+        m = int(m)
+        table = surv[m]
+        contrib = np.where(m_s == m, 1.0 - table[np.clip(k_re, 0, m)], 0.0)
+        stats += contrib.sum(axis=1)
+    stats = 100.0 * stats / nb
+    return float(np.percentile(stats, 2.5)), float(np.percentile(stats, 97.5))
+
+
 def coverage_and_qtfs(hits: collections.Counter, draws: collections.Counter) -> tuple[float, float | None]:
     costs = []
     for behavior, m in draws.items():
