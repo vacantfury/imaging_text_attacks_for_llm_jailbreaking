@@ -48,71 +48,120 @@ import statistics
 from math import comb
 
 # P2 = the repaired matrix (uniform target temperature 1.0 on BOTH arms).
+# P3 = the review-1 response round (second gate, temperature ablation, 70B target).
 CAMPAIGNS = {
     "bestofn_attack_p2_rejudge_llama",  # run A: the 6 llama cells
     "bestofn_attack_p2_rejudge_rest",   # run B: 12 qwen + gemma cells
     "bestofn_attack_p2_rejudge_probe",  # run C: 4 probe-count cells (llama)
+    "bestofn_attack_p3_rejudge",        # run D: 2nd gate + T=0.5 + 4 Llama-3.3-70B cells
 }
 REJUDGE_GLOB = "outputs/bestofn_attack/rejudge/**/*"
 DEFAULT_OUTDIR = "paper/bestofn_attack/latex/figs"
 EXPECTED_DRAWS_PER_CELL = 10_000  # 100 behaviors x 100 draws
 
-TARGETS = ["llama", "qwen", "gemma"]
+# Registry model id -> target key. EXPLICIT, because classifying by name PREFIX is
+# unsafe here: "llama_3_3_70b_instruct" and "llama3_1_8b_cluster" both start with
+# "llama", so a prefix test silently folds the 70B into the 8B's cells and the last
+# one loaded wins. That is a wrong-number bug with no error, so the mapping is a
+# lookup with a hard failure on anything unrecognised.
+TARGET_MODEL_KEY = {
+    "llama3_1_8b_cluster": "llama",
+    "llama_3_3_70b_instruct": "llama70",
+    "qwen2_5_7b_instruct": "qwen",
+    "gemma2_9b_it": "gemma",
+}
+TARGETS = ["llama", "qwen", "gemma"]          # the published 7-9B panel
+TARGETS_WITH_70B = TARGETS + ["llama70"]
 TARGET_LABEL = {
     "llama": "Llama-3.1-8B",
     "qwen": "Qwen2.5-7B",
     "gemma": "Gemma-2-9B",
+    "llama70": "Llama-3.3-70B",
 }
-# Main matrix (fig2) vs the probe-count panel (fig1's third facet, llama only).
+# Axis ticks: TARGET_LABEL.split("-")[0] would render BOTH Llama targets as "Llama",
+# so the 8B and 70B bars would be indistinguishable. Short labels are explicit.
+TARGET_SHORT = {
+    "llama": "Llama\n8B",
+    "qwen": "Qwen",
+    "gemma": "Gemma",
+    "llama70": "Llama\n70B",
+}
+# Main matrix (fig2) vs the probe-count panel (fig1's gate facets).
 DEFENSES = ["no_defense", "sage", "semantic_smooth"]
-PROBE_DEFENSES = ["canonicalize", "canonicalize_guard"]
+PROBE_DEFENSES = ["canonicalize", "canonicalize_guard", "canonicalize_guard3"]
 DEFENSE_LABEL = {
     "no_defense": "no defense",
     "sage": "SAGE",
+    "sage_t05": "SAGE ($T{=}0.5$)",
     "semantic_smooth": "SemanticSmooth",
     "canonicalize": "canonicalize",
-    "canonicalize_guard": "canon.$+$guard",
+    "canonicalize_guard": "canon.$+$WildGuard",
+    "canonicalize_guard3": "canon.$+$LlamaGuard-3",
 }
 # Colorblind-safe (Okabe-Ito): defense -> colour, attack -> linestyle/hatch.
 DEFENSE_COLOR = {
     "no_defense": "#0072B2",
     "sage": "#009E73",
+    "sage_t05": "#66C2A5",
     "semantic_smooth": "#D55E00",
     "canonicalize": "#CC79A7",
     "canonicalize_guard": "#56B4E9",
+    "canonicalize_guard3": "#E69F00",
 }
 ATTACK_LABEL = {"code": "BoN-wrapped CodeAttack", "surf": "original BoN"}
 ATTACK_COLOR = {"code": "#c0392b", "surf": "#2c6fb5"}
 N_GRID = [1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 70, 100]
 
-# fig1 facets: (title, defense key, targets to show)
+# fig1 facets: (title, defense key, targets to show). The two GATE facets sit last
+# and carry the paper's claim that the inversion is a property of gates rather than
+# of one classifier — same architecture, WildGuard vs LlamaGuard-3.
 INVERSION_PANELS = [
-    ("SAGE  (transform)", "sage", TARGETS),
+    ("SAGE  (transform)", "sage", TARGETS_WITH_70B),
     ("SemanticSmooth  (transform)", "semantic_smooth", TARGETS),
-    ("canon.+guard\n(gate)", "canonicalize_guard", ["llama"]),
+    ("canon.+WildGuard\n(gate)", "canonicalize_guard", ["llama"]),
+    ("canon.+LlamaGuard-3\n(gate)", "canonicalize_guard3", ["llama"]),
 ]
 
 
-def _classify(basename: str) -> tuple[str, str, str]:
-    target = (
-        "llama" if basename.startswith("llama")
-        else "qwen" if basename.startswith("qwen")
-        else "gemma"
-    )
-    # Order matters: "_canonicalize_guard_" also contains "_canonicalize".
-    if "_no_defense_" in basename:
-        defense = "no_defense"
-    elif "_sage_" in basename:
-        defense = "sage"
-    elif "_semantic_smooth_" in basename:
-        defense = "semantic_smooth"
-    elif "_canonicalize_guard_" in basename:
-        defense = "canonicalize_guard"
-    elif "_canonicalize_" in basename:
-        defense = "canonicalize"
-    else:
-        raise ValueError(f"unrecognised defense in output dir name: {basename}")
-    attack = "code" if "code_attack" in basename else "surf"
+def _classify(meta: dict, upstream_meta: dict) -> tuple[str, str, str]:
+    """(target, defense, attack) from RESULT METADATA, not from directory names.
+
+    `meta` is the rejudge results.json (authoritative `target_model` / `defense`);
+    `upstream_meta` is the source defense+evaluate results.json, needed for the two
+    fields the rejudge does not carry forward: `defense_config.guard_model` and
+    `target_model_config.temperature`. Both are load-bearing here because the P3
+    round reuses existing (target, defense, attack) triples with a different guard
+    classifier and a different temperature, and would otherwise OVERWRITE published
+    P2 cells in the returned dict.
+    """
+    model = meta.get("target_model") or ""
+    if model not in TARGET_MODEL_KEY:
+        raise ValueError(
+            f"unrecognised target_model {model!r} — add it to TARGET_MODEL_KEY "
+            f"rather than relying on a name prefix")
+    target = TARGET_MODEL_KEY[model]
+
+    defense = meta.get("defense") or ""
+    if defense not in ("no_defense", "sage", "semantic_smooth",
+                       "canonicalize", "canonicalize_guard"):
+        raise ValueError(f"unrecognised defense {defense!r} in {meta.get('output_dir')}")
+
+    # Split the gate by its CLASSIFIER: same defense architecture, different model.
+    if defense == "canonicalize_guard":
+        guard = ((upstream_meta.get("defense_config") or {}).get("guard_model") or "")
+        if "llama_guard_3" in guard:
+            defense = "canonicalize_guard3"
+        elif guard and "wildguard" not in guard:
+            raise ValueError(f"unrecognised guard_model {guard!r}; add a defense key")
+
+    # Split SAGE by target temperature so the ablation cannot overwrite the T=1.0 cell.
+    if defense == "sage":
+        temp = (upstream_meta.get("target_model_config") or {}).get("temperature")
+        if temp is not None and abs(float(temp) - 1.0) > 1e-9:
+            defense = f"sage_t{str(temp).replace('.', '')[:2]}"
+
+    src = os.path.basename((meta.get("upstream_ref") or {}).get("source_dir", ""))
+    attack = "code" if "code_attack" in src else "surf"
     return target, defense, attack
 
 
@@ -149,7 +198,25 @@ def load_cells(
             draws[behavior] += 1
             if row.get("asr"):
                 hits[behavior] += 1
-        cells[_classify(upstream)] = (hits, draws)
+
+        # The upstream carries guard_model / temperature, which _classify needs to
+        # keep P3's reused triples off P2's published cells.
+        src_dir = (meta.get("upstream_ref") or {}).get("source_dir", "")
+        src_results = os.path.join(root, src_dir, "results.json")
+        if not os.path.exists(src_results):
+            src_results = os.path.join(src_dir, "results.json")
+        upstream_meta = json.load(open(src_results)) if os.path.exists(src_results) else {}
+        key = _classify(meta, upstream_meta)
+
+        # A duplicate key means two cells claim the same (target, defense, attack).
+        # Silently keeping the last one is precisely how a P3 cell would overwrite a
+        # published P2 number, so this is fatal rather than last-write-wins.
+        if key in cells:
+            failures.append(
+                f"DUPLICATE cell {key} — {upstream} collides with an already-loaded "
+                f"cell; give one of them a distinct defense/target key")
+            continue
+        cells[key] = (hits, draws)
     if failures:
         raise SystemExit(
             "coverage gate FAILED — a silently-safe judge failure would read as a low "
@@ -186,26 +253,44 @@ def fig_inversion(cells, outdir: str) -> str:
     import matplotlib.pyplot as plt
     import numpy as np
 
+    # Drop any target a panel has no data for (e.g. SemanticSmooth was never run on
+    # the 70B), so adding a target cannot KeyError the whole figure.
+    panels = []
+    for title, defense, targets in INVERSION_PANELS:
+        avail = [t for t in targets
+                 if (t, defense, "code") in cells and (t, "no_defense", "code") in cells]
+        if avail:
+            panels.append((title, defense, avail))
+    widths = [max(1.25, 1.0 * len(t)) for _, _, t in panels]
+
     fig, axes = plt.subplots(
-        1, len(INVERSION_PANELS), figsize=(7.2, 2.45), sharey=True,
-        gridspec_kw=dict(width_ratios=[3, 3, 1.25], wspace=0.12),
+        1, len(panels), figsize=(2.15 * sum(widths) ** 0.62 + 4.2, 2.45), sharey=True,
+        gridspec_kw=dict(width_ratios=widths, wspace=0.12),
     )
-    for ax, (title, defense, targets) in zip(axes, INVERSION_PANELS):
+    axes = np.atleast_1d(axes)
+    for ax, (title, defense, targets) in zip(axes, panels):
         x = np.arange(len(targets))
         width = 0.34 if len(targets) > 1 else 0.30
         for offset, attack in ((-0.5, "code"), (0.5, "surf")):
             heights = []
             for target in targets:
-                defended = union_asr_at_n(*cells[(target, defense, attack)], 100)
-                undefended = union_asr_at_n(*cells[(target, "no_defense", attack)], 100)
+                key, base = (target, defense, attack), (target, "no_defense", attack)
+                if key not in cells or base not in cells:
+                    heights.append(float("nan"))
+                    continue
+                defended = union_asr_at_n(*cells[key], 100)
+                undefended = union_asr_at_n(*cells[base], 100)
                 heights.append(defended / undefended if undefended else float("nan"))
             bars = ax.bar(x + offset * width, heights, width,
                           color=ATTACK_COLOR[attack], label=ATTACK_LABEL[attack])
             for rect in bars:
-                ax.text(rect.get_x() + rect.get_width() / 2, rect.get_height() + 0.025,
-                        f"{rect.get_height():.2f}", ha="center", fontsize=6.4, color="0.25")
+                h = rect.get_height()
+                if h != h:      # NaN -> no cell for this (target, defense, attack)
+                    continue
+                ax.text(rect.get_x() + rect.get_width() / 2, h + 0.025,
+                        f"{h:.2f}", ha="center", fontsize=6.4, color="0.25")
         ax.set_xticks(x)
-        ax.set_xticklabels([TARGET_LABEL[t].split("-")[0] for t in targets], fontsize=8)
+        ax.set_xticklabels([TARGET_SHORT[t] for t in targets], fontsize=8)
         ax.set_title(title, fontsize=8.5, pad=4)
         ax.axhline(1.0, color="0.45", lw=0.8, ls=":")
         ax.set_ylim(0, 1.20)
@@ -215,7 +300,12 @@ def fig_inversion(cells, outdir: str) -> str:
             ax.spines[spine].set_visible(False)
     axes[0].set_ylabel("retained attack reach\n(defended $\\div$ undefended)", fontsize=8.5)
     axes[0].set_yticks([0, 0.25, 0.5, 0.75, 1.0])
-    axes[-1].set_facecolor("#f6f6f6")  # the gate panel, visually set apart
+    # Shade EVERY gate facet (there are two now: WildGuard and LlamaGuard-3), since
+    # the shading is what tells the reader which side of the transform/gate split
+    # each panel belongs to — the paper's whole point in this figure.
+    for ax, (_, defense, _) in zip(axes, panels):
+        if defense in PROBE_DEFENSES:
+            ax.set_facecolor("#f6f6f6")
 
     handles, labels = axes[0].get_legend_handles_labels()
     labels = [f"{labels[0]} (ours)"] + labels[1:]
@@ -231,8 +321,12 @@ def fig_inversion(cells, outdir: str) -> str:
 def fig_asr_vs_n(cells, outdir: str) -> str:
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(1, 3, figsize=(10.5, 3.2), sharey=True)
-    for ax, target in zip(axes, TARGETS):
+    # Only plot targets we actually have cells for, so the 70B appears once its
+    # round lands and the figure still builds from the published panel alone.
+    shown = [t for t in TARGETS_WITH_70B
+             if any((t, d, a) in cells for d in DEFENSES for a in ("code", "surf"))]
+    fig, axes = plt.subplots(1, len(shown), figsize=(3.5 * len(shown), 3.2), sharey=True)
+    for ax, target in zip(axes, shown):
         for defense in DEFENSES:
             for attack, style in (("code", "-"), ("surf", "--")):
                 key = (target, defense, attack)
@@ -273,12 +367,12 @@ def fig_asr_vs_n(cells, outdir: str) -> str:
 
 def print_table(cells) -> None:
     """The main paper's Table 3, so the figures and the table cannot drift apart."""
-    header = "{:<9}{:<20}{:<22}{:>9}{:>7}{:>7}{:>8}{:>7}"
+    header = "{:<9}{:<22}{:<22}{:>9}{:>7}{:>7}{:>8}{:>7}"
     print(header.format("target", "defense", "attack", "per-draw",
                         "N=1", "N=10", "N=100", "QtFS"))
-    print("-" * 89)
-    for target in TARGETS:
-        for defense in DEFENSES + PROBE_DEFENSES:
+    print("-" * 91)
+    for target in TARGETS_WITH_70B:
+        for defense in DEFENSES + ["sage_t05"] + PROBE_DEFENSES:
             for attack in ("code", "surf"):
                 key = (target, defense, attack)
                 if key not in cells:
@@ -305,11 +399,21 @@ def main() -> None:
     args = parser.parse_args()
 
     cells = load_cells(args.root, gate=not args.no_gate)
-    expected = len(TARGETS) * len(DEFENSES) * 2 + len(PROBE_DEFENSES) * 2  # 18 main + 4 probe
-    if len(cells) != expected:
+    # Explicit, not a formula: the matrix is deliberately RAGGED (SemanticSmooth was
+    # never run on the 70B; the temperature ablation is a single cell), so a product
+    # formula would either over- or under-count. Breakdown:
+    #   P2  18  3 targets x {no_defense, sage, semantic_smooth} x {code, surf}
+    #   P2   4  llama x {canonicalize, canon.+WildGuard} x {code, surf}
+    #   P3   2  llama x canon.+LlamaGuard-3 x {code, surf}      (2nd gate)
+    #   P3   1  llama x SAGE(T=0.5) x code                      (temperature ablation)
+    #   P3   4  llama70 x {no_defense, sage} x {code, surf}     (scale)
+    EXPECTED_CELLS = 29
+    if len(cells) != EXPECTED_CELLS:
+        missing = sorted(set(cells))
         raise SystemExit(
-            f"expected {expected} cells across campaigns {sorted(CAMPAIGNS)}, found "
-            f"{len(cells)} — sync outputs/ or check the campaign tags"
+            f"expected {EXPECTED_CELLS} cells across campaigns {sorted(CAMPAIGNS)}, "
+            f"found {len(cells)} — sync outputs/ or check the campaign tags.\n"
+            f"loaded: {missing}"
         )
     os.makedirs(args.outdir, exist_ok=True)
     for path in (fig_inversion(cells, args.outdir), fig_asr_vs_n(cells, args.outdir)):
