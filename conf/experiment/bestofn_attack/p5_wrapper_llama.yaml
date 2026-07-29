@@ -1,0 +1,61 @@
+# bestofn_attack Paper-D — P5 WRAPPER INTERVENTION, llama-3.1-8B (3 cells).
+#
+# WHAT THIS ROUND SETTLES. Two reviewer cons at once, from ONE seed change:
+#
+#   E1 (seed variance) — reviews 1 and 5 both scored on it. Every reported cell is
+#       single-seed at N=100; we have no between-run bound. `published` here is the
+#       SAME cell as the reported one with ONLY the seed moved (42 -> 1337), so the
+#       published@1337 vs published@42 delta IS the seed-variance estimate.
+#
+#   E2 (wrapper intervention) — review 5's con 3: borrowed strength is correlational,
+#       four target-level points. Holding the encoded task and the seed FIXED and
+#       moving only the wrapper makes it causal.
+#
+# WHY ONE ROUND. Running all three conditions at the same NEW seed makes both
+# comparisons well-posed: published@1337 vs published@42 isolates the seed;
+# variant@1337 vs published@1337 isolates the wrapper at matched seed. Running the
+# variants at seed 42 instead would confound the intervention with the seed.
+#
+# PRE-REGISTERED PREDICTION (recorded in conf/defense/sage.yaml before the run):
+#   Borrowed strength says SAGE's efficacy is the target's disposition to convert
+#   the self-check into an EXPLICIT REFUSAL, and that coverage lives in the "middle
+#   band" of analyses that never reach a verdict — 63.6% of llama draws.
+#   => Both variants should SHRINK the band, RAISE explicit refusal, and LOWER
+#      coverage, with the effect LARGEST here (llama has the biggest band).
+#   => If llama's coverage does NOT move, the band is not the operative channel and
+#      the account is wrong in its causal direction. That is a reportable result
+#      either way — this round cannot produce an unpublishable outcome.
+#
+# ARM: code only. The composition cell (SAGE x code) is the headline and the only
+# one where the band is large; the surface arm is floor-pinned under SAGE (0.8h,
+# ASR ~0) and would spend wall time to confirm a zero.
+#
+# JUDGE: wildguard here is the FREE first pass and is NOT reportable — it over-flags
+# code-encoded arms by up to 40 points (text_docs §JUDGE). Reportable numbers come
+# from the gpt-5-mini rejudge pass over the stored responses (p5_rejudge_mini),
+# which is also what makes these cells comparable to the paper's existing numbers.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/p5_wrapper_llama
+#
+# SIZING: R7 measured SAGE+code on llama at 8.9h. Three cells, three replicas, so
+# makespan ~= one cell ~9-11h (T=1.0 sampling may run longer than greedy) against
+# AICR's 24h wall. Results write only at cell end, so a wall timeout loses the cell.
+num_main_job_threads: 3      # all three cells in flight, one replica each
+num_cluster_jobs: 5          # orchestrator + 3 llama replicas + wildguard
+
+_e: &e
+  mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  # seed 1337 != conf/llm/default.yaml's 42 — this is the E1 manipulation.
+  target_model_config: {temperature: 1.0, seed: 1337}
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_p5_wrapper
+
+_CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260718_213010_40825967/code_attack
+
+tasks:
+  - {<<: *e, source_transform_subdir: *code, defense: sage, defense_config: {wrapper: published}}
+  - {<<: *e, source_transform_subdir: *code, defense: sage, defense_config: {wrapper: analysis_then_verdict}}
+  - {<<: *e, source_transform_subdir: *code, defense: sage, defense_config: {wrapper: verdict_only}}
