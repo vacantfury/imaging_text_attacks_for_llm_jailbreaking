@@ -9,7 +9,7 @@ import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt, numpy as np
 from matplotlib.lines import Line2D
 OI = ['#E69F00','#56B4E9','#009E73','#F0E442','#0072B2','#D55E00','#CC79A7','#000000']
-FIGS = "paper/autoattack_defense/latex/figs"
+FIGS = "paper/autoattack_defense/aaai_2027_main/aaai_main_latex/figs"
 
 def wilson_err(vals, n=100, z=1.96):
     """Asymmetric Wilson 95% CI half-widths (lower,upper) for yerr; matches tab:app-stats."""
@@ -71,19 +71,47 @@ def main() -> None:
     fig.tight_layout(); fig.savefig(FIGS+"/ensemble_bars.pdf"); fig.savefig(FIGS+"/ensemble_bars.png", dpi=300)
 
     # ---- Fig 2: safety-utility tradeoff frontier (BOTH models) ----
-    fig, ax = plt.subplots(figsize=(3.5,2.9))
+    # NO LEGEND. Two reviewers independently asked for direct point labels instead
+    # of a colour key ("annotating the specific guard names near each point would
+    # make the frontier visualization self-contained"). The old version carried two
+    # legends -- 5 guard entries + 2 model entries -- at 6pt inside a 3.5in panel,
+    # which is what made it unreadable. Guard identity now sits next to the point;
+    # the target model is named once per cluster. Legend entries: 7 -> 0.
+    # QWEN-ONLY, deliberately. The InternVL3 series was 6 more markers + 3 arrows
+    # landing in the already-crowded top-right, and it covered only 3 of the 5
+    # guards -- which review 15 con 10 flagged as an inconsistency in the figure
+    # ("the benign-utility component ... is only directly measured for three of
+    # five guards on InternVL3"). Showing one COMPLETE panel removes both the
+    # clutter and the partial-coverage objection; Table 1 carries both targets.
+    fig, ax = plt.subplots(figsize=(3.5,2.95))
     plot_model(MC,  MCRG,  MC_OR,  MCRG_OR,  'o', 's', '-', ax)    # Qwen2.5-VL (5 guards)
-    plot_model(MC2, MCRG2, MC_OR2, MCRG_OR2, '^', 'D', '--', ax)   # InternVL3 (first 3 guards)
     ax.set_xlabel('Benign over-refusal (%)  →  worse utility')
     ax.set_ylabel('Ensemble ASR (%)  →  worse safety')
-    guard_handles=[Line2D([0],[0],color=OI[i],lw=2.4,label=g) for i,g in enumerate(GUARDS)]
-    model_handles=[Line2D([0],[0],color='0.35',marker='o',mfc='none',ls='-', label='Qwen2.5-VL'),
-                   Line2D([0],[0],color='0.35',marker='^',mfc='none',ls='--',label='InternVL3')]
-    leg1=ax.legend(handles=guard_handles, frameon=False, fontsize=6, loc='upper left', title='guard', title_fontsize=6)
-    ax.add_artist(leg1)
-    ax.legend(handles=model_handles, frameon=False, fontsize=6, loc='lower right')
-    ax.text(0.02,0.02,'open = amplifier → filled = +reguard', transform=ax.transAxes, fontsize=5.5, ha='left')
+
+    # Label text is DARKENED per guard: the Okabe-Ito yellow (#F0E442) is fine as a
+    # marker edge but unreadable as small bold text on white.
+    def dark(hexc, f=0.62):
+        r,g,b = (int(hexc[i:i+2],16) for i in (1,3,5))
+        return '#%02x%02x%02x' % (int(r*f), int(g*f), int(b*f))
+
+    # Per-guard label offsets (points), hand-placed. The Qwen amplifier markers for
+    # GuardReasoner (59.5,71) and WildGuard (64,72) are ~4.5 units apart at the same
+    # height, so their labels are pushed to opposite sides; Qwen3Guard drops below.
+    # LlamaGuard-3 (28,79) and ThinkGuard (45,77) are close enough in y that a
+    # right-extending LlamaGuard label collides with ThinkGuard's; LlamaGuard goes
+    # ABOVE its marker, ThinkGuard shifts right.
+    OFF = {'WildGuard':(9,-1), 'Qwen3Guard':(-7,-12), 'GuardReasoner':(-38,5),
+           'LlamaGuard-3':(-14,10), 'ThinkGuard':(2,7)}
+    for i, g in enumerate(GUARDS):
+        ax.annotate(g, xy=(MC_OR[i], MC[i]), xytext=OFF[g], textcoords='offset points',
+                    fontsize=6.8, color=dark(OI[i]), fontweight='bold', zorder=5)
+
+    # Bottom-LEFT: the only quadrant no series occupies (everything runs down-right).
+    ax.text(0.02, 0.03, 'Qwen2.5-VL-7B\nopen → filled  =  amplifier → +reguard',
+            transform=ax.transAxes, fontsize=6.4, ha='left', va='bottom', color='0.30', linespacing=1.4)
     ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
+    ax.tick_params(labelsize=7.5)
+    ax.set_ylim(38, 86)
     fig.tight_layout(); fig.savefig(FIGS+"/tradeoff_frontier.pdf"); fig.savefig(FIGS+"/tradeoff_frontier.png", dpi=300)
     print("wrote:", os.listdir(FIGS))
 
