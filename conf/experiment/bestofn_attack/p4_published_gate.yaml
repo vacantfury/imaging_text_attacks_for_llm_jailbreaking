@@ -1,0 +1,88 @@
+# bestofn_attack Paper-D — REVIEW-2 RESPONSE: a PUBLISHED gate, deployed as published.
+#
+# OWNER-APPROVED 2026-07-28 against a stated resource report.
+#
+# ── WHAT THIS ANSWERS ────────────────────────────────────────────────────────
+# Review 2 (rating 8) accepts the defense-type inversion but not its generality:
+#
+#   "both gate conditions (canonicalize+guard with WildGuard and LlamaGuard-3) are
+#    *custom constructions*, not published deployed defenses ... We cannot conclude
+#    from two custom gates that the inversion phenomenon generalizes across the broad
+#    family of classifier-based defenses, yet the paper frames it as a defense-type
+#    property."
+#
+# and asks directly: "Would the authors consider adding at least one published gate
+# defense (e.g. LlamaGuard-3 in its standard input-screening configuration)? ... If
+# adding a published gate confirms the inversion, my significance assessment would
+# increase substantially."
+#
+# That is exactly `guard_baseline`: the classifier screens the RAW input and either
+# blocks (canned refusal) or passes the ORIGINAL prompt to the target. No
+# canonicalization prefix, no recover/decode, nothing of ours in front of it — Llama
+# Guard as Meta ships it and as it is actually deployed. The only difference from the
+# published canonicalize+LlamaGuard-3 cells is the removal of our canonicalization
+# step, so the pair isolates precisely the "is it your construction?" question.
+#
+# ── PRE-REGISTERED PREDICTION (recorded BEFORE the run) ──────────────────────
+# The probe-count account says a gate presents a searchable decision boundary, so the
+# 100-distinct-probe surface search must retain MORE of its undefended reach than the
+# 1-probe code encoding — the REVERSE of the transform-defense ordering (SAGE: code
+# 0.71 >> surface 0.03). Measured on our two constructed gates: WildGuard 0.88 vs 0.61,
+# LlamaGuard-3 0.26 vs 0.06.
+#
+#   PREDICTION: surface retention > code retention again, on the standalone gate.
+#
+# A NON-inversion refutes the probe-count account as a defense-type property and gets
+# reported as such. This preset exists to be able to fail. Note the prediction is
+# non-trivial here: stripping canonicalization can only HELP the surface arm (its
+# case/width noise now survives to the classifier), so a failure would have to come
+# from the code arm gaining more, which the account forbids.
+#
+# ── COMPARABILITY ────────────────────────────────────────────────────────────
+# Same stored attack prompts as every published llama cell (the *code / *surf anchors
+# below are the identical prompt_transform dirs), same target, same T=1.0, same default
+# generation budget. The undefended baselines needed to normalize retention already
+# exist from P2 run A, so retained reach is computable without re-running them.
+#
+# ── JUDGE ────────────────────────────────────────────────────────────────────
+# wildguard first pass (free, on-cluster) then a gpt-5-mini rejudge — the standing
+# pattern. NOTHING from the wildguard pass is reportable: across the 29 published cells
+# it reads higher in 24, by up to +22 per-draw and +58 coverage points.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/p4_published_gate
+#
+# ── FOOTPRINT ────────────────────────────────────────────────────────────────
+# 2 cells x 10,000 = 20,000 generations. GPU only at this stage (no API).
+# num_cluster_jobs=5 deliberately caps the server budget at 4: the manager caps
+# num_instances PROPORTIONALLY when over budget (never promotes), so llama's YAML
+# request of 4 replicas is trimmed to ~2 while wildguard and llama_guard_3_8b keep
+# one each. Two cells cannot use four replicas anyway — load balancing is per-cell.
+# Expected makespan ~2-3h; the gate cells are cheaper than the P2 comparators because
+# blocked prompts never reach the target at all.
+# Follow-on gpt-5-mini rejudge of both cells ~$18 at the measured $0.00090/call.
+#
+# ── VERIFY AFTER ─────────────────────────────────────────────────────────────
+# Both cells must report count == 10000, status success, fallback_parse_count == 0.
+# Expect a LOW draw-diversity ratio on blocked prompts — canned refusals are
+# byte-identical. That is the documented gate exemption, not the variation-channel
+# defect of Section 4; the diagnostic applies to the target's own generations.
+num_main_job_threads: 2      # both cells in flight
+num_cluster_jobs: 5          # orchestrator + ~2 llama replicas + wildguard + llama_guard_3
+
+_e: &e
+  mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  target_model_config: {temperature: 1.0}
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_p4_published_gate
+  defense: guard_baseline
+  defense_config: {guard_model: llama_guard_3_8b}
+
+_CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260718_213010_40825967/code_attack
+_SURF: &surf outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_20260718_050205_56951903/variance_channel_bon
+
+tasks:
+  - {<<: *e, source_transform_subdir: *surf}
+  - {<<: *e, source_transform_subdir: *code}
