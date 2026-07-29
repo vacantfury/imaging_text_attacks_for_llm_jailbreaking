@@ -76,6 +76,7 @@ def collect(root: str = ".") -> dict:
         if key in out:
             raise SystemExit(f"DUPLICATE cell {key}")
         refused = success = band = succ_unrefused = succ_refused = 0
+        hit_behaviors = set()
         for line in open(os.path.join(d, "raw_results.jsonl")):
             row = json.loads(line)
             r = is_refusal(row.get("response") or "")
@@ -85,10 +86,32 @@ def collect(root: str = ".") -> dict:
             band += (not r) and (not s)
             succ_unrefused += (not r) and s
             succ_refused += r and s
+            if s:
+                hit_behaviors.add(row["id"].rsplit("__", 1)[0])
+
+        # Coverage under the GUARD's own verdicts, from the upstream run's stored
+        # per-draw judgments. At M=N=100 union ASR(N=100) is exactly the fraction of
+        # behaviors with at least one hit, so both judges' coverage is a set count on
+        # the identical responses — the apples-to-apples comparison the main text's
+        # judge claim is stated over.
+        guard_hits, guard_behaviors = None, set()
+        up_raw = os.path.join(root, src_dir, "raw_results.jsonl")
+        if not os.path.exists(up_raw):
+            up_raw = os.path.join(src_dir, "raw_results.jsonl")
+        if os.path.exists(up_raw):
+            guard_hits = 0
+            for line in open(up_raw):
+                row = json.loads(line)
+                if row.get("asr"):
+                    guard_hits += 1
+                    guard_behaviors.add(row["id"].rsplit("__", 1)[0])
+
         out[key] = dict(
             n=EXPECTED_DRAWS_PER_CELL, mini=meta["asr"], guard=upstream.get("asr"),
             refused=refused, success=success, band=band,
             succ_unrefused=succ_unrefused, succ_refused=succ_refused,
+            cov_mini=len(hit_behaviors),
+            cov_guard=(len(guard_behaviors) if guard_hits is not None else None),
         )
     return out
 
@@ -160,6 +183,23 @@ def main() -> None:
                 if c["guard"] is not None and a == "surf"]
         print(f"% cells={len(deltas)} guard-higher={sum(1 for x in deltas if x > 0)} "
               f"mean delta code={sum(code)/len(code):+.2f} surf={sum(surf)/len(surf):+.2f}")
+
+        # COVERAGE-level check of the main text's judge claim, which is stated over
+        # coverage and not per-draw ASR. Printed as a sorted audit so the claim can be
+        # written from the data instead of from the four cells that happened to be in
+        # the original table.
+        print("\n% ---- coverage under both judges, sorted by |delta| ----")
+        cov = [(t, d, a, c["cov_mini"], c["cov_guard"]) for (t, d, a), c in cells.items()
+               if c["cov_guard"] is not None]
+        cov.sort(key=lambda r: -abs(r[4] - r[3]))
+        for t, d, a, cm, cg in cov:
+            print(f"%  {t:8s} {d:20s} {a:5s} mini={cm:3d} guard={cg:3d} "
+                  f"delta={cg-cm:+4d}")
+        big = [r for r in cov if abs(r[4] - r[3]) >= 5]
+        print(f"% cells with |coverage delta| >= 5pts: {len(big)} "
+              f"(code={sum(1 for r in big if r[2]=='code')}, "
+              f"surf={sum(1 for r in big if r[2]=='surf')}); "
+              f"guard higher in {sum(1 for r in big if r[4] > r[3])}/{len(big)}")
 
 
 if __name__ == "__main__":
