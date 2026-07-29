@@ -1,0 +1,73 @@
+# bestofn_attack Paper-D — P3 REJUDGE with the reportable judge (7 cells).
+#
+# Re-scores the stored responses of the P3 review-1 rounds with gpt-5-mini, the
+# DECIDED reportable ASR judge. No target regeneration — `rejudge` reads each
+# dir's raw_results.jsonl and runs only the judging step.
+#
+# WHY THIS EXISTS. Both P3 rounds ran wildguard as a free on-cluster first pass.
+# Nothing from that pass is reportable: wildguard does not follow the HarmBench
+# completion rubric (it flags intent and strings rather than task completion) and
+# over-flags encoding/code attacks by 41-68%, which is exactly the arm the
+# composition claim rests on. On the published P2 panel the two judges disagreed by
+# up to 40 coverage points, always with the guard higher, always on the code arm.
+#
+# SEVEN cells, not eight: the fourth p3_review1_llama cell (SAGE x code at T=1.5)
+# never completed — at T=1.5 Llama-3.1-8B stops emitting EOS reliably and runs to
+# the 16,384-token cap, putting the cell ~46h from done against a 15.5h wall. It was
+# cancelled by owner order. The temperature ablation is answerable from T=0.5 (below)
+# plus the published T=1.0 cell, so no third point is needed.
+#
+# OWNER-APPROVED 2026-07-28 against a stated resource report.
+# COST: 7 cells x 10,000 = 70,000 judge calls at the measured $0.00090/call ~= $63.
+# (Quoted as ~$72 for 8 cells before the T=1.5 cell was confirmed dead; 7 cells is
+# the true set, so this is BELOW the approved figure — no re-ask needed.)
+# GPU: none — API judge only. WALL: ~1-2h.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/p3_rejudge_mini
+#
+# ── WHAT THESE CELLS ANSWER ──────────────────────────────────────────────────
+# Cells 1-2 (canonicalize + LlamaGuard-3): review blocker 4, a SECOND gate holding
+#   the defense architecture fixed and swapping only the classifier. Pre-registered
+#   prediction (recorded before the run): the ordering must INVERT relative to the
+#   transform defenses — original BoN (100 distinct probes) retains MORE of its
+#   undefended reach than BoN-wrapped CodeAttack (1 probe); under wildguard the
+#   published panel measured 0.88 vs 0.61. A NON-inversion refutes the probe-count
+#   account as stated and must be reported as such.
+# Cell 3 (SAGE x code, T=0.5): review question 3, the temperature ablation, read
+#   against the existing T=1.0 cell.
+# Cells 4-7 (Llama-3.3-70B): review blocker 2, scale. The undefended pair is what
+#   makes the SAGE pair interpretable — retained reach is uncomputable without it.
+#
+# ── THE FALSIFIABLE CHECK ────────────────────────────────────────────────────
+# The 70B's judge-INDEPENDENT refusal disposition under SAGE measured 68.7% (appendix
+# Refusal-Disposition Protocol: refusal-marker regex vs the first 400 chars, code arm,
+# all 10,000 draws), against 31.8% for Llama-3.1-8B and 96.3/97.3% for Qwen/Gemma.
+# It is an INTERMEDIATE point, which makes borrowed strength testable as a graded
+# relationship rather than an endpoint re-confirmation. If defended coverage really is
+# borrowed from refusal disposition, the 70B's union coverage at N=100 must land
+# BETWEEN Qwen's 22.0 and Llama-3.1-8B's 67.0. A value outside that interval weakens
+# the mechanism claim and gets reported that way.
+#
+# VERIFY AFTER: every cell must report count == 10000, status success,
+# fallback_parse_count == 0. Then spot-read raw judgments on any cell whose ASR moves
+# by more than ~20 points from the wildguard pass before trusting the new number.
+num_cluster_jobs: 1           # orchestrator only — gpt-5-mini is an API model, no server
+num_main_job_threads: 7       # all seven cells judged concurrently
+
+_r: &r
+  mode: rejudge
+  judge_model: gpt-5-mini
+  benchmark: harmbench
+  campaign: bestofn_attack_p3_rejudge
+
+tasks:
+  # ── Block A — second gate (canonicalize + LlamaGuard-3), llama-8B, T=1.0 ──────
+  - {<<: *r, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_canonicalize_guard_variance_channel_bon_20260728_024106_90575447}
+  - {<<: *r, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_canonicalize_guard_code_attack_20260728_024106_90782792}
+  # ── Block B — temperature ablation, SAGE x code, T=0.5 ───────────────────────
+  - {<<: *r, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_sage_code_attack_20260728_024106_39590731}
+  # ── Block C — Llama-3.3-70B scale panel, T=1.0 ───────────────────────────────
+  - {<<: *r, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama_3_3_70b_instruct_no_defense_code_attack_20260728_115636_28481976}
+  - {<<: *r, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama_3_3_70b_instruct_no_defense_variance_channel_bon_20260728_115636_46860258}
+  - {<<: *r, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama_3_3_70b_instruct_sage_code_attack_20260728_115636_446260}
+  - {<<: *r, responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama_3_3_70b_instruct_sage_variance_channel_bon_20260728_115636_57034256}
