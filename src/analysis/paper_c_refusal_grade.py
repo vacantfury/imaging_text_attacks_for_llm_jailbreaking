@@ -21,7 +21,9 @@ Reads exactly the cells `paper_c_benign_utility.py` consumes (same selection
 rule: newest rejudge per (defense, guard, variant)), so the numbers are
 comparable to the reported over-refusal table by construction.
 
-Usage:  python3 src/analysis/paper_c_refusal_grade.py
+Usage:  python3 src/analysis/paper_c_refusal_grade.py            # Qwen2.5-VL
+        python3 src/analysis/paper_c_refusal_grade.py internvl3   # 2nd target
+        python3 src/analysis/paper_c_refusal_grade.py both
         python -m src.analysis.paper_c_refusal_grade
 """
 import glob
@@ -29,9 +31,18 @@ import json
 import math
 import os
 import re
+import sys
 from collections import Counter, defaultdict
 
 REJUDGE_BENIGN = 'outputs/autoattack_defense/rejudge/orbench_benign_hard/*'
+# Both targets' benign panels, so the hedging measure is TWO-target. InternVL3's
+# benign guard_baseline + floor cells landed 2026-07-29 (presets
+# gen2_internvl3_benign_gb_w1 / _gb_rest, gpt-5-mini rejudged); before that this
+# measure was necessarily Qwen-only.
+PANELS = {
+    'qwen': ('paper_c_guard_panel_benign', 'qwen2_5_vl_7b'),
+    'internvl3': ('paper_c_gen2_internvl3', 'internvl3_8b'),
+}
 CAMPAIGN = 'paper_c_guard_panel_benign'
 TARGET = 'qwen2_5_vl_7b'
 VARIANTS = {'text': 'non_llm_baseline', 'image': 'ir_plain'}
@@ -125,9 +136,24 @@ def load_labels(d):
 
 
 def main():
+    which = (sys.argv[1] if len(sys.argv) > 1 else 'qwen').lower()
+    keys = list(PANELS) if which == 'both' else [which]
+    for k in keys:
+        if k not in PANELS:
+            print('unknown target %r; choose from %s or "both"'
+                  % (k, ', '.join(PANELS)))
+            return
+        run_panel(*PANELS[k])
+        if len(keys) > 1:
+            print('\n' + '#' * 78 + '\n')
+
+
+def run_panel(campaign, target):
+    global CAMPAIGN, TARGET
+    CAMPAIGN, TARGET = campaign, target
     cells = collect_cells()
     if not cells:
-        print('no benign cells found under', REJUDGE_BENIGN)
+        print('no benign cells found for %s under %s' % (target, REJUDGE_BENIGN))
         return
 
     # (defense, guard) -> Counter over classes, pooling the text+image variants
