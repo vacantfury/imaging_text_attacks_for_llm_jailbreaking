@@ -5,7 +5,9 @@
 #
 # Roles for this cluster (owner routing policy 2026-07-18):
 #   API-first — AWS Bedrock via the box's AWS profile (no GPU, no server jobs).
-#   GPU last-resort — vLLM serving on the A100s only when Bedrock+AICR+NURC can't cover.
+#   GPU THIRD tier — vLLM serving on the A100s once AICR+NURC are capped, degraded, or
+#   lack the model. THIRD resort, NOT "last resort": routing here is a normal move, not an
+#   emergency one (owner correction 2026-07-29).
 cluster:
   # --- routing capabilities (multi_cluster.plan_split; owner routing policy 2026-07-18) ---
   # OWNER RULE (2026-07-18): on xc we run ONLY Bedrock API models (self-served on xc's own

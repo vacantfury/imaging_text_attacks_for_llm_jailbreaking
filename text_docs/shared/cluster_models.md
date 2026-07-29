@@ -19,7 +19,7 @@ Disk headroom: NURC `/scratch` ~323 TB free; AICR `/scratch` = 10 TiB quota on a
 (2026-07-15). **xc** = 5.7 TB single disk, self-imposed ≤ 1/3 (~1.9 TB) for our weights (owner rule
 2026-07-18); the disk is shared with the box owner (~420 GB his) but as of 2026-07-19 our files live
 under a **dedicated `thomas` user** (isolated home, mode 750 — see below), no longer the shared
-`ubuntu` account. xc is the GPU LAST-RESORT tier → keep it to the small/mid targets+guards+judges that
+`ubuntu` account. xc is the GPU THIRD tier (not "last resort") → keep it to the small/mid targets+guards+judges that
 fit (its 8×A100-80G = 640 GB serves up to ~235B); the frontier capability arm (DeepSeek/Kimi) is AICR-only.
 
 ### xc runs under a dedicated `thomas` user (2026-07-19)
@@ -61,8 +61,12 @@ NURC/AICR snapshot **2026-07-15**; xc snapshot **2026-07-18**. ✓ = present, �
 
 **xc set (COMPLETE 2026-07-18):** all 17 small/mid targets+guards+judges present (~348 GB, well within
 the 1/3 budget). The **70B+/200B general judges** (Llama-3.3-70B, Hermes-4-70B, GLM-4.5-Air, Command-A)
-are `—` on xc by choice: xc is GPU last-resort, so pull them only if xc needs to serve overflow
-judge-bake-off runs (they fit its 8×A100 but are big; ~808 GB, still within the 1/3 budget if wanted).
+were `—` on xc by choice: pull them when xc needs to serve overflow judge-bake-off runs (they fit
+its 8×A100 but are big; ~808 GB, still within the 1/3 budget if wanted). **UPDATE 2026-07-29:**
+`Llama-3.3-70B` and `gemma-2-9b-it` are being pulled to xc now for the P5 wrapper round — AICR was
+job-capped and NURC's gpu partition largely drained, which is exactly the normal third-tier fallback.
+The old "last resort" wording had made xc's absent models look like a deliberate permanent gap rather
+than a not-yet-needed download; treat this table as a snapshot, not a policy.
 The HF token was injected the standard op way (`op read op://dev/HuggingFace/credential` piped over ssh
 stdin, transient — never persisted on the shared box). xc's venv lives at `~/venvs/imaging_xc`
 (OUTSIDE the repo → sync-proof; see below).

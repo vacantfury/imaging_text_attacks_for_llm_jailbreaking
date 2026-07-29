@@ -8,7 +8,7 @@ plan_split is a PURE function (no I/O, no pipeline import), so it's tested here
 with fabricated ClusterSpecs + TaskNeeds — no cluster, no models, no network.
 Encodes the owner routing policy (2026-07-18):
   Bedrock models -> xc only (arise-beta creds); non-Bedrock API -> aicr/nurc
-  (op keys); GPU-served -> any cluster, xc LAST (last-resort); Bedrock+API in
+  (op keys); GPU-served -> any cluster, xc THIRD (third tier, not last-resort); Bedrock+API in
   one task -> unsatisfiable.
 """
 import sys
@@ -63,7 +63,7 @@ def test_gpu_overflow_spills_to_xc_last():
         placed[_where(plan, i)].append(i)
     _check("aicr took 2", len(placed["aicr"]) == 2)
     _check("nurc took 2", len(placed["nurc"]) == 2)
-    _check("xc took the overflow 2 (last-resort)", len(placed["xc"]) == 2)
+    _check("xc took the overflow 2 (third tier)", len(placed["xc"]) == 2)
 
 
 def test_bedrock_task_goes_to_xc_only():

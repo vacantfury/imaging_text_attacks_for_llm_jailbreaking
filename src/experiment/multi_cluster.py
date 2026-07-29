@@ -28,7 +28,8 @@ Placement = greedy, pool-ordered, capability-filtered. Pack whole tasks onto the
     needs (routing policy, 2026-07-18): a task's Bedrock models require a
     ``bedrock`` cluster (xc), its non-Bedrock API models require an ``api_keys``
     cluster (aicr/nurc), GPU-served models run anywhere. Because the pool lists
-    xc LAST, GPU work fills aicr->nurc->xc — xc's GPUs are the last-resort tier.
+    xc THIRD, GPU work fills aicr->nurc->xc — xc's GPUs are the THIRD tier, a
+    normal option once aicr/nurc are capped or degraded (not an emergency one).
     A model shared across a split is served once per cluster (accepted
     duplication). A ``pins`` map forces every task needing a given model onto a
     named cluster. A task needing both Bedrock and non-Bedrock API creds is
@@ -216,9 +217,9 @@ def plan_split(
          onto a `bedrock` cluster (xc); its non-Bedrock API models force it onto
          an `api_keys` cluster (aicr/nurc). GPU-served models run anywhere.
       2. POOL ORDER greedy: fill the first capable cluster whose server budget
-         fits the task, overflow to the next. Because the pool lists xc LAST,
-         GPU work naturally fills aicr→nurc→xc — i.e. xc's GPUs are the
-         last-resort tier, exactly as specified. Bedrock-only tasks have xc as
+         fits the task, overflow to the next. Because the pool lists xc THIRD,
+         GPU work naturally fills aicr→nurc→xc — i.e. xc's GPUs are the THIRD
+         tier, exactly as specified. Bedrock-only tasks have xc as
          their only capable cluster, so they land there directly.
     A task needing BOTH Bedrock and non-Bedrock API models is unsatisfiable (no
     cluster holds both key sets) and surfaces as a clear leftover with a reason.
