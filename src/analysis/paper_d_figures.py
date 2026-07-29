@@ -120,12 +120,14 @@ N_GRID = [1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 70, 100]
 # last and carry the paper's claim that the inversion is a property of gates: the
 # first two hold the architecture fixed and swap the classifier, the third drops
 # our canonicalization prefix entirely and runs LlamaGuard-3 as it ships.
+# Facet titles are kept SHORT and two-line: with five facets the full defense names
+# ("canon.+LlamaGuard-3", "LlamaGuard-3 as published") collide horizontally.
 INVERSION_PANELS = [
-    ("SAGE  (transform)", "sage", TARGETS_WITH_70B),
-    ("SemanticSmooth  (transform)", "semantic_smooth", TARGETS),
+    ("SAGE\n(transform)", "sage", TARGETS_WITH_70B),
+    ("SemanticSmooth\n(transform)", "semantic_smooth", TARGETS),
     ("canon.+WildGuard\n(gate)", "canonicalize_guard", ["llama"]),
-    ("canon.+LlamaGuard-3\n(gate)", "canonicalize_guard3", ["llama"]),
-    ("LlamaGuard-3 as published\n(gate)", "guard_baseline", ["llama"]),
+    ("canon.+LG-3\n(gate)", "canonicalize_guard3", ["llama"]),
+    ("LG-3 as shipped\n(gate)", "guard_baseline", ["llama"]),
 ]
 
 
