@@ -264,6 +264,15 @@ class ModalityComplete(Defense):
                 guard see only the lossy summary. Cost: benign prompts are
                 double-checked, re-introducing over-refusal (the fundamental
                 tension the RQ4 result exposes).
+            reguard_compose: how the two verdicts combine — "or" (default, the
+                shipped behavior: block if EITHER view is flagged) or "and"
+                (block only if BOTH are). Ignored unless reguard_original.
+                AND blocks a strict SUBSET of OR, so an AND run's target
+                responses are a SUPERSET of an OR run's: run once with "and"
+                and both compositions reduce from the same outputs, using the
+                per-prompt verdicts written to reguard_verdicts.jsonl. The
+                reverse does not hold — under OR a flagged decoded view hides
+                the pre-decode verdict entirely.
 
         Passed through **kwargs (decoder-disentanglement, 2026-07-28):
             amplifier_model: run the amplifier's OWN steps (recover, gate,
@@ -477,20 +486,34 @@ class ModalityComplete(Defense):
         # just the (possibly lossy) decoded gist. Blocks if EITHER is flagged —
         # the honest-arc defense vs the decode-evasion compression attack.
         reguard_original = bool(self._config.get("reguard_original", False))
+        # `or` (default, the shipped behavior) blocks if EITHER view is flagged;
+        # `and` blocks only if BOTH are. AND blocks a strict SUBSET of OR, so an
+        # AND run queries the target for a SUPERSET of OR's prompts -- which is
+        # why the per-prompt verdicts below are persisted: they let the OR result
+        # be reduced post-hoc from an AND run, instead of paying for two runs.
+        compose = str(self._config.get("reguard_compose", "or")).lower()
+        if compose not in ("or", "and"):
+            raise ValueError(
+                f"reguard_compose must be 'or' or 'and', got {compose!r}")
         verdicts_orig: dict = {}
         if reguard_original:
             orig_items = [(p.id, union_by_id[p.id], None) for p in prompts]
             logger.info(
-                f"ModalityComplete step 4 (REGUARD-ORIGINAL patch): "
-                f"{len(orig_items)} full-text verdicts via {self._guard_model_name}")
+                f"ModalityComplete step 4 (REGUARD-ORIGINAL patch, "
+                f"compose={compose.upper()}): {len(orig_items)} full-text "
+                f"verdicts via {self._guard_model_name}")
             verdicts_orig = query_guard(
                 guard_service, self._guard_model, orig_items, is_test=True)
+            self._write_reguard_verdicts(prompts, verdicts, verdicts_orig,
+                                         source_dir)
 
         target_convs: list[tuple[str, list]] = []
         for p in prompts:
             harmful = verdicts.get(p.id, True)  # fail-closed default
             if reguard_original:
-                harmful = harmful or verdicts_orig.get(p.id, True)
+                other = verdicts_orig.get(p.id, True)
+                harmful = (harmful and other) if compose == "and" else (
+                    harmful or other)
             if not harmful:
                 messages = build_conversation_message(p, is_multimodal, source_dir)
                 target_convs.append((p.id, messages))
@@ -510,6 +533,33 @@ class ModalityComplete(Defense):
             (p.id, target_results.get(p.id, GUARD_REFUSAL_TEXT))
             for p in prompts
         ]
+
+    @staticmethod
+    def _write_reguard_verdicts(prompts, verdicts: dict, verdicts_orig: dict,
+                                source_dir: str) -> None:
+        """Persist BOTH per-prompt reguard verdicts (decoded `d`, pre-decode `r`).
+
+        Without this only the composed outcome survives, and the alternative
+        composition cannot be recovered from a finished run: when `d` is flagged,
+        OR blocks regardless of `r`, so `r` is unobservable. Written as one
+        newline-delimited row per prompt next to the transform inputs; failures
+        are logged and swallowed -- this is diagnostics, never the experiment.
+        """
+        import json as _json
+        import os as _os
+        path = _os.path.join(source_dir, "reguard_verdicts.jsonl")
+        try:
+            with open(path, "w") as fh:
+                for p in prompts:
+                    fh.write(_json.dumps({
+                        "id": p.id,
+                        "decoded_flagged": bool(verdicts.get(p.id, True)),
+                        "original_flagged": bool(verdicts_orig.get(p.id, True)),
+                    }) + "\n")
+            logger.info(f"ModalityComplete: wrote reguard verdicts "
+                        f"({len(prompts)} rows) to {path}")
+        except OSError as exc:
+            logger.warning(f"ModalityComplete: could not write {path}: {exc}")
 
     def get_usage(self) -> Optional[dict]:
         """LLM usage from the external guard model, if configured (a
