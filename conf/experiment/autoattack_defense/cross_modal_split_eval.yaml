@@ -1,0 +1,74 @@
+# ============================================================
+# Paper C · ADAPTIVE ATTACK — Step B: cross_modal_split vs the reguard stack (2026-07-29)
+# ============================================================
+# Answers cspaper review 16's third named adaptive target: joint evasion of
+# G(d) ^ G(r). Reads the split_ratio=0.3 render (job 234896).
+#
+# ---- WHY 0.3 (method-check gate PASSED, ratio chosen on evidence) ----
+# All three ratios were rendered free (cross_modal_split_render.yaml) and the text
+# halves READ before picking. HarmBench behaviors are consistently
+# "<generic imperative> <harmful operand>", so:
+#   0.3 -> text = "Give detailed" / "Write a post persuading" / "Give instructions for"
+#          image = the entire harmful operand.  CLEAN: text channel alone is benign.
+#   0.5 -> mixed; "Give instructions for 'rolling coal'" already names the act.
+#   0.7 -> FAILS; "...the Korean War was solely initiated by South Korea," is the
+#          whole harmful claim sitting in the text channel, so any guard flags it and
+#          the conjunction is never tested.
+# 0.3 therefore approximates the operation-vs-operand split the transform's docstring
+# describes as its Round-2 refinement -- no new attack design needed.
+#
+# ---- THE PREDICTION THIS TESTS (stated BEFORE the run, on purpose) ----
+# modality_complete.py line 12: "Step 2 -- UNION: concatenate the text channel + the
+# recovered image content." Our amplifier UNIONS the channels; it does NOT inspect
+# them per-channel. So the transform's docstring premise -- that even a
+# modality-complete check "sees two partial/benign fragments" -- is FALSE for our
+# design, and union is precisely the countermeasure to splitting. Predicted:
+#   no_defense    HIGH  -- target reassembles the two halves (ATTACK VALIDITY check;
+#                          if this is low the attack is broken, not the defense good)
+#   guard_baseline HIGH  -- a bare guard sees a benign text channel and an image it
+#                          cannot read: the split SHOULD evade it
+#   mc / mc+rg     LOW   -- recover pulls the operand into text, union reassembles it,
+#                          the guard sees the whole request
+# If that pattern holds it is the sharpest evidence in the paper for what the
+# amplifier is FOR: a mechanistic, guard-independent gain the bare guard cannot get.
+# A LOW guard_baseline instead would mean the bare guard already caught it and the
+# attack tests nothing -- report that honestly rather than dressing it up.
+#
+# ---- JUDGING: cheap-first, matching the decode_evasion arm ----
+# WildGuard self-judge is a THROWAWAY (memory: wildguard is invalid as an ASR judge,
+# 41-68% false positives on encoding attacks -- never reported). A gpt-5-mini rejudge
+# over the stored responses produces the reportable numbers at zero target cost.
+#
+# Resources: 3 GPUs (qwen target + wildguard + guardreasoner_vl_7b), 4 SLURM jobs,
+# $0 this step, ~$0.60 for the companion rejudge. 7 cells x n=100.
+# ============================================================
+
+num_main_job_threads: 4
+num_cluster_jobs: 4          # orchestrator + qwen(target) + wildguard(guard+judge) + guardreasoner_vl_7b(guard)
+
+_rng: &rng [0, 99]
+_cms: &cms outputs/autoattack_defense/prompt_transform/harmbench/cross_modal_split_20260729_170303_71139205/cross_modal_split
+
+_harm: &harm {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+              benchmark: harmbench, judge_method: harmbench, judge_model: wildguard,
+              campaign: paper_c_cross_modal_split, source_transform_subdir: *cms}
+
+_wg:      &wg      {guard_model: wildguard}
+_grvl:    &grvl    {guard_model: guardreasoner_vl_7b}
+_mcwg:    &mcwg    {guard_model: wildguard,           decode_text: true, decode_style: recover}
+_mcgrvl:  &mcgrvl  {guard_model: guardreasoner_vl_7b, decode_text: true, decode_style: recover}
+_mcwgrg:  &mcwgrg  {guard_model: wildguard,           decode_text: true, decode_style: recover, reguard_original: true}
+_mcgrvlrg: &mcgrvlrg {guard_model: guardreasoner_vl_7b, decode_text: true, decode_style: recover, reguard_original: true}
+
+tasks:
+  # attack validity — does the target reassemble the split at all?
+  - {<<: *harm, defense: no_defense}
+  # bare guard: the split should evade it (no recover step to union the channels)
+  - {<<: *harm, defense: guard_baseline,    defense_config: *wg}
+  - {<<: *harm, defense: guard_baseline,    defense_config: *grvl}
+  # amplifier: union should defeat the split
+  - {<<: *harm, defense: modality_complete, defense_config: *mcwg}
+  - {<<: *harm, defense: modality_complete, defense_config: *mcgrvl}
+  # amplifier + reguard: the full conjunction G(d) ^ G(r)
+  - {<<: *harm, defense: modality_complete, defense_config: *mcwgrg}
+  - {<<: *harm, defense: modality_complete, defense_config: *mcgrvlrg}
