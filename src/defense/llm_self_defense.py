@@ -187,6 +187,11 @@ class LLMSelfDefense(Defense):
         logger.info(
             f"LLMSelfDefense: blocked {blocked}/{len(prompts)} responses "
             f"({100.0 * blocked / max(1, len(prompts)):.1f}%)")
+        # Same diagnostic motive as selfdefend.py: a block rate alone cannot
+        # distinguish real screening from a screener that never answers the
+        # question, so sample raw verdicts into the log.
+        for pid, v in list(verdicts.items())[:3]:
+            logger.info(f"LLMSelfDefense sample verdict [{pid}]: {v.strip()[:200]!r}")
         return out
 
     def get_usage(self) -> Optional[dict]:

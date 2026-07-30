@@ -174,6 +174,20 @@ class SelfDefend(Defense):
             f"SelfDefend[{self._prompt_kind}]: blocked {len(blocked)}/{len(prompts)} "
             f"({100.0 * len(blocked) / max(1, len(prompts)):.1f}%)")
 
+        # Degenerate-gate diagnostic (see conf/defense/selfdefend.yaml). A block
+        # rate near 100% is ambiguous: it can mean the shadow really detects the
+        # attack, or merely that an untuned shadow never emits the bare "no" the
+        # exact-match parse requires. Only the RAW replies distinguish those, so
+        # sample a few into the log rather than forcing a re-run to find out.
+        n_bare = sum(1 for v in verdicts.values()
+                     if v.strip().lower() in ("no", "no."))
+        logger.info(
+            f"SelfDefend[{self._prompt_kind}]: shadow emitted a bare-'No' on "
+            f"{n_bare}/{len(verdicts)} prompts "
+            f"(near 0 with a high block rate => DEGENERATE gate, not detection)")
+        for pid, v in list(verdicts.items())[:3]:
+            logger.info(f"SelfDefend sample verdict [{pid}]: {v.strip()[:200]!r}")
+
         # --- Normal stack: only the released prompts reach the target -------
         # The paper runs both stacks concurrently and discards the target's
         # cached response on a block; querying only the released set is

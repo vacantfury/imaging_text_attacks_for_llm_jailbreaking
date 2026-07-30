@@ -1,0 +1,61 @@
+# bestofn_attack Paper-D — P6 SELF-CHECK GENERALIZATION, PILOT (2 cells).
+#
+# PURPOSE: this is a GATE-HEALTH CHECK, not a result. It exists to answer one
+# question before the full 8-cell round is worth running:
+#
+#   Is SelfDefend's published exact-match parse DEGENERATE on an untuned shadow?
+#
+# SelfDefend releases a prompt only when the shadow answers exactly "no"/"no."
+# (parse_selfdefend, faithful to the reference). The paper's strong variant
+# FINE-TUNES the shadow to emit exactly that; we run SelfDefend-BASIC with an
+# off-the-shelf Llama-3-8B, which will likely answer "No, I don't see any
+# violation" -- verbose, fails the match, BLOCKS. If that happens the block
+# rate pins near 100% on every target and the full round would produce a flat
+# curve that CONFIRMS our prediction for the wrong reason (a parse artifact,
+# not the absence of borrowing). Cheaper to find out on 100 draws than on
+# 80,000.
+#
+# WHAT TO READ (in logs/, not results.json):
+#   "SelfDefend[direct]: blocked N/M"
+#   "SelfDefend[direct]: shadow emitted a bare-'No' on K/M"
+#   "SelfDefend sample verdict [...]"   <- the deciding evidence
+#
+# DECISION RULE:
+#   bare-'No' count ~0 AND block rate ~100%  -> DEGENERATE. Flip
+#       conf/defense/selfdefend.yaml to `defense_prompt: intent` (substring
+#       parse, forgiving) and re-pilot. One config flip, no code change.
+#   bare-'No' count healthy                  -> gate is discriminating; run the
+#       full round (p6_selfcheck_main).
+#
+# llm_self_defense is included in the same pilot for free: its screener is the
+# TARGET, so it needs no extra server, and its sample verdicts confirm the
+# harm-filter prompt parses sanely before we scale.
+#
+# JUDGE: wildguard, free first pass, NOT reportable (over-flags code arms).
+# ASR here is diagnostic only -- n=100 is far too small to report anyway.
+#
+#   sbatch scripts/run_experiment_xc.sbatch bestofn_attack/p6_selfcheck_pilot
+#
+# SIZING: 100 draws x 2 cells. llm_self_defense makes 2 target calls per draw
+# (generate + screen); selfdefend makes 1 shadow call + 1 target call only for
+# released prompts. Minutes, not hours.
+num_main_job_threads: 2
+num_cluster_jobs: 4          # orchestrator + target + shadow + wildguard
+
+_e: &e
+  mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  target_model_config: {temperature: 1.0, seed: 1337}
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  prompt_range: [0, 99]      # 100 draws — pilot only
+  campaign: bestofn_attack_p6_pilot
+
+_CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260718_213010_40825967/code_attack
+
+tasks:
+  # Screener = the TARGET itself (borrowed-strength condition).
+  - {<<: *e, source_transform_subdir: *code, defense: llm_self_defense}
+  # Screener = a fixed SEPARATE shadow model (the predicted boundary).
+  - {<<: *e, source_transform_subdir: *code, defense: selfdefend}
