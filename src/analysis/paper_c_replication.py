@@ -84,8 +84,62 @@ def condition_of(r: dict) -> str | None:
     return None
 
 
+GUARD_BLOCK_TEXT = "guard model flagged it as unsafe"
+
+
+def admissible(d: str, benign: bool) -> tuple[bool, str]:
+    """Integrity filter on a stored cell. Returns (ok, reason_if_dropped).
+
+    Two failure modes put UNUSABLE cells on disk next to good ones, and both are
+    invisible in results.json -- which is why a naive latest-wins selector silently
+    prefers them (they tend to be the LAST rerun of a condition):
+
+      A  DEAD TARGET. The vLLM endpoint went away mid-run, so responses are
+         '404 ... model does not exist' strings and asr/refusal come back None.
+         The stored aggregate is computed over the PARSEABLE rows only, so the
+         denominator silently shrinks: one such cell reports refusal_rate=100.0
+         off ten surviving rows, another reports 0.0 off zero.
+
+      B  STUCK GUARD. Every response is the canned block string -- the guard
+         flagged 100% of benign traffic. Rows look perfectly clean, so an
+         unscored-row check cannot see it; the signature is that the response
+         set collapses to a single string. Measured at 100% over-refusal where
+         three independent runs of the same condition give 42--45%.
+
+    Both filters are applied uniformly to every run, and every rejection is
+    logged rather than dropped silently. B is restricted to BENIGN cells on
+    purpose: on HarmBench a guard blocking every attack is a legitimate result,
+    on OR-Bench-Hard it is a malfunction.
+    """
+    path = os.path.join(d, "raw_results.jsonl")
+    if not os.path.exists(path):
+        return False, "no raw_results.jsonl"
+    tot = unscored = 0
+    seen: set[str] = set()
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            tot += 1
+            if row.get("asr") is None and row.get("refusal") is None:
+                unscored += 1
+            seen.add((row.get("response") or "")[:80])
+    if not tot:
+        return False, "empty"
+    if unscored:
+        return False, f"A dead-target: {unscored}/{tot} rows unscored"
+    if benign and len(seen) == 1 and GUARD_BLOCK_TEXT in next(iter(seen)):
+        return False, f"B stuck-guard: all {tot} responses are the canned block"
+    return True, ""
+
+
+DROPPED: list[str] = []
+
+
 def collect(target: str, judge: str) -> dict:
-    """{(run, guard, condition, encoding) -> dir}, latest wins WITHIN a run."""
+    """{(run, guard, condition, encoding) -> dir}, latest ADMISSIBLE wins WITHIN a run."""
     best: dict[tuple, tuple[str, str]] = {}
     camp_to_run = {c: run for run, cs in RUNS.items() for c in cs}
     for tree in TREES:
@@ -99,17 +153,36 @@ def collect(target: str, judge: str) -> dict:
                 continue
             if r.get("target_model") != target or r.get("judge_model") != judge:
                 continue
-            run = camp_to_run.get(r.get("campaign") or "")
-            cond = condition_of(r)
+            # A rejudge dir re-scores a stored run and carries no campaign of its
+            # own, so its run attribution lives on the UPSTREAM cell. Without this
+            # fallback every r1 gb/mc cell is invisible (they reached gpt-5-mini by
+            # rejudge, not by a fresh run) and the drift statistic collapses to the
+            # three conditions that happen to have been run natively.
+            src_results: dict = {}
+            src_dir = (r.get("upstream_ref") or {}).get("source_dir", "") or ""
+            need_src = (camp_to_run.get(r.get("campaign") or "") is None
+                        or not r.get("defense_config"))
+            if need_src and src_dir:
+                try:
+                    src_results = json.load(open(os.path.join(src_dir, "results.json")))
+                except Exception:
+                    src_results = {}
+            run = (camp_to_run.get(r.get("campaign") or "")
+                   or camp_to_run.get(src_results.get("campaign") or ""))
+            cond = condition_of(r) or condition_of(src_results)
             if run is None or cond is None:
                 continue
-            dc = r.get("defense_config") or {}
+            dc = r.get("defense_config") or (src_results.get("defense_config") or {})
             guard = dc.get("guard_model") or "none"
             enc = r.get("encoding")
             src = (r.get("upstream_ref") or {}).get("source_dir", "") or ""
             if enc not in CHAINS + BENIGN:
                 enc = next((c for c in CHAINS if f"_{c}_" in src), enc)
             if enc not in CHAINS + BENIGN:
+                continue
+            ok, why = admissible(d, benign=(enc in BENIGN))
+            if not ok:
+                DROPPED.append(f"{run:3} {cond:5} {str(guard):20} {enc:18} {why}")
                 continue
             key = (run, guard, cond, enc)
             t = _ts(os.path.basename(d))
@@ -175,6 +248,10 @@ def main() -> None:
     runs = [r for r in ("r1", "r2", "r3")
             if any(k[0] == r for k in cells)]
     print(f"target={args.target}  judge={args.judge}  runs found: {runs}")
+    if DROPPED:
+        print(f"\n=== {len(DROPPED)} cell(s) rejected by the integrity filter ===")
+        for line in sorted(DROPPED):
+            print("  " + line)
     if len(runs) < 2:
         print("\nFewer than two runs on disk — the replication is still in flight. "
               "Re-run when the replicate presets have finished.")
