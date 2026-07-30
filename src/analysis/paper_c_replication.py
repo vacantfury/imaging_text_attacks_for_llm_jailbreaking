@@ -198,15 +198,25 @@ def main() -> None:
             if len(good) < 2:
                 continue
             rng = max(good) - min(good)
-            drift_asr.append(rng)
+            # An ensemble computed over FEWER attacks is not comparable to one over
+            # eleven: the OR-reduction can only grow with the suite, so an in-flight
+            # cell reads artificially low and would masquerade as run-to-run drift.
+            # Such cells are shown but EXCLUDED from the drift statistic.
+            complete = len({c for c in counts if c}) == 1 and set(counts) == {len(CHAINS)}
+            if complete:
+                drift_asr.append(rng)
             print(f"  {cond+'/'+guard:22}" + "".join(
                 f"{v:>7.0f}" if not np.isnan(v) else f"{'--':>7}" for v in vals) +
                 f"{np.mean(good):>7.1f}{np.std(good, ddof=1):>6.1f}{rng:>7.0f}"
-                f"  {counts}")
+                f"  {counts}{'' if complete else '  INCOMPLETE (excluded from drift)'}")
     if drift_asr:
-        print(f"\n  MAX drift across cells: {max(drift_asr):.0f} points   "
-              f"median: {np.median(drift_asr):.1f}   "
+        print(f"\n  MAX drift over COMPLETE cells only ({len(drift_asr)} cells): "
+              f"{max(drift_asr):.0f} points   median: {np.median(drift_asr):.1f}   "
               f"(the paper currently claims ~10)")
+    else:
+        print("\n  No cell is complete in two runs yet — no drift figure is "
+              "reportable, and any printed range above is contaminated by "
+              "in-flight cells.")
 
     # ---------------- Q2: does the empty corner survive? ----------------
     print(f"\n=== Q2  is the safe-and-usable corner empty in EVERY run? "
