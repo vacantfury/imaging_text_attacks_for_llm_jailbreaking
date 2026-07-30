@@ -1,0 +1,66 @@
+# bestofn_attack Paper-D — P6 SELF-CHECK GENERALIZATION, LLAMA-3.3-70B (3 cells).
+# Read p6_selfcheck_llama.yaml's header first — it carries this round's design,
+# the pilot findings, why the no_defense cell is not padding, and how to read a
+# flat-at-zero selfdefend result. None of that is repeated here.
+#
+# SUBMIT THIS ONE LAST. It needs 2 GPUs per instance (an 80GB A100 cannot hold
+# fp8 70B plus KV cache at 20480 context), so two replicas plus the shadow and
+# the judge consume all 6 usable GPUs on xc — nothing else can run beside it.
+#
+# WHY IT MATTERS MOST. The four targets were chosen to span refusal
+# disposition, and the 70B is the only one that sits in the MIDDLE:
+#
+#   target            refusal disposition   middle band
+#   ----------------  -------------------   -----------
+#   Llama-3.1-8B                    31.8%         63.6%
+#   Llama-3.3-70B                   68.7%         28.2%   <- this preset
+#   Qwen2.5-7B                      96.3%          2.4%
+#   Gemma-2-9B                      97.3%          2.5%
+#
+# Qwen and Gemma are pinned near ceiling and Llama-8B near floor, so those
+# three alone could produce a "varies" curve that is really just a two-point
+# contrast. The 70B is what makes it a graded relationship rather than a split,
+# and it is the cell that most directly answers reviewer 2's "your targets are
+# too small to say anything about disposition."
+#
+# JUDGE: wildguard, free first pass, NOT reportable. Provisional until rejudge.
+#
+#   sbatch scripts/run_experiment_xc.sbatch bestofn_attack/p6_selfcheck_70b
+#
+# ⚠️ SIZING — THIS PRESET MAY NOT FIT ITS SERVER WALL. The slowest in P6 by a
+# wide margin: 70B generation dominates, and llm_self_defense doubles its
+# target calls (generate + screen), so the three cells are ~4 cell-units over
+# 2 replicas. Scaling the 8B target's measured 3.4h/cell by the usual 70B
+# factor lands somewhere around 24-30h — straddling the 24h wall that
+# conf/clusters/xc.yaml sets and that max_slurm_time_limit caps.
+#
+# So do NOT fire this and walk away. Check the first cell's rate once it is
+# generating, and if the projection clears ~20h, SPLIT this file into two
+# submissions — {no_defense, selfdefend} first (~14h, both are 1 target call
+# per draw), then llm_self_defense alone (~14h, 2 calls per draw). Splitting is
+# the correct response; raising the wall past 24h is not, because a server that
+# outlives a whole day of wall on a shared box is a squatter, and a hung one is
+# invisible until someone looks.
+num_main_job_threads: 3      # all three cells in flight across the replicas
+num_cluster_jobs: 5          # orchestrator + 2x (2-GPU) 70B + shadow + wildguard
+
+_e: &e
+  mode: defense+evaluate
+  target_model: llama_3_3_70b_instruct
+  # Must match p6_selfcheck_main.yaml AND P5 exactly — same sample, one table.
+  target_model_config: {temperature: 1.0, max_tokens: 16384, seed: 1337}
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_p6_selfcheck
+
+_CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260718_213010_40825967/code_attack
+
+tasks:
+  # Matched undefended floor at T=1.0/seed 1337 — see the main preset's header
+  # for why the stored T=0.0/seed 42 baselines cannot serve as this reference.
+  - {<<: *e, source_transform_subdir: *code, defense: no_defense}
+  # Same model screens its own OUTPUT (borrowed-strength condition).
+  - {<<: *e, source_transform_subdir: *code, defense: llm_self_defense}
+  # Fixed SEPARATE shadow screens the INPUT (the predicted boundary).
+  - {<<: *e, source_transform_subdir: *code, defense: selfdefend}

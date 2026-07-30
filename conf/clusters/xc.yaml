@@ -32,7 +32,19 @@ cluster:
   partition: main                           # the single partition of the single node
   gpu_request_style: gres                   # slurm.conf uses GresTypes=gpu (gpu:a100:8)
   excluded_nodes: []
-  time_limit: "08:00:00"                    # default vLLM server wall
+  # DEFAULT vLLM SERVER WALL — 24h on xc, not the 8h used elsewhere (2026-07-30).
+  # A vLLM server must OUTLIVE the whole orchestrator run, judge included; when it
+  # doesn't, the round does not fail loudly — the endpoint vanishes mid-round and
+  # the remaining tasks hang on acquire_endpoint() until something times out. That
+  # is how the NURC round silently burned ~9h (job 8819870).
+  # 8h was calibrated for AICR/NURC, where a shared queue makes a long wall
+  # antisocial and rounds are correspondingly small. xc is a single dedicated box
+  # whose partition has NO time limit of its own, so the only real cost of a long
+  # wall is that a HUNG server squats its GPU longer before someone scancels it.
+  # P6's per-target presets run 5-14h each at 10,000 draws, which 8h does not cover.
+  # 24h matches max_slurm_time_limit above; a round expected to exceed that must be
+  # SPLIT into more submissions rather than have this raised further.
+  time_limit: "24:00:00"                    # default vLLM server wall
   # PORT BASE — xc-specific and load-bearing (2026-07-28). Everywhere else each vLLM
   # server owns its own NODE, so the 8000 default in _defaults.yaml never collides.
   # xc is ONE node SHARED with the box owner, whose own service holds :8000 — our
