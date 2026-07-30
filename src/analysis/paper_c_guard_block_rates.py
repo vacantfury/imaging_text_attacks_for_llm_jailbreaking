@@ -39,10 +39,11 @@ SHORT = {'llm_set_theory': 'set theory', 'llm_formal_logic': 'formal logic',
          'code_attack': 'CODE', 'ir_figstep': 'figstep', 'ir_fc_flowchart': 'flowchart',
          'ir_low_contrast': 'low-contr', 'ir_occluded': 'occluded', 'ir_mm_typo': 'mm-typo',
          'ir_distraction_grid': 'DISTRACT'}
-# Campaigns the paper's Table 1 columns come from (scoping is load-bearing: other
+# Campaigns the paper's Table 1 columns come from. The +rg WildGuard harm cells live in
+# paper_c_reguard_ablation (the 11-attack reguard sweep), NOT paper_c_reguard_5guard (scoping is load-bearing: other
 # campaigns hold cells for the same condition at different rounds).
 CAMPAIGNS = {'gb': 'paper_c_guard_panel', 'mc': 'paper_c_guard_panel',
-             '+rg': 'paper_c_reguard_5guard'}
+             '+rg': 'paper_c_reguard_ablation'}
 GUARD = 'wildguard'   # the guard both mechanism claims are stated on in the paper
 
 
