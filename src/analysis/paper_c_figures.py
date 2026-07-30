@@ -10,6 +10,16 @@ import matplotlib.pyplot as plt, numpy as np
 from matplotlib.lines import Line2D
 OI = ['#E69F00','#56B4E9','#009E73','#F0E442','#0072B2','#D55E00','#CC79A7','#000000']
 FIGS = "paper/autoattack_defense/aaai_2027_main/aaai_main_latex/figs"
+# The live submission is the AI-Alignment track version; figures must land in BOTH
+# trees or a regeneration silently updates only the retired main-track copy.
+FIGS_ALT = "paper/autoattack_defense/aaai_2027_ai_alignment/aaai_aia_latex/figs"
+
+
+def save(fig, stem):
+    for d in (FIGS, FIGS_ALT):
+        if os.path.isdir(d):
+            fig.savefig(f"{d}/{stem}.pdf")
+            fig.savefig(f"{d}/{stem}.png", dpi=300)
 
 def wilson_err(vals, n=100, z=1.96):
     """Asymmetric Wilson 95% CI half-widths (lower,upper) for yerr; matches tab:app-stats."""
@@ -21,8 +31,24 @@ def wilson_err(vals, n=100, z=1.96):
         lo.append(v - (c-h)*100); hi.append((c+h)*100 - v)
     return np.array([lo, hi])
 
-def plot_model(MCv, MCRGv, ORv, ORrgv, m_mc, m_rg, ls, ax):
+def plot_model(MCv, MCRGv, ORv, ORrgv, m_mc, m_rg, ls, ax, errors=True):
+    """One target's amplifier -> +reguard arrows.
+
+    `errors=True` draws Wilson 95% whiskers on both axes of every point (review 18's
+    presentation ask: "plotting points without uncertainty visually overstates how
+    precisely the frontier is located"). They are deliberately thin, capless and
+    semi-transparent, drawn UNDER the markers -- 20 whiskers in a 3.5in panel is the
+    most uncertainty this figure can carry and stay readable. Note the two axes have
+    different n: ensemble ASR is over 100 behaviors, over-refusal is the average of a
+    100-prompt text channel and a 100-prompt image channel, so n=200.
+    """
     for i in range(len(MCv)):
+        if errors:
+            for xv, yv in ((ORv[i], MCv[i]), (ORrgv[i], MCRGv[i])):
+                ax.errorbar(xv, yv,
+                            yerr=wilson_err([yv], n=100), xerr=wilson_err([xv], n=200),
+                            fmt='none', ecolor=OI[i], elinewidth=0.6, alpha=0.32,
+                            capsize=0, zorder=1)
         ax.annotate('', xy=(ORrgv[i],MCRGv[i]), xytext=(ORv[i],MCv[i]),
                     arrowprops=dict(arrowstyle='->', color=OI[i], lw=1.2, alpha=0.85, linestyle=ls))
         ax.scatter(ORv[i],   MCv[i],   facecolors='none', edgecolors=OI[i], marker=m_mc, s=34, zorder=3, lw=1.3)
@@ -68,7 +94,7 @@ def main() -> None:
     ax.legend(frameon=False, fontsize=6, loc='lower center', bbox_to_anchor=(0.5,1.0),
               ncol=3, columnspacing=1.1, handlelength=1.1, handletextpad=0.4)
     ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
-    fig.tight_layout(); fig.savefig(FIGS+"/ensemble_bars.pdf"); fig.savefig(FIGS+"/ensemble_bars.png", dpi=300)
+    fig.tight_layout(); save(fig, "ensemble_bars")
 
     # ---- Fig 2: safety-utility tradeoff frontier (BOTH models) ----
     # NO LEGEND. Two reviewers independently asked for direct point labels instead
@@ -111,8 +137,8 @@ def main() -> None:
             transform=ax.transAxes, fontsize=6.4, ha='left', va='bottom', color='0.30', linespacing=1.4)
     ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
     ax.tick_params(labelsize=7.5)
-    ax.set_ylim(38, 86)
-    fig.tight_layout(); fig.savefig(FIGS+"/tradeoff_frontier.pdf"); fig.savefig(FIGS+"/tradeoff_frontier.png", dpi=300)
+    ax.set_ylim(33, 90)   # widened for the Wilson whiskers added for review 18
+    fig.tight_layout(); save(fig, "tradeoff_frontier")
     print("wrote:", os.listdir(FIGS))
 
 
