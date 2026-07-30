@@ -1,0 +1,129 @@
+# ============================================================
+# Paper C · PROMPT-WORDING SENSITIVITY of the amplifier (2026-07-30)
+# ============================================================
+# Answers cspaper review 17 con 4: the ceiling "could reflect our recover/decode
+# prompts" — a limitation the paper currently CONCEDES rather than measures. This
+# measures it.
+#
+# ---- WHAT IS VARIED, AND WHAT IS HELD FIXED ----
+# ONLY the surface wording of the amplifier's two prompts (`prompt_variant`):
+#   v1 = the shipped RECOVER_PROMPT / DECODE_PROMPT (byte-identical; asserted by
+#        object identity in a unit check, so this arm cannot silently drift)
+#   v2, v3 = independent PARAPHRASES that preserve each step's intent exactly
+#        (recover: transcribe all text verbatim + one-sentence non-text summary;
+#         decode: restate the underlying request in plain English, do not comply)
+#        while differing in clause order, register, and vocabulary.
+# Everything else is identical across arms: same attacks (same transform dirs,
+# not re-rendered), same target, same guard, same judge, same 100 behaviors.
+#
+# ---- WHY v1 IS RE-RUN AS A CONTROL (the design point) ----
+# The paper documents +-10-point between-run drift (appendix, Statistical
+# Significance: decode is a fresh generation each run even at temperature 0).
+# Comparing v2/v3 against the STORED v1 cells would therefore confound wording
+# with drift. Re-running v1 in THIS batch makes all three arms same-batch, so an
+# arm difference is attributable to wording. This is why the preset costs 3 arms
+# rather than 2.
+#
+# ---- WHY `mc` AND NOT `+rg` ----
+# `mc` is the condition MOST sensitive to decode wording: the guard sees only the
+# decoded gist. Under `+rg` the pre-decode surface is screened too, which masks
+# decode-wording effects. Testing where the effect should be LARGEST makes a null
+# result meaningful — a null at `+rg` would be weak evidence by construction.
+#
+# ---- PREDICTION, WRITTEN BEFORE THE RUN (so it cannot be fitted afterward) ----
+# Wording is not a systematic driver. Individual cells should move within the
+# already-documented +-10-point band, but (a) v2 and v3 should NOT deviate from v1
+# in a consistent direction — if wording mattered systematically, two independent
+# paraphrases would both shift the same way — and (b) no arm should produce an
+# operating point with BOTH low ensemble ASR and low over-refusal. If some arm
+# DOES, that is a real result against the ceiling claim and gets reported as such:
+# this preset exists to find out, not to confirm.
+#
+# ---- RESOURCES ----
+# 39 cells (3 arms x [11 harm + 2 benign]) x n=100.
+#   API:  judge only, gpt-5-mini @ ~$0.018/cell (measured over 1200 real
+#         judgments: ~689 input tok/judgment @ $0.25/M in, $2/M out) = ~$0.70
+#   GPU:  2 servers (qwen target + wildguard guard) -> num_cluster_jobs = 3
+#   wall: ~35-45 min at 6 threads (median mc cell 3.8 min)
+# Judge is gpt-5-mini DIRECTLY, not cheap-first: 6 of the 11 attacks are image
+# cells and the WildGuard HarmBench-judge path is broken for image inputs
+# (fallback_parse_count=100, every row scored a success — memory note
+# project_api_judge_run_gotchas). A wildguard in-run judge would produce garbage
+# for those cells, and the gpt-5-mini rejudge would cost the same anyway.
+# ============================================================
+
+num_main_job_threads: 6
+num_cluster_jobs: 3
+
+_rng: &rng [0, 99]
+
+# the three arms — identical but for `prompt_variant`
+_v1: &v1 {guard_model: wildguard, decode_text: true, decode_style: recover, prompt_variant: v1}
+_v2: &v2 {guard_model: wildguard, decode_text: true, decode_style: recover, prompt_variant: v2}
+_v3: &v3 {guard_model: wildguard, decode_text: true, decode_style: recover, prompt_variant: v3}
+
+_harm: &harm {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+              benchmark: harmbench, judge_method: harmbench, judge_model: gpt-5-mini,
+              campaign: paper_c_prompt_wording, defense: modality_complete}
+_ben:  &ben  {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+              benchmark: orbench_benign_hard, judge_model: gpt-5-mini,
+              campaign: paper_c_prompt_wording, defense: modality_complete}
+
+# the eleven attacks — SAME transform dirs as the main run (attack-for-attack)
+_set: &set outputs/autoattack_defense/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory
+_flog: &flog outputs/autoattack_defense/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
+_class: &class outputs/autoattack_defense/prompt_transform/harmbench/classical_chinese_simplified_ir_constant_20260710_002424_56524373/llm_classical_language
+_cipher: &cipher outputs/autoattack_defense/prompt_transform/harmbench/non_llm_cipher_20260718_183504_42666777/non_llm_cipher
+_code: &code outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack
+_figstep: &figstep outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260718_183457_7682501/ir_figstep
+_fcflow: &fcflow outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart
+_lowcon: &lowcon outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260718_183457_77423812/ir_low_contrast
+_occluded: &occluded outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260718_183457_84223144/ir_occluded
+_mmtypo: &mmtypo outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260718_183500_58590499/ir_mm_typo
+_distract: &distract outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid
+_orbtxt: &orbtxt outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260718_183505_52485516/non_llm_baseline
+_orbimg: &orbimg outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260718_183504_7866920/ir_plain
+
+tasks:
+  # ---------------- arm v1 (CONTROL, shipped wording) ----------------
+  - {<<: *harm, defense_config: *v1, source_transform_subdir: *set}
+  - {<<: *harm, defense_config: *v1, source_transform_subdir: *flog}
+  - {<<: *harm, defense_config: *v1, source_transform_subdir: *class}
+  - {<<: *harm, defense_config: *v1, source_transform_subdir: *cipher}
+  - {<<: *harm, defense_config: *v1, source_transform_subdir: *code}
+  - {<<: *harm, defense_config: *v1, source_transform_subdir: *figstep}
+  - {<<: *harm, defense_config: *v1, source_transform_subdir: *fcflow}
+  - {<<: *harm, defense_config: *v1, source_transform_subdir: *lowcon}
+  - {<<: *harm, defense_config: *v1, source_transform_subdir: *occluded}
+  - {<<: *harm, defense_config: *v1, source_transform_subdir: *mmtypo}
+  - {<<: *harm, defense_config: *v1, source_transform_subdir: *distract}
+  - {<<: *ben,  defense_config: *v1, source_transform_subdir: *orbtxt}
+  - {<<: *ben,  defense_config: *v1, source_transform_subdir: *orbimg}
+  # ---------------- arm v2 (paraphrase) ----------------
+  - {<<: *harm, defense_config: *v2, source_transform_subdir: *set}
+  - {<<: *harm, defense_config: *v2, source_transform_subdir: *flog}
+  - {<<: *harm, defense_config: *v2, source_transform_subdir: *class}
+  - {<<: *harm, defense_config: *v2, source_transform_subdir: *cipher}
+  - {<<: *harm, defense_config: *v2, source_transform_subdir: *code}
+  - {<<: *harm, defense_config: *v2, source_transform_subdir: *figstep}
+  - {<<: *harm, defense_config: *v2, source_transform_subdir: *fcflow}
+  - {<<: *harm, defense_config: *v2, source_transform_subdir: *lowcon}
+  - {<<: *harm, defense_config: *v2, source_transform_subdir: *occluded}
+  - {<<: *harm, defense_config: *v2, source_transform_subdir: *mmtypo}
+  - {<<: *harm, defense_config: *v2, source_transform_subdir: *distract}
+  - {<<: *ben,  defense_config: *v2, source_transform_subdir: *orbtxt}
+  - {<<: *ben,  defense_config: *v2, source_transform_subdir: *orbimg}
+  # ---------------- arm v3 (independent paraphrase) ----------------
+  - {<<: *harm, defense_config: *v3, source_transform_subdir: *set}
+  - {<<: *harm, defense_config: *v3, source_transform_subdir: *flog}
+  - {<<: *harm, defense_config: *v3, source_transform_subdir: *class}
+  - {<<: *harm, defense_config: *v3, source_transform_subdir: *cipher}
+  - {<<: *harm, defense_config: *v3, source_transform_subdir: *code}
+  - {<<: *harm, defense_config: *v3, source_transform_subdir: *figstep}
+  - {<<: *harm, defense_config: *v3, source_transform_subdir: *fcflow}
+  - {<<: *harm, defense_config: *v3, source_transform_subdir: *lowcon}
+  - {<<: *harm, defense_config: *v3, source_transform_subdir: *occluded}
+  - {<<: *harm, defense_config: *v3, source_transform_subdir: *mmtypo}
+  - {<<: *harm, defense_config: *v3, source_transform_subdir: *distract}
+  - {<<: *ben,  defense_config: *v3, source_transform_subdir: *orbtxt}
+  - {<<: *ben,  defense_config: *v3, source_transform_subdir: *orbimg}
