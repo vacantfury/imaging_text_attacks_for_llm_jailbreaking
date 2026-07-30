@@ -19,9 +19,12 @@ and their decision rules are fixed here in advance:
       target, does the sign of the change agree across runs? Sign disagreement on a
       contrast the paper draws a conclusion from is a finding, not a footnote.
 
-Runs are kept STRICTLY separate by campaign. Pooling them silently converts an
-ensemble (an OR-reduction) into a best-of-N-runs figure -- measured at 94% vs the
-single-run 89% while building the CIDER analysis, which is how that trap was found.
+Runs are kept STRICTLY separate by campaign, for two reasons. Taking the latest cell
+per encoding across campaigns silently mixes runs: while building the CIDER analysis
+that read a floor of 94% where the published figure is 89%. The mixed union can only
+sit at or above either run's own value, so it is never safe -- and in that instance it
+resolved to r2's OWN floor of 94%, because r2 had by then superseded all eleven
+encodings. Both facts matter: the mixing is unsound, AND the floor really does drift.
 
 Usage:
     python src/analysis/paper_c_replication.py --target qwen2_5_vl_7b

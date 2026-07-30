@@ -116,9 +116,11 @@ def main() -> None:
                     default=["paper_c_replicate_r2", "paper_c_replicate_r3"],
                     help="campaigns to keep OUT of the no-defense reference. The "
                          "replication runs must be excluded: taking the latest cell "
-                         "per encoding across runs silently turns the union into a "
-                         "best-of-two-runs figure (measured: 94%% vs the single-run "
-                         "89%%), which would understate CIDER by inflating the floor.")
+                         "per encoding across runs mixes runs, and a mixed union can "
+                         "only sit at or above either run's own value. Measured here "
+                         "as 94%% against the published single-run 89%% -- which is "
+                         "in fact r2's own floor, since the floor itself drifts. "
+                         "Either way the reference must come from ONE run.")
     args = ap.parse_args()
 
     nd = find_no_defense(args.target, args.judge, args.exclude_campaigns)
