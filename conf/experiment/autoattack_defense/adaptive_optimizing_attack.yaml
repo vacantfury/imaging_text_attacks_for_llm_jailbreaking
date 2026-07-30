@@ -1,0 +1,84 @@
+# ============================================================
+# Paper C · ADAPTIVE OPTIMIZING ATTACK against the guarded pipeline (2026-07-30)
+# ============================================================
+# Answers cspaper review 17 con 5: *"the adaptive attacks are hand-constructed
+# rather than an attacker that OPTIMIZES against the guarded pipeline."* The three
+# adaptive attacks already in the paper (positional split, semantic split,
+# decode-evasion) are each a SINGLE blind construction — fired once, never adapted
+# to whether it worked. This is a closed-loop attacker: per behavior it runs a
+# query budget, reads the pipeline's refusal/block outcome, and has an attacker
+# LLM rewrite the request to steer around the observed failure (Carlini et al.
+# 2019 adaptive-evaluation discipline).
+#
+# ---- WHAT IT IS AND IS NOT ----
+# A TEXT-CHANNEL optimizing attacker: candidates are plain text, so the pipeline's
+# recover (image->text) step is a no-op and the attack stresses the DECODE+GUARD
+# mechanism — the text-side defense, which is exactly where an adaptive attacker
+# would push (the image splits were shown structurally self-defeating, §RQ4). It
+# is NOT a joint text+image optimizer (that would need per-round re-rendering; out
+# of scope and stated as such in the paper). It is black-box: it sees only the
+# pipeline's text response, including the guard's fixed block string, as any real
+# attacker does.
+#
+# ---- CONDITIONS (both target-Qwen, WildGuard guard) ----
+#   1. vs mc   (recover+decode+guard)          — the shipped amplifier
+#   2. vs +rg  (mc + reguard on pre-decode)     — the honest-arc defense
+# Contrast against the NON-adaptive numbers already in Table 1 (WildGuard/Qwen:
+# mc 72, +rg 43) shows what optimization buys the attacker over a blind attack.
+#
+# ---- PREDICTION, WRITTEN BEFORE THE RUN ----
+# The loop should RAISE ASR over the blind decode-evasion baseline on `mc` (that
+# is the whole point of feedback), but should NOT collapse the ceiling: +rg
+# screens the PRE-DECODE surface too, so a rewrite that keeps a harmful answer
+# must keep harmful specifics somewhere the pre-decode guard sees — the same bind
+# the split-triangle formalizes. Concretely we expect adaptive-vs-mc to beat the
+# 72 blind mc number materially, and adaptive-vs-+rg to stay well above deployable
+# safety but below mc, i.e. the frontier holds. If instead adaptive-vs-+rg reaches
+# a low-ASR-low-over-refusal point, that is a real defeat of the defense and gets
+# reported as such — this preset exists to find out, not to confirm.
+#
+# ---- RESOURCES ----
+# 2 conditions x 100 behaviors x up to (1 + `rounds`=8) pipeline queries. The
+# attacker only re-queries UNBROKEN behaviors, so cost tapers as behaviors break.
+#   Worst case: 2 x 100 x 9 = 1800 pipeline queries + up to 1600 attacker rewrites.
+#   API:  attacker gpt-4.1-mini (~1600 rewrites x ~0.5k tok) + judge gpt-5-mini
+#         (200 final responses) ~= $1.5-3 total. This CROSSES the $1 auto-gate ->
+#         propose + wait before submitting.
+#   GPU:  2 servers (qwen target + wildguard guard); SLURM jobs = 3.
+#   wall: budget-dependent; ~1-2h (each unbroken behavior costs 8 sequential
+#         target+guard round-trips).
+# Judge = gpt-5-mini DIRECTLY (text cells, but the decode step's outputs are the
+# scored responses; keep one judge across all Paper C numbers).
+#
+# TUNING PATH (engineering law — every knob has one): `attack_budget_sweep`, filed
+# in TODO.md — rerun at rounds=1,2,4,8 on the same behaviors and read ASR vs query
+# budget. `budget_curve` is logged into each results.json from round 1, so the
+# sweep reads existing data. `rounds`, attacker temperature, and the refusal
+# heuristic all live in conf/adaptive_attack/default.yaml, tuned by that sweep +
+# `refusal_heuristic_agreement`.
+# ============================================================
+
+num_main_job_threads: 2
+num_cluster_jobs: 3
+
+_rng: &rng [0, 99]
+
+_mc:  &mc  {guard_model: wildguard, decode_text: true, decode_style: recover}
+_rg:  &rg  {guard_model: wildguard, decode_text: true, decode_style: recover, reguard_original: true}
+
+_base: &base
+  mode: adaptive_attack
+  source_file: data/harmbench_prompts.jsonl
+  prompt_range: *rng
+  benchmark: harmbench
+  target_model: qwen2_5_vl_7b
+  defense: modality_complete
+  attacker_model: gpt-4.1-mini
+  judge_model: gpt-5-mini
+  judge_method: harmbench
+  campaign: paper_c_adaptive_attack
+  attack_config: {rounds: 8}
+
+tasks:
+  - {<<: *base, defense_config: *mc}
+  - {<<: *base, defense_config: *rg}
