@@ -77,3 +77,7 @@ from . import canonicalize_guard  # noqa: E402,F401
 # shadow model (borrows nothing, should not vary).
 from . import llm_self_defense  # noqa: E402,F401
 from . import selfdefend  # noqa: E402,F401
+# CIDER — published black-box cross-modal consistency detector (Xu et al.,
+# Findings of EMNLP 2024). Added for review-18 con 7 as the eligible
+# consistency-based baseline the paper had only acknowledged, not compared.
+from . import cider  # noqa: E402,F401
