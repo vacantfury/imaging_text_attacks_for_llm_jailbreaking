@@ -1,0 +1,39 @@
+# ============================================================
+# Paper C · rejudge the BLIND decode-evasion baseline with gpt-5-mini (2026-07-30)
+# ============================================================
+# The adaptive optimizing attacker (con 5) scored ASR 38 (vs mc) / 25 (vs +rg)
+# under the gpt-5-mini judge. Its natural head-to-head is the BLIND, single-shot
+# decode-evasion attack (same idea, no feedback) — but the stored blind runs were
+# judged by WILDGUARD (asr 5-9), which is not comparable to gpt-5-mini (judge
+# mismatch = a validity trap, see project_api_judge_run_gotchas). This re-scores
+# the stored blind responses with gpt-5-mini, no target re-query, so the
+# "optimization gain" claim (blind vs adaptive) is judge-matched.
+#
+# Ladder (all Qwen2.5-VL, wildguard where a guard applies):
+#   no_defense  — this attack's undefended floor
+#   guard_baseline (gb) — wildguard alone
+#   modality_complete (mc) — the amplifier
+# Compare mc here to the adaptive-vs-mc = 38.
+#
+# Cost: pure rejudge, ~100 rows x 3 cells, gpt-5-mini ~$0.05. No servers.
+# ============================================================
+
+num_main_job_threads: 3
+num_cluster_jobs: 1
+
+tasks:
+  - mode: rejudge
+    responses_from: outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_no_defense_llm_decode_evasion_20260720_054239_44017191
+    judge_model: gpt-5-mini
+    judge_method: harmbench
+    campaign: paper_c_adaptive_attack
+  - mode: rejudge
+    responses_from: outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_guard_baseline_llm_decode_evasion_20260720_054239_87790727
+    judge_model: gpt-5-mini
+    judge_method: harmbench
+    campaign: paper_c_adaptive_attack
+  - mode: rejudge
+    responses_from: outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_llm_decode_evasion_20260720_054625_16762029
+    judge_model: gpt-5-mini
+    judge_method: harmbench
+    campaign: paper_c_adaptive_attack
