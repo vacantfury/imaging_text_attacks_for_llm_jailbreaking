@@ -70,3 +70,10 @@ from . import canonicalize  # noqa: E402,F401
 # Paper D / R4: canonicalize -> guard-screen (the guarded architecture the
 # guardless `canonicalize` above lacked; see proposal.md §9).
 from . import canonicalize_guard  # noqa: E402,F401
+# Paper D / P6: two MORE published self-check architectures, added so the
+# borrowed-strength account is tested beyond SAGE alone. They straddle the
+# boundary the account predicts — llm_self_defense screens with the TARGET
+# (borrows, should vary by target), selfdefend screens with a fixed SEPARATE
+# shadow model (borrows nothing, should not vary).
+from . import llm_self_defense  # noqa: E402,F401
+from . import selfdefend  # noqa: E402,F401

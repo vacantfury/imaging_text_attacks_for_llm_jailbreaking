@@ -1,0 +1,36 @@
+# LLM Self Defense — output-side self-examination gate.
+# Phute et al., ICLR 2024 TinyPaper (arXiv 2308.07308). ESTABLISHED LITERATURE.
+# Implementation: src/defense/llm_self_defense.py
+# Reference impl:  other_repos/llm-self-defense/harm_filter.py
+#   (harm-filter prompt is byte-identical to the reference; verified 2026-07-30)
+#
+# ROLE IN THE PAPER (P6). The SECOND same-model self-check architecture, added
+# because reviewers 1 and 3 both said their score would rise if borrowed
+# strength were shown to hold beyond SAGE alone. It varies the axis that should
+# NOT matter (input-side transform -> output-side gate) while holding fixed the
+# one that should (the TARGET screens itself).
+#
+# PRE-REGISTERED PREDICTION (recorded BEFORE the run, per the discipline that
+# made the P5 falsification credible):
+#   Borrowed strength says a self-check inherits the TARGET's own disposition.
+#   => Coverage here should VARY ACROSS TARGETS in the same rank order as the
+#      targets' refusal disposition (llama-3.1-8B 31.8% < llama-3.3-70B 68.7%
+#      < qwen 96.3% < gemma 97.3%), i.e. weakest protection on llama-3.1-8B.
+#   => It need NOT match SAGE's absolute levels — output-side screening sees the
+#      generated text, not the encoded prompt, so the code encoding is no longer
+#      hidden from the screener. Protection may well be STRONGER than SAGE's.
+#      The claim under test is the ORDERING across targets, not the level.
+#   => FALSIFIED IF coverage is flat across targets: that would mean same-model
+#      self-checking does not inherit target disposition, and borrowed strength
+#      is wrong (or is specific to SAGE's input-side form).
+#
+# Contrast case: conf/defense/selfdefend.yaml — a SEPARATE shadow model, which
+# the account predicts should be flat across targets. The two configs together
+# are the test; neither alone settles it.
+
+# null = screen with the TARGET model itself. This IS the borrowed-strength
+# condition and is the default on purpose — changing it silently converts the
+# experiment into its own control. The paper's phrase is "another instance of
+# an LLM", and its own experiments screen GPT-3.5 with GPT-3.5 and Llama-2
+# with Llama-2, so same-model is the faithful reading.
+filter_model: null
