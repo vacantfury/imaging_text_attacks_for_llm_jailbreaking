@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.experiment.schemas import Prompt
-from llm_utils.base_llm_service import BaseLLMService
+from llm_utils.base_llm_service import BaseLLMService, is_mechanism_error
 from llm_utils.llm_service_factory import LLMServiceFactory
 from src.utils.logger import get_logger
 from .base import Defense, build_conversation_message
@@ -168,8 +168,22 @@ class SelfDefend(Defense):
             max_tokens=_SHADOW_MAX_TOKENS,
         ))
 
+        # An infrastructure failure is NOT a detection. Rows whose shadow call
+        # errored are propagated as mechanism errors (task.py then marks them
+        # is_correctly_processed=False) instead of counting as blocks — a dead
+        # shadow endpoint would otherwise read as a flawless 100%-coverage
+        # gate, which is exactly the artifact this defense's flat-curve
+        # prediction is most vulnerable to.
+        errored = {p.id for p in prompts
+                   if is_mechanism_error(verdicts.get(p.id, ""))}
         blocked = {p.id for p in prompts
-                   if parse_selfdefend(verdicts.get(p.id, ""), self._prompt_kind)}
+                   if p.id not in errored
+                   and parse_selfdefend(verdicts.get(p.id, ""), self._prompt_kind)}
+        if errored:
+            logger.error(
+                f"SelfDefend[{self._prompt_kind}]: {len(errored)}/{len(prompts)} "
+                f"SHADOW calls hit a mechanism error — those rows are NOT blocks "
+                f"and must not be read as coverage. Fix the shadow endpoint and rerun.")
         logger.info(
             f"SelfDefend[{self._prompt_kind}]: blocked {len(blocked)}/{len(prompts)} "
             f"({100.0 * len(blocked) / max(1, len(prompts)):.1f}%)")
@@ -192,7 +206,10 @@ class SelfDefend(Defense):
         # The paper runs both stacks concurrently and discards the target's
         # cached response on a block; querying only the released set is
         # equivalent in outcome and avoids paying for discarded generations.
-        passed = [p for p in prompts if p.id not in blocked]
+        # Errored rows are excluded too: their verdict is unknown, so the
+        # target's answer would be discarded anyway.
+        passed = [p for p in prompts
+                  if p.id not in blocked and p.id not in errored]
         target_results: dict = {}
         if passed:
             target_results = dict(target_service.batch_chat(
@@ -201,11 +218,14 @@ class SelfDefend(Defense):
                 is_test=True,
             ))
 
-        return [
-            (p.id, SELFDEFEND_REFUSAL_TEXT if p.id in blocked
-             else target_results.get(p.id, ""))
-            for p in prompts
-        ]
+        def _resp(p):
+            if p.id in errored:
+                return verdicts.get(p.id, "")      # propagate the mechanism error
+            if p.id in blocked:
+                return SELFDEFEND_REFUSAL_TEXT
+            return target_results.get(p.id, "")
+
+        return [(p.id, _resp(p)) for p in prompts]
 
     def get_usage(self) -> Optional[dict]:
         if self._shadow_service is not None:

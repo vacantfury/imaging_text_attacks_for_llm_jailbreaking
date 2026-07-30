@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.experiment.schemas import Prompt
-from llm_utils.base_llm_service import BaseLLMService
+from llm_utils.base_llm_service import BaseLLMService, is_mechanism_error
 from llm_utils.llm_service_factory import LLMServiceFactory
 from src.utils.logger import get_logger
 from .base import Defense, build_conversation_message
@@ -177,13 +177,30 @@ class LLMSelfDefense(Defense):
             max_tokens=_FILTER_MAX_TOKENS,
         ))
 
-        out, blocked = [], 0
+        out, blocked, n_err = [], 0, 0
         for p in prompts:
-            if parse_harm_filter(verdicts.get(p.id, "")):
+            v = verdicts.get(p.id, "")
+            if is_mechanism_error(v):
+                # An infrastructure failure is NOT a verdict. Propagate the
+                # mechanism error so task.py marks the row
+                # is_correctly_processed=False and the judge excludes it.
+                # Folding it into the harmful branch (which fail-closed parsing
+                # would otherwise do) manufactures a clean-looking 100% block
+                # rate out of a dead endpoint -- observed for real in the P6
+                # pilot, job 65, where every screening call returned
+                # "Connection error." and the defense reported blocked 100/100.
+                out.append((p.id, v))
+                n_err += 1
+            elif parse_harm_filter(v):
                 out.append((p.id, SELF_DEFENSE_REFUSAL_TEXT))
                 blocked += 1
             else:
                 out.append((p.id, initial.get(p.id, "")))
+        if n_err:
+            logger.error(
+                f"LLMSelfDefense: {n_err}/{len(prompts)} SCREENING calls hit a "
+                f"mechanism error — those rows are NOT blocks and must not be "
+                f"read as defense coverage. Fix the screener endpoint and rerun.")
         logger.info(
             f"LLMSelfDefense: blocked {blocked}/{len(prompts)} responses "
             f"({100.0 * blocked / max(1, len(prompts)):.1f}%)")
