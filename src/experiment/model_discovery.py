@@ -248,17 +248,33 @@ def _referenced_models_for_task(info: "TaskInfo", providers=None) -> set:
         # overrides. Only these keys are scanned (see docstring); a key missing
         # here means its server is never submitted and the task hangs on
         # acquire_endpoint().
+        # Resolve the SAME merged config the defense will actually be built
+        # from (task.py::_run_defense_evaluate 3-layer merge), not just
+        # task.defense_config. A second model usually lives in
+        # conf/defense/<name>.yaml as its DEFAULT and never appears in the
+        # preset at all — reading only task.defense_config makes discovery
+        # blind to exactly those, so the server is never submitted while the
+        # defense still asks for the endpoint. That is the P6 pilot failure
+        # ("No vLLM server was ever started for meta-llama/Meta-Llama-3-8B-Instruct",
+        # 2026-07-30): selfdefend's shadow_model is a YAML default. It was
+        # latent for semantic_smooth too, hidden only because its default
+        # perturbation_model is an API model that needs no server.
+        try:
+            from .config import load_conf as _load_conf
+            defense_cfg = _load_conf(
+                "defense", override_name=task.defense,
+                task_overrides=task.defense_config or None,
+            )
+        except Exception:
+            defense_cfg = dict(task.defense_config or {})
+
         for key in ("guard_model", "perturbation_model", "amplifier_model",
                     "recover_model", "gate_model", "decode_model",
                     # P6 self-check defenses (2026-07-30): selfdefend's separate
                     # shadow screener, and llm_self_defense's optional separate
                     # filter (None = screen with the target, needing no server).
-                    # Omitting `shadow_model` here is what made the P6 pilot die
-                    # with "No vLLM server was ever started for
-                    # meta-llama/Meta-Llama-3-8B-Instruct" — the defense asked
-                    # for an endpoint the orchestrator never submitted.
                     "shadow_model", "filter_model"):
-            model_str = task.defense_config.get(key)
+            model_str = defense_cfg.get(key)
             if model_str:
                 m = _resolve_model(model_str)
                 if _keep(m):
