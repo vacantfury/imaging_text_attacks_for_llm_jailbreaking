@@ -170,11 +170,14 @@ def _referenced_models_for_task(info: "TaskInfo", providers=None) -> set:
     bypass cluster judge discovery — tasks would hang on acquire_endpoint().
 
     Defense-config scan is DELIBERATELY narrow: only the known second-model
-    keys (`guard_model`, `perturbation_model`, and modality_complete's
-    `amplifier_model` / `recover_model` / `gate_model` / `decode_model`) are
-    looked up — defense_config is a free-form dict and we don't want to guess
-    at arbitrary keys. Extend this tuple deliberately if a new defense adds
-    another second-model config key.
+    keys (`guard_model`, `perturbation_model`, modality_complete's
+    `amplifier_model` / `recover_model` / `gate_model` / `decode_model`, and
+    the P6 self-check defenses' `shadow_model` / `filter_model`) are looked
+    up — defense_config is a free-form dict and we don't want to guess at
+    arbitrary keys. EXTEND THIS TUPLE whenever a new defense adds another
+    second-model config key; forgetting to is a silent-until-runtime failure
+    (the task dies with "No vLLM server was ever started for <model>", as the
+    P6 pilot did for selfdefend's shadow_model on 2026-07-30).
 
     Budget note: a defense+evaluate task with a cluster target AND a cluster
     guard AND a cluster judge needs orchestrator + 3 vLLM servers = 4 SLURM
@@ -246,7 +249,15 @@ def _referenced_models_for_task(info: "TaskInfo", providers=None) -> set:
         # here means its server is never submitted and the task hangs on
         # acquire_endpoint().
         for key in ("guard_model", "perturbation_model", "amplifier_model",
-                    "recover_model", "gate_model", "decode_model"):
+                    "recover_model", "gate_model", "decode_model",
+                    # P6 self-check defenses (2026-07-30): selfdefend's separate
+                    # shadow screener, and llm_self_defense's optional separate
+                    # filter (None = screen with the target, needing no server).
+                    # Omitting `shadow_model` here is what made the P6 pilot die
+                    # with "No vLLM server was ever started for
+                    # meta-llama/Meta-Llama-3-8B-Instruct" — the defense asked
+                    # for an endpoint the orchestrator never submitted.
+                    "shadow_model", "filter_model"):
             model_str = task.defense_config.get(key)
             if model_str:
                 m = _resolve_model(model_str)
