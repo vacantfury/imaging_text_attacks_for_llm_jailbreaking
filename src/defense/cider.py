@@ -218,12 +218,20 @@ class Cider(Defense):
                 enc = self._processor(text=texts, images=images, return_tensors="pt",
                                       padding=True, truncation=True)
                 enc = {k: v.to(self._device) for k, v in enc.items()}
-                t_emb = self._clip.get_text_features(
-                    input_ids=enc["input_ids"], attention_mask=enc["attention_mask"])
-                t_emb = t_emb / t_emb.norm(dim=-1, keepdim=True)
-
                 pixels = enc["pixel_values"]
-                i_emb = self._clip.get_image_features(pixel_values=pixels)
+
+                # Use the FULL forward, not get_text_features/get_image_features:
+                # in transformers 5.x those return a BaseModelOutputWithPooling
+                # rather than a tensor. `text_embeds` / `image_embeds` are the
+                # PROJECTED embeddings CLIP's own contrastive similarity is defined
+                # over, which is the space a cosine similarity should live in, and
+                # the field names are stable across 4.x and 5.x.
+                out = self._clip(input_ids=enc["input_ids"],
+                                 attention_mask=enc["attention_mask"],
+                                 pixel_values=pixels)
+                t_emb = out.text_embeds
+                i_emb = out.image_embeds
+                t_emb = t_emb / t_emb.norm(dim=-1, keepdim=True)
                 i_emb = i_emb / i_emb.norm(dim=-1, keepdim=True)
 
                 # DnCNN expects [0,1] pixels; CLIP's processor hands us normalised
@@ -243,7 +251,10 @@ class Cider(Defense):
                                     device=self._device).view(1, 3, 1, 1)
                 std = torch.tensor(self._processor.image_processor.image_std,
                                    device=self._device).view(1, 3, 1, 1)
-                d_emb = self._clip.get_image_features(pixel_values=(den - mean) / std)
+                out_d = self._clip(input_ids=enc["input_ids"],
+                                   attention_mask=enc["attention_mask"],
+                                   pixel_values=(den - mean) / std)
+                d_emb = out_d.image_embeds
                 d_emb = d_emb / d_emb.norm(dim=-1, keepdim=True)
 
                 cos_o = (t_emb * i_emb).sum(-1)
