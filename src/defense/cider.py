@@ -203,7 +203,7 @@ class Cider(Defense):
         import torch
 
         self._load()
-        out: dict[str, float] = {}
+        deltas: dict[str, float] = {}
         for start in range(0, len(items), self._batch_size):
             chunk = items[start:start + self._batch_size]
             ids = [c[0] for c in chunk]
@@ -226,11 +226,11 @@ class Cider(Defense):
                 # PROJECTED embeddings CLIP's own contrastive similarity is defined
                 # over, which is the space a cosine similarity should live in, and
                 # the field names are stable across 4.x and 5.x.
-                out = self._clip(input_ids=enc["input_ids"],
-                                 attention_mask=enc["attention_mask"],
-                                 pixel_values=pixels)
-                t_emb = out.text_embeds
-                i_emb = out.image_embeds
+                clip_out = self._clip(input_ids=enc["input_ids"],
+                                      attention_mask=enc["attention_mask"],
+                                      pixel_values=pixels)
+                t_emb = clip_out.text_embeds
+                i_emb = clip_out.image_embeds
                 t_emb = t_emb / t_emb.norm(dim=-1, keepdim=True)
                 i_emb = i_emb / i_emb.norm(dim=-1, keepdim=True)
 
@@ -251,10 +251,10 @@ class Cider(Defense):
                                     device=self._device).view(1, 3, 1, 1)
                 std = torch.tensor(self._processor.image_processor.image_std,
                                    device=self._device).view(1, 3, 1, 1)
-                out_d = self._clip(input_ids=enc["input_ids"],
-                                   attention_mask=enc["attention_mask"],
-                                   pixel_values=(den - mean) / std)
-                d_emb = out_d.image_embeds
+                clip_out_den = self._clip(input_ids=enc["input_ids"],
+                                          attention_mask=enc["attention_mask"],
+                                          pixel_values=(den - mean) / std)
+                d_emb = clip_out_den.image_embeds
                 d_emb = d_emb / d_emb.norm(dim=-1, keepdim=True)
 
                 cos_o = (t_emb * i_emb).sum(-1)
@@ -268,8 +268,8 @@ class Cider(Defense):
                 for pid, delta in zip(ids, diffs):
                     # Keys are forced to str: a prompt id that arrives as a tensor
                     # or numpy scalar silently breaks the JSON trace downstream.
-                    out[str(pid)] = float(delta)
-        return out
+                    deltas[str(pid)] = float(delta)
+        return deltas
 
     def query(
         self,
