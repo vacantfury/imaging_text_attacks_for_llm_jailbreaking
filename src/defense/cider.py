@@ -259,8 +259,16 @@ class Cider(Defense):
 
                 cos_o = (t_emb * i_emb).sum(-1)
                 cos_d = (t_emb * d_emb).sum(-1)
-                for pid, delta in zip(ids, (cos_d - cos_o).tolist()):
-                    out[pid] = float(delta)
+                diffs = (cos_d - cos_o).detach().cpu().reshape(-1).tolist()
+                if len(diffs) != len(ids):
+                    raise RuntimeError(
+                        f"CIDER: {len(diffs)} deltas for {len(ids)} inputs — the "
+                        f"CLIP batch and the id list disagree, which would "
+                        f"mis-attribute every score in this chunk.")
+                for pid, delta in zip(ids, diffs):
+                    # Keys are forced to str: a prompt id that arrives as a tensor
+                    # or numpy scalar silently breaks the JSON trace downstream.
+                    out[str(pid)] = float(delta)
         return out
 
     def query(

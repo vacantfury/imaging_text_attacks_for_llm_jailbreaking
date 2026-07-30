@@ -84,7 +84,7 @@ def main() -> None:
         out = Path(args.trace_dir) / f"{step.name}.jsonl"
         with open(out, "w") as fh:
             for pid, d in deltas.items():
-                fh.write(json.dumps({"id": pid, "delta": d}) + "\n")
+                fh.write(json.dumps({"id": str(pid), "delta": float(d)}) + "\n")
         vals = list(deltas.values())
         print(f"{step.name:26} n={len(vals):4d}  "
               f"mean={sum(vals)/len(vals):+.4f}  min={min(vals):+.4f}  -> {out}")
