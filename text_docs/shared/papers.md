@@ -12,10 +12,15 @@ repo, public-grade discipline).
 | Alias | Codename | Topic (one line) | Namespace | Key doc | Stage |
 |---|---|---|---|---|---|
 | **A** | MathEnc | *Exposing LLM Safety Gaps Through Mathematical Encoding* — text-side encoders (set theory, formal logic, code) recast harmful queries into out-of-distribution surface forms | — *(predates namespacing; encoders live in `src/prompt_transformations/text/`)* | `README.md` line-of-work; arXiv 2605.03441 | published |
-| **B** | ImgAug | *Image Augmentation Strengthens VLM Defenses Against Encoded Jailbreak Attacks* — adding an image (even a content-unrelated decoy) shifts a defense's behavior via coverage alignment | `imgaug_defense` | `text_docs/imgaug_defense/paper_b_rebuttal_results.md` | under review |
-| **C** | The Decode Gap | Black-box **recover→decode→guard** defense — deployed guards *inspect/reason about* content but never *decode* an obfuscated payload; `modality_complete` closes the decode gap | `autoattack_defense` | `text_docs/autoattack_defense/{proposal,experiments_plan,experiment_results}.md` | in progress |
-| **D** | Variance Channels | *Best-of-N Jailbreaking Beyond Surface Noise* — Best-of-N over a strong structural/encoding attack (code_attack) decisively beats vanilla surface-noise BoN, defended and undefended; the strategy channel survives a canonicalize→guard defense. Venue: **AAAI-27 primary** (abstract 7/21 / paper 7/28) | `bestofn_attack` | `text_docs/bestofn_attack/proposal.md` | in progress |
+| **B** | ImgAug | *Image Augmentation Strengthens VLM Defenses Against Encoded Jailbreak Attacks* — adding an image (even a content-unrelated decoy) shifts a defense's behavior via coverage alignment | `imgaug_defense` | *(working docs local-only)* | under review |
+| **C** | The Decode Gap | Black-box **recover→decode→guard** defense — deployed guards *inspect/reason about* content but never *decode* an obfuscated payload; `modality_complete` closes the decode gap | `autoattack_defense` | `text_docs/autoattack_defense/{proposal,experiments_plan}.md` | in progress |
+| **D** | Variance Channels | *Best-of-N Jailbreaking Beyond Surface Noise* — Best-of-N over a strong structural/encoding attack (code_attack) decisively beats vanilla surface-noise BoN, defended and undefended; the strategy channel survives a canonicalize→guard defense | `bestofn_attack` | `text_docs/bestofn_attack/proposal.md` | in progress |
 | ~~**E**~~ | Smuggled Actions | **→ SPUN OUT 2026-07-19 to its own repo `llm_agent_security`** — agent-side security (encoded indirect injection on LLM agents) is a separate line with a different runtime (tool-loop / action-scoring, not this repo's VLM eval pipeline). Work continues there; this repo keeps the model-side papers A–D. | — | sibling repo `llm_agent_security` | moved out |
+
+**What is tracked.** Only `proposal.md`, `experiments_plan.md`, and structural planning docs are committed. Working
+result logs — `experiment_results.md`, `experiment_matrix.md`, `experiments_findings.md`, `progress_report.md`,
+and per-paper working notes — are **gitignored on purpose**: analyzed results belong in the papers, not in untracked
+working notes on a public repo. Do not cite them as a "key doc" here; a reader cloning the repo will not have them.
 
 **Namespacing convention.** Each paper owns a subdir keyed by its **Namespace** above under `text_docs/`,
 `conf/experiment/`, and `outputs/`; `shared/` holds cross-paper material (venue facts, judge validation,
