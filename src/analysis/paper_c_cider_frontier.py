@@ -48,7 +48,7 @@ def _ts(name: str) -> str:
     return (m.group(1) + m.group(2)) if m else "0"
 
 
-def find_no_defense(target: str, judge: str) -> dict[str, str]:
+def find_no_defense(target: str, judge: str, exclude: list[str]) -> dict[str, str]:
     """{encoding -> latest no_defense dir judged by `judge` on `target`}."""
     best: dict[str, tuple[str, str]] = {}
     for tree in TREES:
@@ -63,6 +63,8 @@ def find_no_defense(target: str, judge: str) -> dict[str, str]:
             if r.get("defense") != "no_defense" or r.get("target_model") != target:
                 continue
             if r.get("judge_model") != judge:
+                continue
+            if (r.get("campaign") or "") in exclude:
                 continue
             enc = r.get("encoding")
             src = (r.get("upstream_ref") or {}).get("source_dir", "") or ""
@@ -110,9 +112,16 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--target", default="qwen2_5_vl_7b")
     ap.add_argument("--judge", default="gpt-5-mini")
+    ap.add_argument("--exclude-campaigns", nargs="*",
+                    default=["paper_c_replicate_r2", "paper_c_replicate_r3"],
+                    help="campaigns to keep OUT of the no-defense reference. The "
+                         "replication runs must be excluded: taking the latest cell "
+                         "per encoding across runs silently turns the union into a "
+                         "best-of-two-runs figure (measured: 94%% vs the single-run "
+                         "89%%), which would understate CIDER by inflating the floor.")
     args = ap.parse_args()
 
-    nd = find_no_defense(args.target, args.judge)
+    nd = find_no_defense(args.target, args.judge, args.exclude_campaigns)
     missing = [a for a in TEXT_ATTACKS + IMAGE_ATTACKS + ["ir_plain", "non_llm_baseline"]
                if a not in nd]
     if missing:
@@ -134,8 +143,8 @@ def main() -> None:
     floor_asr = 100.0 * float(np.mean(list(union_floor.values()))) if union_floor else float("nan")
 
     # Undefended benign over-refusal, per channel.
-    ref_txt = per_prompt(nd["non_llm_baseline"], "refused") if "non_llm_baseline" in nd else {}
-    ref_img = per_prompt(nd["ir_plain"], "refused") if "ir_plain" in nd else {}
+    ref_txt = per_prompt(nd["non_llm_baseline"], "refusal") if "non_llm_baseline" in nd else {}
+    ref_img = per_prompt(nd["ir_plain"], "refusal") if "ir_plain" in nd else {}
     if not ref_txt or not ref_img:
         print("WARNING: a benign channel is missing its refusal verdicts; "
               "over-refusal below uses only the channels found.")
