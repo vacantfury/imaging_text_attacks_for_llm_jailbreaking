@@ -70,9 +70,9 @@ class ClusterSpec:
 
     Capability flags gate WHICH tasks a cluster can run (routing, 2026-07-18):
       bedrock  = can invoke AWS Bedrock (only xc, which holds the arise-beta creds).
-      api_keys = has the injected OpenAI/Anthropic/Google/... keys (aicr/nurc
-                 inject at launch from the secret manager; xc deliberately does NOT — shared box, no
-                 service-account token). A task's Bedrock models force it onto a
+      api_keys = has the injected OpenAI/Anthropic/Google/... keys (aicr/nurc;
+                 xc holds the keys too but is flagged false as a ROUTING
+                 preference, owner ruling 2026-07-30). A task's Bedrock models force it onto a
                  bedrock cluster; its other-API models force it onto an api_keys
                  cluster; a task needing BOTH is unsatisfiable (no cluster has
                  both key sets) and surfaces as a clear leftover.
@@ -84,7 +84,7 @@ class ClusterSpec:
     budget: int              # max concurrent vLLM servers, from conf/clusters/<name>.yaml
     max_submit: int          # QOS submit cap, from conf/clusters/<name>.yaml
     bedrock: bool = False    # can invoke AWS Bedrock (xc only)
-    api_keys: bool = True    # has injected non-Bedrock API keys (aicr/nurc; NOT xc)
+    api_keys: bool = True    # has injected non-Bedrock API keys (xc flagged false by routing preference)
 
 
 def load_pool(path: Path, conf_dir: Path) -> tuple[list[ClusterSpec], dict[str, str]]:

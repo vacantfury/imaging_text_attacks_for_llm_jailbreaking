@@ -13,14 +13,15 @@ cluster:
   # OWNER RULE (2026-07-18): on xc we run ONLY Bedrock API models (self-served on xc's own
   # arise-beta creds) + GPU-served open models. We do NOT run any OTHER API model here
   # (OpenAI/Anthropic/Google/DeepSeek/… — incl. the gpt-5-mini judge); those run ONLY on
-  # aicr/nurc. So the secret-manager service-account token / general API keys are deliberately NOT
-  # installed on xc (also avoids exposing the dev vault on xc's shared `ubuntu` account).
-  # Enforced by the flags below: `api_keys: false` makes plan_split route every non-Bedrock
-  # API task to an api_keys cluster (aicr/nurc), and flag a Bedrock+other-API task as
-  # needing a decoupled stage. The HF token for model DOWNLOADS is injected transiently via
-  # op (not persisted) — that is not "running an API model", so it does not change this.
+  # aicr/nurc. AMENDED (owner ruling 2026-07-30): the secret-manager service-account token
+  # IS installed on xc — xc keeps full capability; the shared-box exposure is a known,
+  # ACCEPTED risk (reaction path if ever suspect: revoke the token at the vault, one click).
+  # `api_keys: false` below is therefore a ROUTING PREFERENCE, not a capability fact:
+  # plan_split still routes every non-Bedrock API task to an api_keys cluster (aicr/nurc),
+  # and flags a Bedrock+other-API task as needing a decoupled stage. The HF token persists
+  # in ~/.xc_env (chmod 600, since 2026-07-21) for gated-model downloads — same ruling.
   bedrock: true                             # ONLY cluster that can invoke AWS Bedrock
-  api_keys: false                           # NO general API keys here → non-Bedrock API → aicr/nurc
+  api_keys: false                           # routing preference: non-Bedrock API tasks → aicr/nurc
   # --- dispatch / limits ---
   sbatch: scripts/run_experiment_xc.sbatch
   budget: 6                                 # concurrent vLLM servers; 8 GPUs total but leave

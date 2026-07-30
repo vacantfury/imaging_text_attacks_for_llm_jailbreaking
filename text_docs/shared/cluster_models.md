@@ -67,8 +67,8 @@ its 8×A100 but are big; ~808 GB, still within the 1/3 budget if wanted). **UPDA
 job-capped and NURC's gpu partition largely drained, which is exactly the normal third-tier fallback.
 The old "last resort" wording had made xc's absent models look like a deliberate permanent gap rather
 than a not-yet-needed download; treat this table as a snapshot, not a policy.
-The HF token was injected the standard transient way (piped over ssh
-stdin from the maintainer's secret manager — never persisted on the shared box). xc's venv lives at `~/venvs/imaging_xc`
+The HF token came from the maintainer's secret manager (piped over ssh stdin;
+since 2026-07-21 it also persists in `~/.xc_env`, chmod 600 — owner-accepted 2026-07-30). xc's venv lives at `~/venvs/imaging_xc`
 (OUTSIDE the repo → sync-proof; see below).
 
 ### venv location — OUTSIDE the repo (2026-07-18, sync-proof)
