@@ -34,7 +34,7 @@ dependencies = [
     "homoglyphs (>=2.0.4,<3.0.0)",
     "pyspellchecker (>=0.9,<1.0)",
     "boto3>=1.43.51",
-    "llm_utils @ git+https://github.com/vacantfury/llm_utils.git@v4.0.0",
+    "llm_utils @ git+https://github.com/vacantfury/llm_utils.git@v5.0.0",
 ]
 
 

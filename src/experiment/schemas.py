@@ -600,6 +600,26 @@ class ClusterConfig(BaseModel):
     max_slurm_time_limit: Optional[str] = None        # gpu-partition QOS wall cap (clamps time_limit)
 
 
+def _arch_row_for(model_str: str):
+    """Resolve a conf/llm model string to a registry row for ARCHITECTURE
+    checks (context ceiling, chat template). llm_utils v5's `from_string`
+    refuses an id registered on several serving routes (today only
+    meta-llama/Meta-Llama-3-8B-Instruct, local + cluster) — but route twins
+    share the same weights, so architecture facts are identical across them;
+    any matching row serves. Prefer the cluster row, since conf/llm/*.yaml
+    configure cluster serving. Returns None when the string is not in the
+    registry at all (fine-tuned checkpoints etc. — validators skip)."""
+    from llm_utils.llm_model import LLMModel, Provider
+    try:
+        return LLMModel.from_string(model_str)
+    except ValueError:
+        matches = [m for m in LLMModel if m.model_id == model_str]
+        if not matches:
+            return None
+        cluster = [m for m in matches if m.provider is Provider.SLURM_CLUSTER]
+        return (cluster or matches)[0]
+
+
 class LLMConfig(BaseModel):
     """Top-level LLM config."""
     model: ModelConfig
@@ -607,10 +627,8 @@ class LLMConfig(BaseModel):
 
     @model_validator(mode="after")
     def _check_max_model_len_against_arch_ceiling(self) -> "LLMConfig":
-        from llm_utils.llm_model import LLMModel
-        try:
-            m = LLMModel.from_string(self.model.model)
-        except ValueError:
+        m = _arch_row_for(self.model.model)
+        if m is None:
             return self
         ceiling = m.max_context_len
         if ceiling is not None and self.cluster.max_model_len > ceiling:
@@ -626,10 +644,8 @@ class LLMConfig(BaseModel):
     def _check_chat_template_file_exists(self) -> "LLMConfig":
         from pathlib import Path
         import llm_utils as _llm_utils_pkg
-        from llm_utils.llm_model import LLMModel
-        try:
-            m = LLMModel.from_string(self.model.model)
-        except ValueError:
+        m = _arch_row_for(self.model.model)
+        if m is None:
             return self
         chat_template = self.cluster.chat_template or m.chat_template
         if not chat_template:

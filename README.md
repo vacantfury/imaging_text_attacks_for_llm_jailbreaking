@@ -170,9 +170,9 @@ Provider routing sits behind one unified call shape, `service.batch_chat(convers
 
 | Provider | Strategy |
 |---|---|
-| OpenAI | `AsyncOpenAI` + `asyncio.gather` |
-| Anthropic | native Message Batches API (50% cheaper) |
-| Google | native Batch API, inline (50% cheaper) |
+| OpenAI | realtime `AsyncOpenAI` + `asyncio.gather`, or native Batch API (50% cheaper) when the estimated job cost crosses the batch threshold (default $1) |
+| Anthropic | realtime SDK fan-out, or native Message Batches API (50% cheaper) past the same threshold |
+| Google | realtime, or native inline Batch API (50% cheaper) past the same threshold |
 | SLURM cluster (vLLM) | `AsyncOpenAI` against the endpoint registered by the server manager; base64 `image_url` for image input |
 | AWS Bedrock | boto3 `bedrock-runtime.converse` (Claude / Qwen / DeepSeek / Nova / …) |
 | Local | Ollama-served models |
