@@ -522,7 +522,8 @@ class ModalityComplete(Defense):
         # Persists the recover/union/decode intermediates (otherwise only logged),
         # so failure modes (e.g. CodeAttack, distraction) can be inspected. Off by
         # default; enable with `save_trace: true` + `trace_path: <file>` in the config.
-        if self._config.get("save_trace"):
+        if self._config.get("save_trace") and (
+                self._config.get("trace_path") or source_dir is not None):
             import json as _json
             import os as _os
             _tp = self._config.get("trace_path") or _os.path.join(source_dir, "decode_trace.jsonl")
@@ -643,6 +644,13 @@ class ModalityComplete(Defense):
         same attack points at it, so a fixed name lets the last cell to finish
         silently clobber the others' verdicts.
         """
+        # Diagnostics only (never the experiment), so a caller with no on-disk
+        # source_dir — e.g. the adaptive_attack loop, which synthesizes text
+        # candidates with no prompt_transform folder — skips the write rather
+        # than crashing. os.path.join(None, ...) raises TypeError, which the
+        # OSError guard below does NOT catch, so this must be checked up front.
+        if source_dir is None:
+            return
         import json as _json
         import os as _os
         import re as _re
