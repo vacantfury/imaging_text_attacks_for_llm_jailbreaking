@@ -1,0 +1,79 @@
+# ============================================================
+# Paper C · SemanticSmooth as a SECOND end-to-end baseline (2026-07-29)
+# ============================================================
+# Answers cspaper review 17 con 6 + question 4: *"ECSO is included and is a reasonable
+# closest transform-then-guard baseline, but it is the only substantive end-to-end defense
+# baseline in Table 1. The paper cites CIDER, SmoothLLM, SemanticSmooth, DefenSee ... yet
+# does not compare against the applicable black-box or multi-view alternatives ... My score
+# could increase if the paper demonstrates that the observed frontier persists relative to
+# more than ECSO and guard-only baselines."*
+#
+# SemanticSmooth (Ji et al., AACL-IJCNLP 2025) is the right pick: PUBLISHED, fully
+# BLACK-BOX (no target internals, no training), already implemented here
+# (`src/defense/semantic_smooth.py`) and never yet run on this paper's grid. Of the
+# defenses the reviewer names it is the only one that is both eligible under our threat
+# model and already built; the others get a precise exclusion statement in the paper
+# instead (CIDER/pixel-denoising and the internal-state family need model internals or
+# target a different attack class).
+#
+# ---- WHAT IS BEING MEASURED ----
+# The SAME two axes as every other row of Table 1, on the SAME artifacts, so it lands as a
+# comparable point on the frontier: ensemble (best-of-11) ASR on HarmBench, and benign
+# over-refusal on OR-Bench-Hard text+image. Identical transform dirs as the main run, so
+# the comparison is attack-for-attack, not a re-render.
+#
+# ---- PREDICTION, WRITTEN BEFORE THE RUN (so it cannot be fitted afterward) ----
+# SemanticSmooth paraphrases the TEXT channel and reuses the image verbatim (its own
+# docstring). Our suite is 6/11 image-delivered, so on those cells the harmful payload is
+# untouched and we expect ASR at or near the undefended floor. On the 5 text encodings a
+# summary may or may not preserve the harmful meaning; where it preserves it the target
+# still answers. Because the headline is an OR over 11 attacks, we therefore predict
+# ENSEMBLE ASR near the undefended 89 / ECSO's 90 -- i.e. SemanticSmooth should land near
+# the undefended corner rather than at a materially better safety-utility point, and the
+# frontier claim survives. Benign over-refusal should stay near the 26 floor, since
+# paraphrasing adds no classifier. If instead it reaches a materially better point than our
+# pipeline, that is a real result against the paper's ceiling claim and gets reported as
+# such -- this preset exists to find out, not to confirm.
+#
+# ---- RESOURCES (SemanticSmooth is guard-free, so only the target is served) ----
+# 13 cells x n=100 = 1300 defended queries. Per prompt the defense makes 5 paraphrase
+# calls (gemini-2.5-flash-lite), 5 target calls (Qwen, GPU, free) and 5 internal vote
+# calls (gpt-5-nano); the project judge then scores once (gpt-5-mini).
+#   API:  ~6500 gemini-flash-lite + ~6500 gpt-5-nano + 1300 gpt-5-mini  ~= $3-4 total
+#   GPU:  1 (Qwen only)   SLURM jobs: 2   wall: ~2-3h
+#   (anchor: an ECSO 100-prompt cell runs ~13 min median at 2 target calls; SS makes 5)
+# Judge is gpt-5-mini DIRECTLY, not the usual cheap-first throwaway: the WildGuard
+# HarmBench-judge path is broken for image-input runs (fallback_parse_count=100, scores
+# every row a success -- see memory note project_api_judge_run_gotchas), and 6 of these 11
+# cells are image cells.
+# ============================================================
+
+num_main_job_threads: 7
+num_cluster_jobs: 2
+
+_rng: &rng [0, 99]
+
+_harm: &harm {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+              benchmark: harmbench, judge_method: harmbench, judge_model: gpt-5-mini,
+              campaign: paper_c_semanticsmooth_baseline, defense: semantic_smooth}
+
+_benign: &benign {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+                  benchmark: orbench_benign_hard, judge_model: gpt-5-mini,
+                  campaign: paper_c_semanticsmooth_baseline, defense: semantic_smooth}
+
+tasks:
+  # ---- the eleven attacks, same transform dirs as the main run ----
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/classical_chinese_simplified_ir_constant_20260710_002424_56524373/llm_classical_language}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/non_llm_cipher_20260718_183504_42666777/non_llm_cipher}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260718_183457_7682501/ir_figstep}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260718_183457_77423812/ir_low_contrast}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260718_183457_84223144/ir_occluded}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260718_183500_58590499/ir_mm_typo}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid}
+  # ---- benign utility, both channels ----
+  - {<<: *benign, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260718_183505_52485516/non_llm_baseline}
+  - {<<: *benign, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260718_183504_7866920/ir_plain}
