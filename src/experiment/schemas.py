@@ -487,9 +487,40 @@ class RejudgeTask(_TaskBase):
     judge_method: Optional[str] = None  # evaluator override; else benchmark->evaluator
 
 
+class AdaptiveAttackTask(_TaskBase):
+    """Feedback-driven adaptive attack against the whole defended pipeline
+    (review 17 con 5).
+
+    Unlike the hand-built adaptive attacks (channel splits, one-shot
+    decode-evasion), this runs a query BUDGET per behavior: it queries the full
+    `defense` pipeline, reads whether the response was a refusal/guard-block, and
+    has an attacker LLM rewrite the request to steer around the observed failure,
+    repeating up to `rounds` times. The FINAL kept response per behavior is judged
+    by the project judge exactly like a defense+evaluate cell, so the reported ASR
+    is comparable to every other number in the paper.
+
+    Text-channel attack: candidates are plain text, so `is_multimodal` is False
+    and the pipeline's recover step is a no-op — the attack stresses the
+    decode+guard mechanism, which is the text-side defense. Reported as such.
+    """
+    mode: Literal["adaptive_attack"]
+    source_file: str             # raw dataset JSONL of harmful behaviors
+    target_model: str
+    defense: str = "modality_complete"
+    defense_config: dict[str, Any] = Field(default_factory=dict)
+    attacker_model: str          # the LLM that rewrites candidates each round
+    benchmark: Optional[str] = None
+    prompt_range: Optional[list[int]] = None
+    judge_model: Optional[str] = None
+    judge_method: Optional[str] = None
+    # adaptive-loop knobs; merged over conf/adaptive_attack/default.yaml
+    attack_config: dict[str, Any] = Field(default_factory=dict)
+
+
 # Discriminated union: Pydantic dispatches by `mode`.
 TaskConfig = Annotated[
-    Union[PromptTransformTask, DefenseEvaluateTask, AnalyzeTask, RejudgeTask],
+    Union[PromptTransformTask, DefenseEvaluateTask, AnalyzeTask, RejudgeTask,
+          AdaptiveAttackTask],
     Discriminator("mode"),
 ]
 

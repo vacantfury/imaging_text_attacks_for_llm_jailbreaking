@@ -193,12 +193,30 @@ class SelfDefend(Defense):
         # attack, or merely that an untuned shadow never emits the bare "no" the
         # exact-match parse requires. Only the RAW replies distinguish those, so
         # sample a few into the log rather than forcing a re-run to find out.
-        n_bare = sum(1 for v in verdicts.values()
-                     if v.strip().lower() in ("no", "no."))
-        logger.info(
-            f"SelfDefend[{self._prompt_kind}]: shadow emitted a bare-'No' on "
-            f"{n_bare}/{len(verdicts)} prompts "
-            f"(near 0 with a high block rate => DEGENERATE gate, not detection)")
+        # The release signal is PROMPT-SPECIFIC, and reporting the wrong one is
+        # actively misleading. `direct` releases only on a literal bare "no", so
+        # a bare-'No' count near zero beside a high block rate means the gate is
+        # degenerate. `intent` releases on a SUBSTRING ("answer: no"), so its
+        # bare-'No' count is legitimately 0 even when the gate is working
+        # perfectly — printing the degenerate warning there reads as an alarm on
+        # a healthy gate. Observed 2026-07-30: job 77 blocked 82% with 0
+        # bare-'No' and the old line still cried DEGENERATE.
+        if self._prompt_kind == "direct":
+            n_release = sum(1 for v in verdicts.values()
+                            if v.strip().lower() in ("no", "no."))
+            logger.info(
+                f"SelfDefend[direct]: shadow emitted a bare-'No' on "
+                f"{n_release}/{len(verdicts)} prompts "
+                f"(near 0 with a high block rate => DEGENERATE gate, not detection)")
+        else:
+            n_release = sum(1 for v in verdicts.values()
+                            if "answer: no" in v.strip().lower()
+                            or "\nno" in v.strip().lower())
+            logger.info(
+                f"SelfDefend[intent]: shadow emitted a release pattern "
+                f"('answer: no' / '\\nno') on {n_release}/{len(verdicts)} prompts "
+                f"(this is the parse's actual release signal; a bare-'No' count "
+                f"is NOT meaningful under P_intent)")
         for pid, v in list(verdicts.items())[:3]:
             logger.info(f"SelfDefend sample verdict [{pid}]: {v.strip()[:200]!r}")
 

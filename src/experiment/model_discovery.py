@@ -37,8 +37,8 @@ def _target_model_for_task(task) -> Optional[str]:
     those don't drive orchestrator-level cluster-server discovery — the
     factory handles them inline.
     """
-    from .schemas import DefenseEvaluateTask
-    if isinstance(task, DefenseEvaluateTask):
+    from .schemas import AdaptiveAttackTask, DefenseEvaluateTask
+    if isinstance(task, (DefenseEvaluateTask, AdaptiveAttackTask)):
         return task.target_model
     return None
 
@@ -186,7 +186,8 @@ def _referenced_models_for_task(info: "TaskInfo", providers=None) -> set:
     sizing a round with multiple concurrent cluster-guard tasks).
     """
     from .schemas import (
-        DefenseEvaluateTask, PromptTransformTask, RejudgeTask, TransformationSpec,
+        AdaptiveAttackTask, DefenseEvaluateTask, PromptTransformTask, RejudgeTask,
+        TransformationSpec,
     )
     from .task import _infer_benchmark
     from src.evaluation.evaluator_factory import judge_methods_for_benchmark
@@ -205,6 +206,38 @@ def _referenced_models_for_task(info: "TaskInfo", providers=None) -> set:
         judge = _resolve_model(task.judge_model)
         if _keep(judge):
             required.add(judge)
+        return required
+
+    # adaptive_attack: needs the TARGET, the ATTACKER LLM, the defense's guard,
+    # and the judge — all potentially cluster-served. Missing any one hangs the
+    # run on acquire_endpoint() (the silent-until-runtime failure this module
+    # exists to prevent).
+    if isinstance(task, AdaptiveAttackTask):
+        for name in (task.target_model, task.attacker_model, task.judge_model):
+            m = _resolve_model(name) if name else None
+            if _keep(m):
+                required.add(m)
+        try:
+            from .config import load_conf as _load_conf
+            dcfg = _load_conf("defense", override_name=task.defense,
+                              task_overrides=task.defense_config or None)
+        except Exception:
+            dcfg = dict(task.defense_config or {})
+        for key in ("guard_model", "amplifier_model", "recover_model",
+                    "gate_model", "decode_model"):
+            m = _resolve_model(dcfg[key]) if dcfg.get(key) else None
+            if _keep(m):
+                required.add(m)
+        if not task.judge_model:
+            try:
+                methods = judge_methods_for_benchmark(
+                    task.benchmark or _infer_benchmark(task.source_file))
+            except ValueError:
+                methods = []
+            for method in methods:
+                jm = _judge_model_for_method(method)
+                if _keep(jm):
+                    required.add(jm)
         return required
 
     # Target model (only meaningful for defense+evaluate)
