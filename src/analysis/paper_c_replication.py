@@ -172,6 +172,15 @@ def collect(target: str, judge: str) -> dict:
             cond = condition_of(r) or condition_of(src_results)
             if run is None or cond is None:
                 continue
+            # The sampling-variance arm reuses its base run's CAMPAIGN NAME, so
+            # without this split its 52 cells are simply newer than the greedy
+            # ones and latest-wins silently swaps them in -- mixing temperature
+            # 0.7 decoding into the 0.0 column (observed: r2 floor read 87
+            # instead of 94, rg/wildguard 37 instead of 45). Decoding temperature
+            # is part of a run's IDENTITY here, so it belongs in the run key.
+            tmc = r.get("target_model_config") or src_results.get("target_model_config") or {}
+            if float(tmc.get("temperature") or 0.0) != 0.0:
+                run = run + "T"
             dc = r.get("defense_config") or (src_results.get("defense_config") or {})
             guard = dc.get("guard_model") or "none"
             enc = r.get("encoding")
@@ -339,8 +348,36 @@ def main() -> None:
             print(f"    {guard:22} deltas={[f'{d:+.0f}' for d in deltas]}  "
                   f"{'agree' if agree else 'DISAGREE'}")
 
-    print("\nRuns are kept separate by campaign throughout: pooling them would turn "
-          "each ensemble into a best-of-N-runs figure, which inflates it.")
+    # ---------------- Q4: sampling variance vs run-to-run variance ----------------
+    temp_runs = sorted({k[0] for k in cells if k[0].endswith("T")})
+    if temp_runs:
+        print("\n=== Q4  sampling arm (temperature 0.7) vs its greedy base run ===")
+        print("  Run-to-run drift above is measured at temperature 0.0, where the only")
+        print("  moving parts are server/batching nondeterminism. This arm re-runs the")
+        print("  same conditions WITH sampling, so the two together separate 'the")
+        print("  pipeline is noisy' from 'decoding is noisy'.")
+        for tr in temp_runs:
+            base = tr[:-1]
+            print(f"\n  {tr} (temp 0.7) vs {base} (greedy):")
+            print(f"    {'cell':26}{base:>8}{tr:>8}{'delta':>8}")
+            ds = []
+            for cond in ("floor", "gb", "mc", "rg"):
+                for guard in (["none"] if cond == "floor" else GUARDS):
+                    a_t, n_t = ensemble(cells, tr, guard, cond)
+                    if np.isnan(a_t) or n_t != len(CHAINS):
+                        continue
+                    a_b, n_b = ensemble(cells, base, guard, cond)
+                    if np.isnan(a_b) or n_b != len(CHAINS):
+                        continue
+                    ds.append(a_t - a_b)
+                    print(f"    {cond+'/'+guard:26}{a_b:>8.0f}{a_t:>8.0f}{a_t-a_b:>+8.0f}")
+            if ds:
+                print(f"    mean shift {np.mean(ds):+.1f}, max |shift| {max(abs(d) for d in ds):.0f} "
+                      f"points over {len(ds)} complete cells")
+
+    print("\nRuns are kept separate by campaign AND decoding temperature throughout: "
+          "pooling them would turn each ensemble into a best-of-N-runs figure, which "
+          "inflates it.")
 
 
 if __name__ == "__main__":
