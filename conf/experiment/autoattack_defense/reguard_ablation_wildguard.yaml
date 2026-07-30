@@ -3,7 +3,7 @@
 # ============================================================
 # Completes the reguard ablation: the wildguard cells failed in the first xc run
 # (job 25) because xc had no HF token → wildguard's GATED repo returned 401. Fixed
-# 2026-07-21: HF token wired into xc ~/.xc_env (op://dev/HuggingFace/credential) +
+# 2026-07-21: HF token wired into xc ~/.xc_env (from the maintainer's secret manager) +
 # xc.yaml env_setup now sources it into server jobs. This re-runs ONLY wildguard's
 # 13 cells (11 harmful + 2 benign); qwen3guard + guardreasoner (26 cells) already
 # succeeded and are kept. SAME campaign (paper_c_reguard_ablation) so the ensemble

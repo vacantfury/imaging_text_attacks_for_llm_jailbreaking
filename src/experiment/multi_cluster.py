@@ -70,8 +70,8 @@ class ClusterSpec:
 
     Capability flags gate WHICH tasks a cluster can run (routing, 2026-07-18):
       bedrock  = can invoke AWS Bedrock (only xc, which holds the arise-beta creds).
-      api_keys = has the op-injected OpenAI/Anthropic/Google/... keys (aicr/nurc
-                 inject via `op run`; xc deliberately does NOT — shared box, no
+      api_keys = has the injected OpenAI/Anthropic/Google/... keys (aicr/nurc
+                 inject at launch from the secret manager; xc deliberately does NOT — shared box, no
                  service-account token). A task's Bedrock models force it onto a
                  bedrock cluster; its other-API models force it onto an api_keys
                  cluster; a task needing BOTH is unsatisfiable (no cluster has
@@ -84,7 +84,7 @@ class ClusterSpec:
     budget: int              # max concurrent vLLM servers, from conf/clusters/<name>.yaml
     max_submit: int          # QOS submit cap, from conf/clusters/<name>.yaml
     bedrock: bool = False    # can invoke AWS Bedrock (xc only)
-    api_keys: bool = True    # has op-injected non-Bedrock API keys (aicr/nurc; NOT xc)
+    api_keys: bool = True    # has injected non-Bedrock API keys (aicr/nurc; NOT xc)
 
 
 def load_pool(path: Path, conf_dir: Path) -> tuple[list[ClusterSpec], dict[str, str]]:
@@ -341,7 +341,7 @@ def compute_task_needs(preset) -> list[TaskNeed]:
         needs_bedrock = any(m.provider == Provider.BEDROCK for m in all_models)
         # "other API" = anything needing a key that isn't Bedrock and isn't a
         # GPU-served or in-process-local model (OpenAI/Anthropic/Google/DeepSeek/
-        # Z.AI/xAI/Moonshot). These need the op-injected keys → aicr/nurc.
+        # Z.AI/xAI/Moonshot). These need the injected API keys → aicr/nurc.
         needs_other_api = any(
             m.provider not in (Provider.SLURM_CLUSTER, Provider.BEDROCK, Provider.LOCAL)
             for m in all_models)

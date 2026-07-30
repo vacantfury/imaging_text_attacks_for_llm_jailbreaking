@@ -25,7 +25,7 @@ CAPABILITY POLICY (fail-closed vs fail-open):
   * bedrock creds         → fail CLOSED (a reliable `sts` check; expiry is the whole
                             point). A probe that can't run at all is treated as dead.
   * api_keys              → declared-only (ASSUME-LIVE) in v1: there is no cheap,
-                            reliable liveness probe (keys are op-injected at job
+                            reliable liveness probe (keys are injected at job
                             launch, not present in a login shell) and it has never
                             been the failure mode. A false "keys dead" would wrongly
                             strand aicr/nurc — worse than the rare miss.

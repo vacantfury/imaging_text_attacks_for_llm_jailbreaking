@@ -13,7 +13,7 @@ cluster:
   # OWNER RULE (2026-07-18): on xc we run ONLY Bedrock API models (self-served on xc's own
   # arise-beta creds) + GPU-served open models. We do NOT run any OTHER API model here
   # (OpenAI/Anthropic/Google/DeepSeek/… — incl. the gpt-5-mini judge); those run ONLY on
-  # aicr/nurc. So the op service-account token / general API keys are deliberately NOT
+  # aicr/nurc. So the secret-manager service-account token / general API keys are deliberately NOT
   # installed on xc (also avoids exposing the dev vault on xc's shared `ubuntu` account).
   # Enforced by the flags below: `api_keys: false` makes plan_split route every non-Bedrock
   # API task to an api_keys cluster (aicr/nurc), and flag a Bedrock+other-API task as

@@ -17,7 +17,7 @@
 #     ⚠️ API MODEL — flagged for the API gate. Kept as gpt-4.1-mini to match the
 #     existing n=20 renders + the published MM-SafetyBench / CS-DJ construction.
 #   - No vLLM servers -> num_cluster_jobs = 1 (orchestrator only). Runs on AICR's
-#     cpu partition; API keys injected by the sbatch wrapper's op run.
+#     cpu partition; API keys injected by the sbatch wrapper at launch.
 #
 # AFTER this runs: re-point guard_panel.yaml's 8 image/cipher/benign anchors to
 # the NEW n=100 render dirs, then flip guard_panel's _rng to [0,99].

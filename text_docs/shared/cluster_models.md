@@ -12,8 +12,8 @@ Three SLURM clusters serve this project's open-weight models from an HF cache.
 NURC/AICR downloads run on a **compute node, never the login node** (NURC partition `short`,
 AICR partition `cpu`, 24h wall); the sbatch scripts route the cache to the path above, which MUST
 match `cluster.hf_home` in `conf/clusters/<cluster>.yaml`. **xc** is single-node (no scratch, big
-home disk) so it downloads directly with `hf download` — the HF token is injected the standard op
-way (transient over ssh stdin for a one-off; `op://dev/HuggingFace/credential`, in `scripts/op_refs`).
+home disk) so it downloads directly with `hf download` — the HF token is injected the standard
+way (transient over ssh stdin for a one-off; the ref lives in the gitignored `scripts/op_refs`).
 
 Disk headroom: NURC `/scratch` ~323 TB free; AICR `/scratch` = 10 TiB quota on a 2.6 PB filesystem
 (2026-07-15). **xc** = 5.7 TB single disk, self-imposed ≤ 1/3 (~1.9 TB) for our weights (owner rule
@@ -67,8 +67,8 @@ its 8×A100 but are big; ~808 GB, still within the 1/3 budget if wanted). **UPDA
 job-capped and NURC's gpu partition largely drained, which is exactly the normal third-tier fallback.
 The old "last resort" wording had made xc's absent models look like a deliberate permanent gap rather
 than a not-yet-needed download; treat this table as a snapshot, not a policy.
-The HF token was injected the standard op way (`op read op://dev/HuggingFace/credential` piped over ssh
-stdin, transient — never persisted on the shared box). xc's venv lives at `~/venvs/imaging_xc`
+The HF token was injected the standard transient way (piped over ssh
+stdin from the maintainer's secret manager — never persisted on the shared box). xc's venv lives at `~/venvs/imaging_xc`
 (OUTSIDE the repo → sync-proof; see below).
 
 ### venv location — OUTSIDE the repo (2026-07-18, sync-proof)
