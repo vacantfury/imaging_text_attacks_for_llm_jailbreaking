@@ -27,6 +27,11 @@ The abstract deadline (7/21) is a **hard wall with no paper attached yet** — y
 - **Page limit: 7 pages of main technical content, 9 pages max total** — pages 8–9 are for **references only** (reproducibility checklist allowed beyond that). This is tighter than an ACL/ARR long paper (8 pages content), so a Paper-B port would need trimming.
 - **Double-blind**: submissions are anonymous; remove all author/affiliation info.
 
+## Main-track review criteria (verbatim from the AAAI-27 main-track call, captured 2026-07-30)
+- *"All submissions will be evaluated and scored for the **significance and novelty** of the contributions (research problems or questions addressed, methods, experiments, analyses), **theoretical and/or empirical soundness** of the claims, their **relevance to the AAAI community**, and **clarity of exposition."*** Plus responsible-research practices and *"steps to ensure **reproducibility** of research results."*
+- Contribution types admitted: *"theoretical, methodological, algorithmic, empirical, integrative (connecting ideas and methods across disparate subfields of AI), or critical."*
+- **Two-phase process detail:** Phase 1 = at least two human reviews **plus one AI-generated supplementary review** (non-decisional); papers surviving into Phase 2 get additional human reviews + the author response window. (Compare the AIA rubric in §AI Alignment special track — AIA's four criteria replace significance-to-the-AAAI-community with relevance-to-alignment, make "new perspective/analysis" first-class novelty, and add the engagement-with-alignment-literature criterion.)
+
 ## Policies that bear on the Paper B decision
 - **Dual / concurrent submission — the load-bearing constraint:** *"AAAI-27 does not permit simultaneous submission of papers involving an overlapping set of authors that do not constitute distinct scientific contributions, whether submitted to AAAI-27 or another archival conference or journal."* → **A paper currently under ARR review must be WITHDRAWN from ARR before it can be submitted to AAAI-27.** (ARR is an archival review process.)
 - **Author submission cap:** ≤10 AAAI-27 submissions per author, combined across the main track + AI Alignment + AI for Social Impact special tracks. Not binding for us (we'd submit ≤2).
