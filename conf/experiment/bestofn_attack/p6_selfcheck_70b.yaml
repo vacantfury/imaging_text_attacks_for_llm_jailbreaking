@@ -41,7 +41,14 @@
 # the correct response; raising the wall past 24h is not, because a server that
 # outlives a whole day of wall on a shared box is a squatter, and a hung one is
 # invisible until someone looks.
-num_main_job_threads: 3      # all three cells in flight across the replicas
+# ⚠️ THREADS MUST BE <= TARGET REPLICAS — and on xc the 70B gets only TWO
+# (conf/llm/llama_3_3_70b_instruct.yaml profiles.xc: num_instances 2 x num_gpus 2).
+# 3 threads against 2 replicas starves the third cell, which then waits the full
+# `cluster_server_endpoint_timeout` (10000 s) and DIES while the other two
+# succeed — the round reports "Successful: 2 / Failed: 1" and looks almost fine.
+# That is exactly what happened to gemma's selfdefend cell (job 96, 2026-07-30);
+# this preset had the identical misconfiguration and would have repeated it.
+num_main_job_threads: 2      # == 70B replicas on xc; see the warning above
 num_cluster_jobs: 5          # orchestrator + 2x (2-GPU) 70B + shadow + wildguard
 
 _e: &e

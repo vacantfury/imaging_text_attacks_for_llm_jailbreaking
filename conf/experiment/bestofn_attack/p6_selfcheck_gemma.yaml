@@ -25,7 +25,17 @@
 # conf/llm/gemma2_9b_it.yaml pins max_tokens 3072 / max_model_len 8192, so its
 # generations are shorter than the other targets' — do not read a lower ASR
 # here as robustness without checking truncation first.
-num_main_job_threads: 3      # all three cells in flight across the replicas
+# ⚠️ THREADS MUST BE <= TARGET REPLICAS. gemma2_9b_it declares num_instances: 2,
+# so only TWO cells can hold a target endpoint at once. Running 3 threads against
+# 2 replicas starved the third cell: it waited the full
+# `cluster_server_endpoint_timeout` (10000 s) and died with
+#   "No endpoint available for google/gemma-2-9b-it within 10000s.
+#    Pool has 2 server(s), all busy or none started."
+# That is what killed the selfdefend cell in job 96 (2026-07-30) after 2h52m of
+# waiting, while the other two cells ran fine — a partial-round failure, which is
+# worse than a clean one because the round still reports "Successful: 2".
+# The third cell now starts when one of the first two finishes.
+num_main_job_threads: 2      # == gemma replicas; see the warning above
 num_cluster_jobs: 5          # orchestrator + 2 gemma + shadow + wildguard
 
 _e: &e
