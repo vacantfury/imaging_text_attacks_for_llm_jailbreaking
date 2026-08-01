@@ -1,0 +1,95 @@
+# ============================================================
+# Paper C · CAMO — Step B (COLLECTION PASS): free wildguard judge (2026-07-31)
+# ============================================================
+# The 1Password service account was DELETED 2026-07-31 -> gpt-5-mini (OpenAI) cannot
+# run on any box. This variant judges with the FREE cluster wildguard so all 18 cells'
+# TARGET responses persist to raw_results.jsonl (written PRE-judge, task.py:550). The
+# wildguard verdicts are GARBAGE for image-attack ASR and are DISCARDED; rejudge these
+# dirs with gpt-5-mini (~$0.32) once the key is restored. Original gpt-5-mini preset:
+# camo_eval.yaml.
+# ============================================================
+# [superseded header below kept for the design]
+# Paper C · CAMO — Step B: eval the cross-modal-obfuscation attack (2026-07-31)
+# ============================================================
+# Measures the paper's standing PREDICTION (§Related Work + §Limitations) that CAMO
+# is self-defeating against recover+decode. Twice-requested (reviews 18 con 3/Q2 and
+# 19); the paper names it as "the first experiment we would add".
+#
+# Attack artifacts: the headline (r=1.0, k=1.0) CAMO render, generated locally by
+# conf/experiment/autoattack_defense/camo_render.yaml (NON-LLM, deterministic,
+# round-trip-verified). This preset only READS them — no spaCy needed on the cluster.
+#
+# ---- WHAT IS MEASURED (Qwen2.5-VL-7B, HarmBench 0-99, gpt-5-mini judge) ----
+# CAMO's per-condition ASR across the SAME grid as Table 1, so it lands as a
+# comparable point on the frontier:
+#   * floor            — no_defense: does CAMO break the bare target at all?
+#   * gb[g]            — guard g alone on the RAW attack (no amplifier)
+#   * mc[g]            — recover+DECODE amplifier + guard g
+#   * +rg[g]           — recover+decode + guard g + reguard_original (the Table-1 +rg)
+# for all five guards, PLUS the decode-isolation ablation on two representative guards:
+#   * mc-recoveronly[g] — recover WITHOUT decode (decode_text: false): image->text
+#                         union only, which is EXACTLY CAMO's own OCR-classifier
+#                         configuration (their Table: 100% "safe").
+#
+# ---- PRE-REGISTERED PREDICTION (also in conf/imaging/camo.yaml, pre-eval) ----
+# CAMO carries no readable request on either channel, so gb and mc-recoveronly should
+# PASS (ASR near the floor). Decode instructs the target to perform CAMO's own
+# solve->index->transcribe->reassemble and hands the assembled request to the guard,
+# so mc (decode ON) and +rg should COLLAPSE CAMO's ASR. The decisive contrast is
+# mc-recoveronly (decode OFF) vs mc (decode ON) on the SAME guard: a large drop is
+# decode closing the composition gap.
+# FALSIFIED IF decode does NOT materially drop CAMO's ASR vs recover-only — that would
+# mean the target won't reconstruct on demand what it reconstructs when complying, and
+# the decode-gap claim needs qualifying.
+#
+# ---- RESOURCES ----
+# 18 cells x n=100. Target Qwen (GPU, free) + 5 served guards (GPU, free); the
+# amplifier makes ~2-3 target calls/prompt, all free. gpt-5-mini judge = 1 call/prompt
+# = 1800 judgments ~= $0.32 at the measured $0.018/100 rate. Well under the $1 gate.
+# GPU: Qwen + 5 guards = 6 vLLM servers + orchestrator = 7 SLURM jobs (cap 8). Weights
+# are all in the AICR scratch HF cache (used by the main 5-guard run).
+# ============================================================
+
+num_main_job_threads: 6
+num_cluster_jobs: 7        # orchestrator + Qwen + 5 guards
+
+_camo: &camo outputs/autoattack_defense/prompt_transform/harmbench/camo_20260731_180027_83675262/ir_camo
+
+_base: &base
+  mode: defense+evaluate
+  target_model: qwen2_5_vl_7b
+  prompt_range: [0, 99]
+  benchmark: harmbench
+  judge_model: wildguard      # FREE collection judge (verdicts DISCARDED)
+  judge_method: wildguard     # rejudge with gpt-5-mini once the OpenAI key is restored
+  campaign: paper_c_camo_collect
+  source_transform_subdir: *camo
+
+tasks:
+  # ---- floor ----
+  - {<<: *base, defense: no_defense, defense_config: {}}
+
+  # ---- guard_baseline: each guard ALONE on the raw CAMO attack ----
+  - {<<: *base, defense: guard_baseline, defense_config: {guard_model: wildguard}}
+  - {<<: *base, defense: guard_baseline, defense_config: {guard_model: qwen3guard_gen_8b}}
+  - {<<: *base, defense: guard_baseline, defense_config: {guard_model: guardreasoner_vl_7b}}
+  - {<<: *base, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}}
+  - {<<: *base, defense: guard_baseline, defense_config: {guard_model: thinkguard}}
+
+  # ---- modality_complete: recover+DECODE amplifier + guard ----
+  - {<<: *base, defense: modality_complete, defense_config: {guard_model: wildguard, decode_text: true}}
+  - {<<: *base, defense: modality_complete, defense_config: {guard_model: qwen3guard_gen_8b, decode_text: true}}
+  - {<<: *base, defense: modality_complete, defense_config: {guard_model: guardreasoner_vl_7b, decode_text: true}}
+  - {<<: *base, defense: modality_complete, defense_config: {guard_model: llama_guard_3_8b, decode_text: true}}
+  - {<<: *base, defense: modality_complete, defense_config: {guard_model: thinkguard, decode_text: true}}
+
+  # ---- +rg: recover+decode + guard + reguard_original (Table-1 +rg composition) ----
+  - {<<: *base, defense: modality_complete, defense_config: {guard_model: wildguard, decode_text: true, decode_style: recover, reguard_original: true}}
+  - {<<: *base, defense: modality_complete, defense_config: {guard_model: qwen3guard_gen_8b, decode_text: true, decode_style: recover, reguard_original: true}}
+  - {<<: *base, defense: modality_complete, defense_config: {guard_model: guardreasoner_vl_7b, decode_text: true, decode_style: recover, reguard_original: true}}
+  - {<<: *base, defense: modality_complete, defense_config: {guard_model: llama_guard_3_8b, decode_text: true, decode_style: recover, reguard_original: true}}
+  - {<<: *base, defense: modality_complete, defense_config: {guard_model: thinkguard, decode_text: true, decode_style: recover, reguard_original: true}}
+
+  # ---- decode-isolation ablation: recover WITHOUT decode (= CAMO's OCR-classifier config) ----
+  - {<<: *base, defense: modality_complete, defense_config: {guard_model: wildguard, decode_text: false}}
+  - {<<: *base, defense: modality_complete, defense_config: {guard_model: llama_guard_3_8b, decode_text: false}}
