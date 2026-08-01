@@ -53,6 +53,8 @@ TRANSFORMATION_ALIASES: dict[str, str] = {
     "semantic_split": "ir_semantic_split",
     "distraction": "ir_distraction_grid",
     "distraction_grid": "ir_distraction_grid",
+    "camo": "ir_camo",
+    "cross_modal_obfuscation": "ir_camo",
 }
 
 

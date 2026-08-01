@@ -1,0 +1,44 @@
+# ============================================================
+# Paper C · CAMO — Step A: render the cross-modal-obfuscation attack (2026-07-31)
+# ============================================================
+# Answers cspaper reviews 18 (con 3 / Q2) AND 19 — CAMO is twice-requested and the
+# paper itself (§Related Work + §Limitations) names it as "the first experiment we
+# would add". The paper currently only PREDICTS CAMO is self-defeating against
+# recover+decode; this run lets us MEASURE it.
+#
+# CAMO (Jiang et al. 2025, arXiv 2506.16760, CoRR — no code released) replaces each
+# character of a selected harmful keyword with a math question whose numeric answer
+# indexes a character-grid drawn in the image. The model must solve -> index ->
+# transcribe -> reassemble before the harmful request even exists. Reimplemented
+# from the paper's §3; verified by exact round-trip reconstruction (a perfect solver
+# recovers the original sentence) and a legible OCR grid.
+#
+# FREE: ir_camo is NON-LLM and deterministic (seeded per prompt id) — spaCy keyword
+# pick + PIL grid render, NO encoder LLM, no API call, no GPU. Orchestrator job only,
+# runnable LOCALLY at zero cost. This preset produces ONLY the attack artifacts; the
+# eval (Qwen target + amplifier + gpt-5-mini judge) is a SEPARATE cluster preset that
+# references this dir via source_transform_subdir.
+#
+# DECLARED DEVIATION (headed for the appendix): the adaptive difficulty loop
+# (Algorithm 2 — raise r then k, re-query until success) is NOT run; we render ONE
+# artifact per prompt at a fixed (r=1.0, k=1.0), the maximum-obfuscation operating
+# point. Stated as a lower bound on the attack's strength, as with CC-BOS's `direct`
+# arm. Two auxiliary difficulty points (k=0.5 and a milder r) are rendered too so a
+# sensitivity check is free if wanted — the eval uses the k=1.0 arm as the headline.
+#
+# Output: outputs/autoattack_defense/prompt_transform/harmbench/camo_<ts>/ir_camo
+# ============================================================
+
+num_main_job_threads: 3
+num_cluster_jobs: 1          # no model of any kind — orchestrator only
+
+_hb: &hb data/harmbench_prompts.jsonl
+_rng: &rng [0, 99]
+
+tasks:
+  # Headline arm: full obfuscation (mask every selected keyword, whole word).
+  - {mode: prompt_transform, source_file: *hb, prompt_range: *rng, benchmark: harmbench,
+     transformation_list: [{type: camo, params: {mask_word_ratio: 1.0, mask_char_depth: 1.0}}]}
+  # Sensitivity arm A: shallower character masking (prefix half of each keyword).
+  - {mode: prompt_transform, source_file: *hb, prompt_range: *rng, benchmark: harmbench,
+     transformation_list: [{type: camo, params: {mask_word_ratio: 1.0, mask_char_depth: 0.5}}]}
