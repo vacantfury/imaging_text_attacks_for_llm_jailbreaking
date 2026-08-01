@@ -1,0 +1,69 @@
+# bestofn_attack Paper-D — REVIEW-6 RESPONSE (con 4): gates on a SECOND target.
+#
+# OWNER-APPROVED 2026-08-01 ("both") against a stated resource report.
+#
+# ── WHAT THIS ANSWERS ────────────────────────────────────────────────────────
+# Review 6 con 4:
+#
+#   "Figure 2 aggregates results from SAGE, SemanticSmooth, a canonicalize-plus-
+#    WildGuard construction, LlamaGuard-3, and LlamaGuard-3 'as shipped', but the
+#    key gate experiments are all conducted on Llama-3.1-8B ... it weakens the
+#    broad statement that gate defenses invert attack rankings in practical
+#    end-to-end systems."
+#
+# Correct as stated: every gate cell in the paper is Llama-3.1-8B. This preset
+# replicates the gate panel on Qwen2.5-7B; a sibling preset does the same on the
+# other target. Two additional targets turn a single-model observation into a
+# defense-CLASS claim, which is how the paper currently frames it.
+#
+# ── PRE-REGISTERED PREDICTION (recorded BEFORE the run) ──────────────────────
+# The probe-count account is a property of the DEFENSE, not of the target: a gate
+# presents a searchable decision boundary, so the 100-probe surface search should
+# retain more of its undefended reach than the 1-probe code encoding, on ANY
+# target. On Llama-3.1-8B: WildGuard 0.88 vs 0.61, LlamaGuard-3 0.26 vs 0.06.
+#
+#   PREDICTION: surface retention > code retention on Qwen2.5-7B too, at both gates.
+#
+#   A non-inversion here would show the inversion is target-specific rather than
+#   defense-type-specific, and would force the claim to be narrowed. This preset
+#   exists to be able to fail.
+#
+# ── COMPARABILITY ────────────────────────────────────────────────────────────
+# Identical stored attack prompts as every llama gate cell (same *code / *surf
+# prompt_transform dirs), same T=1.0, same generation budget. The undefended
+# Qwen2.5-7B baselines needed to normalize retention ALREADY EXIST in the main
+# matrix (no_defense x {code, surface} at T=1.0), so no baseline cells here.
+#
+# ── JUDGE ────────────────────────────────────────────────────────────────────
+# wildguard first pass (FREE, on-cluster) then a gpt-5-mini rejudge. Nothing from
+# the wildguard pass is reportable -- it over-flags the code arm 41-68%, and
+# retention is a RATIO, the statistic most sensitive to that bias.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/p7_gates_qwen
+#
+# ── FOOTPRINT ────────────────────────────────────────────────────────────────
+# 4 cells x 10,000 = 40,000 generations. GPU only at this stage (no API spend).
+# Follow-on gpt-5-mini rejudge ~$24-36 -- a SEPARATE ask, not covered here.
+#
+# ── VERIFY AFTER ─────────────────────────────────────────────────────────────
+# All 4 cells: count == 10000, status success, fallback_parse_count == 0.
+# Low draw-diversity on gate cells is the documented canned-refusal exemption.
+num_main_job_threads: 4      # all 4 cells in flight
+num_cluster_jobs: 5          # orchestrator + ~2 target replicas + wildguard + llama_guard_3
+_e: &e
+  mode: defense+evaluate
+  target_model: qwen2_5_7b_instruct
+  target_model_config: {temperature: 1.0}
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_p7_gates_qwen
+_CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260718_213010_40825967/code_attack
+_SURF: &surf outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_20260718_050205_56951903/variance_channel_bon
+_CG: &cg {guard_model: wildguard}
+_LG: &lg {guard_model: llama_guard_3_8b}
+tasks:
+  - {<<: *e, source_transform_subdir: *surf, defense: canonicalize_guard, defense_config: *cg}
+  - {<<: *e, source_transform_subdir: *code, defense: canonicalize_guard, defense_config: *cg}
+  - {<<: *e, source_transform_subdir: *surf, defense: guard_baseline, defense_config: *lg}
+  - {<<: *e, source_transform_subdir: *code, defense: guard_baseline, defense_config: *lg}
