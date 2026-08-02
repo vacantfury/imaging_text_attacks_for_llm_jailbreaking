@@ -5,7 +5,7 @@ This repository is a **shared harness for a line of work**, not a single paper. 
 
 **This is a projection, not the source of truth.** The canonical registry — evaluation, priority, venue and
 review status, publication record, and future aims (including papers outside this repo, e.g. the QML side
-track) — is the portfolio of record (psyche `self_model/portfolio.md`); live status/venue tracking is the
+track) — is the portfolio of record (the science repo `portfolio.md`); live status/venue tracking is the
 gitignored `TODO.md`. Keep review status, scores, and venue decisions **out of this committed file** (public
 repo, public-grade discipline).
 
