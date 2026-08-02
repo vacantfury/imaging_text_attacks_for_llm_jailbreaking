@@ -1,5 +1,5 @@
 [project]
-name = "imaging_text_attacks_for_llm_jailbreaking"
+name = "llm_guardrail_security"
 version = "0.1.0"
 description = ""
 authors = [
