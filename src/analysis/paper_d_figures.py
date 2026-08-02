@@ -55,9 +55,19 @@ CAMPAIGNS = {
     "bestofn_attack_p2_rejudge_probe",  # run C: 4 probe-count cells (llama)
     "bestofn_attack_p3_rejudge",        # run D: 2nd gate + T=0.5 + 4 Llama-3.3-70B cells
     "bestofn_attack_p4_rejudge",        # run E: the PUBLISHED gate, no canonicalization prefix
+    # P7 = the review-6 response. The gate runs extend both gates to a 2nd and 3rd
+    # target (con 4: is the inversion a gate property or a Llama property?); the
+    # paraphrase run adds the probe-count continuum's middle rung (con 5).
+    "bestofn_attack_p7_gates_qwen",     # run F: 4 qwen cells, both gates x both attacks
+    "bestofn_attack_p7_gates_gemma",    # run G: 4 gemma cells, both gates x both attacks
+    "bestofn_attack_p7_paraphrase",     # run H: 4 llama PARAPHRASE cells
 }
 REJUDGE_GLOB = "outputs/bestofn_attack/rejudge/**/*"
-DEFAULT_OUTDIR = "paper/bestofn_attack/latex/figs"
+# The AIA tree is the SOLE live edit target for Paper D (owner ruling 2026-08-02:
+# the AAAI-main copy is off the table, the arXiv copy is refreshed only at
+# camera-ready). The old "paper/bestofn_attack/latex/figs" default died in the
+# 2026-08-01 paper-dir reorganization and pointed at a nonexistent directory.
+DEFAULT_OUTDIR = "paper/bestofn_attack/aaai_2027_ai_alignment/aaai_aia_latex/figs"
 EXPECTED_DRAWS_PER_CELL = 10_000  # 100 behaviors x 100 draws
 
 # Registry model id -> target key. EXPLICIT, because classifying by name PREFIX is
@@ -112,8 +122,17 @@ DEFENSE_COLOR = {
     "canonicalize_guard3": "#E69F00",
     "guard_baseline": "#8C564B",
 }
-ATTACK_LABEL = {"code": "BoN-wrapped CodeAttack", "surf": "original BoN"}
-ATTACK_COLOR = {"code": "#c0392b", "surf": "#2c6fb5"}
+ATTACK_LABEL = {"code": "BoN-wrapped CodeAttack", "surf": "original BoN",
+                "para": "paraphrase continuum"}
+ATTACK_COLOR = {"code": "#c0392b", "surf": "#2c6fb5", "para": "#7a5195"}
+# variance_channel_bon's `channel` -> attack key. The surface and paraphrase arms
+# BOTH come out of the same transform and land in identically-named directories
+# (`..._variance_channel_bon_...`), so a name test cannot separate them: before
+# this map both classified as "surf" and collided on the same (target, defense,
+# attack) key. `strategy` is deliberately absent — it is a different attack that
+# would need its own key and its own figure treatment, so it must fail loudly
+# rather than be folded into one of these two.
+CHANNEL_ATTACK_KEY = {"surface": "surf", "paraphrase": "para"}
 N_GRID = [1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 70, 100]
 
 # fig1 facets: (title, defense key, targets to show). The three GATE facets sit
@@ -122,16 +141,22 @@ N_GRID = [1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 70, 100]
 # our canonicalization prefix entirely and runs LlamaGuard-3 as it ships.
 # Facet titles are kept SHORT and two-line: with five facets the full defense names
 # ("canon.+LlamaGuard-3", "LlamaGuard-3 as published") collide horizontally.
+# P7 extended the two gates that bracket the claim (canon.+WildGuard and the
+# published LlamaGuard-3) to all three targets, which is what lets the figure show
+# that the end-to-end inversion is NOT uniform -- Gemma reverses under WildGuard.
+# canon.+LG-3 stays Llama-only: it was the classifier-swap control and was never
+# run on the other two targets. Facets list the targets actually measured; the
+# availability filter in fig_inversion drops anything missing anyway.
 INVERSION_PANELS = [
     ("SAGE\n(transform)", "sage", TARGETS_WITH_70B),
     ("SemanticSmooth\n(transform)", "semantic_smooth", TARGETS),
-    ("canon.+WildGuard\n(gate)", "canonicalize_guard", ["llama"]),
+    ("canon.+WG\n(gate)", "canonicalize_guard", TARGETS),
     ("canon.+LG-3\n(gate)", "canonicalize_guard3", ["llama"]),
-    ("LG-3 as shipped\n(gate)", "guard_baseline", ["llama"]),
+    ("LG-3 shipped\n(gate)", "guard_baseline", TARGETS),
 ]
 
 
-def _classify(meta: dict, upstream_meta: dict) -> tuple[str, str, str]:
+def _classify(meta: dict, upstream_meta: dict, transform_meta: dict) -> tuple[str, str, str]:
     """(target, defense, attack) from RESULT METADATA, not from directory names.
 
     `meta` is the rejudge results.json (authoritative `target_model` / `defense`);
@@ -141,6 +166,11 @@ def _classify(meta: dict, upstream_meta: dict) -> tuple[str, str, str]:
     round reuses existing (target, defense, attack) triples with a different guard
     classifier and a different temperature, and would otherwise OVERWRITE published
     P2 cells in the returned dict.
+
+    `transform_meta` is the prompt_transform results.json one level further up, and
+    is what separates the SURFACE arm from the PARAPHRASE arm: both are produced by
+    `variance_channel_bon` and are indistinguishable by directory name, so only the
+    recorded `variance_channel` tells them apart.
     """
     model = meta.get("target_model") or ""
     if model not in TARGET_MODEL_KEY:
@@ -179,8 +209,48 @@ def _classify(meta: dict, upstream_meta: dict) -> tuple[str, str, str]:
             defense = f"sage_t{str(temp).replace('.', '')[:2]}"
 
     src = os.path.basename((meta.get("upstream_ref") or {}).get("source_dir", ""))
-    attack = "code" if "code_attack" in src else "surf"
-    return target, defense, attack
+    if "code_attack" in src:
+        return target, defense, "code"
+
+    # Everything else is a variance_channel_bon run, whose ARM is the recorded
+    # channel. Read it rather than guessing: `surface` and `paraphrase` produce
+    # byte-identical directory naming and would otherwise collide on one key.
+    channel = _variance_channel(transform_meta)
+    if channel not in CHANNEL_ATTACK_KEY:
+        raise ValueError(
+            f"{src}: variance channel {channel!r} has no attack key — add it to "
+            f"CHANNEL_ATTACK_KEY (with a colour/label) rather than folding it into "
+            f"an existing arm; silently reusing 'surf' is how the paraphrase arm "
+            f"would overwrite the character-search cells")
+    return target, defense, CHANNEL_ATTACK_KEY[channel]
+
+
+def _variance_channel(transform_meta: dict) -> str | None:
+    """The `variance_channel` recorded by the prompt_transform step, or None.
+
+    Written by VarianceChannelTransformation into the step's metrics; the config
+    block is read as a fallback for any run predating the metric.
+    """
+    for step in reversed(transform_meta.get("results_history") or []):
+        block = (step or {}).get("variance_channel_bon")
+        if not block:
+            continue
+        channel = ((block.get("metrics") or {}).get("variance_channel")
+                   or (block.get("config") or {}).get("channel"))
+        if channel:
+            return channel
+    return None
+
+
+def _read_results(root: str, rel_dir: str) -> dict:
+    """Load `<rel_dir>/results.json`, tolerating a path already absolute/relative."""
+    if not rel_dir:
+        return {}
+    for candidate in (os.path.join(root, rel_dir, "results.json"),
+                      os.path.join(rel_dir, "results.json")):
+        if os.path.exists(candidate):
+            return json.load(open(candidate))
+    return {}
 
 
 def load_cells(
@@ -219,12 +289,13 @@ def load_cells(
 
         # The upstream carries guard_model / temperature, which _classify needs to
         # keep P3's reused triples off P2's published cells.
-        src_dir = (meta.get("upstream_ref") or {}).get("source_dir", "")
-        src_results = os.path.join(root, src_dir, "results.json")
-        if not os.path.exists(src_results):
-            src_results = os.path.join(src_dir, "results.json")
-        upstream_meta = json.load(open(src_results)) if os.path.exists(src_results) else {}
-        key = _classify(meta, upstream_meta)
+        upstream_meta = _read_results(root, (meta.get("upstream_ref") or {}).get("source_dir", ""))
+        # One level further up: the prompt_transform step, whose recorded
+        # `variance_channel` is the ONLY thing separating the surface arm from the
+        # paraphrase arm (same transform, same directory naming).
+        transform_meta = _read_results(
+            root, (upstream_meta.get("upstream_ref") or {}).get("source_dir", ""))
+        key = _classify(meta, upstream_meta, transform_meta)
 
         # A duplicate key means two cells claim the same (target, defense, attack).
         # Silently keeping the last one is precisely how a P3 cell would overwrite a
@@ -328,9 +399,13 @@ def fig_inversion(cells, outdir: str) -> str:
     # be ~7.6in regardless of how many facets there are — panel COUNT changes the
     # width_ratios, never the total. A width that scales with the facet count would
     # be silently downscaled by LaTeX and shrink every font below legibility.
+    # wspace/height were tuned when the three gate facets held ONE bar-pair each.
+    # P7 widened them to three targets, which pushed the facet titles into each
+    # other and the legend onto the tick labels; the extra gutter and the reserved
+    # bottom band below are what keep both legible at five facets.
     fig, axes = plt.subplots(
-        1, len(panels), figsize=(7.6, 2.45), sharey=True,
-        gridspec_kw=dict(width_ratios=widths, wspace=0.12),
+        1, len(panels), figsize=(7.6, 2.7), sharey=True,
+        gridspec_kw=dict(width_ratios=widths, wspace=0.30),
     )
     axes = np.atleast_1d(axes)
     for ax, (title, defense, targets) in zip(axes, panels):
@@ -352,10 +427,13 @@ def fig_inversion(cells, outdir: str) -> str:
                 h = rect.get_height()
                 if h != h:      # NaN -> no cell for this (target, defense, attack)
                     continue
+                # 5.9pt, not 6.4: in a 3-target gate facet the two bars of a pair
+                # sit 0.34 x-units apart, and at 6.4 the "0.14"/"0.18" labels of
+                # the LlamaGuard-3 facet touch.
                 ax.text(rect.get_x() + rect.get_width() / 2, h + 0.025,
-                        f"{h:.2f}", ha="center", fontsize=6.4, color="0.25")
+                        f"{h:.2f}", ha="center", fontsize=5.9, color="0.25")
         ax.set_xticks(x)
-        ax.set_xticklabels([TARGET_SHORT[t] for t in targets], fontsize=8)
+        ax.set_xticklabels([TARGET_SHORT[t] for t in targets], fontsize=7.5)
         ax.set_title(title, fontsize=8.5, pad=4)
         ax.axhline(1.0, color="0.45", lw=0.8, ls=":")
         ax.set_ylim(0, 1.20)
@@ -374,9 +452,14 @@ def fig_inversion(cells, outdir: str) -> str:
 
     handles, labels = axes[0].get_legend_handles_labels()
     labels = [f"{labels[0]} (ours)"] + labels[1:]
+    # Deterministic margins, NOT tight_layout: with five facets of unequal
+    # width_ratios matplotlib reports the axes as tight_layout-incompatible and
+    # silently leaves the geometry alone, which is why the legend used to print on
+    # top of the x tick labels (visible in every figure this script produced before
+    # 2026-08-02). subplots_adjust reserves the bottom band unconditionally.
+    fig.subplots_adjust(left=0.085, right=0.995, top=0.865, bottom=0.30, wspace=0.30)
     fig.legend(handles, labels, fontsize=7.6, frameon=False, loc="lower center",
-               bbox_to_anchor=(0.5, -0.08), ncol=2, handlelength=1.3, columnspacing=1.8)
-    fig.tight_layout(rect=(0, 0.02, 1, 1))
+               bbox_to_anchor=(0.5, 0.005), ncol=2, handlelength=1.3, columnspacing=1.8)
     path = os.path.join(outdir, "fig1_inversion.pdf")
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
@@ -438,7 +521,7 @@ def print_table(cells) -> None:
     print("-" * 91)
     for target in TARGETS_WITH_70B:
         for defense in DEFENSES + ["sage_t05"] + PROBE_DEFENSES:
-            for attack in ("code", "surf"):
+            for attack in ("code", "surf", "para"):
                 key = (target, defense, attack)
                 if key not in cells:
                     continue
@@ -472,7 +555,10 @@ def main() -> None:
     #   P3   2  llama x canon.+LlamaGuard-3 x {code, surf}      (2nd gate)
     #   P3   1  llama x SAGE(T=0.5) x code                      (temperature ablation)
     #   P3   4  llama70 x {no_defense, sage} x {code, surf}     (scale)
-    EXPECTED_CELLS = 31
+    #   P4   2  llama x LG-3 as published x {code, surf}        (the shipped gate)
+    #   P7   8  {qwen, gemma} x {canon.+WildGuard, LG-3 pub.} x {code, surf}
+    #   P7   4  llama x {no_def., canon., canon.+WG, LG-3 pub.} x para
+    EXPECTED_CELLS = 43
     if len(cells) != EXPECTED_CELLS:
         missing = sorted(set(cells))
         raise SystemExit(
