@@ -1,7 +1,7 @@
 import colorlog
 import logging
 
-DEFAULT_LOGGER_NAME = "imaging_text_attacks"
+DEFAULT_LOGGER_NAME = "llm_guardrail_security"
 
 
 def get_logger(name: str = DEFAULT_LOGGER_NAME, level: int = logging.INFO) -> logging.Logger:

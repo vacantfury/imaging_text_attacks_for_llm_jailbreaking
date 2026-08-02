@@ -44,7 +44,7 @@
 ## Phase 6 — Minor Cleanup (P6)
 
 - [x] 6.1 Removed unused `Optional` from `base_image_renderer.py`; removed `os`, `Optional` from `fc_flowchart_image_renderer.py`
-- [x] 6.2 `src/utils/logger.py`: Renamed `DEFAULT_LOGGER_NAME` to `"imaging_text_attacks"`
+- [x] 6.2 `src/utils/logger.py`: Renamed `DEFAULT_LOGGER_NAME` to `"llm_guardrail_security"`
 - [x] 6.3 `src/experiment/config.py`: Documented `_strip_hydra` mutation is safe (fresh objects)
 
 ---

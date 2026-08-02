@@ -17,13 +17,13 @@
 clusters:
   - name: aicr        # must match conf/clusters/aicr.yaml
     ssh: aicr         # ssh alias in ~/.ssh/config
-    repo: ~/projects/imaging_text_attacks_for_llm_jailbreaking
+    repo: ~/projects/llm_guardrail_security
   - name: nurc        # conda; use name: nurc_uv (conf/clusters/nurc_uv.yaml) for the uv env
     ssh: <neu-id>@login.explorer.northeastern.edu
-    repo: ~/projects/imaging_text_attacks_for_llm_jailbreaking
+    repo: ~/projects/llm_guardrail_security
   - name: xc          # single-node SLURM (conf/clusters/xc.yaml); GPU tier is THIRD (not "last resort")
     ssh: xc           # ssh alias in ~/.ssh/config
-    repo: ~/projects/imaging_text_attacks_for_llm_jailbreaking
+    repo: ~/projects/llm_guardrail_security
 
 # Optional: pin a model (by model_id) onto a specific cluster, overriding the
 # automatic AICR-first packing. Every task needing that model is forced onto the

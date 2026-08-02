@@ -1,6 +1,6 @@
-# The Decode Gap — Black-Box Recover-and-Decode Defense for Encoded & Image-Rendered VLM Jailbreaks
+# LLM Guardrail Security — Encoded & Image-Rendered Jailbreaks vs. Black-Box Defenses
 
-Research codebase for evaluating black-box defenses against encoded and image-rendered jailbreak attacks on Vision-Language Models, and for building a black-box **recover→decode→guard** defense that closes the **decode gap** — the step deployed guards lack: they *inspect or reason about* content but never *decode* an obfuscated payload.
+Research codebase on the security of the **guardrail layer** — the out-of-model safety mechanisms (guard classifiers, filters, caption/decode pipelines) deployed around LLMs and VLMs. The through-line: encoded and image-rendered jailbreaks route past deployed guards, which *inspect or reason about* content but never *decode* an obfuscated payload (the **decode gap**) — we measure that gap from the attack side and close it from the defense side with a black-box **recover→decode→guard** amplifier.
 
 This repo is the shared harness for a line of work:
 

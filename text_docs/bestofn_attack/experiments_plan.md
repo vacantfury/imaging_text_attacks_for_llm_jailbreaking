@@ -35,7 +35,7 @@ The pipeline doesn't auto-chain across a timestamp, so:
 (A ~20-row smoke — `prompt_range: [0, 19]`, surface channel, no_defense — is worth firing first to validate the new `variance_channel_bon` serving path before the full pilot.)
 
 ## BLOCKER to launch (verified 2026-07-17) — one owner action on return
-The cluster checkout `~/projects/imaging_text_attacks_for_llm_jailbreaking` is an **rsync target, not a git repo** (probed 2026-07-17: `git log` → "not a git repository"). So the new code (`variance_channel.py`, `llm_paraphrase_encoder.py`, the two confs, the preset) **cannot be delivered by git-pull** — it needs the owner's **Cursor Sync-Rsync (local→remote)**, which the session cannot invoke. Everything else is ready.
+The cluster checkout `~/projects/llm_guardrail_security` is an **rsync target, not a git repo** (probed 2026-07-17: `git log` → "not a git repository"). So the new code (`variance_channel.py`, `llm_paraphrase_encoder.py`, the two confs, the preset) **cannot be delivered by git-pull** — it needs the owner's **Cursor Sync-Rsync (local→remote)**, which the session cannot invoke. Everything else is ready.
 - **On return:** run Cursor Sync-Rsync (Cmd+Shift+P → sync local→remote), reply "synced" → the session runs the smoke, then Stage 1 → fills timestamps → Stage 2, and reports job ids. No other owner action needed until results.
 
 ## Reserved / later rounds
