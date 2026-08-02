@@ -1,0 +1,36 @@
+# ============================================================
+# Paper C · con 10 — Step A2: the two arms that BALANCE the design (2026-08-01)
+# ============================================================
+# The first pass (con10_codeattack_render.yaml + _eval.yaml, job 251667) left the
+# "no-syntax" condition unmatched across rows: the harmful no-syntax arm (C) was our
+# word-list control (still an obfuscation) while the benign one (D) was plain text.
+# Only B-vs-D was a clean syntax isolation. These two arms close that gap, turning
+# the design into a balanced 2 x 3:
+#
+#                 | plain            | word-list (no code) | code
+#   ------------- | ---------------- | ------------------- | ----------------
+#   harmful       | C' (THIS)        | C (have)            | A (have)
+#   benign        | D (have)         | B' (THIS)           | B (have)
+#
+# With C' and B' in hand every cell has both a same-semantics and a same-syntax
+# neighbour, so the syntax main effect is estimable in BOTH rows rather than only
+# the benign one.
+#
+# Both transforms are NON-LLM and deterministic: zero API cost, instant.
+# ============================================================
+
+num_main_job_threads: 2
+num_cluster_jobs: 1          # no model of any kind — orchestrator only
+
+_hb: &hb data/harmbench_prompts.jsonl
+_ob: &ob data/orbench_benign_hard_prompts.jsonl
+_rng: &rng [0, 99]
+
+tasks:
+  # C' — plain harmful text (the missing "no obfuscation at all" harmful reference)
+  - {mode: prompt_transform, source_file: *hb, prompt_range: *rng, benchmark: harmbench,
+     transformation_list: [{type: non_llm_baseline}]}
+
+  # B' — benign as word-list (matches arm C's obfuscation, benign payload)
+  - {mode: prompt_transform, source_file: *ob, prompt_range: *rng, benchmark: orbench_benign_hard,
+     transformation_list: [{type: code_attack_no_syntax}]}

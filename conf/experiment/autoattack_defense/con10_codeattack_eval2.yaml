@@ -1,0 +1,72 @@
+# ============================================================
+# Paper C · con 10 — Step B2: eval the two balancing arms (2026-08-01)
+# ============================================================
+# Completes the 2 x 3 begun by job 251667 (campaign paper_c_con10_codeattack).
+# SAME campaign on purpose: these cells are read together with the first 34, and
+# pinning one campaign is what the standing "latest-wins is unsafe" lesson requires.
+#
+#                 | plain            | word-list (no code) | code
+#   ------------- | ---------------- | ------------------- | ----------------
+#   harmful       | C' (THIS)        | C (job 251667)      | A (job 251667)
+#   benign        | D (job 251667)   | B' (THIS)           | B (job 251667)
+#
+# ---- WHAT THE FIRST PASS ALREADY SHOWED (so this is a completeness pass) ----
+# Matched benign contrast B vs D: guard blocking 63.0% -> 12.2% mean; four of five
+# guards 73-78% -> 0% (p ~ 1e-32..1e-35), LlamaGuard-3 alone INVERTED 10% -> 61%
+# (p=1.8e-14). The draft's "code carries a syntactic signature classifiers flag"
+# therefore holds for LG3 and is inverted for the other four.
+#
+# ---- WHAT THESE TWO ARMS ADD ----
+# C' gives the harmful row its plain reference, so "does code raise or lower guard
+# blocking relative to NO obfuscation" becomes answerable on harmful content too
+# (the first pass could only compare code against another obfuscation).
+# B' gives the benign row its word-list cell, separating "obfuscation of any kind
+# blinds the guard" from "CODE specifically blinds the guard". If B' also drops to
+# ~0% the effect is obfuscation-general; if only B does, it is code-specific.
+# PRE-REGISTERED: I expect B' to fall well below D but to stay ABOVE B, i.e. code is
+# the strongest blinder but not the only one. FALSIFIED IF B' ~ D (no drop at all).
+#
+# ---- RESOURCES ----
+# 12 cells x n=100 = 1200 gpt-5-mini judgments ~= $0.22. Under the $1 gate.
+# GPU free: Qwen + 5 guards = 6 vLLM servers + orchestrator = 7 SLURM jobs (cap 8).
+# ============================================================
+
+num_main_job_threads: 6
+num_cluster_jobs: 7
+
+_Cp: &Cp outputs/autoattack_defense/prompt_transform/harmbench/non_llm_baseline_20260801_213522_1831754/non_llm_baseline
+_Bp: &Bp outputs/autoattack_defense/prompt_transform/orbench_benign_hard/code_attack_no_syntax_20260801_213522_46610260/code_attack_no_syntax
+
+_harm: &harm
+  mode: defense+evaluate
+  target_model: qwen2_5_vl_7b
+  prompt_range: [0, 99]
+  benchmark: harmbench
+  judge_model: gpt-5-mini
+  judge_method: harmbench
+  campaign: paper_c_con10_codeattack
+
+_benign: &benign
+  mode: defense+evaluate
+  target_model: qwen2_5_vl_7b
+  prompt_range: [0, 99]
+  benchmark: orbench_benign_hard
+  judge_model: gpt-5-mini
+  campaign: paper_c_con10_codeattack
+
+tasks:
+  # ===== ARM C' — plain harmful text (no obfuscation, no code) =====
+  - {<<: *harm, source_transform_subdir: *Cp, defense: no_defense, defense_config: {}}
+  - {<<: *harm, source_transform_subdir: *Cp, defense: guard_baseline, defense_config: {guard_model: wildguard}}
+  - {<<: *harm, source_transform_subdir: *Cp, defense: guard_baseline, defense_config: {guard_model: qwen3guard_gen_8b}}
+  - {<<: *harm, source_transform_subdir: *Cp, defense: guard_baseline, defense_config: {guard_model: guardreasoner_vl_7b}}
+  - {<<: *harm, source_transform_subdir: *Cp, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}}
+  - {<<: *harm, source_transform_subdir: *Cp, defense: guard_baseline, defense_config: {guard_model: thinkguard}}
+
+  # ===== ARM B' — benign as word-list (obfuscated but not code) =====
+  - {<<: *benign, source_transform_subdir: *Bp, defense: no_defense, defense_config: {}}
+  - {<<: *benign, source_transform_subdir: *Bp, defense: guard_baseline, defense_config: {guard_model: wildguard}}
+  - {<<: *benign, source_transform_subdir: *Bp, defense: guard_baseline, defense_config: {guard_model: qwen3guard_gen_8b}}
+  - {<<: *benign, source_transform_subdir: *Bp, defense: guard_baseline, defense_config: {guard_model: guardreasoner_vl_7b}}
+  - {<<: *benign, source_transform_subdir: *Bp, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}}
+  - {<<: *benign, source_transform_subdir: *Bp, defense: guard_baseline, defense_config: {guard_model: thinkguard}}
