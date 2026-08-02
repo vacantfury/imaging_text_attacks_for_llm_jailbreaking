@@ -1,0 +1,53 @@
+# ============================================================
+# Paper C · con 10 (review 19) — controlled CodeAttack intervention, Step A: render
+# ============================================================
+# Builds the four arms of the 2x2 that isolates SYNTAX from SEMANTICS.
+#
+# The paper's claim under test (§Discussion, "The modular reguard layer"):
+#   "Decoding can LOSE the very signal a guard keys on: executable-code attacks
+#    are the clearest case, since restating code as prose removes the SYNTACTIC
+#    SIGNATURE classifiers flag."
+# Review 19 con 10: "controlled CodeAttack intervention (preserve syntax while
+# replacing harmful semantics, and vice versa). Converts our 'syntactic signal'
+# interpretation from speculation to demonstration."
+#
+#                    | harmful semantics        | benign semantics
+#   ---------------- | ------------------------ | -------------------------
+#   code syntax      | A: code_attack/harmbench | B: code_attack/orbench
+#   no code syntax   | C: no_syntax/harmbench   | D: baseline/orbench
+#
+# A = the established CodeAttack (Ren et al., Findings of ACL 2024) unchanged.
+# C = OUR control `code_attack_no_syntax` (commit 9ea7867): same obfuscation
+#     (split to words, reversed, reassemble-then-enumerate-5-steps), every code
+#     token removed. Not an attack we propose.
+# B = the SAME established template carrying a BENIGN payload — no new code.
+# D = plain benign baseline, the reference floor.
+#
+# All four transforms are NON-LLM and deterministic: zero API cost, instant.
+# Run locally (like the CAMO render), then rsync the artifact dirs to the cluster
+# for con10_codeattack_eval.yaml.
+# ============================================================
+
+num_main_job_threads: 4
+num_cluster_jobs: 1          # no model of any kind — orchestrator only
+
+_hb: &hb data/harmbench_prompts.jsonl
+_ob: &ob data/orbench_benign_hard_prompts.jsonl
+_rng: &rng [0, 99]
+
+tasks:
+  # A — code syntax + harmful semantics (the established attack, unchanged)
+  - {mode: prompt_transform, source_file: *hb, prompt_range: *rng, benchmark: harmbench,
+     transformation_list: [{type: code_attack}]}
+
+  # C — NO code syntax + harmful semantics (our control: obfuscation held, syntax removed)
+  - {mode: prompt_transform, source_file: *hb, prompt_range: *rng, benchmark: harmbench,
+     transformation_list: [{type: code_attack_no_syntax}]}
+
+  # B — code syntax + BENIGN semantics (same template, benign payload)
+  - {mode: prompt_transform, source_file: *ob, prompt_range: *rng, benchmark: orbench_benign_hard,
+     transformation_list: [{type: code_attack}]}
+
+  # D — no code syntax + benign semantics (plain benign reference floor)
+  - {mode: prompt_transform, source_file: *ob, prompt_range: *rng, benchmark: orbench_benign_hard,
+     transformation_list: [{type: non_llm_baseline}]}

@@ -1,0 +1,115 @@
+# ============================================================
+# Paper C · con 10 (review 19) — controlled CodeAttack intervention, Step B: eval
+# ============================================================
+# Consumes the four arms rendered by con10_codeattack_render.yaml.
+#
+# ---- THE CLAIM UNDER TEST ----
+# §Discussion ("The modular reguard layer"): "Decoding can LOSE the very signal a
+# guard keys on: executable-code attacks are the clearest case, since restating
+# code as prose removes the SYNTACTIC SIGNATURE classifiers flag."
+#
+# ---- WHY THIS NEEDS SETTLING (an internal tension in the current draft) ----
+# The same paper reports (a) CodeAttack "the raw guard already fails to flag"
+# (43% guard-alone ASR), and (b) CodeAttack 88/85% -> 28/6% under decode, i.e.
+# decode HELPS enormously against it. If guards barely flag the code form, then
+# "decode removes the signature classifiers flag" cannot be the mechanism --- there
+# is little signature to remove. Con 10 is right that this is speculation; the 2x2
+# below decides it.
+#
+#                    | harmful semantics        | benign semantics
+#   ---------------- | ------------------------ | -------------------------
+#   code syntax      | A                        | B
+#   no code syntax   | C (our control)          | D
+#
+# ---- PRE-REGISTERED PREDICTIONS (written BEFORE the run) ----
+# H1 "syntactic signal" (the paper's current interpretation): guard block rate
+#    tracks the SYNTAX COLUMN. Then B (benign payload in code) is blocked at a rate
+#    far above D, and A ~ B >> C ~ D. Over-refusal on B is the smoking gun: a guard
+#    that blocks benign requests merely for wearing a code costume is keying on form.
+# H2 "semantic signal": block rate tracks the SEMANTICS ROW --- A ~ C >> B ~ D, and
+#    B stays near D's benign floor. Then the draft's syntactic-signature sentence is
+#    wrong and the reguard motivation must be restated on other grounds.
+# H3 "code suppresses detection" (what the 43% guard-alone figure hints at):
+#    A < C on block rate --- wrapping in code makes guards flag LESS, not more. This
+#    would invert the sentence outright: decode does not remove a signature, it
+#    RESTORES a payload the code form was hiding.
+# The gb-vs-mc contrast on A and C separates these: if decode's gain is large on A
+# and small on C, decode is recovering payload (H3), not losing signature.
+# FALSIFIED/INCONCLUSIVE IF all four arms block at indistinguishable rates.
+#
+# ---- RESOURCES ----
+# 34 cells x n=100 = 3400 gpt-5-mini judgments ~= $0.61 at the measured $0.018/100
+# rate. Under the $1 gate. GPU free: Qwen + 5 guards = 6 vLLM servers + orchestrator
+# = 7 SLURM jobs (cap 8). Guard on the result: fallback_parse_count == 0 per cell,
+# and the benign arms must NOT collapse to all-canned-block (failure class B).
+# ============================================================
+
+num_main_job_threads: 6
+num_cluster_jobs: 7          # orchestrator + Qwen + 5 guards
+
+_A: &A outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260801_194335_40863028/code_attack
+_C: &C outputs/autoattack_defense/prompt_transform/harmbench/code_attack_no_syntax_20260801_194335_91135552/code_attack_no_syntax
+_B: &B outputs/autoattack_defense/prompt_transform/orbench_benign_hard/code_attack_20260801_194335_27253431/code_attack
+_D: &D outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260801_194335_78620485/non_llm_baseline
+
+# harmful arms -> HarmBench rubric
+_harm: &harm
+  mode: defense+evaluate
+  target_model: qwen2_5_vl_7b
+  prompt_range: [0, 99]
+  benchmark: harmbench
+  judge_model: gpt-5-mini
+  judge_method: harmbench
+  campaign: paper_c_con10_codeattack
+
+# benign arms -> ORBench 3-class refusal (evaluator inferred from benchmark)
+_benign: &benign
+  mode: defense+evaluate
+  target_model: qwen2_5_vl_7b
+  prompt_range: [0, 99]
+  benchmark: orbench_benign_hard
+  judge_model: gpt-5-mini
+  campaign: paper_c_con10_codeattack
+
+tasks:
+  # ===== ARM A — code syntax + harmful semantics (established CodeAttack) =====
+  - {<<: *harm, source_transform_subdir: *A, defense: no_defense, defense_config: {}}
+  - {<<: *harm, source_transform_subdir: *A, defense: guard_baseline, defense_config: {guard_model: wildguard}}
+  - {<<: *harm, source_transform_subdir: *A, defense: guard_baseline, defense_config: {guard_model: qwen3guard_gen_8b}}
+  - {<<: *harm, source_transform_subdir: *A, defense: guard_baseline, defense_config: {guard_model: guardreasoner_vl_7b}}
+  - {<<: *harm, source_transform_subdir: *A, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}}
+  - {<<: *harm, source_transform_subdir: *A, defense: guard_baseline, defense_config: {guard_model: thinkguard}}
+  - {<<: *harm, source_transform_subdir: *A, defense: modality_complete, defense_config: {guard_model: wildguard, decode_text: true}}
+  - {<<: *harm, source_transform_subdir: *A, defense: modality_complete, defense_config: {guard_model: qwen3guard_gen_8b, decode_text: true}}
+  - {<<: *harm, source_transform_subdir: *A, defense: modality_complete, defense_config: {guard_model: guardreasoner_vl_7b, decode_text: true}}
+  - {<<: *harm, source_transform_subdir: *A, defense: modality_complete, defense_config: {guard_model: llama_guard_3_8b, decode_text: true}}
+  - {<<: *harm, source_transform_subdir: *A, defense: modality_complete, defense_config: {guard_model: thinkguard, decode_text: true}}
+
+  # ===== ARM C — NO code syntax + harmful semantics (our control) =====
+  - {<<: *harm, source_transform_subdir: *C, defense: no_defense, defense_config: {}}
+  - {<<: *harm, source_transform_subdir: *C, defense: guard_baseline, defense_config: {guard_model: wildguard}}
+  - {<<: *harm, source_transform_subdir: *C, defense: guard_baseline, defense_config: {guard_model: qwen3guard_gen_8b}}
+  - {<<: *harm, source_transform_subdir: *C, defense: guard_baseline, defense_config: {guard_model: guardreasoner_vl_7b}}
+  - {<<: *harm, source_transform_subdir: *C, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}}
+  - {<<: *harm, source_transform_subdir: *C, defense: guard_baseline, defense_config: {guard_model: thinkguard}}
+  - {<<: *harm, source_transform_subdir: *C, defense: modality_complete, defense_config: {guard_model: wildguard, decode_text: true}}
+  - {<<: *harm, source_transform_subdir: *C, defense: modality_complete, defense_config: {guard_model: qwen3guard_gen_8b, decode_text: true}}
+  - {<<: *harm, source_transform_subdir: *C, defense: modality_complete, defense_config: {guard_model: guardreasoner_vl_7b, decode_text: true}}
+  - {<<: *harm, source_transform_subdir: *C, defense: modality_complete, defense_config: {guard_model: llama_guard_3_8b, decode_text: true}}
+  - {<<: *harm, source_transform_subdir: *C, defense: modality_complete, defense_config: {guard_model: thinkguard, decode_text: true}}
+
+  # ===== ARM B — code syntax + BENIGN semantics (the decisive over-refusal cell) =====
+  - {<<: *benign, source_transform_subdir: *B, defense: no_defense, defense_config: {}}
+  - {<<: *benign, source_transform_subdir: *B, defense: guard_baseline, defense_config: {guard_model: wildguard}}
+  - {<<: *benign, source_transform_subdir: *B, defense: guard_baseline, defense_config: {guard_model: qwen3guard_gen_8b}}
+  - {<<: *benign, source_transform_subdir: *B, defense: guard_baseline, defense_config: {guard_model: guardreasoner_vl_7b}}
+  - {<<: *benign, source_transform_subdir: *B, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}}
+  - {<<: *benign, source_transform_subdir: *B, defense: guard_baseline, defense_config: {guard_model: thinkguard}}
+
+  # ===== ARM D — no code syntax + benign semantics (reference floor) =====
+  - {<<: *benign, source_transform_subdir: *D, defense: no_defense, defense_config: {}}
+  - {<<: *benign, source_transform_subdir: *D, defense: guard_baseline, defense_config: {guard_model: wildguard}}
+  - {<<: *benign, source_transform_subdir: *D, defense: guard_baseline, defense_config: {guard_model: qwen3guard_gen_8b}}
+  - {<<: *benign, source_transform_subdir: *D, defense: guard_baseline, defense_config: {guard_model: guardreasoner_vl_7b}}
+  - {<<: *benign, source_transform_subdir: *D, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}}
+  - {<<: *benign, source_transform_subdir: *D, defense: guard_baseline, defense_config: {guard_model: thinkguard}}
