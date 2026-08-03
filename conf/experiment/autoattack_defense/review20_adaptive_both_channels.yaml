@@ -1,0 +1,91 @@
+# ============================================================
+# Paper C · ADAPTIVE ATTACKER THAT VARIES BOTH CHANNELS (2026-08-02)
+# ============================================================
+# Answers cspaper review 19 question 2 and review 20 con 3, which repeat the same
+# objection verbatim: *"the strongest feedback-driven attacker is text-only"* —
+# so the paper's adaptive evaluation never tests an attacker that re-renders the
+# IMAGE in response to what the pipeline did. `adaptive_optimizing_attack.yaml`
+# says so in its own header ("It is NOT a joint text+image optimizer ... out of
+# scope"). This preset removes that scope limit.
+#
+# ---- WHAT CHANGED (code, 2026-08-02) ----
+# The attacker now picks the DELIVERY CHANNEL alongside the rewrite: each round it
+# emits `CHANNEL: <name>` and the loop renders that channel with the SAME renderer
+# the published suite uses (keep_text: false, so the text channel becomes the stock
+# "check the image" instruction — an image channel hides the payload rather than
+# duplicating it). Menu:
+#     text                 — plain text (nothing to transcribe)
+#     image_figstep        — numbered typographic list (FigStep)
+#     image_flowchart      — flowchart-styled render
+#     image_low_contrast   — low-contrast render (hard to TRANSCRIBE)
+#     image_occluded       — glyph-occluded render (hard to TRANSCRIBE)
+# The last two matter most: they attack the amplifier's RECOVER step directly,
+# which a text-only attacker structurally cannot reach.
+#
+# ---- THE BUDGET IS UNCHANGED, ON PURPOSE ----
+# Still one pipeline query per behavior per round, `rounds: 8`, same refusal
+# heuristic, same judge. All four renderers are non-LLM, so a channel switch costs
+# the attacker nothing but its one query. Any ASR difference against
+# `adaptive_optimizing_attack.yaml` (campaign paper_c_adaptive_attack) is therefore
+# attributable to the attacker's extra FREEDOM, not to extra queries — which is the
+# comparison the reviewers are asking for.
+#
+# ---- CONDITIONS (target Qwen2.5-VL, guard WildGuard — the published pair) ----
+#   1. vs mc   (recover+decode+guard)      — non-adaptive baseline: ASR 72
+#   2. vs +rg  (mc + reguard on pre-decode) — non-adaptive baseline: ASR 43
+# Read against BOTH the non-adaptive Table-1 numbers and the text-only adaptive
+# numbers, so the paper can report what each increment of attacker power buys.
+#
+# ---- PREDICTION, WRITTEN BEFORE THE RUN (so it cannot be fitted afterward) ----
+# Two-channel freedom should help MORE against `mc` than against `+rg`. The
+# perceptual-blindness channels (low_contrast, occluded) work by defeating RECOVER,
+# and under `mc` a failed recovery leaves the guard with only the benign "check the
+# image" placeholder — but the TARGET must also read the image to answer, so the
+# attacker is bidding against itself and the gain should be real but bounded. Under
+# `+rg` the pre-decode union is guarded too, so an unreadable render buys less. We
+# therefore predict adaptive-both > adaptive-text on `mc`, a smaller gap on `+rg`,
+# and the frontier holding. If instead the both-channel attacker collapses `+rg`
+# to a low-ASR-defeating level, that is a genuine defeat of the defense and gets
+# reported as such — this preset exists to find out, not to confirm.
+# A secondary readout comes free: `channel_final_counts` in each results.json says
+# WHICH channels the attacker actually converged on, which is evidence about the
+# mechanism independent of the ASR number.
+#
+# ---- RESOURCES ----
+# 2 conditions x 100 behaviors x up to (1 + rounds=8) pipeline queries; only
+# UNBROKEN behaviors are re-queried, so cost tapers as behaviors break.
+#   Worst case: 2 x 100 x 9 = 1800 pipeline queries + up to 1600 attacker rewrites.
+#   API:  attacker gpt-4.1-mini (<=1600 rewrites) + judge gpt-5-mini (200 final
+#         responses) ~= $2-4. Renders are free (non-LLM); target/guard are GPU.
+#   GPU:  2 servers (qwen target + wildguard guard)   SLURM jobs: 3
+#   wall: ~2-4h (each unbroken behavior costs 8 sequential round-trips; image
+#         rounds add a local render, which is milliseconds)
+# Judge = gpt-5-mini DIRECTLY, one judge across all Paper C numbers.
+# ============================================================
+
+num_main_job_threads: 2
+num_cluster_jobs: 3
+
+_rng: &rng [0, 99]
+
+_mc: &mc {guard_model: wildguard, decode_text: true, decode_style: recover}
+_rg: &rg {guard_model: wildguard, decode_text: true, decode_style: recover, reguard_original: true}
+
+_base: &base
+  mode: adaptive_attack
+  source_file: data/harmbench_prompts.jsonl
+  prompt_range: *rng
+  benchmark: harmbench
+  target_model: qwen2_5_vl_7b
+  defense: modality_complete
+  attacker_model: gpt-4.1-mini
+  judge_model: gpt-5-mini
+  judge_method: harmbench
+  campaign: paper_c_adaptive_both_channels
+  attack_config:
+    rounds: 8
+    channels: [text, image_figstep, image_flowchart, image_low_contrast, image_occluded]
+
+tasks:
+  - {<<: *base, defense_config: *mc}
+  - {<<: *base, defense_config: *rg}

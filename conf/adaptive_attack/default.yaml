@@ -26,6 +26,20 @@ attacker_max_tokens: 800
 # (saves queries; 1.0 disables). Not a scientific knob — a cost guard.
 early_stop_fraction: 1.0
 
+# ---- DELIVERY CHANNELS the attacker may choose (review 20 con 3) ----
+# `[text]` = the shipped text-only loop (attacker never told a channel exists).
+# Listing image channels hands the attacker the second channel: each round it
+# picks `CHANNEL: <name>` alongside the rewrite and the named renderer produces
+# the artifact. Names map to renderers in
+# `src/experiment/task.py::CHANNEL_RENDERERS`; only non-LLM renderers belong
+# here, so a channel switch costs the attacker exactly its one query and the
+# budget stays comparable to the text-only arm.
+# TUNING PATH: the same `attack_budget_sweep` that sets `rounds` — the per-round
+# channel choices are logged to attack_traces.jsonl (`channels`) and summarized
+# in results.json (`channel_final_counts`) from the first run onward, so which
+# channels earn their place in the menu is read off stored data, not guessed.
+channels: [text]
+
 # ---- REFUSAL heuristic (the loop's INTERNAL feedback signal only) ----
 # The attacker needs a cheap local signal to steer on; a real attacker has
 # exactly this much (it reads the response). The REPORTED ASR never uses this —

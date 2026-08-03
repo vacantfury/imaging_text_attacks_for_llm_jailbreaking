@@ -357,6 +357,21 @@ class ModalityComplete(Defense):
                 win over `amplifier_model`. Recovery is the multimodal step
                 (needs a VLM); decode is text-only (any strong LLM will do), so
                 setting them separately isolates WHICH step bounds the ceiling.
+
+        Passed through **kwargs (defense COMPOSITION, 2026-08-02, review 20 con 4/Q3):
+            downstream_defense: name of a second defense that answers the
+                prompts this one lets through, instead of a bare target query.
+                Default None = unchanged. The amplifier+guard becomes a GATE and
+                the named defense (e.g. `semantic_smooth`) owns the answer for
+                the pass-through fraction — the deployment order a real stack
+                would use, since a smoothing defense must be last to produce the
+                response. Blocked prompts never reach it, so its per-query cost
+                is paid only on what survives the gate. External-guard branch
+                only: composing under the SAGE self-check is meaningless (that
+                branch's "response" IS the safety check, so there is nothing to
+                hand downstream).
+            downstream_defense_config: overrides merged over the downstream
+                defense's own conf/defense/<name>.yaml.
         """
         super().__init__(decode_text=decode_text, guard_model=guard_model,
                          decode_style=decode_style, gate_decode=gate_decode,
@@ -370,6 +385,12 @@ class ModalityComplete(Defense):
         )
         self._guard_service: Optional[BaseLLMService] = None
         self._amp_services: dict[str, BaseLLMService] = {}
+        self._downstream_defense: Optional[Defense] = None
+        if self._config.get("downstream_defense") and guard_model is None:
+            raise ValueError(
+                "downstream_defense requires an external guard_model: under the "
+                "SAGE self-check branch the response IS the safety check, so "
+                "there is no pass-through set to hand to a second defense.")
 
     def _get_guard_service(self) -> BaseLLMService:
         if self._guard_service is None:
@@ -601,7 +622,7 @@ class ModalityComplete(Defense):
             self._write_reguard_verdicts(prompts, verdicts, verdicts_orig,
                                          source_dir, compose)
 
-        target_convs: list[tuple[str, list]] = []
+        passed: list[Prompt] = []
         for p in prompts:
             harmful = verdicts.get(p.id, True)  # fail-closed default
             if reguard_original:
@@ -609,24 +630,67 @@ class ModalityComplete(Defense):
                 harmful = (harmful and other) if compose == "and" else (
                     harmful or other)
             if not harmful:
-                messages = build_conversation_message(p, is_multimodal, source_dir)
-                target_convs.append((p.id, messages))
+                passed.append(p)
 
-        logger.info(
-            f"ModalityComplete step 4: {len(target_convs)}/{len(prompts)} "
-            f"passed external guard -> querying target with ORIGINAL input")
+        downstream_name = self._config.get("downstream_defense")
         target_results: dict[str, str] = {}
-        if target_convs:
-            target_results = dict(target_service.batch_chat(
-                conversations=target_convs,
-                system_message=system_message,
-                is_test=True,
-            ))
+        if downstream_name:
+            # COMPOSED pipeline: the amplifier+guard is a GATE, and whatever
+            # survives it is answered by a second defense instead of by a bare
+            # target query. Blocked prompts never reach the downstream defense,
+            # so its cost is paid only on the pass-through fraction.
+            logger.info(
+                f"ModalityComplete step 4: {len(passed)}/{len(prompts)} passed "
+                f"external guard -> downstream defense {downstream_name!r} "
+                f"answers them")
+            if passed:
+                target_results = dict(self._downstream(downstream_name).query(
+                    prompts=passed,
+                    target_service=target_service,
+                    is_multimodal=is_multimodal,
+                    source_dir=source_dir,
+                    system_message=system_message,
+                ))
+        else:
+            target_convs = [
+                (p.id, build_conversation_message(p, is_multimodal, source_dir))
+                for p in passed
+            ]
+            logger.info(
+                f"ModalityComplete step 4: {len(target_convs)}/{len(prompts)} "
+                f"passed external guard -> querying target with ORIGINAL input")
+            if target_convs:
+                target_results = dict(target_service.batch_chat(
+                    conversations=target_convs,
+                    system_message=system_message,
+                    is_test=True,
+                ))
 
         return [
             (p.id, target_results.get(p.id, GUARD_REFUSAL_TEXT))
             for p in prompts
         ]
+
+    def _downstream(self, name: str) -> "Defense":
+        """Build (once) the defense that answers guard-passed prompts.
+
+        Its own YAML defaults merge exactly as they would if it ran standalone
+        (conf/defense/<name>.yaml <- downstream_defense_config), so a composed
+        run and a solo run of the same defense differ only in what reaches it.
+        """
+        if self._downstream_defense is None:
+            from src.experiment.config import load_conf
+            from .defender_factory import create_defense
+            overrides = dict(self._config.get("downstream_defense_config") or {})
+            try:
+                merged = load_conf("defense", override_name=name,
+                                   task_overrides=overrides or None)
+            except FileNotFoundError:
+                merged = overrides
+            logger.info(f"ModalityComplete: downstream defense {name!r} "
+                        f"config={merged}")
+            self._downstream_defense = create_defense(name, **merged)
+        return self._downstream_defense
 
     def _write_reguard_verdicts(self, prompts, verdicts: dict,
                                 verdicts_orig: dict, source_dir: str,
@@ -680,4 +744,8 @@ class ModalityComplete(Defense):
             usage["guard"] = self._guard_service.get_usage()
         for name, svc in self._amp_services.items():
             usage[f"amplifier:{name}"] = svc.get_usage()
+        if self._downstream_defense is not None:
+            down = self._downstream_defense.get_usage()
+            if down:
+                usage[f"downstream:{self._config.get('downstream_defense')}"] = down
         return usage or None

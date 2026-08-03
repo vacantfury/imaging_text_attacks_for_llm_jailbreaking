@@ -1,0 +1,132 @@
+# ============================================================
+# Paper C · COMPOSED DEFENSE — amplifier+guard THEN SemanticSmooth (2026-08-02)
+# ============================================================
+# Answers cspaper review 20 con 4 / question 3: *"the paper shows near-disjoint
+# residuals -- SemanticSmooth collapses CodeAttack while the amplifier handles the
+# attacks SemanticSmooth worsens -- yet never composes them. If a composed defense
+# under a clearly reported total budget reaches a materially better point, the
+# central 'empirical ceiling' conclusion does not hold as stated."* The reviewer
+# conditions the paper's central conclusion on this run, which makes it the
+# highest-leverage of the four remaining experiments.
+#
+# ---- WHAT COMPOSITION MEANS HERE (and why this order) ----
+# The stack is amplifier+guard as a GATE, and SemanticSmooth answers whatever
+# survives it:
+#     input -> recover -> decode -> guard --(blocked)--> canned refusal
+#                                        \--(passed)--> SemanticSmooth -> answer
+# The order is forced, not chosen: a smoothing defense must be LAST because it
+# owns the answer (it paraphrases N times, queries the target N times, and votes).
+# Implemented as `downstream_defense` on modality_complete (2026-08-02) -- blocked
+# prompts never reach SemanticSmooth, so its 5x per-query cost is paid only on the
+# pass-through fraction, which is also what a real deployment would pay.
+#
+# ---- CONDITIONS (WildGuard guard, Qwen2.5-VL target, the paper's primary pair) ----
+#   1. mc  + SemanticSmooth   — the shipped amplifier as the gate (Table 1: ASR 72)
+#   2. +rg + SemanticSmooth   — the strongest published defense point (ASR 43,
+#                               over-refusal 63.5) with smoothing behind it
+# Both are measured on the SAME two axes and the SAME transform dirs as every
+# other row of Table 1, so each lands as a comparable point on the frontier: the
+# question is whether either composed point escapes the ASR<=40 / low-over-refusal
+# corner that the 30-cell factorial leaves empty.
+#
+# ---- PREDICTION, WRITTEN BEFORE THE RUN (so it cannot be fitted afterward) ----
+# Harm: composition should help where the residuals are genuinely disjoint --
+# SemanticSmooth's paraphrase should keep collapsing CodeAttack, and the gate
+# already handles the two attacks paraphrasing worsens -- so we expect the composed
+# ENSEMBLE ASR to fall BELOW each component alone. Whether it clears 40 is the open
+# question and the reason to run it. Utility: over-refusal should be at or ABOVE
+# the gate's own (63.5 for +rg), never below -- the gate blocks exactly what it
+# blocked before, and paraphrase can only add refusals on the pass-through. So the
+# honest prediction is a point that is BETTER on ASR and NO BETTER on over-refusal,
+# i.e. still on the frontier rather than off it. If instead the composed point
+# lands at low ASR AND near the 26 benign floor, that is a real result against the
+# paper's ceiling claim and gets reported as such -- this preset exists to find
+# out, not to confirm.
+#
+# ---- RESOURCES (the "clearly reported total budget" the reviewer asks for) ----
+# 26 cells x n=100 = 2600 defended queries. Per prompt the GATE costs 1 recover
+# (image cells only) + 1 decode + 1-2 guard calls, all GPU/free. Only prompts the
+# gate PASSES reach SemanticSmooth, each costing 5 paraphrase (gemini-2.5-flash-lite)
+# + 5 target (GPU, free) + 5 internal vote (gpt-5-nano) calls; the project judge
+# then scores every cell once (gpt-5-mini).
+#   Pass-through estimate: ~72% under mc, ~43% under +rg on harm; benign ~37%/~36%
+#   -> ~1400 prompts reach SemanticSmooth (vs 1300 in the solo baseline).
+#   API:  ~7000 gemini-flash-lite + ~7000 gpt-5-nano + 2600 gpt-5-mini ~= $4-5
+#   GPU:  2 servers (qwen target + wildguard guard)   SLURM jobs: 3   wall: ~4-6h
+# Judge is gpt-5-mini DIRECTLY (not a cheap-first throwaway): 12 of these 26 cells
+# are image cells and the WildGuard HarmBench-judge path is broken for image
+# inputs (memory note project_api_judge_run_gotchas).
+# ============================================================
+
+num_main_job_threads: 6
+num_cluster_jobs: 3
+
+_rng: &rng [0, 99]
+
+# gate = the two published amplifier conditions; SemanticSmooth answers the survivors
+_mc_ss: &mc_ss
+  guard_model: wildguard
+  decode_text: true
+  decode_style: recover
+  downstream_defense: semantic_smooth
+
+_rg_ss: &rg_ss
+  guard_model: wildguard
+  decode_text: true
+  decode_style: recover
+  reguard_original: true
+  downstream_defense: semantic_smooth
+
+_harm: &harm {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+              benchmark: harmbench, judge_method: harmbench, judge_model: gpt-5-mini,
+              defense: modality_complete, campaign: paper_c_composed_semsm}
+
+_ben: &ben {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+            benchmark: orbench_benign_hard, judge_model: gpt-5-mini,
+            defense: modality_complete, campaign: paper_c_composed_semsm_benign}
+
+# the eleven attacks — identical transform dirs as the main run and as the
+# SemanticSmooth solo baseline, so the comparison is attack-for-attack
+_set: &set outputs/autoattack_defense/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory
+_flog: &flog outputs/autoattack_defense/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
+_class: &class outputs/autoattack_defense/prompt_transform/harmbench/classical_chinese_simplified_ir_constant_20260710_002424_56524373/llm_classical_language
+_cipher: &cipher outputs/autoattack_defense/prompt_transform/harmbench/non_llm_cipher_20260718_183504_42666777/non_llm_cipher
+_code: &code outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack
+_figstep: &figstep outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260718_183457_7682501/ir_figstep
+_fcflow: &fcflow outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart
+_lowcon: &lowcon outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260718_183457_77423812/ir_low_contrast
+_occluded: &occluded outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260718_183457_84223144/ir_occluded
+_mmtypo: &mmtypo outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260718_183500_58590499/ir_mm_typo
+_distract: &distract outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid
+_orbtxt: &orbtxt outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260718_183505_52485516/non_llm_baseline
+_orbimg: &orbimg outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260718_183504_7866920/ir_plain
+
+tasks:
+  # ---- condition 1: mc gate + SemanticSmooth (11 harmful + 2 benign) ----
+  - {<<: *harm, defense_config: *mc_ss, source_transform_subdir: *set}
+  - {<<: *harm, defense_config: *mc_ss, source_transform_subdir: *flog}
+  - {<<: *harm, defense_config: *mc_ss, source_transform_subdir: *class}
+  - {<<: *harm, defense_config: *mc_ss, source_transform_subdir: *cipher}
+  - {<<: *harm, defense_config: *mc_ss, source_transform_subdir: *code}
+  - {<<: *harm, defense_config: *mc_ss, source_transform_subdir: *figstep}
+  - {<<: *harm, defense_config: *mc_ss, source_transform_subdir: *fcflow}
+  - {<<: *harm, defense_config: *mc_ss, source_transform_subdir: *lowcon}
+  - {<<: *harm, defense_config: *mc_ss, source_transform_subdir: *occluded}
+  - {<<: *harm, defense_config: *mc_ss, source_transform_subdir: *mmtypo}
+  - {<<: *harm, defense_config: *mc_ss, source_transform_subdir: *distract}
+  - {<<: *ben,  defense_config: *mc_ss, source_transform_subdir: *orbtxt}
+  - {<<: *ben,  defense_config: *mc_ss, source_transform_subdir: *orbimg}
+  # ---- condition 2: +rg gate + SemanticSmooth (11 harmful + 2 benign) ----
+  - {<<: *harm, defense_config: *rg_ss, source_transform_subdir: *set}
+  - {<<: *harm, defense_config: *rg_ss, source_transform_subdir: *flog}
+  - {<<: *harm, defense_config: *rg_ss, source_transform_subdir: *class}
+  - {<<: *harm, defense_config: *rg_ss, source_transform_subdir: *cipher}
+  - {<<: *harm, defense_config: *rg_ss, source_transform_subdir: *code}
+  - {<<: *harm, defense_config: *rg_ss, source_transform_subdir: *figstep}
+  - {<<: *harm, defense_config: *rg_ss, source_transform_subdir: *fcflow}
+  - {<<: *harm, defense_config: *rg_ss, source_transform_subdir: *lowcon}
+  - {<<: *harm, defense_config: *rg_ss, source_transform_subdir: *occluded}
+  - {<<: *harm, defense_config: *rg_ss, source_transform_subdir: *mmtypo}
+  - {<<: *harm, defense_config: *rg_ss, source_transform_subdir: *distract}
+  - {<<: *ben,  defense_config: *rg_ss, source_transform_subdir: *orbtxt}
+  - {<<: *ben,  defense_config: *rg_ss, source_transform_subdir: *orbimg}

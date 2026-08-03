@@ -1,0 +1,119 @@
+# ============================================================
+# Paper C · CROSS-GUARD RECOVER/DECODE ABLATION — part C/D (2026-08-02)
+# ============================================================
+# Answers cspaper review 20 question 5: *"Table 2 isolates recover from decode for
+# WildGuard only, while the paper's core claim is that the amplifier's benefit is
+# guard-DEPENDENT. Is the 'decode adds nothing at the ensemble level' finding a
+# property of the mechanism or of WildGuard?"* The objection is exact: the paper
+# generalizes a component ablation from a single guard while simultaneously arguing
+# that guards differ. This runs the same ablation for the four remaining guards.
+#
+# ---- THE ARM BEING ADDED ----
+# Only the RECOVER-ONLY arm is missing. The full-decode arm for these four guards
+# is already published (the `mc` column of Table 1), so pairing this run against it
+# reproduces Table 2's contrast per guard:
+#     recover-only  = modality_complete with decode_text: false  (this run)
+#     full          = modality_complete with decode_text: true   (published mc)
+# Split A/B and C/D purely for scheduling — each half gets its own target replica
+# instead of 52 cells queueing behind one, halving wall time. Same campaign, so the
+# ensemble analysis joins all four guards on prompt id.
+#   part A/B:             llama_guard_3_8b, qwen3guard_gen_8b  (review20_crossguard_ab.yaml)
+#   part C/D (this file): thinkguard, guardreasoner_vl_7b
+#
+# NOTE: GuardReasoner-VL-7B is not in the AICR scratch HF cache (checked
+# 2026-08-02) — its first server job downloads it. AICR compute nodes have
+# internet (conf/clusters/aicr.yaml::hf_offline false), so this costs startup
+# minutes, not a failure.
+#
+# ---- WHY ALL ELEVEN ATTACKS, NOT THE SIX IMAGE ONES ----
+# Table 2 ran only the six IMAGE attacks and reused guard-alone for the five TEXT
+# ones, on the argument that with a text-only guard and decode off both paths hand
+# the guard an identical string. That identity does NOT hold for GuardReasoner-VL
+# (multimodal), and running the five text cells anyway costs ~$0.10 and converts
+# the argument into a measured internal-consistency check. So all eleven run here.
+#
+# ---- PREDICTION, WRITTEN BEFORE THE RUN ----
+# If "decode adds no ensemble-level benefit" is a property of the MECHANISM, the
+# recover-only ensemble should land within noise of the published mc ensemble for
+# every guard, as it did for WildGuard (61 vs 65 on Qwen). If it is a property of
+# WildGuard, at least one guard should show decode moving the ensemble materially
+# -- which would narrow a claim the paper currently states across guards. The
+# benign side should show the same shape as Table 2's last column (recover drives
+# over-refusal up, decode softens it back down); if decode does NOT soften it for
+# some guard, the paper's stated mechanism for the over-refusal cost is guard-
+# specific too. Either outcome is reportable; we do not need a particular one.
+#
+# ---- RESOURCES ----
+# 2 guards x (11 harmful + 2 benign) = 26 cells x n=100 = 2600 defended queries.
+# Recover-only is CHEAPER per prompt than the shipped path (the decode call is
+# skipped): 1 recover (image cells) + 1 guard + <=1 target call, all GPU/free.
+# The only API is the project judge.
+#   API:  2600 gpt-5-mini judge calls ~= $0.50
+#         (anchor: the 39-cell prompt-wording round cost $0.70 end to end)
+#   GPU:  3 servers (qwen target + 2 guards)   SLURM jobs: 4   wall: ~5-7h
+# Judge is gpt-5-mini DIRECTLY — these numbers are compared against published
+# gpt-5-mini cells, and 12 of the 26 cells are image cells where the WildGuard
+# judge path is broken.
+# ============================================================
+
+num_main_job_threads: 6
+num_cluster_jobs: 4
+
+_rng: &rng [0, 99]
+
+# recover WITHOUT decode — the arm Table 2 has for WildGuard and nobody else
+_tg_nodec: &tg_nodec {guard_model: thinkguard, decode_text: false}
+_grv_nodec: &grv_nodec {guard_model: guardreasoner_vl_7b, decode_text: false}
+
+_harm: &harm {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+              benchmark: harmbench, judge_method: harmbench, judge_model: gpt-5-mini,
+              defense: modality_complete, campaign: paper_c_crossguard_nodecode}
+
+_ben: &ben {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+            benchmark: orbench_benign_hard, judge_model: gpt-5-mini,
+            defense: modality_complete, campaign: paper_c_crossguard_nodecode_benign}
+
+# same eleven transform dirs as every other Paper-C run
+_set: &set outputs/autoattack_defense/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory
+_flog: &flog outputs/autoattack_defense/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
+_class: &class outputs/autoattack_defense/prompt_transform/harmbench/classical_chinese_simplified_ir_constant_20260710_002424_56524373/llm_classical_language
+_cipher: &cipher outputs/autoattack_defense/prompt_transform/harmbench/non_llm_cipher_20260718_183504_42666777/non_llm_cipher
+_code: &code outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack
+_figstep: &figstep outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260718_183457_7682501/ir_figstep
+_fcflow: &fcflow outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart
+_lowcon: &lowcon outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260718_183457_77423812/ir_low_contrast
+_occluded: &occluded outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260718_183457_84223144/ir_occluded
+_mmtypo: &mmtypo outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260718_183500_58590499/ir_mm_typo
+_distract: &distract outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid
+_orbtxt: &orbtxt outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260718_183505_52485516/non_llm_baseline
+_orbimg: &orbimg outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260718_183504_7866920/ir_plain
+
+tasks:
+  # ---- ThinkGuard, recover-only ----
+  - {<<: *harm, defense_config: *tg_nodec, source_transform_subdir: *set}
+  - {<<: *harm, defense_config: *tg_nodec, source_transform_subdir: *flog}
+  - {<<: *harm, defense_config: *tg_nodec, source_transform_subdir: *class}
+  - {<<: *harm, defense_config: *tg_nodec, source_transform_subdir: *cipher}
+  - {<<: *harm, defense_config: *tg_nodec, source_transform_subdir: *code}
+  - {<<: *harm, defense_config: *tg_nodec, source_transform_subdir: *figstep}
+  - {<<: *harm, defense_config: *tg_nodec, source_transform_subdir: *fcflow}
+  - {<<: *harm, defense_config: *tg_nodec, source_transform_subdir: *lowcon}
+  - {<<: *harm, defense_config: *tg_nodec, source_transform_subdir: *occluded}
+  - {<<: *harm, defense_config: *tg_nodec, source_transform_subdir: *mmtypo}
+  - {<<: *harm, defense_config: *tg_nodec, source_transform_subdir: *distract}
+  - {<<: *ben,  defense_config: *tg_nodec, source_transform_subdir: *orbtxt}
+  - {<<: *ben,  defense_config: *tg_nodec, source_transform_subdir: *orbimg}
+  # ---- GuardReasoner-VL-7B, recover-only (the MULTIMODAL guard) ----
+  - {<<: *harm, defense_config: *grv_nodec, source_transform_subdir: *set}
+  - {<<: *harm, defense_config: *grv_nodec, source_transform_subdir: *flog}
+  - {<<: *harm, defense_config: *grv_nodec, source_transform_subdir: *class}
+  - {<<: *harm, defense_config: *grv_nodec, source_transform_subdir: *cipher}
+  - {<<: *harm, defense_config: *grv_nodec, source_transform_subdir: *code}
+  - {<<: *harm, defense_config: *grv_nodec, source_transform_subdir: *figstep}
+  - {<<: *harm, defense_config: *grv_nodec, source_transform_subdir: *fcflow}
+  - {<<: *harm, defense_config: *grv_nodec, source_transform_subdir: *lowcon}
+  - {<<: *harm, defense_config: *grv_nodec, source_transform_subdir: *occluded}
+  - {<<: *harm, defense_config: *grv_nodec, source_transform_subdir: *mmtypo}
+  - {<<: *harm, defense_config: *grv_nodec, source_transform_subdir: *distract}
+  - {<<: *ben,  defense_config: *grv_nodec, source_transform_subdir: *orbtxt}
+  - {<<: *ben,  defense_config: *grv_nodec, source_transform_subdir: *orbimg}

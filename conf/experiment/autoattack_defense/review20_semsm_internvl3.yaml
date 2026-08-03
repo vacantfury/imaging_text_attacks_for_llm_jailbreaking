@@ -1,0 +1,63 @@
+# ============================================================
+# Paper C · SemanticSmooth on InternVL3 — the second target (2026-08-02)
+# ============================================================
+# Answers cspaper review 19 con 7 (carried, and unaddressed since): SemanticSmooth
+# was added as the second end-to-end baseline but run on Qwen2.5-VL ONLY, while
+# every other row of Table 1 carries both targets. That makes the baseline
+# comparison uneven exactly where the paper claims its ceiling RECURS across
+# targets. This completes the row.
+#
+# Byte-identical to `semanticsmooth_baseline.yaml` except `target_model` — same
+# transform dirs, same n, same judge, same campaign shape — so the two targets are
+# comparable attack-for-attack and the pair reads as one Table-1 row.
+#
+# ---- PREDICTION, WRITTEN BEFORE THE RUN ----
+# On Qwen, SemanticSmooth landed near the undefended corner (its paraphrase touches
+# only the text channel while 6/11 of the suite is image-delivered). InternVL3's
+# undefended ensemble floor is 91 vs Qwen's 89, and the mechanism is
+# target-independent -- the image payload survives paraphrase regardless of who
+# answers -- so we predict InternVL3's SemanticSmooth ensemble ASR also lands near
+# its own undefended floor, with benign over-refusal near the 26 floor. A
+# materially different result on InternVL3 would mean the baseline's weakness is
+# target-specific rather than structural, which would itself need reporting.
+#
+# ---- RESOURCES ----
+# 13 cells x n=100 = 1300 defended queries; per prompt 5 paraphrase
+# (gemini-2.5-flash-lite) + 5 target (GPU, free) + 5 internal vote (gpt-5-nano),
+# then one project-judge call (gpt-5-mini).
+#   API:  ~6500 gemini-flash-lite + ~6500 gpt-5-nano + 1300 gpt-5-mini ~= $3-4
+#   GPU:  1 server (internvl3 target; SemanticSmooth is guard-free)
+#   SLURM jobs: 2    wall: ~2-3h
+# Judge is gpt-5-mini DIRECTLY — 6 of these 11 cells are image cells and the
+# WildGuard HarmBench-judge path is broken for image inputs.
+# ============================================================
+
+num_main_job_threads: 7
+num_cluster_jobs: 2
+
+_rng: &rng [0, 99]
+
+_harm: &harm {mode: defense+evaluate, target_model: internvl3_8b, prompt_range: *rng,
+              benchmark: harmbench, judge_method: harmbench, judge_model: gpt-5-mini,
+              campaign: paper_c_semanticsmooth_baseline_internvl3, defense: semantic_smooth}
+
+_benign: &benign {mode: defense+evaluate, target_model: internvl3_8b, prompt_range: *rng,
+                  benchmark: orbench_benign_hard, judge_model: gpt-5-mini,
+                  campaign: paper_c_semanticsmooth_baseline_internvl3, defense: semantic_smooth}
+
+tasks:
+  # ---- the eleven attacks, same transform dirs as the Qwen run ----
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/classical_chinese_simplified_ir_constant_20260710_002424_56524373/llm_classical_language}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/non_llm_cipher_20260718_183504_42666777/non_llm_cipher}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260531_055707_73740181/code_attack}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260718_183457_7682501/ir_figstep}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260718_183457_77423812/ir_low_contrast}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260718_183457_84223144/ir_occluded}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260718_183500_58590499/ir_mm_typo}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid}
+  # ---- benign utility, both channels ----
+  - {<<: *benign, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260718_183505_52485516/non_llm_baseline}
+  - {<<: *benign, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260718_183504_7866920/ir_plain}

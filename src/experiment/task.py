@@ -643,6 +643,18 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
 
 # ======================== adaptive_attack ========================
 
+# Delivery channels the adaptive attacker may choose, mapped onto the renderers
+# the published attack suite already uses (review 20 con 3 / review 19 Q2 — the
+# both-channel attacker). Non-LLM renderers only: a channel switch must cost the
+# attacker nothing but its one query, or the budget comparison against the
+# text-only run stops being apples-to-apples.
+CHANNEL_RENDERERS = {
+    "image_figstep": "ir_figstep",
+    "image_flowchart": "ir_fc_flowchart",
+    "image_low_contrast": "ir_low_contrast",
+    "image_occluded": "ir_occluded",
+}
+
 
 def _run_adaptive_attack(task) -> dict[str, Any]:
     """`adaptive_attack` mode: feedback-driven attack on the whole defended
@@ -653,6 +665,11 @@ def _run_adaptive_attack(task) -> dict[str, Any]:
     response per behavior is judged by the project judge, so ASR is comparable to
     a defense+evaluate cell. Writes a DefenseEvaluateResult so the existing
     ensemble/portfolio analysis reads it unchanged.
+
+    With `attack_config.channels` listing more than one channel, the attacker
+    also picks HOW each candidate is delivered (plain text or one of the
+    CHANNEL_RENDERERS renders), so the search varies both channels at the same
+    query budget.
     """
     from src.attacks.adaptive_pipeline_attack import (
         ATTACKER_SYSTEM, run_adaptive_attack)
@@ -684,14 +701,66 @@ def _run_adaptive_attack(task) -> dict[str, Any]:
     attacker_service.temperature = float(ac.get("attacker_temperature", 0.9))
     attacker_service.max_tokens = int(ac.get("attacker_max_tokens", 800))
 
-    # pipeline_fn: text candidates -> defended responses (one real query each)
-    def pipeline_fn(items: list[tuple[str, str]]) -> dict[str, str]:
-        ps = [Prompt(id=pid, encoding="", original=text, encoded=text)
-              for pid, text in items]
-        pairs = defense.query(
-            prompts=ps, target_service=target_service, is_multimodal=False,
-            source_dir=None, system_message=None)
-        return {pid: strip_mechanism_error(resp) for pid, resp in pairs}
+    out_dir = Path(get_new_experiment_data_dir(
+        "outputs/defense+evaluate", dataset=benchmark,
+        model=f"{task.target_model}_{task.defense}_adaptive"))
+
+    # ---- delivery channels the attacker may pick from (review 20 con 3) ----
+    # `channels: [text]` (default) = the shipped text-only loop. More than one
+    # name hands the attacker the image channel too; each image_* channel is a
+    # REAL render by the same renderer the published attack suite uses, so a
+    # channel switch produces the same artifact a static attack would.
+    channels = [str(c) for c in (ac.get("channels") or ["text"])]
+    renderers: dict[str, Any] = {}
+
+    def _renderer(channel: str):
+        if channel not in renderers:
+            type_name = CHANNEL_RENDERERS[channel]
+            # keep_text: false matches how the published suite was rendered
+            # (conf/experiment/.../render_n100.yaml) — the text channel becomes
+            # the stock "check the image" instruction, so an image channel
+            # actually hides the payload instead of duplicating it in text.
+            renderers[channel] = create_transformation(
+                type_name,
+                **_resolve_step_config(type_name, {"keep_text": False}))
+        return renderers[channel]
+
+    unknown = [c for c in channels if c != "text" and c not in CHANNEL_RENDERERS]
+    if unknown:
+        raise ValueError(
+            f"unknown adaptive-attack channel(s) {unknown}; expected 'text' or "
+            f"one of {sorted(CHANNEL_RENDERERS)}")
+
+    # pipeline_fn: candidates (text or rendered) -> defended responses.
+    # One real defended query per candidate, whatever the channel — the budget
+    # is per behavior per round, so text and image cost the attacker the same.
+    round_idx = {"r": 0}
+
+    def pipeline_fn(items: list[tuple[str, str, str]]) -> dict[str, str]:
+        by_channel: dict[str, list[tuple[str, str]]] = {}
+        for pid, text, ch in items:
+            by_channel.setdefault(ch, []).append((pid, text))
+        out: dict[str, str] = {}
+        for ch, group in by_channel.items():
+            ps = [Prompt(id=pid, encoding="", original=text, encoded=text)
+                  for pid, text in group]
+            if ch == "text":
+                pairs = defense.query(
+                    prompts=ps, target_service=target_service,
+                    is_multimodal=False, source_dir=None, system_message=None)
+            else:
+                step_dir = out_dir / "adaptive_renders" / f"round{round_idx['r']}_{ch}"
+                step_dir.mkdir(parents=True, exist_ok=True)
+                rendered = _renderer(ch).apply(ps, step_dir)
+                logger.info(
+                    f"adaptive_attack round {round_idx['r']}: rendered "
+                    f"{len(rendered)} candidates over channel {ch}")
+                pairs = defense.query(
+                    prompts=rendered, target_service=target_service,
+                    is_multimodal=True, source_dir=step_dir, system_message=None)
+            out.update({pid: strip_mechanism_error(resp) for pid, resp in pairs})
+        round_idx["r"] += 1
+        return out
 
     # attacker_fn: rewrite requests -> rewrites (one batched LLM call)
     def attacker_fn(reqs: list[tuple[str, str]]) -> dict[str, str]:
@@ -708,28 +777,28 @@ def _run_adaptive_attack(task) -> dict[str, Any]:
         min_answer_chars=int(ac.get("min_answer_chars", 40)),
         block_text=GUARD_REFUSAL_TEXT,
         early_stop_fraction=float(ac.get("early_stop_fraction", 1.0)),
-        round_log=lambda r, a, s: round_counts.append((r, a, s)))
-
-    out_dir = Path(get_new_experiment_data_dir(
-        "outputs/defense+evaluate", dataset=benchmark,
-        model=f"{task.target_model}_{task.defense}_adaptive"))
+        round_log=lambda r, a, s: round_counts.append((r, a, s)),
+        channels=channels)
 
     # judge the FINAL kept response per behavior, like any defense+evaluate cell
     stage_label = f"adaptive__{task.defense}"
     all_rows = [
         EvaluationRow(id=tr.prompt_id, prompt_stage=stage_label,
                       response=strip_mechanism_error(tr.final_response), asr=None,
-                      num_images=0, is_within_maxlen=True,
+                      num_images=0 if tr.final_channel == "text" else 1,
+                      is_within_maxlen=True,
                       is_correctly_processed=not is_mechanism_error(tr.final_response))
         for tr in traces]
     write_jsonl_atomic(out_dir / "raw_results.jsonl",
                        [r.model_dump_json() for r in all_rows])
-    # per-behavior attack traces (query budget used, candidate/response history)
+    # per-behavior attack traces (query budget used, candidate/response/channel history)
     write_jsonl_atomic(out_dir / "attack_traces.jsonl", [
         json.dumps({"id": tr.prompt_id, "rounds_used": tr.rounds_used,
                     "succeeded_heuristic": tr.succeeded_heuristic,
                     "final_text": tr.final_text,
+                    "final_channel": tr.final_channel,
                     "blocked_flags": tr.blocked_flags,
+                    "channels": tr.channels,
                     "candidates": tr.candidates}) for tr in traces])
 
     judge_prompts = [Prompt(id=tr.prompt_id, encoding="", original=tr.behavior,
@@ -766,13 +835,17 @@ def _run_adaptive_attack(task) -> dict[str, Any]:
         source_transform_subdir=task.source_file,
         campaign=task.campaign,
         upstream_ref=None,
-        is_multimodal=False,
+        is_multimodal=any(tr.final_channel != "text" for tr in traces),
         defense=f"adaptive_{task.defense}",
         defense_config={**(task.defense_config or {}),
                         "attacker_model": task.attacker_model,
                         "attack_config": {k: ac.get(k) for k in
                                           ("rounds", "attacker_temperature",
                                            "early_stop_fraction")},
+                        "channels": channels,
+                        "channel_final_counts": {
+                            ch: sum(1 for tr in traces if tr.final_channel == ch)
+                            for ch in channels},
                         "budget_curve": budget_curve},
         target_model=task.target_model,
         target_model_config=TargetModelConfig(
