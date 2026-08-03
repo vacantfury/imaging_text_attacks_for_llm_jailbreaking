@@ -48,7 +48,11 @@ def _run_rejudge(task) -> dict[str, Any]:
     """
     t0 = time.time()
 
-    src = Path(task.responses_from)
+    # base_dir roots archive-relative paths (see RejudgeTask.base_dir); the
+    # default Path(".") preserves the historical CWD-relative behavior, and an
+    # absolute responses_from wins over base via pathlib joining either way.
+    base = Path(task.base_dir) if getattr(task, "base_dir", None) else Path(".")
+    src = base / task.responses_from
     if not src.exists():
         raise FileNotFoundError(f"responses_from does not exist: {src}")
     source = _load_results(str(src))
@@ -63,12 +67,13 @@ def _run_rejudge(task) -> dict[str, Any]:
     # Originals (the harmful behavior the judge scores against) come from the
     # transform step this defense+evaluate run consumed.
     transform_subdir = source.get("source_transform_subdir")
-    if not transform_subdir or not Path(transform_subdir).exists():
+    transform_dir = base / transform_subdir if transform_subdir else None
+    if not transform_dir or not transform_dir.exists():
         raise FileNotFoundError(
             f"rejudge needs the source transform dir for originals, but "
-            f"source_transform_subdir={transform_subdir!r} is missing "
-            f"(recorded in {src}/results.json)")
-    prompts = _load_prompts(transform_subdir)
+            f"source_transform_subdir={transform_subdir!r} (resolved against "
+            f"base_dir={str(base)!r}) is missing (recorded in {src}/results.json)")
+    prompts = _load_prompts(str(transform_dir))
 
     benchmark = task.benchmark or source.get("benchmark") or _infer_benchmark(str(src))
     target_model = source.get("target_model")

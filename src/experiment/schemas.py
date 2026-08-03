@@ -485,6 +485,11 @@ class RejudgeTask(_TaskBase):
     responses_from: str          # a stored defense+evaluate output dir
     judge_model: str             # judge LLM to apply (e.g. gpt-5-mini, wildguard)
     judge_method: Optional[str] = None  # evaluator override; else benchmark->evaluator
+    # Resolve responses_from AND its stored source_transform_subdir against this
+    # dir instead of the CWD. Needed for archived output trees (e.g. the ARR May
+    # campaign under backup_files/arr_may_submission_files/) whose recorded
+    # relative paths are rooted at the archive, not at today's repo root.
+    base_dir: Optional[str] = None
 
 
 class AdaptiveAttackTask(_TaskBase):

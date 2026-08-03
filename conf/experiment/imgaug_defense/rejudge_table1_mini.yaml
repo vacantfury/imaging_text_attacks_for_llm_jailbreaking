@@ -1,0 +1,309 @@
+# Paper B Table-1 judge migration: rejudge all 60 PINNED May-campaign cells
+# gpt-5-nano -> gpt-5-mini, zero target re-query. GENERATED 2026-08-02 from the
+# asset-keyed pin manifest (temporary_scripts/paper_b_pin_manifest.json, rebuilt
+# 2026-08-02 -- 3 blank-asset pins repaired; decoy pins verified mountain-only).
+# base_dir roots the archive-relative paths; outputs land under outputs/rejudge/
+# at the repo root as usual. Judge cost ~= $3 (6000 HarmBench judgments).
+num_cluster_jobs: 1
+num_main_job_threads: 8
+tasks:
+# claude-sonnet-4-6|code_attack|ecso|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/claude-sonnet-4-6_ecso_code_attack_ir_constant_20260525_204214_84334698
+  judge_model: gpt-5-mini
+# claude-sonnet-4-6|code_attack|ecso|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/claude-sonnet-4-6_ecso_code_attack_20260525_203857_12450658
+  judge_model: gpt-5-mini
+# claude-sonnet-4-6|code_attack|no_defense|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/claude-sonnet-4-6_no_defense_code_attack_ir_constant_20260525_203917_39317039
+  judge_model: gpt-5-mini
+# claude-sonnet-4-6|code_attack|no_defense|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/claude-sonnet-4-6_no_defense_code_attack_20260525_203637_80739325
+  judge_model: gpt-5-mini
+# claude-sonnet-4-6|code_attack|sage|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/claude-sonnet-4-6_sage_code_attack_ir_constant_20260525_204051_85403860
+  judge_model: gpt-5-mini
+# claude-sonnet-4-6|code_attack|sage|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/claude-sonnet-4-6_sage_code_attack_20260525_203645_5473940
+  judge_model: gpt-5-mini
+# claude-sonnet-4-6|formal_logic|ecso|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/claude-sonnet-4-6_ecso_llm_formal_logic_ir_constant_20260525_203205_28034453
+  judge_model: gpt-5-mini
+# claude-sonnet-4-6|formal_logic|ecso|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/claude-sonnet-4-6_ecso_llm_formal_logic_20260525_202656_14127765
+  judge_model: gpt-5-mini
+# claude-sonnet-4-6|formal_logic|no_defense|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/claude-sonnet-4-6_no_defense_llm_formal_logic_ir_constant_20260525_202727_8416107
+  judge_model: gpt-5-mini
+# claude-sonnet-4-6|formal_logic|no_defense|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/claude-sonnet-4-6_no_defense_llm_formal_logic_20260525_202138_11063313
+  judge_model: gpt-5-mini
+# claude-sonnet-4-6|formal_logic|sage|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/claude-sonnet-4-6_sage_llm_formal_logic_ir_constant_20260525_202922_17408732
+  judge_model: gpt-5-mini
+# claude-sonnet-4-6|formal_logic|sage|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/claude-sonnet-4-6_sage_llm_formal_logic_20260525_202147_25621216
+  judge_model: gpt-5-mini
+# gemini-2.0-flash|code_attack|ecso|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.0-flash_ecso_code_attack_ir_constant_20260525_201330_77848276
+  judge_model: gpt-5-mini
+# gemini-2.0-flash|code_attack|ecso|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.0-flash_ecso_code_attack_20260525_200602_56839789
+  judge_model: gpt-5-mini
+# gemini-2.0-flash|code_attack|no_defense|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.0-flash_no_defense_code_attack_ir_constant_20260525_200711_97034099
+  judge_model: gpt-5-mini
+# gemini-2.0-flash|code_attack|no_defense|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.0-flash_no_defense_code_attack_20260525_195839_47887935
+  judge_model: gpt-5-mini
+# gemini-2.0-flash|code_attack|sage|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.0-flash_sage_code_attack_ir_constant_20260525_200954_58717603
+  judge_model: gpt-5-mini
+# gemini-2.0-flash|code_attack|sage|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.0-flash_sage_code_attack_20260525_195856_83334967
+  judge_model: gpt-5-mini
+# gemini-2.0-flash|formal_logic|ecso|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.0-flash_ecso_llm_formal_logic_ir_constant_20260525_195830_43768697
+  judge_model: gpt-5-mini
+# gemini-2.0-flash|formal_logic|ecso|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.0-flash_ecso_llm_formal_logic_20260525_195236_84110748
+  judge_model: gpt-5-mini
+# gemini-2.0-flash|formal_logic|no_defense|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.0-flash_no_defense_llm_formal_logic_ir_constant_20260525_195241_10950786
+  judge_model: gpt-5-mini
+# gemini-2.0-flash|formal_logic|no_defense|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.0-flash_no_defense_llm_formal_logic_20260525_194954_2113819
+  judge_model: gpt-5-mini
+# gemini-2.0-flash|formal_logic|sage|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.0-flash_sage_llm_formal_logic_ir_constant_20260525_195552_86056541
+  judge_model: gpt-5-mini
+# gemini-2.0-flash|formal_logic|sage|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.0-flash_sage_llm_formal_logic_20260525_195023_98516154
+  judge_model: gpt-5-mini
+# gemini-2.5-flash-lite|code_attack|ecso|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash-lite_ecso_code_attack_ir_constant_20260526_033833_76302922
+  judge_model: gpt-5-mini
+# gemini-2.5-flash-lite|code_attack|ecso|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash-lite_ecso_code_attack_20260525_160545_92853470
+  judge_model: gpt-5-mini
+# gemini-2.5-flash-lite|code_attack|no_defense|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash-lite_no_defense_code_attack_ir_constant_20260526_033803_56211519
+  judge_model: gpt-5-mini
+# gemini-2.5-flash-lite|code_attack|no_defense|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash-lite_no_defense_code_attack_20260525_160231_41029947
+  judge_model: gpt-5-mini
+# gemini-2.5-flash-lite|code_attack|sage|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash-lite_sage_code_attack_ir_constant_20260525_180137_88165325
+  judge_model: gpt-5-mini
+# gemini-2.5-flash-lite|code_attack|sage|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash-lite_sage_code_attack_20260525_160541_7304422
+  judge_model: gpt-5-mini
+# gemini-2.5-flash-lite|formal_logic|ecso|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash-lite_ecso_llm_formal_logic_ir_constant_20260525_132212_45126956
+  judge_model: gpt-5-mini
+# gemini-2.5-flash-lite|formal_logic|ecso|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash-lite_ecso_llm_formal_logic_20260525_131827_9595290
+  judge_model: gpt-5-mini
+# gemini-2.5-flash-lite|formal_logic|no_defense|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash-lite_no_defense_llm_formal_logic_ir_constant_20260525_125756_24971606
+  judge_model: gpt-5-mini
+# gemini-2.5-flash-lite|formal_logic|no_defense|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash-lite_no_defense_llm_formal_logic_20260526_032027_20586993
+  judge_model: gpt-5-mini
+# gemini-2.5-flash-lite|formal_logic|sage|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash-lite_sage_llm_formal_logic_ir_constant_20260525_130929_87504701
+  judge_model: gpt-5-mini
+# gemini-2.5-flash-lite|formal_logic|sage|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash-lite_sage_llm_formal_logic_20260526_032114_42463755
+  judge_model: gpt-5-mini
+# gemini-2.5-flash|code_attack|ecso|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash_ecso_code_attack_ir_constant_20260525_181228_84478868
+  judge_model: gpt-5-mini
+# gemini-2.5-flash|code_attack|ecso|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash_ecso_code_attack_20260525_162359_16493111
+  judge_model: gpt-5-mini
+# gemini-2.5-flash|code_attack|no_defense|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash_no_defense_code_attack_ir_constant_20260525_180137_91537178
+  judge_model: gpt-5-mini
+# gemini-2.5-flash|code_attack|no_defense|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash_no_defense_code_attack_20260525_161343_70317198
+  judge_model: gpt-5-mini
+# gemini-2.5-flash|code_attack|sage|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash_sage_code_attack_ir_constant_20260525_180923_85835241
+  judge_model: gpt-5-mini
+# gemini-2.5-flash|code_attack|sage|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash_sage_code_attack_20260525_162001_9560462
+  judge_model: gpt-5-mini
+# gemini-2.5-flash|formal_logic|ecso|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash_ecso_llm_formal_logic_ir_constant_20260525_155511_69517619
+  judge_model: gpt-5-mini
+# gemini-2.5-flash|formal_logic|ecso|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash_ecso_llm_formal_logic_20260525_152828_64334229
+  judge_model: gpt-5-mini
+# gemini-2.5-flash|formal_logic|no_defense|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash_no_defense_llm_formal_logic_ir_constant_20260525_152828_86839999
+  judge_model: gpt-5-mini
+# gemini-2.5-flash|formal_logic|no_defense|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash_no_defense_llm_formal_logic_20260525_152826_7510551
+  judge_model: gpt-5-mini
+# gemini-2.5-flash|formal_logic|sage|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash_sage_llm_formal_logic_ir_constant_20260525_155344_4136971
+  judge_model: gpt-5-mini
+# gemini-2.5-flash|formal_logic|sage|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gemini-2.5-flash_sage_llm_formal_logic_20260525_152827_32358147
+  judge_model: gpt-5-mini
+# gpt-4o-mini|code_attack|ecso|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gpt-4o-mini_ecso_code_attack_ir_constant_20260525_182357_26892714
+  judge_model: gpt-5-mini
+# gpt-4o-mini|code_attack|ecso|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gpt-4o-mini_ecso_code_attack_20260525_163922_161645
+  judge_model: gpt-5-mini
+# gpt-4o-mini|code_attack|no_defense|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gpt-4o-mini_no_defense_code_attack_ir_constant_20260525_182248_56837402
+  judge_model: gpt-5-mini
+# gpt-4o-mini|code_attack|no_defense|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gpt-4o-mini_no_defense_code_attack_20260525_163409_24990743
+  judge_model: gpt-5-mini
+# gpt-4o-mini|code_attack|sage|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gpt-4o-mini_sage_code_attack_ir_constant_20260525_182315_96422600
+  judge_model: gpt-5-mini
+# gpt-4o-mini|code_attack|sage|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gpt-4o-mini_sage_code_attack_20260525_163805_89072062
+  judge_model: gpt-5-mini
+# gpt-4o-mini|formal_logic|ecso|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gpt-4o-mini_ecso_llm_formal_logic_ir_constant_20260525_160225_85304372
+  judge_model: gpt-5-mini
+# gpt-4o-mini|formal_logic|ecso|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gpt-4o-mini_ecso_llm_formal_logic_20260525_155929_43347367
+  judge_model: gpt-5-mini
+# gpt-4o-mini|formal_logic|no_defense|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gpt-4o-mini_no_defense_llm_formal_logic_ir_constant_20260525_160014_5172802
+  judge_model: gpt-5-mini
+# gpt-4o-mini|formal_logic|no_defense|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gpt-4o-mini_no_defense_llm_formal_logic_20260525_155619_3687209
+  judge_model: gpt-5-mini
+# gpt-4o-mini|formal_logic|sage|decoy
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gpt-4o-mini_sage_llm_formal_logic_ir_constant_20260525_160154_99386888
+  judge_model: gpt-5-mini
+# gpt-4o-mini|formal_logic|sage|text
+- mode: rejudge
+  base_dir: backup_files/arr_may_submission_files
+  responses_from: outputs/defense+evaluate/harmbench/gpt-4o-mini_sage_llm_formal_logic_20260525_155839_7599909
+  judge_model: gpt-5-mini
