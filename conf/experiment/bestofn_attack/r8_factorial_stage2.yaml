@@ -3,12 +3,10 @@
 # OWNER-APPROVED 2026-08-03 ("yes, go full six") — 6 cells on Llama-3.1-8B.
 # Design + pre-registered predictions: text_docs/bestofn_attack/experiments_plan.md §Round 8.
 #
-# ⛔ NOT RUNNABLE UNTIL THE TWO PLACEHOLDERS BELOW ARE FILLED with the actual
-#    Stage-1 output subdirs (the standing two-pass procedure), AND the Stage-1
-#    distinct-prompt check has passed:
-#        ARM A (plain x fixed)  -> exactly   1 distinct prompt per behavior
-#        ARM B (code  x varied) -> exactly 100 distinct prompts per behavior
-#    Skipping that check is precisely how the original confound was created.
+# ✅ RUNNABLE as of 2026-08-03: both Stage-1 subdirs are filled in below and the
+#    distinct-prompt gate PASSED (ARM A = 1, ARM B = 100/99/98). Skipping that
+#    check is precisely how the original confound was created -- it is recorded
+#    at the anchor block below, not just asserted here.
 #
 # ── THE 2x2 THIS COMPLETES ───────────────────────────────────────────────────
 #                  varied                         fixed
@@ -71,9 +69,17 @@ _e: &e
   benchmark: harmbench
   campaign: bestofn_attack_r8_factorial
 
-# ⛔ FILL BOTH FROM STAGE 1 OUTPUT BEFORE RUNNING ⛔
-_PLAIN_FIXED: &plain_fixed outputs/bestofn_attack/prompt_transform/harmbench/FILL_ME_non_llm_baseline/non_llm_baseline
-_CODE_VARIED: &code_varied outputs/bestofn_attack/prompt_transform/harmbench/FILL_ME_code_attack/code_attack
+# ✅ FILLED 2026-08-03 from Stage-1 (AICR job 256948, COMPLETED 31s, $0).
+# GATE CHECK PASSED before filling -- distinct `encoded` values per behavior:
+#   ARM A -> 1 for all 100 behaviors                       (required: 1)
+#   ARM B -> 100 for 66 beh., 99 for 18, 98 for 4          (required: ~100)
+# ARM B's 99/98 tail is INHERITED: the upstream paraphrase arm has the identical
+# histogram (100/99/98 -> 66/18/4), i.e. the paraphraser occasionally repeats
+# itself. code_attack did not collapse anything. For contrast, measured in the
+# same pass: the EXISTING code arm = 1 distinct, the surface arm = 100 distinct
+# -- the confound this round exists to break, re-confirmed.
+_PLAIN_FIXED: &plain_fixed outputs/bestofn_attack/prompt_transform/harmbench/non_llm_baseline_20260803_033658_62709884/non_llm_baseline
+_CODE_VARIED: &code_varied outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_code_attack_20260803_033658_17867502/code_attack
 
 tasks:
   # ---- ARM A: plain x fixed ------------------------------------------------
