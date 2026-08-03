@@ -1,0 +1,51 @@
+# Phase B of the tab:bypass SAGE-redundancy rerun (owner-approved 2026-08-03,
+# ~$15-25). Fresh single-protocol replacement for the lost May-era SAGE-as-
+# system campaign (provenance audit: text_docs/imgaug_defense/
+# paper_b_rebuttal_results.md). 32 cells = 4 models x {set_theory,
+# formal_logic} x {no_def, sage-as-system} x {text, ir_plain}; same canonical
+# May encodings (text = archived encoder leaves; ir_plain = Phase A re-render,
+# job 256875); judge gpt-5-mini throughout.
+num_main_job_threads: 8
+
+_text_formal: &tf backup_files/arr_may_submission_files/outputs/prompt_transform/harmbench/formal_logic_ir_plain_20260525_010219_56487445/llm_formal_logic
+_text_set: &ts backup_files/arr_may_submission_files/outputs/prompt_transform/harmbench/set_theory_ir_plain_20260525_010316_31521122/llm_set_theory
+_img_formal: &if outputs/imgaug_defense/prompt_transform/harmbench/llm_formal_logic_ir_plain_20260803_031315_97481103/ir_plain
+_img_set: &is outputs/imgaug_defense/prompt_transform/harmbench/llm_set_theory_ir_plain_20260803_031315_31743711/ir_plain
+
+tasks:
+  # ---- gemini-2.5-flash-lite ----
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *ts, defense: no_defense, target_model: gemini-2.5-flash-lite, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *is, defense: no_defense, target_model: gemini-2.5-flash-lite, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *ts, defense: sage, defense_config: {as_system: true}, target_model: gemini-2.5-flash-lite, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *is, defense: sage, defense_config: {as_system: true}, target_model: gemini-2.5-flash-lite, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tf, defense: no_defense, target_model: gemini-2.5-flash-lite, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *if, defense: no_defense, target_model: gemini-2.5-flash-lite, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tf, defense: sage, defense_config: {as_system: true}, target_model: gemini-2.5-flash-lite, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *if, defense: sage, defense_config: {as_system: true}, target_model: gemini-2.5-flash-lite, judge_model: gpt-5-mini}
+  # ---- gemini-2.5-flash ----
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *ts, defense: no_defense, target_model: gemini-2.5-flash, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *is, defense: no_defense, target_model: gemini-2.5-flash, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *ts, defense: sage, defense_config: {as_system: true}, target_model: gemini-2.5-flash, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *is, defense: sage, defense_config: {as_system: true}, target_model: gemini-2.5-flash, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tf, defense: no_defense, target_model: gemini-2.5-flash, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *if, defense: no_defense, target_model: gemini-2.5-flash, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tf, defense: sage, defense_config: {as_system: true}, target_model: gemini-2.5-flash, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *if, defense: sage, defense_config: {as_system: true}, target_model: gemini-2.5-flash, judge_model: gpt-5-mini}
+  # ---- gpt-4o-mini ----
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *ts, defense: no_defense, target_model: gpt-4o-mini, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *is, defense: no_defense, target_model: gpt-4o-mini, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *ts, defense: sage, defense_config: {as_system: true}, target_model: gpt-4o-mini, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *is, defense: sage, defense_config: {as_system: true}, target_model: gpt-4o-mini, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tf, defense: no_defense, target_model: gpt-4o-mini, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *if, defense: no_defense, target_model: gpt-4o-mini, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tf, defense: sage, defense_config: {as_system: true}, target_model: gpt-4o-mini, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *if, defense: sage, defense_config: {as_system: true}, target_model: gpt-4o-mini, judge_model: gpt-5-mini}
+  # ---- claude-sonnet-4-6 ----
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *ts, defense: no_defense, target_model: claude-sonnet-4-6, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *is, defense: no_defense, target_model: claude-sonnet-4-6, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *ts, defense: sage, defense_config: {as_system: true}, target_model: claude-sonnet-4-6, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *is, defense: sage, defense_config: {as_system: true}, target_model: claude-sonnet-4-6, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tf, defense: no_defense, target_model: claude-sonnet-4-6, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *if, defense: no_defense, target_model: claude-sonnet-4-6, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tf, defense: sage, defense_config: {as_system: true}, target_model: claude-sonnet-4-6, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *if, defense: sage, defense_config: {as_system: true}, target_model: claude-sonnet-4-6, judge_model: gpt-5-mini}
