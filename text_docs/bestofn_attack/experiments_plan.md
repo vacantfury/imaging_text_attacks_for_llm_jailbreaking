@@ -185,3 +185,57 @@ clone). This matches the repo `CLAUDE.md`, which another session had already cor
 on 2026-08-02 after verifying all three boxes — an earlier draft of this addendum
 claimed that line was still stale; it was not, and the error was mine (a stale
 CLAUDE.md snapshot in session context, not a stale file).
+
+## Round 8 — execution record (2026-08-03)
+
+**Stage 1 — AICR job `256948`, COMPLETED in 31 s, $0.** Both transforms are non-LLM and
+arm B reuses stored paraphrase output, so no vLLM server was needed. Outputs:
+
+- ARM A `non_llm_baseline_20260803_033658_62709884/non_llm_baseline`
+- ARM B `variance_channel_bon_code_attack_20260803_033658_17867502/code_attack`
+
+**THE GATE — passed, and this is the round's licence to proceed.** Distinct `encoded`
+values per behavior, measured over all 10,000 rows of each arm:
+
+| arm | distinct encoded prompts / behavior | required | verdict |
+|---|---|---|---|
+| ARM A — plain × fixed | **1** for all 100 behaviors | 1 | ✅ |
+| ARM B — code × varied | **100** (66 beh.), 99 (18), 98 (4) | ~100 | ✅ |
+| *(control)* existing code arm | **1** for all 100 | — | the confound, re-confirmed |
+| *(control)* surface arm | **100** for all 100 | — | the confound, re-confirmed |
+
+ARM B's 99/98 tail is **inherited, not a collapse**: the upstream paraphrase arm has the
+identical histogram (100/99/98 → 66/18/4), i.e. the paraphraser occasionally repeats
+itself across draws. `code_attack` preserved every distinction it was given.
+
+**Two process notes worth keeping.**
+
+1. *The first run of this check read a field that does not exist.* `prompts.jsonl` stores
+   the encoded text under `encoded`, not `prompt`; reading `prompt` returned `None` for
+   every row, which collapsed to "1 distinct" and looked exactly like a real failure of
+   arm B. The schema is `id, encoding, original, encoded, image_original, image_encoded`.
+   A distinctness check that reads the wrong key fails **toward** the alarming answer, so
+   the control rows above (existing code arm = 1, surface arm = 100) are not decoration —
+   they are what proves the probe itself is live.
+2. *`num_cluster_jobs` is a load-bearing parameter, not a round number.* The allocator in
+   `Experiment._prepare_cluster_servers` sets `servers_wanted = N - 1` and caps **only if**
+   `total_requested > available_slots`, by floor division `available_slots // n_models`,
+   never promoting above the YAML request. This round serves 3 distinct models and
+   requests 6 instances (llama 4 + wildguard 1 + llama_guard_3 1):
+   - `N=5` → 4 slots → 6 > 4 → cap `4//3 = 1` → **llama collapses 4 → 1**, and since
+     load-balancing is per-cell, all six cells serialize onto one endpoint (~22 h
+     projected against the 24 h wall — the round-174759 failure mode).
+   - `N=7` → 6 slots → `6 > 6` is false → **no capping at all**, llama keeps 4.
+   The preset was written at 5 and corrected to 7 before submission. Verified at submit
+   time: AICR `max_gpu_jobs: 12`, 0 GPU jobs running, so 7 jobs sits inside both that and
+   `MAX_SUBMIT_JOBS_PER_USER = 8`.
+
+**Stage 2 — AICR job `257350`, submitted 2026-08-03, $0** (6 cells, wildguard first pass).
+Verify on landing: all 6 cells `total_evaluated == 10000`, status success,
+`fallback_parse_count == 0`. Expect low draw-diversity on ARM A's gate cell — a blocked
+prompt returns a byte-identical canned refusal, which is the documented gate exemption,
+not the Section-4 variation-channel defect.
+
+**No number from the wildguard pass is reportable.** It over-flags the code arm 41–68 %
+and *both* arms in this round are code-bearing. The follow-on gpt-5-mini rejudge
+(~$36–54 at the measured $0.00090/call) is the approved spend and a separate ask.
