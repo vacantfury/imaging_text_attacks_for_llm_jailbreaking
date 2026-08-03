@@ -58,7 +58,21 @@
 # a byte-identical canned refusal) -- that is the documented gate exemption, not
 # the Section-4 variation-channel defect.
 num_main_job_threads: 6      # all 6 cells in flight
-num_cluster_jobs: 5          # orchestrator + llama replicas + wildguard + llama_guard_3
+# num_cluster_jobs=7 is LOAD-BEARING, not a round number. The allocator
+# (Experiment._prepare_cluster_servers) computes servers_wanted = N-1, then caps
+# ONLY IF total_requested > available_slots, using FLOOR division
+# `available_slots // n_models` and never promoting above the YAML request.
+# This round serves 3 distinct models -- llama3_1_8b_cluster (target, YAML asks
+# num_instances: 4), wildguard (judge, 1), llama_guard_3_8b (gate, 1) = 6
+# requested. So:
+#   N=5 -> 4 slots  -> 6 > 4  -> cap = 4//3 = 1 -> LLAMA COLLAPSES 4 -> 1 and,
+#          because load-balancing is PER-CELL, all six cells serialize onto one
+#          endpoint (~22h projected against a 24h wall -- the round 174759
+#          failure mode).
+#   N=7 -> 6 slots  -> 6 > 6 is FALSE -> no capping at all -> llama keeps 4.
+# 6 servers + orchestrator = 7 jobs, inside MAX_SUBMIT_JOBS_PER_USER=8 and well
+# inside AICR's max_gpu_jobs=12 (verified 0 GPU jobs running at submit time).
+num_cluster_jobs: 7
 
 _e: &e
   mode: defense+evaluate
