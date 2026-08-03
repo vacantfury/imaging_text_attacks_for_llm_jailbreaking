@@ -100,13 +100,18 @@ class ECSO(Defense):
         source_dir: Optional[Path] = None,
         system_message: Optional[str] = None,
     ) -> list[tuple[str, str]]:
-        # Resolve raw query text from each prompt — for ECSO the "QUERY" used
-        # in TELL/CAP/SAFE is the original harmful query, not the encoded /
-        # destroyer-modified version. This matches the paper: ECSO is checking
-        # whether the response is harmful given the original user intent.
-        # If `original` is missing (shouldn't happen but defend), fall back to
-        # the (possibly destroyer-replaced) Prompt.encoded.
+        # Which text fills the {original_query} slot in TELL/CAP/SAFE — see
+        # conf/defense/ecso.yaml. "original" (the dataset's unencoded harmful
+        # query) is what every recorded campaign ran and is ORACLE-ASSISTED
+        # under the encoded-attack threat model: a deployed defender only sees
+        # the encoded input. "encoded" is the threat-model-faithful arm.
+        source = self._config.get("query_source", "original")
+        if source not in ("original", "encoded"):
+            raise ValueError(f"unknown ECSO query_source {source!r}")
+
         def _query_text(p: Prompt) -> str:
+            if source == "encoded":
+                return p.encoded or p.original or ""
             return p.original or p.encoded or ""
 
         # ---------- Step 1: INITIAL — query model normally ----------

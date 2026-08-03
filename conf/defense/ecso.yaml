@@ -1,0 +1,13 @@
+# ECSO defense configuration.
+#
+# `query_source` — which text fills the {original_query} slot in TELL/CAP/SAFE:
+#   original — the dataset's UNENCODED harmful query. This is what every
+#     recorded campaign through 2026-08 ran, and it is ORACLE-ASSISTED: a
+#     deployed defender facing an encoded attack does not possess the unencoded
+#     intent (confound identified via review, verified in code 2026-08-03 —
+#     record in text_docs/imgaug_defense/paper_b_rebuttal_results.md).
+#   encoded — the defender-visible input text (threat-model-faithful).
+# Default MUST stay `original`: every recorded ECSO number was produced under
+# it, and changing the default would silently re-define the defense. The
+# threat-model-faithful arm opts in per task via defense_config.
+query_source: original

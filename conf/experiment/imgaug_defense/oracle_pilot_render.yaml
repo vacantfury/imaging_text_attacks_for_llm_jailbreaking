@@ -1,0 +1,13 @@
+# Phase A of the ECSO oracle-leak pilot (owner-approved 2026-08-03): re-render
+# the mountain-decoy (ir_constant) variants of the canonical May encodings —
+# deterministic, no LLM, no cost; the ARR archive excluded rendered images.
+# image_path is EXPLICIT because ir_constant DEFAULTS TO rabit.jpeg (the
+# four-asset trap from the May campaign). Phase B = oracle_pilot_mini.yaml.
+num_main_job_threads: 2
+tasks:
+  - {mode: prompt_transform, benchmark: harmbench,
+     source_transform_subdir: backup_files/arr_may_submission_files/outputs/prompt_transform/harmbench/formal_logic_ir_plain_20260525_010219_56487445/llm_formal_logic,
+     transformation_list: [{type: ir_constant, params: {image_path: src/prompt_transformations/image/images/mountain.png}}]}
+  - {mode: prompt_transform, benchmark: harmbench,
+     source_transform_subdir: backup_files/arr_may_submission_files/outputs/prompt_transform/harmbench/code_attack_ir_plain_20260524_085040_58051887/code_attack,
+     transformation_list: [{type: ir_constant, params: {image_path: src/prompt_transformations/image/images/mountain.png}}]}
