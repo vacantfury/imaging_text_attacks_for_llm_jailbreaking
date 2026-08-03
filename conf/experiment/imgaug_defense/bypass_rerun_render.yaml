@@ -1,0 +1,13 @@
+# Phase A of the tab:bypass SAGE-redundancy rerun (owner-approved 2026-08-03).
+# Re-renders the canonical May encodings' ir_plain images — deterministic
+# typography render, no LLM calls, no cost; the ARR archive excluded rendered
+# images. Phase B (bypass_rerun_mini.yaml, generated after this runs) points
+# its ir_plain cells at the two timestamped output dirs this writes.
+num_main_job_threads: 2
+tasks:
+  - {mode: prompt_transform, benchmark: harmbench,
+     source_transform_subdir: backup_files/arr_may_submission_files/outputs/prompt_transform/harmbench/formal_logic_ir_plain_20260525_010219_56487445/llm_formal_logic,
+     transformation_list: [{type: ir_plain}]}
+  - {mode: prompt_transform, benchmark: harmbench,
+     source_transform_subdir: backup_files/arr_may_submission_files/outputs/prompt_transform/harmbench/set_theory_ir_plain_20260525_010316_31521122/llm_set_theory,
+     transformation_list: [{type: ir_plain}]}

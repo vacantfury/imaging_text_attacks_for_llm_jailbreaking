@@ -126,6 +126,11 @@ class SAGE(Defense):
             )
         return SAGE_WRAPPERS[name]
 
+    # Tail line of every wrapper template; the as_system mode swaps it for a
+    # forward reference to the user turn instead of inlining the content.
+    _CONTENT_TAIL = "Request to analyze: {content}"
+    _SYSTEM_TAIL = "Apply this protocol to the user message that follows."
+
     def query(
         self,
         prompts: list[Prompt],
@@ -135,6 +140,18 @@ class SAGE(Defense):
         system_message: Optional[str] = None,
     ) -> list[tuple[str, str]]:
         template = self._template()
+        as_system = bool(self._config.get("as_system", False))
+        if as_system:
+            if system_message:
+                raise ValueError(
+                    "SAGE as_system=true occupies the system slot; an "
+                    "experiment-level system_message cannot be combined with it")
+            sage_system = template.replace(self._CONTENT_TAIL, self._SYSTEM_TAIL)
+            if "{content}" in sage_system:
+                raise ValueError(
+                    f"SAGE wrapper {self._config.get('wrapper', 'published')!r} "
+                    f"has no {self._CONTENT_TAIL!r} tail; as_system unsupported for it")
+
         conversations: list[tuple[str, list]] = []
         for p in prompts:
             # Build the standard multimodal message first, then wrap its text side.
@@ -144,15 +161,20 @@ class SAGE(Defense):
             # Single-turn assumption: rewrite the first message's text side
             # with the SAGE wrap; keep the image side (if any) unchanged.
             text_side, image_side = messages[0]
-            wrapped_text = template.format(content=text_side or "")
-            conversations.append((p.id, [(wrapped_text, image_side)]))
+            if as_system:
+                # SAGE delivered as the system message; user turn stays raw.
+                conversations.append((p.id, [(text_side, image_side)]))
+            else:
+                wrapped_text = template.format(content=text_side or "")
+                conversations.append((p.id, [(wrapped_text, image_side)]))
 
+        mode = "as_system" if as_system else "user_wrap"
         logger.info(
-            f"SAGE[{self._config.get('wrapper', 'published')}]: forwarding "
-            f"{len(conversations)} SAGE-wrapped prompts to "
+            f"SAGE[{self._config.get('wrapper', 'published')}|{mode}]: forwarding "
+            f"{len(conversations)} prompts to "
             f"target (is_multimodal={is_multimodal})")
         return target_service.batch_chat(
             conversations=conversations,
-            system_message=system_message,
+            system_message=sage_system if as_system else system_message,
             is_test=True,
         )
