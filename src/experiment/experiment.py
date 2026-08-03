@@ -272,6 +272,51 @@ class Experiment:
             "Keep max_model_len consistent across targets you intend to COMPARE "
             "— an unequal generation budget is not a comparable measurement.")
 
+    def _arch_ceiling_preflight(self, model_configs: dict) -> None:
+        """Fail fast if any cluster-served model asks vLLM for a `max_model_len`
+        above its architectural context ceiling.
+
+        vLLM refuses to START under that condition, so the server job dies on
+        launch and every task depending on it hangs until its endpoint timeout.
+        Distinct from `_context_budget_preflight`, which compares a task's
+        requested `max_tokens` against the server's `max_model_len` — this
+        compares that `max_model_len` against what the architecture can serve
+        at all (`max_position_embeddings`, via the llm_utils registry row).
+
+        Covers EVERY cluster-served model in the run — target, judge, and guard
+        alike — because any of them is a vLLM server that can fail to start.
+
+        This check was written as a Pydantic validator on `LLMConfig`
+        (schemas.py) but never ran: nothing constructs `LLMConfig`, and
+        `_load_cluster_config` returns a plain dict. Moved here 2026-08-02 so
+        it runs on the live path, before the first sbatch.
+        """
+        from .schemas import _arch_row_for
+        offenders = []
+        for model, cfg in model_configs.items():
+            mml = cfg.get("max_model_len")
+            if not mml:
+                continue
+            row = _arch_row_for(model.model_id)
+            ceiling = getattr(row, "max_context_len", None) if row else None
+            if ceiling and int(mml) > int(ceiling):
+                offenders.append((model.model_id, int(mml), int(ceiling)))
+        if not offenders:
+            return
+        lines = "\n".join(
+            f"  - {mid}: max_model_len={mml} > architectural ceiling {ceil}"
+            for mid, mml, ceil in sorted(set(offenders)))
+        raise RuntimeError(
+            "Architecture-ceiling preflight FAILED — vLLM would refuse to start "
+            "these servers, and every task needing them would hang until its "
+            "endpoint timeout:\n"
+            f"{lines}\n"
+            "Fix: lower `max_model_len` in conf/llm/<model>.yaml::cluster (or "
+            "its profiles.<cluster> block) to at most the ceiling shown. The "
+            "ceiling comes from the model's upstream config.json "
+            "max_position_embeddings and cannot be raised. Nothing was "
+            "submitted.")
+
     def _bedrock_preflight(self, tasks: list[TaskInfo]) -> None:
         """Fail fast BEFORE launching anything if the run needs Bedrock but its
         creds are dead.
@@ -478,6 +523,9 @@ class Experiment:
         # and `enumerate(set)`'s non-determinism doesn't bite us.
         cluster_models_sorted = sorted(cluster_models, key=lambda m: m.model_id)
         model_configs = {m: self._load_cluster_config(m) for m in cluster_models_sorted}
+
+        # Before any budget math or submission: would vLLM even start?
+        self._arch_ceiling_preflight(model_configs)
 
         # Per-cluster GPU-server cap (conf/clusters/<profile>.yaml::max_gpu_jobs,
         # falling back to ::budget). This is a GPU quota, NOT a job quota — see

@@ -626,45 +626,23 @@ def _arch_row_for(model_str: str):
 
 
 class LLMConfig(BaseModel):
-    """Top-level LLM config."""
+    """Top-level LLM config — SCHEMA DOCUMENTATION ONLY, never instantiated.
+
+    ⚠️ Nothing constructs this model. `Experiment._load_cluster_config` returns
+    a plain merged dict and passes it straight to `start_server`, so a validator
+    written here DOES NOT RUN. Two once lived here and had never fired (found
+    2026-08-02):
+      - the max_model_len architectural-ceiling check → moved to the live path
+        as `Experiment._arch_ceiling_preflight`;
+      - the chat-template file-existence check → deleted as redundant, since
+        llm_utils v5.1.0 performs it upfront for every instance before the
+        first sbatch (family cluster-job standard §5 T1).
+
+    Keep this class as the readable shape of conf/llm/<model>.yaml. Put new
+    cluster-config CHECKS in `Experiment`'s preflights, not here.
+    """
     model: ModelConfig
     cluster: ClusterConfig
-
-    @model_validator(mode="after")
-    def _check_max_model_len_against_arch_ceiling(self) -> "LLMConfig":
-        m = _arch_row_for(self.model.model)
-        if m is None:
-            return self
-        ceiling = m.max_context_len
-        if ceiling is not None and self.cluster.max_model_len > ceiling:
-            raise ValueError(
-                f"cluster.max_model_len={self.cluster.max_model_len} exceeds "
-                f"{m.model_id}'s architectural ceiling of {ceiling} "
-                f"(from upstream config.json max_position_embeddings). vLLM "
-                f"would refuse to serve this at startup. Lower `max_model_len` "
-                f"in conf/llm/{m.name.lower()}.yaml.")
-        return self
-
-    @model_validator(mode="after")
-    def _check_chat_template_file_exists(self) -> "LLMConfig":
-        from pathlib import Path
-        import llm_utils as _llm_utils_pkg
-        m = _arch_row_for(self.model.model)
-        if m is None:
-            return self
-        chat_template = self.cluster.chat_template or m.chat_template
-        if not chat_template:
-            return self
-        templates_dir = (
-            Path(_llm_utils_pkg.__file__).resolve().parent / "chat_templates")
-        template_file = templates_dir / f"{chat_template}.jinja"
-        if not template_file.exists():
-            raise ValueError(
-                f"chat_template={chat_template!r} for {m.model_id} "
-                f"does not resolve to a file at {template_file}. "
-                f"Available templates: "
-                f"{sorted(p.stem for p in templates_dir.glob('*.jinja'))}")
-        return self
 
 
 # ====================================================================

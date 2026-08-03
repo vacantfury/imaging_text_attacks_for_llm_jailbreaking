@@ -32,3 +32,25 @@ cluster:
   health_check_timeout: 5
   slurm_cmd_timeout: 15
   health_recheck_interval: 60
+  # --- server-lifecycle hygiene (llm_utils v5.1.0, family cluster-job standard §5) ---
+  # Nest each run's vLLM server logs under logs/run_<run_id>/ instead of letting
+  # concurrent runs interleave in flat logs/. This account is shared and runs
+  # concurrently, which is why --clean-logs became opt-in (owner 2026-07-16);
+  # this fixes the interleaving at the source. Safe: nothing in this repo reads
+  # vllm_*.out/.err — the check-experiment-results skill reads logs/mj_*, the
+  # ORCHESTRATOR's own sbatch log, which is unaffected (its path is set by
+  # #SBATCH --output in the wrappers, not by this key).
+  run_scoped_logs: true
+  # Job ledgers (logs/slurm_jobs_<run_id>.json) stay in the BASE logs/ dir either
+  # way, so a later run can still find a dead run's ledger and reap its servers.
+  # NOTE: our orchestrator is an sbatch job on whatever node SLURM picks, so a
+  # later run usually sees a foreign-host ledger and REPORTS a ready-to-paste
+  # `scancel <ids>` rather than reaping automatically. Leave true: reporting is
+  # the whole value here (invisible orphans become one loud log line).
+  reap_orphans: true
+  # Evict a pool endpoint only after this many CONSECUTIVE health-check failures
+  # (pre-v5.1.0 behavior was 1 = a single failed ping evicted permanently).
+  # Tuning path: the structured `EVICTION` log lines llm_utils emits at the
+  # threshold are the data stream; raise if healthy servers still get evicted
+  # under load, lower if dead servers linger. Upstream default is 3.
+  eviction_failure_threshold: 3
