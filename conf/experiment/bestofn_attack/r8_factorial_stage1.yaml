@@ -1,0 +1,75 @@
+# bestofn_attack Paper-D — ROUND 8, Stage 1 (transforms). FREE, no API, no helper LLM.
+#
+# OWNER-APPROVED 2026-08-03 ("yes, go full six"). Design + pre-registered
+# predictions: text_docs/bestofn_attack/experiments_plan.md §Round 8.
+#
+# ── WHY THIS ROUND ───────────────────────────────────────────────────────────
+# The paper's two arms are TWO DIFFERENT ATTACKS, and we had been calling both
+# "best-of-N". Measured: across 100 draws the code arm has 1 distinct prompt per
+# behavior, the surface arm has 100. So encoding and variation-type change
+# TOGETHER and the headline 67-vs-5 gap is unattributable. This round fills the
+# two missing cells of the 2x2.
+#
+#                  varied (new prompt each draw)   fixed (same prompt, resampled)
+#   plain          original BoN  (HAVE)            <-- ARM A, built here
+#   code           <-- ARM B, built here           headline 67%  (HAVE)
+#
+# NOTE the R4 baseline preset (baselines_stage1.yaml, 2026-07-19) already stated
+# this in its own comments -- "100 identical draws ... the variance across draws
+# is the target's sampling temperature". The knowledge existed in July; it never
+# reached the paper's framing. That is the defect this round repairs.
+#
+# ── ARM A: plain x fixed ─────────────────────────────────────────────────────
+# The raw harmful request, unmodified, 100 behaviors x 100 identical draws.
+# `data/harmbench_bon_100.jsonl` was DELETED at some point (see the HISTORICAL
+# banner on baselines_stage1.yaml). It was REBUILT 2026-08-03 by alignment, not
+# by re-expansion: each row's id and prompt were read straight off the existing
+# code arm's prompts.jsonl and joined to data/harmbench_prompts.jsonl for
+# `category`. Verified: 10,000 rows, id sequence BYTE-IDENTICAL to the code arm,
+# 100 behaviors x exactly 100 draws. So arm A aligns draw-for-draw with the
+# existing arms -- a stronger guarantee than scripts/expand_bon_dataset.py gives.
+#
+# ── ARM B: code x varied ─────────────────────────────────────────────────────
+# Vary the request, THEN encode -- payload differs each draw, code structure
+# intact. This is what "BoN-wrapped CodeAttack" should have meant.
+# Built by CHAINING code_attack onto the EXISTING paraphrase transform
+# (channel: paraphrase, seed 0, helper qwen2_5_vl_7b, batch 20260718), so:
+#   - the paraphrase draws are reused, not regenerated -> zero helper-LLM cost;
+#   - arm B is exactly "the existing paraphrase arm + code encoding", which
+#     makes it comparable to BOTH the paraphrase arm and the code arm.
+#
+# ── VERIFY BEFORE STAGE 2 (this is the whole point of the round) ─────────────
+#   ARM A: distinct encoded prompts per behavior == 1
+#   ARM B: distinct encoded prompts per behavior == 100
+# The ABSENCE of this check is what created the original confound. Do not
+# proceed to stage 2, and do not spend a cent of judge budget, until both hold.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r8_factorial_stage1
+#
+# ── FOOTPRINT ────────────────────────────────────────────────────────────────
+# Both transforms are non-LLM (non_llm_baseline is passthrough; code_attack is a
+# static template) and arm B reuses stored paraphrase output, so Stage 1 needs
+# NO vLLM server and costs $0. Minutes, not hours.
+num_main_job_threads: 2
+num_cluster_jobs: 1          # orchestrator only -- no model is served at this stage
+
+tasks:
+  # ---- ARM A: plain x fixed (the floor, and the P4 story-killer test) -------
+  - mode: prompt_transform
+    source_file: data/harmbench_bon_100.jsonl
+    prompt_range: [0, 9999]
+    benchmark: harmbench
+    campaign: bestofn_attack_r8_factorial
+    transformation_list:
+      - type: non_llm_baseline
+        params: {}
+
+  # ---- ARM B: code x varied (paraphrase -> code) ---------------------------
+  - mode: prompt_transform
+    source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_20260718_050204_64308095/variance_channel_bon
+    prompt_range: [0, 9999]
+    benchmark: harmbench
+    campaign: bestofn_attack_r8_factorial
+    transformation_list:
+      - type: code_attack
+        params: {}

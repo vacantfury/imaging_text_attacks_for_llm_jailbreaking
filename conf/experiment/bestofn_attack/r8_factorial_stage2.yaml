@@ -1,0 +1,87 @@
+# bestofn_attack Paper-D — ROUND 8, Stage 2: the variation-type x encoding factorial.
+#
+# OWNER-APPROVED 2026-08-03 ("yes, go full six") — 6 cells on Llama-3.1-8B.
+# Design + pre-registered predictions: text_docs/bestofn_attack/experiments_plan.md §Round 8.
+#
+# ⛔ NOT RUNNABLE UNTIL THE TWO PLACEHOLDERS BELOW ARE FILLED with the actual
+#    Stage-1 output subdirs (the standing two-pass procedure), AND the Stage-1
+#    distinct-prompt check has passed:
+#        ARM A (plain x fixed)  -> exactly   1 distinct prompt per behavior
+#        ARM B (code  x varied) -> exactly 100 distinct prompts per behavior
+#    Skipping that check is precisely how the original confound was created.
+#
+# ── THE 2x2 THIS COMPLETES ───────────────────────────────────────────────────
+#                  varied                         fixed
+#   plain          original BoN (HAVE, <5% SAGE)  ARM A  <-- new
+#   code           ARM B  <-- new                 headline (HAVE, 67% SAGE)
+#
+# ── CELLS (6) ────────────────────────────────────────────────────────────────
+#   {ARM A, ARM B} x {no_defense, sage, guard_baseline(llama_guard_3_8b)}
+#
+# no_defense is REQUIRED, not optional: every retention/conversion figure is
+# normalized by the arm's OWN undefended reach, and neither new arm has one.
+#
+# GATE CHOICE — llama_guard_3_8b AS SHIPPED, not canon.+WildGuard. The plan doc
+# first named canon.+WildGuard; the shipped gate is the sharper test because that
+# is where the existing code-vs-surface gap is widest (code 14 vs surface 53
+# behaviors admitted), so prediction P1 is stated in those units and is falsified
+# most cleanly there.
+#
+# ── PRE-REGISTERED, recorded BEFORE the run (scored either way) ──────────────
+#   P1  ARM B at the gate RISES SHARPLY vs code x fixed (14 -> toward 53).
+#       Prompt variation should convert a 1-probe attack into an N-probe one.
+#       IF IT DOES NOT RISE, the probe-count mechanism is WRONG and gets
+#       WITHDRAWN from the paper, not patched.
+#   P2  ARM B under SAGE >= code x fixed (a transform already exposes the target
+#       channel; prompt variation adds a second one).
+#   P4  ARM A under SAGE stays LOW, far below 67%.
+#       ⚠️ STORY-KILLER: if ARM A reaches ~67%, the code encoding contributes
+#       nothing and this paper is about inference-time resampling alone.
+#       Prior: R4's undefended raw-prompt floor was 0.19 (per-draw 15.2%) -- but
+#       that ran on qwen2.5-VL with NO SAGE (baselines_stage2.yaml), so it is a
+#       prior, not this cell.
+#
+# ── JUDGE: cheap-first, the standing pattern ─────────────────────────────────
+# wildguard first pass (FREE, on-cluster) -> then a SEPARATE gpt-5-mini rejudge.
+# NOTHING from the wildguard pass is reportable: it over-flags the code arm
+# 41-68%, and this round has TWO code-bearing arms. No wildguard number from
+# this preset may be recorded, even provisionally.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r8_factorial_stage2
+#
+# ── FOOTPRINT ────────────────────────────────────────────────────────────────
+# 6 cells x 10,000 = 60,000 generations. GPU only at this stage -- $0 API.
+# The follow-on gpt-5-mini rejudge is the approved spend: at the measured
+# $0.00090/call that is ~$36-54 for 60,000, a SEPARATE preset and a separate ask.
+#
+# ── VERIFY AFTER ─────────────────────────────────────────────────────────────
+# All 6 cells: total_evaluated == 10000, status success, fallback_parse_count == 0.
+# Expect LOW draw-diversity on the gate cells for ARM A (a blocked prompt returns
+# a byte-identical canned refusal) -- that is the documented gate exemption, not
+# the Section-4 variation-channel defect.
+num_main_job_threads: 6      # all 6 cells in flight
+num_cluster_jobs: 5          # orchestrator + llama replicas + wildguard + llama_guard_3
+
+_e: &e
+  mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  target_model_config: {temperature: 1.0}
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r8_factorial
+
+# ⛔ FILL BOTH FROM STAGE 1 OUTPUT BEFORE RUNNING ⛔
+_PLAIN_FIXED: &plain_fixed outputs/bestofn_attack/prompt_transform/harmbench/FILL_ME_non_llm_baseline/non_llm_baseline
+_CODE_VARIED: &code_varied outputs/bestofn_attack/prompt_transform/harmbench/FILL_ME_code_attack/code_attack
+
+tasks:
+  # ---- ARM A: plain x fixed ------------------------------------------------
+  - {<<: *e, source_transform_subdir: *plain_fixed, defense: no_defense}
+  - {<<: *e, source_transform_subdir: *plain_fixed, defense: sage}
+  - {<<: *e, source_transform_subdir: *plain_fixed, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}}
+
+  # ---- ARM B: code x varied ------------------------------------------------
+  - {<<: *e, source_transform_subdir: *code_varied, defense: no_defense}
+  - {<<: *e, source_transform_subdir: *code_varied, defense: sage}
+  - {<<: *e, source_transform_subdir: *code_varied, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}}
