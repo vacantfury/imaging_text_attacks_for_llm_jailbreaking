@@ -179,7 +179,9 @@ stated in its own comments that both arms are "BoN via TARGET TEMPERATURE ... 10
 identical draws". The fact was known in July and never reached the paper's framing.
 The defect was in the write-up, not in the understanding of the pipeline.
 
-**Deployment:** the AICR checkout at `~/projects/llm_guardrail_security` **is a git
-repo** (verified 2026-08-03), so presets deploy by commit+push+pull with no owner
-sync. ⚠️ The repo `CLAUDE.md` still claims the cluster checkouts are
-"rsync-everything / non-git" — that line is STALE and should be corrected.
+**Deployment:** presets deploy by commit → push → `git pull` on the box, with no owner
+sync. Confirmed on AICR 2026-08-03 (`~/projects/llm_guardrail_security` is a real git
+clone). This matches the repo `CLAUDE.md`, which another session had already corrected
+on 2026-08-02 after verifying all three boxes — an earlier draft of this addendum
+claimed that line was still stale; it was not, and the error was mine (a stale
+CLAUDE.md snapshot in session context, not a stale file).
