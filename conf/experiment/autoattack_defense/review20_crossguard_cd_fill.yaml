@@ -1,0 +1,30 @@
+# ============================================================
+# Paper C · cross-guard recover-only — ONE-CELL FILL (2026-08-02)
+# ============================================================
+# Job 256089 (review20_crossguard_cd) finished 25/26. The last cell —
+# GuardReasoner-VL-7B on the BENIGN IMAGE variant — failed at 17.4s with
+# "All 1 server job(s) for Qwen/Qwen2.5-VL-7B-Instruct failed during discovery":
+# a teardown race, not a code or config fault. The target server auto-shuts when
+# its cells finish, and this last task tried to acquire an endpoint after the
+# shutdown began. Nothing about the cell itself is suspect; it just never ran.
+#
+# Without it GuardReasoner's over-refusal is a TEXT-ONLY mean (82.0 from one cell)
+# while every other guard's is the text+image mean — not comparable, and the
+# image side is exactly where the amplifier's over-refusal cost lives. This fills it.
+# Same campaign, same config, same judge as the parent run.
+#   API: 100 gpt-5-mini judge calls ~= $0.02   GPU: 2 servers   jobs: 3   wall: ~15m
+# ============================================================
+
+num_main_job_threads: 1
+num_cluster_jobs: 3
+
+tasks:
+  - mode: defense+evaluate
+    target_model: qwen2_5_vl_7b
+    prompt_range: [0, 99]
+    benchmark: orbench_benign_hard
+    judge_model: gpt-5-mini
+    defense: modality_complete
+    campaign: paper_c_crossguard_nodecode_benign
+    defense_config: {guard_model: guardreasoner_vl_7b, decode_text: false}
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260718_183504_7866920/ir_plain
