@@ -6,7 +6,7 @@ Visibility: public *(deliberately public from the start — owner policy 2026-07
 
 ## Project
 
-Research codebase on LLM/VLM guardrail-layer security — a multi-paper harness (papers A–D, see `text_docs/shared/papers.md`; renamed from `imaging_text_attacks_for_llm_jailbreaking` and moved to `AI safety/` 2026-08-02). The pipeline encodes harmful prompts into alternative representations (set theory, formal logic, classical Chinese, etc.), optionally renders them as images, applies black-box defenses (Image Rendering, SAGE, SemanticSmooth, hybrids), queries a target VLM, and ASR-judges the response.
+Research codebase on LLM/VLM guardrail-layer security — a multi-paper harness (papers AS-1…AS-4, aliases A–D — see `text_docs/shared/papers.md`; renamed from `imaging_text_attacks_for_llm_jailbreaking` and moved to `AI safety/` 2026-08-02). The pipeline encodes harmful prompts into alternative representations (set theory, formal logic, classical Chinese, etc.), optionally renders them as images, applies black-box defenses (Image Rendering, SAGE, SemanticSmooth, hybrids), queries a target VLM, and ASR-judges the response.
 
 See `README.md` for the research narrative and `text_docs/autoattack_defense/experiments_plan.md` / `text_docs/autoattack_defense/experiment_results.md` for the current experimental state — this is an active research repo whose direction shifts week to week, so consult those before assuming what's important.
 
