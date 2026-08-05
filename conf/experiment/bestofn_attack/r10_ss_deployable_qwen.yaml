@@ -1,0 +1,70 @@
+# bestofn_attack AS-4 — ROUND 10: SemanticSmooth on the DEPLOYABLE arm (qwen).
+#
+# OWNER-APPROVED 2026-08-05. One preset PER TARGET on purpose (see BUDGET below).
+#
+# ── WHY ──────────────────────────────────────────────────────────────────────
+# The oracle-leak audit (TODO 16-18, 2026-08-05) found SemanticSmooth reads the
+# UNENCODED query into its own decision path (`semantic_smooth.py`, stage-4 vote).
+# Every SS number in this paper came from a leaked cell; all six were QUARANTINED
+# to outputs/_superseded_oracle_arm_20260805/ and none remain in the live tree.
+#
+# ⚠️ THE BIAS RAN IN OUR FAVOUR, which is why a disclosure line is not enough.
+# The leak is SELECTION-ONLY: stage 4 picks which of the 5 already-generated
+# responses to return and never blocks. A plaintext-fed judge spots harm better,
+# returns a harm-labelled response, and measured ASR goes UP -- so the oracle made
+# SemanticSmooth look WEAKER than it is. This paper's claim about SS is precisely
+# that it is weak in a specific way (it removes per-draw reliability, not coverage,
+# and so is "structurally mismatched to an attacker who needs one success").
+# If deployable SS also removes coverage, that claim compresses. We must measure it.
+#
+# ── WHAT CHANGES: `query_source: encoded`, AND NOTHING ELSE ─────────────────
+# Every other field below was read off the cell being replaced, not chosen:
+# temperature 1.0, seed 42, max_tokens 16384, n_copies 5,
+# perturbation_model null, judge wildguard. Holding all of it fixed is what makes
+# the delta attributable to the leak rather than to drift.
+# Predecessors (quarantined) and their oracle ASR, to diff against:
+#   qwen code / character = 49.40 / 29.03
+#
+# ── COST: $0 API. The constraint is TIME, not money ─────────────────────────
+# Measured from the stored cells: target_cost 0.0 and judge_cost 0.0 on every one.
+# `perturbation_model: null` resolves to THE TARGET MODEL (semantic_smooth.py:129
+# "None -> use target"), so all 10 calls/prompt (5 paraphrases + 5 responses) run
+# on the cluster, and the internal judge is wildguard, also on-cluster. The
+# signature default of gemini-2.5-flash-lite is NOT in play for these cells.
+# Measured wall: 12.9 h (code) / 16.0 h (character).
+# The only spend is the follow-on gpt-5-mini rejudge (~$13 for all six cells),
+# a separate preset and a separate ask.
+#
+# ── BUDGET: why one preset per target ───────────────────────────────────────
+# All six cells in ONE job would serve 4 models (3 targets + wildguard); the
+# allocator's floor division would cap each to 1 replica, so a target's two cells
+# would run back-to-back -- Llama alone needs 25.6 h against the 24 h wall and
+# would die there. Split per target: 2 models, num_cluster_jobs=5 keeps
+# total_requested (3 + 1) <= servers_wanted, so NO capping fires and makespan
+# is the longest SINGLE cell. AICR's max_gpu_jobs is 12, so at most two of these
+# may run at once -- check `squeue` before launching the second.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r10_ss_deployable_qwen
+#
+# ── JUDGE ───────────────────────────────────────────────────────────────────
+# wildguard first pass (FREE) -> separate gpt-5-mini rejudge. Nothing from the
+# wildguard pass is reportable; one arm here is code-bearing, where it over-flags
+# 41-68%. Diff each rerun against ITS OWN quarantined predecessor, never against
+# the paper's printed value, so the change is attributable to query_source alone.
+num_main_job_threads: 2
+num_cluster_jobs: 5
+
+_e: &e
+  mode: defense+evaluate
+  target_model: qwen2_5_7b_instruct
+  target_model_config: {temperature: 1.0, seed: 42, max_tokens: 16384}
+  defense: semantic_smooth
+  defense_config: {n_copies: 5, perturbation_model: null, judge_model: wildguard, query_source: encoded}
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r10_ss_deployable
+
+tasks:
+  - {<<: *e, source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260718_213010_40825967/code_attack}
+  - {<<: *e, source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_20260718_050205_56951903/variance_channel_bon}
