@@ -79,6 +79,7 @@ class SemanticSmooth(Defense):
         perturbation_temperature: float = 0.7,
         perturbation_top_p: float = 1.0,
         perturbation_max_tokens: int = 2048,
+        query_source: str = "original",
         **kwargs,
     ):
         """
@@ -100,6 +101,14 @@ class SemanticSmooth(Defense):
             perturbation_top_p: top-p applied ONLY to the paraphrase step.
             perturbation_max_tokens: max output tokens for paraphrase calls.
                 Paraphrases are short; capped to control cost.
+            query_source: which text fills the {query} slot of the INTERNAL
+                harm judge that drives the majority vote — "original" (the
+                dataset's unencoded query; ORACLE-ASSISTED, and what every
+                recorded campaign through 2026-08 ran) or "encoded" (the
+                defender-visible input; threat-model-faithful). Note the
+                paraphrase step itself always reads `p.encoded` and is
+                unaffected — this leak reaches only response SELECTION, not
+                what the defense produces. See conf/defense/semantic_smooth.yaml.
         """
         super().__init__(
             n_copies=n_copies,
@@ -108,8 +117,14 @@ class SemanticSmooth(Defense):
             perturbation_temperature=perturbation_temperature,
             perturbation_top_p=perturbation_top_p,
             perturbation_max_tokens=perturbation_max_tokens,
+            query_source=query_source,
             **kwargs,
         )
+        if query_source not in ("original", "encoded"):
+            raise ValueError(
+                f"unknown SemanticSmooth query_source {query_source!r} "
+                "(expected 'original' or 'encoded')")
+        self._query_source = query_source
         self.n_copies = n_copies
         self._perturbation_model = perturbation_model  # None → use target
         self._judge_model = judge_model
@@ -238,8 +253,14 @@ class SemanticSmooth(Defense):
         judge_convs: list[tuple[str, list]] = []
         for p in prompts:
             for i, response in enumerate(responses_by_id.get(p.id, [])):
+                # `original` is ORACLE-ASSISTED (the defender does not possess
+                # the unencoded intent); `encoded` is threat-model-faithful.
+                if self._query_source == "encoded":
+                    judge_query = p.encoded or p.original or ""
+                else:
+                    judge_query = p.original or p.encoded or ""
                 judge_prompt = HARM_JUDGE_PROMPT.format(
-                    query=(p.original or p.encoded or ""),
+                    query=judge_query,
                     response=response,
                 )
                 judge_convs.append((

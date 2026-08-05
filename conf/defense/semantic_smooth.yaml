@@ -28,3 +28,17 @@ judge_model: gpt-5-nano              # internal vote judge ONLY (defense-interna
 perturbation_temperature: 0.7
 perturbation_top_p: 1.0
 perturbation_max_tokens: 2048
+
+# `query_source` — which text fills the {query} slot of the INTERNAL harm judge
+# that drives the majority vote:
+#   original — the dataset's UNENCODED query. Every recorded campaign through
+#     2026-08 ran this, and it is ORACLE-ASSISTED: a deployed defender facing an
+#     encoded attack does not possess the unencoded intent (found in the
+#     all-defense audit 2026-08-04; record in
+#     text_docs/imgaug_defense/paper_b_rebuttal_results.md).
+#   encoded — the defender-visible input text (threat-model-faithful).
+# SCOPE, and why this differs from ECSO's leak: the paraphrase step ALWAYS reads
+# p.encoded, so this leak affects only which candidate response the vote SELECTS,
+# never what the defense produces. Expected smaller than ECSO's — unmeasured.
+# Default MUST stay `original`: every recorded number was produced under it.
+query_source: original
