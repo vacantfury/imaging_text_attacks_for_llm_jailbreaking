@@ -4,8 +4,12 @@
 # is FREE and the only cost is the gpt-5-mini judge (~$0.02/cell).
 # The API half (79 cells, ~$71, concentrated in gemini-2.5-flash + claude) is
 # HELD for the owner's go. 11 gemini-2.0-flash cells are unrecoverable (hard 404).
+# 3 distinct targets => 3 vLLM servers, so num_cluster_jobs must be 4
+# (orchestrator + 3 servers); at 3 the pre-flight budgets only 2 servers and the
+# third model's tasks hang on acquire_endpoint(). 4 cells per target, so the
+# floor-division replica allocator giving each 1 replica is fine here.
 num_main_job_threads: 4
-num_cluster_jobs: 3
+num_cluster_jobs: 4
 
 tasks:
   - {"mode": "defense+evaluate", "benchmark": "harmbench", "target_model": "internvl3_8b", "source_transform_subdir": "outputs/autoattack_defense/prompt_transform/harmbench/classical_chinese_simplified_ir_constant_20260710_002424_56524373/ir_constant", "defense": "ecso", "defense_config": {"query_source": "encoded"}, "judge_model": "gpt-5-mini", "campaign": "paper_b_oracle_rerun_free"}
