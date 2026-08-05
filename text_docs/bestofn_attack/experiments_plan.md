@@ -1,4 +1,4 @@
-# Experiments plan — `bestofn_attack` (Paper D, attack-primary)
+# Experiments plan — `bestofn_attack` (AS-4, attack-primary)
 
 **Status (2026-07-17):** S7 code built (paraphrase transform + variance-channel wrapper, structurally tested offline). This doc is the S6/S8 experiment design. **Round 1 = a FREE cheap-first PILOT** — validate the pipeline end-to-end and get first directional signal on the core claim. The API-judged headline run is RESERVED for owner approval (see §Judge).
 
