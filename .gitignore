@@ -148,3 +148,6 @@ text_docs/imgaug_defense/paper_b_rebuttal_results.md
 text_docs/bestofn_defense/r4_gate_record.md
 text_docs/bestofn_defense/idea_2026-07-13.md
 NOW.md
+
+# task-estate store + operational state (personal data — never committed; task-estate refactor 2026-08-04)
+/state/
