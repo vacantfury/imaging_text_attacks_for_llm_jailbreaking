@@ -1,0 +1,59 @@
+# ============================================================
+# Paper C (AS-3) · ORACLE-LEAK RERUN — deployable arm, target pixtral_12b
+# ============================================================
+# WHY. ECSO and SemanticSmooth both fed the UNENCODED dataset query into their
+# own decision path (ECSO's TELL/CAP/SAFE check; SemanticSmooth's internal vote
+# judge, `semantic_smooth.py:257`). A defender facing an encoded attack does not
+# possess the unencoded intent, so every recorded number for those two defenses
+# is ORACLE-ASSISTED. `query_source: encoded` is the threat-model-faithful arm.
+# Audit + scope: TODO items 16-18; enumerator `scripts/_enumerate_oracle_scope.py`.
+#
+# These tasks are generated from the enumerator's own owed-cell list, so the
+# source transform dirs are byte-identical to the leaked cells they replace —
+# the comparison is cell-for-cell, and nothing is re-encoded.
+#
+# PREDICTION, WRITTEN BEFORE THE RUN (AS-3 is a BASELINE consumer of both
+# defenses, so both biases ran against our own claims):
+#   ECSO — ran oracle-assisted and STILL failed to defend (90/91% ensemble ASR
+#     against an 89/91% undefended floor). Removing the oracle should leave it at
+#     or below that, i.e. our margin over it holds or grows. A LARGE drop in
+#     ECSO's ASR would be the surprise, and would mean the oracle was somehow
+#     hurting it — worth checking rather than assuming.
+#   SemanticSmooth — the leak is SELECTION-ONLY: stage 4 returns a response
+#     matching the majority verdict and never blocks, so a plaintext-fed judge
+#     identifies the harmful majority more accurately and RETURNS a harmful
+#     response. Deployable SS should therefore measure LOWER ASR (look stronger).
+#     If it does, check whether the amplifier's marginal value compresses.
+# ============================================================
+
+num_main_job_threads: 6
+num_cluster_jobs: 2
+
+_rng: &rng [0, 99]
+_enc: &enc {query_source: encoded}
+
+tasks:
+  - {mode: defense+evaluate, target_model: pixtral_12b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: ecso, defense_config: *enc, campaign: paper_c_oracle_rerun_ecso,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/classical_chinese_simplified_ir_constant_20260710_002424_56524373/ir_constant}
+  - {mode: defense+evaluate, target_model: pixtral_12b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: ecso, defense_config: *enc, campaign: paper_c_oracle_rerun_ecso,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/code_attack_ir_constant_20260531_061400_61010177/ir_constant}
+  - {mode: defense+evaluate, target_model: pixtral_12b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: ecso, defense_config: *enc, campaign: paper_c_oracle_rerun_ecso,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/llm_formal_logic_ir_constant_20260531_061400_16547161/ir_constant}
+  - {mode: defense+evaluate, target_model: pixtral_12b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: ecso, defense_config: *enc, campaign: paper_c_oracle_rerun_ecso,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/llm_formal_logic_ir_plain_20260605_093357_24164176/ir_plain}
+  - {mode: defense+evaluate, target_model: pixtral_12b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: ecso, defense_config: *enc, campaign: paper_c_oracle_rerun_ecso,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/llm_set_theory_ir_plain_20260605_093357_74173344/ir_plain}
+  - {mode: defense+evaluate, target_model: pixtral_12b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: ecso, defense_config: *enc, campaign: paper_c_oracle_rerun_ecso,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/rebuttal_semantic_camo_decoy/ir_constant}

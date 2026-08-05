@@ -1,15 +1,27 @@
 # ============================================================
-# HISTORICAL — SUPERSEDED 2026-08-05. DO NOT RE-RUN.
-# ------------------------------------------------------------
-# This preset produces ORACLE-ARM cells: it sets `downstream_defense:
-# semantic_smooth` without a `query_source` override, so the child defense picks
-# up conf/defense/semantic_smooth.yaml's `query_source: original` and its internal
-# vote judge sees the UNENCODED query. Its 26 cells (AICR job 256087) are the
-# leaked source of the +rg+SemanticSmooth Pareto figures.
-# Deployable replacement: `oracle_rerun_composed_semsm.yaml`.
-# Kept for provenance of the retired numbers (TODO items 16-18).
+# Paper C (AS-3) · ORACLE-LEAK RERUN — COMPOSED arm, deployable
 # ============================================================
-# Paper C · COMPOSED DEFENSE — amplifier+guard THEN SemanticSmooth (2026-08-02)
+# Re-run of `review20_composed_semsm` with the downstream SemanticSmooth on
+# `query_source: encoded`. The original 26 cells (job 256087) fed SS's internal
+# vote judge the UNENCODED query, because ModalityComplete._downstream() builds
+# the child through load_conf("defense","semantic_smooth"), which applies that
+# config's `query_source: original` default — and the preset set no override.
+#
+# THIS IS THE HIGHEST-STAKES CELL SET IN THE ORACLE-LEAK SCOPE: the +rg+SS
+# Pareto result (ensemble ASR 21.0 at 83.5% over-refusal) that AS-3's ABSTRACT
+# now states came from those cells. The enumerator missed them entirely until
+# 2026-08-05 because a composed cell records defense="modality_complete".
+#
+# PREDICTION (written before the run): SS's leak is selection-only, so a
+# deployable vote identifies the harmful majority LESS accurately and should
+# return harmful responses less often — composed ASR at or BELOW the recorded
+# 21.0/50.0, with over-refusal ~unchanged (the gate blocks what it blocked
+# before; SS never refuses). The risk to watch is the opposite reading: if
+# deployable SS is materially stronger on its own, the amplifier's marginal
+# contribution to the composed point compresses, which weakens how much of the
+# Pareto move we can attribute to our method. Check that explicitly.
+# ============================================================
+
 # ============================================================
 # Answers cspaper review 20 con 4 / question 3: *"the paper shows near-disjoint
 # residuals -- SemanticSmooth collapses CodeAttack while the amplifier handles the
@@ -79,6 +91,7 @@ _mc_ss: &mc_ss
   decode_text: true
   decode_style: recover
   downstream_defense: semantic_smooth
+  downstream_defense_config: {query_source: encoded}
 
 _rg_ss: &rg_ss
   guard_model: wildguard
@@ -86,14 +99,15 @@ _rg_ss: &rg_ss
   decode_style: recover
   reguard_original: true
   downstream_defense: semantic_smooth
+  downstream_defense_config: {query_source: encoded}
 
 _harm: &harm {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
               benchmark: harmbench, judge_method: harmbench, judge_model: gpt-5-mini,
-              defense: modality_complete, campaign: paper_c_composed_semsm}
+              defense: modality_complete, campaign: paper_c_composed_semsm_deployable}
 
 _ben: &ben {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
             benchmark: orbench_benign_hard, judge_model: gpt-5-mini,
-            defense: modality_complete, campaign: paper_c_composed_semsm_benign}
+            defense: modality_complete, campaign: paper_c_composed_semsm_deployable_benign}
 
 # the eleven attacks — identical transform dirs as the main run and as the
 # SemanticSmooth solo baseline, so the comparison is attack-for-attack
