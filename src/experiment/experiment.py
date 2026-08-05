@@ -458,6 +458,62 @@ class Experiment:
                 n += 1
         return n
 
+    @staticmethod
+    def _pick_port_block(base_port: int, count: int, span: int = 400) -> int:
+        """Pick a port block this orchestrator can own alone.
+
+        Two mechanisms, because either alone is insufficient:
+
+        1. SPREAD by SLURM job id. Concurrent orchestrators get deterministically
+           different starting offsets, so they do not all begin at the YAML base.
+           A pure free-port probe cannot do this on its own — the orchestrator
+           never binds the port (its vLLM server does, ~30s later), so two
+           orchestrators probing at the same moment both see the base as free.
+        2. PROBE upward from there for a block with nothing already listening,
+           which catches a collision the spread happens to land on.
+
+        The probe is exact on a single-node cluster (servers share the
+        orchestrator's node) and merely conservative elsewhere: a port busy on
+        this node but free on the server's node only pushes the block higher,
+        which costs nothing. Returns `base_port` unchanged if `span` is
+        exhausted — same behavior as before this existed.
+        """
+        import os
+        import socket
+
+        stride = max(count, 4)
+        try:
+            job_id = int(os.environ.get("SLURM_JOB_ID", "0"))
+        except ValueError:
+            job_id = 0
+        start_base = base_port + (job_id % 32) * stride
+
+        def block_free(start: int) -> bool:
+            for p in range(start, start + count):
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                try:
+                    s.bind(("0.0.0.0", p))
+                except OSError:
+                    return False
+                finally:
+                    s.close()
+            return True
+
+        for start in range(start_base, start_base + span):
+            if block_free(start):
+                if start != base_port:
+                    logger.info(
+                        f"Port block {start}-{start + count - 1} (YAML base "
+                        f"{base_port}, SLURM_JOB_ID={job_id or 'unset'}) — "
+                        f"blocks are spread per job so concurrent orchestrators "
+                        f"on a single-node cluster cannot share a port.")
+                return start
+        logger.warning(
+            f"No free {count}-port block in {start_base}-{start_base + span}; "
+            f"falling back to the YAML base {base_port}. If servers now fail to "
+            f"bind, check `ss -ltn` on the node for stale vLLM processes.")
+        return base_port
+
     def _wait_for_servers_parallel(self, models: list) -> set:
         """Wait for the first server of each model to come up, in parallel.
 
@@ -575,7 +631,22 @@ class Experiment:
         # Cumulative port assignment over the sorted model list.
         # Base port comes from the YAML default (typically 8000); each model's
         # port range is contiguous and non-overlapping.
-        base_port = next(iter(model_configs.values()))["port"]
+        #
+        # WITHIN one orchestrator that is enough. ACROSS concurrent orchestrators
+        # on a SINGLE-NODE cluster it is not: on xc every vLLM server lands on the
+        # same box, so a second orchestrator starting from the same YAML base asks
+        # for a port the first one's server already holds. The second server dies
+        # with EADDRINUSE and — the damaging part — its tasks still reach the port,
+        # where the FIRST orchestrator's server answers 404 for a model it is not
+        # serving. That killed the AS-3 composed rerun twice on 2026-08-05 (xc jobs
+        # 114/115/117, then 124 alone, 24x `model Qwen/Qwen2.5-VL-7B-Instruct does
+        # not exist`, 0 cells) while `ss -ltn` showed only 8400/8401 bound — proof
+        # the later servers never got a port. Note this is NOT a submit-timing race:
+        # 124 was submitted 23 minutes after 116 was already serving and collided
+        # anyway. The base itself is the bug, so separate the blocks per job.
+        total_instances = sum(c["num_instances"] for c in model_configs.values())
+        base_port = self._pick_port_block(
+            next(iter(model_configs.values()))["port"], total_instances)
         next_port = base_port
         for m in cluster_models_sorted:
             cfg = model_configs[m]
