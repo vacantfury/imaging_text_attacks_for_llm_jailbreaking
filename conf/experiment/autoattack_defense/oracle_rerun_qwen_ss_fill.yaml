@@ -1,0 +1,20 @@
+# ============================================================
+# Paper C (AS-3) · ORACLE-LEAK RERUN — gap fill, 1 cell
+# ============================================================
+# NURC job 8951520 finished 24 succeeded / 1 failed. The one loss was
+# `semantic_smooth` x qwen2_5_vl_7b x ir_low_contrast (task 19), which died on
+# `TimeoutError: OpenAI batch ... not done after 3600s` — the judge batch was
+# still running server-side when the orchestrator's hour-long wait expired.
+# Re-running the cell is cleaner than harvesting the orphaned batch, since the
+# task never persisted its target responses.
+# ============================================================
+
+num_main_job_threads: 2
+num_cluster_jobs: 2
+
+tasks:
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0, 99],
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: semantic_smooth, defense_config: {query_source: encoded},
+     campaign: paper_c_oracle_rerun_semantic_smooth,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260718_183457_77423812/ir_low_contrast}
