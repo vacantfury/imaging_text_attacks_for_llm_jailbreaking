@@ -1,0 +1,94 @@
+# bestofn_attack AS-4 — ROUND 9, Stage 2: is the CODE encoding special, or does any
+# strong encoding beat a self-check defense?
+#
+# OWNER-APPROVED 2026-08-05 ("yes, do experiments and then back to paper framing"),
+# from his question "code attack is not special?".
+#
+# ── WHY ──────────────────────────────────────────────────────────────────────
+# Round 8's encoding factor had only TWO levels (none, code), so it proved
+# "code vs no-code", NOT "encoding in general" -- while the paper generalises to
+# "a transform defense is broken by the encoding". This round adds two more
+# encodings at FIXED variation so the generalisation is tested, not assumed.
+#
+#   at FIXED variation, against SAGE:   plain 10 | set_theory ? | formal_logic ? | code 67
+#
+#   Land near 67  -> the claim GENERALISES; code is just our instance.
+#   Only code high -> CODE IS SPECIAL; a sharper claim about what self-check
+#                     defenses actually key on.
+# Both outcomes change the paper's wording. There is no null result.
+#
+# ── PRE-REGISTERED, recorded BEFORE the run ─────────────────────────────────
+#   Q1  At the GATE, both new arms stay LOW (near code x fixed's 13, plain's 6).
+#       Fixed variation = 1 probe, and probe count -- not encoding -- is what a
+#       gate fails to. If a new arm is HIGH at the gate, the R8 gate account is
+#       wrong and must be revisited, not patched.
+#   Q2  Undefended, both new arms are non-trivial (>= ~30), else a low SAGE
+#       number is uninformative -- it would mean the attack is simply weak
+#       rather than that the encoding fails to transfer. THIS IS THE CONTROL
+#       THAT MAKES THE SAGE COLUMN READABLE; no_defense is not optional.
+#
+# ── ARMS: replicated, NOT re-encoded (load-bearing) ─────────────────────────
+# An LLM encoder run once per ROW would emit a different encoding per draw --
+# that is the VARIED condition, the opposite of what this round needs. So each
+# behavior's stored Paper-C encoding was replicated 100x:
+#   outputs/.../r9_llm_set_theory_fixed/llm_set_theory
+#   outputs/.../r9_llm_formal_logic_fixed/llm_formal_logic
+# Sources: autoattack_defense set_theory_20260531_055707_10045511 (100 beh.) and
+# formal_logic_20260531_055707_75502107 (100 beh.) -- the ORIGINAL encoder model
+# (gpt-4.1-mini), so encoding quality matches Paper C rather than a cheap re-run.
+# VERIFIED at build: 10,000 rows each; distinct ENCODED per behavior == 1;
+# distinct ORIGINAL per behavior == 1; id sequence BYTE-IDENTICAL to
+# harmbench_bon_100.jsonl, so these align draw-for-draw with every R8 arm.
+#
+# ⚠️ `original` MUST stay the true harmful behavior, never the encoding. The judge
+# reads Prompt.original as ground-truth intent (src/experiment/judging.py:287).
+# A first attempt fed the encoded text in as the dataset prompt, which would have
+# asked the judge whether a response exhibits "a math problem about sets" -- a
+# silently meaningless ASR. Verified fixed: original == the raw behavior.
+#
+# ⚠️ formal_logic is the OWNER'S OWN PUBLISHED ATTACK (Canadian AI 2026 / PMLR 318).
+# Cite it third-person as established prior art under double-blind; never present
+# it as this paper's contribution.
+#
+# ── JUDGE: cheap-first ──────────────────────────────────────────────────────
+# wildguard first pass (FREE, on-cluster) -> then a SEPARATE gpt-5-mini rejudge.
+# NOTHING here is reportable from wildguard: it over-flags encoded/code-like text
+# badly, and every arm in this round is an encoding. No wildguard number from this
+# preset may be recorded, even provisionally.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r9_encoder_generality_stage2
+#
+# ── FOOTPRINT ───────────────────────────────────────────────────────────────
+# 6 cells x 10,000 = 60,000 generations. GPU only -- $0 API at this stage.
+# num_cluster_jobs=7 is LOAD-BEARING, exactly as in R8: the allocator caps by floor
+# division `available_slots // n_models` ONLY IF total_requested > available_slots.
+# 3 models are served (llama target asks 4 instances, wildguard 1, llama_guard_3 1
+# = 6 requested). N=5 -> 4 slots -> cap 4//3 = 1 -> llama collapses 4->1 and, since
+# load-balancing is per-cell, all six cells serialise into the 24h wall. N=7 -> 6
+# slots -> no capping. 7 jobs is inside MAX_SUBMIT_JOBS_PER_USER=8 and AICR's
+# max_gpu_jobs=12.
+num_main_job_threads: 6
+num_cluster_jobs: 7
+
+_e: &e
+  mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  target_model_config: {temperature: 1.0}
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r9_encgen
+
+_SET: &set_theory outputs/bestofn_attack/prompt_transform/harmbench/r9_llm_set_theory_fixed/llm_set_theory
+_FL:  &formal_logic outputs/bestofn_attack/prompt_transform/harmbench/r9_llm_formal_logic_fixed/llm_formal_logic
+
+tasks:
+  # ---- set_theory x fixed --------------------------------------------------
+  - {<<: *e, source_transform_subdir: *set_theory, defense: no_defense}
+  - {<<: *e, source_transform_subdir: *set_theory, defense: sage}
+  - {<<: *e, source_transform_subdir: *set_theory, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}}
+
+  # ---- formal_logic x fixed ------------------------------------------------
+  - {<<: *e, source_transform_subdir: *formal_logic, defense: no_defense}
+  - {<<: *e, source_transform_subdir: *formal_logic, defense: sage}
+  - {<<: *e, source_transform_subdir: *formal_logic, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}}
