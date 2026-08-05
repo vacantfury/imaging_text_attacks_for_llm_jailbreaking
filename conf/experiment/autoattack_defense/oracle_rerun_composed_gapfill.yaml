@@ -1,0 +1,49 @@
+# ============================================================
+# Paper C (AS-3) · ORACLE-LEAK RERUN — composed arm GAP-FILL (2 cells)
+# ============================================================
+# Job `132` (the composed deployable rerun) finished 24 succeeded / 2 failed.
+# Both failures were the SAME cause and NOT a measurement problem: the OpenAI
+# judge batch did not return inside the 3600s wait
+#   `OpenAI batch batch_6a731ee0... not done after 3600s`
+# so the task aborted before writing anything. Verified: both output dirs are
+# EMPTY (no raw_results.jsonl), so there is nothing to rejudge — these are full
+# reruns, not rescues.
+#
+# The two gaps are BOTH on the `mc` arm, and they matter for different reasons:
+#   - mc x ir_fc_flowchart (harmbench) — the ensemble ASR is an OR-reduction
+#     over the attack suite, so a missing attack SHRINKS the union and makes the
+#     defense look STRONGER than it is. The `mc` ensemble must not be quoted
+#     until this lands.
+#   - mc x ir_plain (orbench_benign_hard) — one of only TWO benign cells per
+#     arm, so the `mc` over-refusal figure rests on a single cell without it.
+# The `+rg` arm — the one carrying the paper's headline — came back COMPLETE
+# (11 harmbench + 2 benign) and needs nothing here.
+#
+# Config anchors are copied verbatim from oracle_rerun_composed_semsm.yaml so
+# these two cells are identical in every respect except when they ran.
+# ============================================================
+
+num_main_job_threads: 2
+num_cluster_jobs: 3
+
+_rng: &rng [0, 99]
+
+_mc_ss: &mc_ss
+  guard_model: wildguard
+  decode_text: true
+  decode_style: recover
+  downstream_defense: semantic_smooth
+  downstream_defense_config: {query_source: encoded}
+
+_fcflow: &fcflow outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart
+_orbimg: &orbimg outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260718_183504_7866920/ir_plain
+
+tasks:
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+     benchmark: harmbench, judge_method: harmbench, judge_model: gpt-5-mini,
+     defense: modality_complete, campaign: paper_c_composed_semsm_deployable,
+     defense_config: *mc_ss, source_transform_subdir: *fcflow}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+     benchmark: orbench_benign_hard, judge_model: gpt-5-mini,
+     defense: modality_complete, campaign: paper_c_composed_semsm_deployable_benign,
+     defense_config: *mc_ss, source_transform_subdir: *orbimg}
