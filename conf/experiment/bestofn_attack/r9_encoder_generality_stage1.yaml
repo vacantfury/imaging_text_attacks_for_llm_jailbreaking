@@ -1,0 +1,74 @@
+# bestofn_attack AS-4 — ROUND 9, Stage 1 (transforms). FREE, no API, no helper LLM.
+#
+# OWNER-APPROVED 2026-08-05 ("yes, do experiments and then back to paper framing").
+#
+# ── THE QUESTION ─────────────────────────────────────────────────────────────
+# Round 8's "encoding" factor has only TWO levels: none (plain) and code. So R8
+# proved "code vs no-code", NOT "encoding in general" -- yet the paper generalises
+# to "a transform defense is broken by the encoding". That is an overclaim, caught
+# by the owner 2026-08-05 ("code attack is not special?").
+#
+# This round adds two MORE encodings at FIXED variation, so the encoding factor
+# gains levels and the generalisation becomes testable rather than assumed:
+#
+#   plain        x fixed  ->  SAGE  10   (HAVE, R8)
+#   set_theory   x fixed  ->  ?          <-- built here
+#   formal_logic x fixed  ->  ?          <-- built here
+#   code         x fixed  ->  SAGE  67   (HAVE)
+#
+# ── THE TWO OUTCOMES, BOTH PUBLISHABLE ───────────────────────────────────────
+#   If set_theory/formal_logic also land near 67 -> the claim GENERALISES; code is
+#   merely our instance, and "encoding beats self-check defenses" is earned.
+#   If only code lands high -> CODE IS SPECIAL, a sharper finding: it says
+#   self-check defenses key on something the code form specifically defeats.
+# Either way the paper's current wording changes. There is no null result here.
+#
+# ── DATASETS: built by REPLICATION, not re-encoding (load-bearing) ───────────
+# An LLM encoder called once per ROW would produce a different encoding per draw,
+# which is exactly the VARIED condition -- the opposite of what this round needs.
+# So each behavior was encoded ONCE (reusing stored Paper-C encodings, zero LLM
+# cost) and that single encoding replicated 100x:
+#   data/harmbench_set_theory_fixed_100.jsonl
+#   data/harmbench_formal_logic_fixed_100.jsonl
+# Sources (autoattack_defense/prompt_transform/harmbench/):
+#   set_theory_20260531_055707_10045511/llm_set_theory      (100 behaviors)
+#   formal_logic_20260531_055707_75502107/llm_formal_logic  (100 behaviors)
+# VERIFIED at build: 10,000 rows each, 100 behaviors x exactly 1 DISTINCT prompt,
+# and the id sequence is BYTE-IDENTICAL to data/harmbench_bon_100.jsonl -- so both
+# arms align draw-for-draw with every existing R8 arm.
+# NOTE: the 20-behavior set_theory dir (…_20260717_121526_…) is NOT the one used.
+#
+# ⚠️ formal_logic is the OWNER'S OWN PUBLISHED ATTACK (Canadian AI 2026 / PMLR 318).
+# Under double-blind it is cited in the third person as established prior art, never
+# introduced as new. Do not describe it as ours in the paper.
+#
+# ── VERIFY BEFORE STAGE 2 ────────────────────────────────────────────────────
+#   both arms: distinct encoded prompts per behavior == 1
+# Same gate as R8. Do not spend judge budget until it holds.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r9_encoder_generality_stage1
+#
+# ── FOOTPRINT ────────────────────────────────────────────────────────────────
+# Passthrough only (the encoding already sits in the prompt text), so no vLLM
+# server, no API, $0, minutes.
+num_main_job_threads: 2
+num_cluster_jobs: 1          # orchestrator only -- nothing is served at this stage
+
+tasks:
+  - mode: prompt_transform
+    source_file: data/harmbench_set_theory_fixed_100.jsonl
+    prompt_range: [0, 9999]
+    benchmark: harmbench
+    campaign: bestofn_attack_r9_encgen
+    transformation_list:
+      - type: non_llm_baseline
+        params: {}
+
+  - mode: prompt_transform
+    source_file: data/harmbench_formal_logic_fixed_100.jsonl
+    prompt_range: [0, 9999]
+    benchmark: harmbench
+    campaign: bestofn_attack_r9_encgen
+    transformation_list:
+      - type: non_llm_baseline
+        params: {}
