@@ -50,11 +50,12 @@
 num_main_job_threads: 4
 num_cluster_jobs: 1          # API targets + API judge — no vLLM server needed.
 
-# <<< PASTE stage 1's timestamped parent. It holds BOTH step subdirs:
-#       .../non_llm_baseline_ir_blank_<TS>_<RAND>/non_llm_baseline   (text arm)
-#       .../non_llm_baseline_ir_blank_<TS>_<RAND>/ir_blank           (blank arm)
-_text:  &text  PASTE/non_llm_baseline
-_blank: &blank PASTE/ir_blank
+# Stage 1 (AICR job 292257) verified 2026-08-06, same checks as the ladder:
+#   100/100 IDENTICAL text between arms · text arm image_encoded=None · 100 images
+#   with exactly 1 DISTINCT md5 (byte-identical blank canvas, zero per-prompt
+#   information). Arms differ ONLY in image presence; McNemar pairing is exact.
+_text:  &text  outputs/imgaug_defense/prompt_transform/harmbench/non_llm_baseline_ir_blank_20260806_151849_37565903/non_llm_baseline
+_blank: &blank outputs/imgaug_defense/prompt_transform/harmbench/non_llm_baseline_ir_blank_20260806_151849_37565903/ir_blank
 
 _b: &b
   mode: defense+evaluate
