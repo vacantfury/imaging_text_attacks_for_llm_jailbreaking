@@ -320,3 +320,42 @@ and parser.
 Per-paper banners state each paper's own affected scope, so an AS-2/AS-3/AS-4 session gets the finding from
 the doc it already opens rather than needing this file. When a fix lands, update the banner in the same
 session that re-runs the cells — a stale banner is worse than none.
+
+---
+
+## 8. Verdict log — paper sessions record their opinion HERE
+
+**Status: awaiting paper-session review (opened 2026-08-05).** The owner's sequence is: paper sessions check
+each finding against their own paper and record an opinion below → *then* the fixes are commissioned. **Nothing
+in §1–§2 is being fixed until that happens** — do not start a re-run off this document alone.
+
+**How to fill this in.** One row per (finding × paper) that applies to you. Verdict vocabulary:
+
+* **CONFIRMED** — I checked the code/cells and the finding holds for my paper.
+* **DISPUTED** — the finding is wrong, or wrong for my paper; say why, with the evidence.
+* **NOT-APPLICABLE** — my paper does not depend on that cell.
+* **CONFIRMED-BUT-SURVIVES** — the finding holds, but my claim stands without those cells; say which claim and why.
+
+Give the *reasoning*, not just the label — the point of the log is that the fix order and the re-run scope get
+decided from it. If a finding changes what a paper can claim, say so explicitly; that is the piece the fixes
+will be prioritised on. Sign with the paper ID and date.
+
+| # | Finding | Paper | Verdict | Reasoning / what it costs the paper | By · date |
+|---|---|---|---|---|---|
+| 1.1 | `code_attack` inverted stack ordering | AS-3 | | | |
+| 1.1 | `code_attack` inverted stack ordering | AS-4 | | | |
+| 1.1 | `code_attack` inverted stack ordering | AS-2 | | | |
+| 1.1k | con-10 2×2 confound (`code_attack_no_syntax`) | AS-4 | | | |
+| 1.2 | `llm_semantic_camo` attacks the helper, not the target | AS-3 | | | |
+| 1.2 | `llm_semantic_camo` attacks the helper, not the target | AS-2 | | | |
+| 1.3 | `ir_figstep` missing paraphrase + canonical instruction | AS-3 | | | |
+| 1.4 | `ir_fc_flowchart` is not FC-Attack | AS-3 | | | |
+| 1.5 | `non_llm_artprompt` masks the wrong word | any | | | |
+| 2.1 | five suite members uncited / "published" overclaim | AS-3 | | | |
+| 2.2 | HarmBench + OR-Bench judge rubric disclosure | AS-3 | | | |
+| 2.2 | HarmBench judge rubric disclosure | AS-5 | | | |
+| 2.3 | SemanticSmooth configuration label (N=5, Summarize-only) | AS-3 | | | |
+| 2.4 | `ir_distraction_grid` single-grid vs CS-DJ dispersion | AS-3 | | | |
+
+**Open a new row** for anything the audit missed or got wrong — a finding the audit did not raise is as useful
+as a verdict on one it did.
