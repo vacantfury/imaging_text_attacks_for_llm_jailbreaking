@@ -1,0 +1,88 @@
+# ============================================================
+# Paper C (AS-3) · METHOD-FIDELITY RERUN — STAGE 4a: floor + baselines, Qwen2.5-VL (AICR)
+# ============================================================
+# WHY THIS EXISTS — the gap Stages 2/3 did not cover.
+# Stages 2-3 re-ran Table 1's GUARD rows (gb / mc / +rg, 5 guards x 2 targets = 56
+# cells) and every comparable ensemble contrast came back non-significant. But
+# `tab:reguard`'s section headers also print an UNDEFENDED FLOOR and two BASELINES,
+# and those are 11-attack ensembles over the SAME eleven attacks — so they contain
+# the two encoders `b266892` calls a bug just as the guard rows did:
+#
+#   Qwen2.5-VL   floor 89 ASR · ECSO 90 · SemanticSmooth 80
+#   InternVL3-8B floor 91 ASR · ECSO 91 · SemanticSmooth 77   (stage 4b, xc)
+#
+# Verified against the tree, not assumed: the `no_defense`, `ecso` and
+# `semantic_smooth` cells on `code_attack` / `ir_figstep` are all in
+# `outputs/_quarantine/` (52 cells across campaigns). Leaving them unrebuilt would
+# make the paper's disclosure false in a way a reviewer can check — "we regenerated
+# the affected columns" cannot be said while the floor every contrast is measured
+# AGAINST still comes from the unfaithful encoder.
+#
+# ⚠️ The floor is NOT cosmetic. `paper_c_stats.py` computes floor->gb, floor->mc and
+# floor->+rg as the PIPELINE-level contrasts the paper's claims rest on, and the
+# abstract quotes "the undefended ensemble breaks 89--91%" directly.
+#
+# ── TWO ARMS FOR THE BASELINES, DELIBERATELY ──
+# ECSO and SemanticSmooth also carry the ORACLE LEAK (TODO item 18): both read the
+# unencoded query into their own decision path. `query_source: original` is the
+# legacy/published behaviour, `encoded` is the threat-model-faithful one. Running
+# both arms on the two fixed attacks costs 4 extra cells and buys the clean
+# statement — with only the `encoded` arm the baselines would move for TWO reasons
+# at once and neither could be attributed. `original` = comparable to the published
+# cells (campaigns `paper_c_ecso_compare` / `paper_c_semanticsmooth_baseline`);
+# `encoded` = comparable to the 2026-08-05 oracle rerun (`paper_c_oracle_rerun_*`),
+# which is itself pre-fix and so needs these two attacks rebuilt regardless.
+#
+# ✅ NO NEW STAGE 1: transform dirs are TARGET- AND DEFENSE-INDEPENDENT — the same
+# fixed encodings built for the Qwen guard block (NURC job 8957825) feed these too.
+#
+# ── SCOPE: HARMFUL AXIS ONLY ── as established for stages 2-3: the over-refusal
+# columns draw from `orbench_benign_hard/non_llm_baseline_*` and `.../ir_plain_*`,
+# never from these two attacks, so no benign cell is affected.
+#
+# ── SERVER BUDGET: sized with MARGIN, deliberately not to the cap ──
+# qwen2_5_vl_7b only (no guard servers — none of these three defenses uses a guard);
+# 1 server + orchestrator = 2, against AICR's 3 free slots at submit time (9 of 12
+# in use by another session). One spare. Do NOT raise it to 3 to buy a second
+# replica: that would be cap-exact, which is exactly how job 163 was lost.
+# ⚠️ SemanticSmooth's perturbation model defaults to `gemini-2.5-flash-lite` (API,
+# not a served model) — that is the PUBLISHED config and is left alone on purpose.
+#
+# JUDGE: inline gpt-5-mini, matching the published pipeline — a reproducibility
+# rebuild must be scored the way the cells it replaces were.
+# 10 x 100 = 1000 judgements, ~$2-3 (plus a few cents of flash-lite paraphrase).
+#
+# Submit: sbatch scripts/run_experiment.sbatch autoattack_defense/fidelity_rerun_stage4_floor_baselines_qwen_aicr
+# ============================================================
+
+num_main_job_threads: 4
+num_cluster_jobs: 2
+
+_code: &code outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260805_215649_22270770/code_attack
+_fig:  &fig  outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260805_215649_72871103/ir_figstep
+
+_base: &base
+  mode: defense+evaluate
+  target_model: qwen2_5_vl_7b
+  prompt_range: [0, 99]
+  judge_model: gpt-5-mini
+  campaign: paper_c_fidelity_rerun
+
+tasks:
+  # ── Undefended floor (abstract: "89--91%") ──
+  - {<<: *base, defense: no_defense, source_transform_subdir: *code}
+  - {<<: *base, defense: no_defense, source_transform_subdir: *fig}
+
+  # ── ECSO baseline · published arm (oracle default) ──
+  - {<<: *base, defense: ecso, source_transform_subdir: *code, defense_config: {query_source: original}}
+  - {<<: *base, defense: ecso, source_transform_subdir: *fig,  defense_config: {query_source: original}}
+  # ── ECSO baseline · deployable arm (threat-model-faithful) ──
+  - {<<: *base, defense: ecso, source_transform_subdir: *code, defense_config: {query_source: encoded}}
+  - {<<: *base, defense: ecso, source_transform_subdir: *fig,  defense_config: {query_source: encoded}}
+
+  # ── SemanticSmooth baseline · published arm (oracle default) ──
+  - {<<: *base, defense: semantic_smooth, source_transform_subdir: *code, defense_config: {query_source: original}}
+  - {<<: *base, defense: semantic_smooth, source_transform_subdir: *fig,  defense_config: {query_source: original}}
+  # ── SemanticSmooth baseline · deployable arm (threat-model-faithful) ──
+  - {<<: *base, defense: semantic_smooth, source_transform_subdir: *code, defense_config: {query_source: encoded}}
+  - {<<: *base, defense: semantic_smooth, source_transform_subdir: *fig,  defense_config: {query_source: encoded}}

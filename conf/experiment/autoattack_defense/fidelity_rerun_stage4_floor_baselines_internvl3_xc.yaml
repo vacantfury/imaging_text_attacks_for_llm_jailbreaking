@@ -1,0 +1,58 @@
+# ============================================================
+# Paper C (AS-3) · METHOD-FIDELITY RERUN — STAGE 4b: floor + baselines, InternVL3 (xc)
+# ============================================================
+# The SECOND target's floor and baselines. Read the Qwen preset's header
+# (`fidelity_rerun_stage4_floor_baselines_qwen_aicr.yaml`) for the full rationale,
+# the two-arm reasoning, and the scope verification — it is not repeated here.
+#
+# In short: `tab:reguard`'s InternVL3 section header prints floor 91 ASR, ECSO 91,
+# SemanticSmooth 77, all 11-attack ensembles containing the two fixed encoders, all
+# currently sourced from quarantined cells. The abstract's "89--91%" spans both
+# targets, so the two presets must land together or the claim is only half rebuilt.
+#
+# Runs CONCURRENTLY with the Qwen half rather than queued behind it: each half needs
+# only its own target server, so splitting costs nothing and halves the wall.
+#
+# ── SERVER BUDGET ── internvl3_8b only (none of these three defenses uses a guard);
+# 2 replicas + orchestrator = 3, against xc's cap of 6 with 1 job in flight at
+# submit time. Two spare slots. A100s, so the heavier SemanticSmooth cells
+# (5 paraphrases + 5 target queries per prompt) are much faster here than on NURC's
+# V100s — which is why InternVL3 takes xc and Qwen takes AICR.
+#
+# JUDGE: inline gpt-5-mini, matching the published pipeline.
+# 10 x 100 = 1000 judgements, ~$2-3 (plus a few cents of flash-lite paraphrase).
+#
+# Submit: sbatch scripts/run_experiment_xc.sbatch autoattack_defense/fidelity_rerun_stage4_floor_baselines_internvl3_xc
+# ============================================================
+
+num_main_job_threads: 4
+num_cluster_jobs: 3
+
+_code: &code outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260805_215649_22270770/code_attack
+_fig:  &fig  outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260805_215649_72871103/ir_figstep
+
+_base: &base
+  mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range: [0, 99]
+  judge_model: gpt-5-mini
+  campaign: paper_c_fidelity_rerun
+
+tasks:
+  # ── Undefended floor (abstract: "89--91%") ──
+  - {<<: *base, defense: no_defense, source_transform_subdir: *code}
+  - {<<: *base, defense: no_defense, source_transform_subdir: *fig}
+
+  # ── ECSO baseline · published arm (oracle default) ──
+  - {<<: *base, defense: ecso, source_transform_subdir: *code, defense_config: {query_source: original}}
+  - {<<: *base, defense: ecso, source_transform_subdir: *fig,  defense_config: {query_source: original}}
+  # ── ECSO baseline · deployable arm (threat-model-faithful) ──
+  - {<<: *base, defense: ecso, source_transform_subdir: *code, defense_config: {query_source: encoded}}
+  - {<<: *base, defense: ecso, source_transform_subdir: *fig,  defense_config: {query_source: encoded}}
+
+  # ── SemanticSmooth baseline · published arm (oracle default) ──
+  - {<<: *base, defense: semantic_smooth, source_transform_subdir: *code, defense_config: {query_source: original}}
+  - {<<: *base, defense: semantic_smooth, source_transform_subdir: *fig,  defense_config: {query_source: original}}
+  # ── SemanticSmooth baseline · deployable arm (threat-model-faithful) ──
+  - {<<: *base, defense: semantic_smooth, source_transform_subdir: *code, defense_config: {query_source: encoded}}
+  - {<<: *base, defense: semantic_smooth, source_transform_subdir: *fig,  defense_config: {query_source: encoded}}
