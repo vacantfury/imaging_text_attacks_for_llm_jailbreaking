@@ -1,7 +1,8 @@
 # Paper B (AS-2) · METHOD-FIDELITY RE-COLLECTION — the API (paid) half.
 #
-# ⚠️ STAGED, NOT AUTHORISED. Costs real money; do not submit without the owner's
-# explicit go (standing dollar gate: ≲$1 runs freely, above that = propose + WAIT).
+# ✅ AUTHORISED by the owner 2026-08-05 ("go the rest also") and submitted on AICR
+# (cpu partition, keys injected by `op run`). Costs real money — a RE-run still
+# needs a fresh go under the standing dollar gate (≲$1 runs freely, above = WAIT).
 #
 # WHY: `code_attack` was not the published method (audit §1.1 — `appendleft` over a
 # reversed list double-reversed the deque, so decode() rebuilt the behaviour
