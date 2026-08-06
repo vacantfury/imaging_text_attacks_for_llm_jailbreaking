@@ -211,6 +211,50 @@ def _denormalize_rope_scaling(config) -> None:
             f"rope would silently change the masker's embeddings.")
 
 
+def _shim_tied_weights_keys(model_name: str, config) -> None:
+    """Add transformers 5's `all_tied_weights_keys` to the remote model class.
+
+    Third and final transformers-5 incompatibility in VisRAG-Ret's frozen remote
+    code. transformers 5 renamed the weight-tying registry `_tied_weights_keys`
+    (a list) to `all_tied_weights_keys` (a dict) and reads it during loading:
+
+        for key in missing_keys - self.all_tied_weights_keys.keys():
+
+    The 2024 class defines only the old name, so loading dies with
+    AttributeError after the weights are already on the meta device.
+
+    THE EMPTY DICT IS VERIFIED, NOT ASSUMED. Weight tying is the one place where
+    a careless shim could silently leave a tensor randomly initialised, so this
+    refuses to run unless the model declares NO tying. Measured on AICR
+    2026-08-05 for openbmb/VisRAG-Ret: `_tied_weights_keys` is None, and
+    from_pretrained(output_loading_info=True) reports 0 missing / 0 unexpected /
+    0 mismatched keys — every parameter comes from the checkpoint, so there is
+    nothing to tie and the subtraction above is a no-op either way. If some other
+    mask_encoder DOES declare tied weights, the raise below stops the run rather
+    than quietly dropping the tie.
+    """
+    from transformers.dynamic_module_utils import get_class_from_dynamic_module
+
+    ref = (getattr(config, "auto_map", None) or {}).get("AutoModel")
+    if not ref:
+        return                                   # not a remote-code model
+    cls = get_class_from_dynamic_module(ref, model_name)
+    if hasattr(cls, "all_tied_weights_keys"):
+        return                                   # new-style already
+    legacy = getattr(cls, "_tied_weights_keys", None)
+    if legacy:
+        raise RuntimeError(
+            f"AMIA masking: {model_name} declares tied weights "
+            f"({legacy!r}) but the installed transformers expects the newer "
+            f"`all_tied_weights_keys` mapping. Translating that mapping by hand "
+            f"risks leaving a tied tensor randomly initialised, which would "
+            f"corrupt the masker silently — pin transformers, or convert the "
+            f"mapping deliberately, rather than letting this pass.")
+    cls.all_tied_weights_keys = {}
+    logger.debug(f"AMIA masking: shimmed empty all_tied_weights_keys onto "
+                 f"{cls.__name__} (model declares no tied weights)")
+
+
 class _VisRagMasker:
     """Text-relevance-driven patch masking. Lazily loads VisRAG-Ret."""
 
@@ -254,6 +298,7 @@ class _VisRagMasker:
         # injects can be undone BEFORE the decoder layers are built from it.
         config = AutoConfig.from_pretrained(self._model_name, trust_remote_code=True)
         _denormalize_rope_scaling(config)
+        _shim_tied_weights_keys(self._model_name, config)
         self._model = AutoModel.from_pretrained(
             self._model_name,
             config=config,
