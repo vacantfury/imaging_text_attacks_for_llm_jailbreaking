@@ -36,6 +36,15 @@ dependencies = [
     "boto3>=1.43.51",
     "llm_utils @ git+https://github.com/vacantfury/llm_utils.git@v5.1.0",
     "spacy>=3.8.14",
+    # Required by AMIA's masking encoder (openbmb/VisRAG-Ret). It is an INDIRECT
+    # dependency that nothing in this repo imports: VisRAG-Ret is a
+    # trust_remote_code model whose MiniCPM-V modeling file imports timm, and
+    # transformers' check_imports() raises ImportError before the weights are
+    # touched. So it cannot be discovered by grepping our own imports — it was
+    # found by tests/test_cider_amia_ready.py on 2026-08-05, which is why that
+    # check exists. Unpinned major: timm is a stable, widely-pinned-by-others
+    # vision-backbone package and VisRAG-Ret's file does not constrain a version.
+    "timm>=1.0,<2.0",
 ]
 
 

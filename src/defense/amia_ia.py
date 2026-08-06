@@ -131,6 +131,44 @@ REQUEST: {content}"""
 _VISRAG_QUERY_PREFIX = "Represent this query for retrieving relevant documents: "
 
 
+def _shim_transformers_for_visrag() -> None:
+    """Restore `is_torch_fx_available` so VisRAG-Ret's remote code can import.
+
+    VisRAG-Ret is a `trust_remote_code` model whose vendored MiniCPM sources
+    (`modeling_minicpm.py`, frozen at the 2024 revision the weights were released
+    with) do `from transformers.utils.import_utils import is_torch_fx_available`.
+    transformers 5.x DELETED that symbol outright — along with the whole
+    `transformers.utils.fx` module — so the import raises before a single weight
+    is read. This repo pins `transformers >=4.51,<6` and currently resolves to
+    5.13.1 on the clusters, and we cannot pin back: CIDER's encoder path is
+    written against the >=4.52 LLaVA layout (vision_tower / multi_modal_projector
+    moved under `.model`), so the two defenses would need incompatible pins.
+
+    Downgrading is therefore not available, and forking the model's remote code
+    would mean maintaining a copy of someone else's modeling file. Re-adding the
+    symbol is the minimal intervention, and it is SAFE rather than merely
+    expedient: `is_torch_fx_available()` only gates optional torch.fx symbolic
+    tracing support in MiniCPM's attention classes. We never trace the masker —
+    it runs a plain forward pass under `torch.no_grad()` — so `False` selects the
+    ordinary eager path, which is the same path the model would take on old
+    transformers when fx was unavailable.
+
+    Verified 2026-08-05 on AICR (transformers 5.13.1): this ONE symbol is the
+    only incompatibility; with it present the full VisRAG_Ret -> MiniCPMV ->
+    MiniCPM import chain resolves. Re-check when the transformers pin moves —
+    tests/test_cider_amia_ready.py is the guard.
+    """
+    import transformers.utils as U
+    import transformers.utils.import_utils as IU
+
+    for module in (IU, U):
+        if not hasattr(module, "is_torch_fx_available"):
+            module.is_torch_fx_available = lambda: False
+            logger.debug(
+                f"AMIA masking: shimmed is_torch_fx_available into "
+                f"{module.__name__} for VisRAG-Ret's remote code")
+
+
 class _VisRagMasker:
     """Text-relevance-driven patch masking. Lazily loads VisRAG-Ret."""
 
@@ -159,6 +197,10 @@ class _VisRagMasker:
         if self._model is not None:
             return
         import torch
+
+        # MUST precede the transformers import chain below: the shim has to be in
+        # place before `trust_remote_code` executes VisRAG-Ret's modeling files.
+        _shim_transformers_for_visrag()
         from transformers import AutoModel, AutoTokenizer
 
         self._device = torch.device(
