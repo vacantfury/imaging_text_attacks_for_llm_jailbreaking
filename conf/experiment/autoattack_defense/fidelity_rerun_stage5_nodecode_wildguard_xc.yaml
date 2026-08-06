@@ -1,0 +1,52 @@
+# ============================================================
+# Paper C (AS-3) · METHOD-FIDELITY RERUN — STAGE 5b: recover-only arm, WildGuard main block (xc)
+# ============================================================
+# The upper half of `tab:ablation` -- the WildGuard recover-only row on BOTH targets.
+# Read the AICR preset's header
+# (`fidelity_rerun_stage5_nodecode_crossguard_aicr.yaml`) for why this arm has to be
+# re-collected at all; in short, `tab:ablation` currently contradicts `tab:reguard`
+# because its recover-only cells predate `b266892` and sit in quarantine.
+#
+# ── SCOPE: ONE attack, not two, and this is deliberate ──
+# The table's main block ran only the SIX IMAGE attacks per target, because for a
+# TEXT-ONLY guard with decode off, the recover path and the guard-alone path hand the
+# guard an identical string -- an identity in the pipeline, not a separate measurement.
+# Of the two attacks `b266892` fixed, `code_attack` is TEXT and `ir_figstep` is IMAGE.
+# So the code_attack recover-only cell is by construction the guard-alone cell, which
+# stages 2-3 already rebuilt, and only ir_figstep needs running: 2 cells, one per target.
+# ⚠️ This identity does NOT hold for the cross-guard block -- GuardReasoner-VL is
+# multimodal -- which is why that preset runs both attacks for all four of its guards.
+#
+# ── SERVER BUDGET ── qwen2_5_vl_7b + internvl3_8b + wildguard = 3 servers;
+# + orchestrator = 4, against xc's cap of 6 with the box EMPTY at submit time.
+# Two spare slots, deliberately not cap-exact (job 163 was lost that way).
+# ⚠️ Free job SLOTS are not free GPU MEMORY on xc -- it is a single node, so another
+# session's vLLM server can make `gpu_memory_utilization: 0.9` unsatisfiable and every
+# task dies at discovery leaving EMPTY output dirs (job 183, 2026-08-06). Confirm cells
+# by `results.json` with a non-None `asr`, never by a directory count.
+#
+# JUDGE: inline gpt-5-mini. The published cells were collected under a wildguard judge
+# and rejudged to gpt-5-mini, which is what `tab:ablation` reports; judging inline here
+# reaches the same endpoint in one step.
+# 2 x 100 = 200 judgements, well under $1.
+#
+# Submit: sbatch scripts/run_experiment_xc.sbatch autoattack_defense/fidelity_rerun_stage5_nodecode_wildguard_xc
+# ============================================================
+
+num_main_job_threads: 4
+num_cluster_jobs: 4
+
+_fig: &fig outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260805_215649_72871103/ir_figstep
+
+_base: &base
+  mode: defense+evaluate
+  defense: modality_complete
+  source_transform_subdir: *fig
+  prompt_range: [0, 99]
+  judge_model: gpt-5-mini
+  campaign: paper_c_fidelity_rerun_nodecode
+  defense_config: {guard_model: wildguard, decode_text: false}
+
+tasks:
+  - {<<: *base, target_model: qwen2_5_vl_7b}
+  - {<<: *base, target_model: internvl3_8b}

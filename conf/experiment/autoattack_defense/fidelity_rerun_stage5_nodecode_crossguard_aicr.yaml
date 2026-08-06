@@ -1,0 +1,66 @@
+# ============================================================
+# Paper C (AS-3) · METHOD-FIDELITY RERUN — STAGE 5a: recover-only arm, cross-guard (AICR)
+# ============================================================
+# WHY: `tab:ablation` now CONTRADICTS `tab:reguard`. Stages 2-4 rebuilt gb / mc / +rg,
+# so Table 1 prints WildGuard gb/mc as 77/68 (Qwen) and 86/70 (InternVL3) -- but the
+# ablation table still prints 75/72 and 81/63, because its RECOVER-ONLY arm
+# (`decode_text: false`) was never re-collected. Verified against the tree: that arm is
+# 15 quarantined cells and ZERO live. No amount of writing fixes an internal
+# contradiction between two tables; the cells have to exist.
+#
+# ── SCOPE: the CROSS-GUARD block of `tab:ablation` (lower half) ──
+# The table repeats the ablation for the four non-WildGuard guards on Qwen, over all
+# eleven attacks each -- the text-cell identity that spares the main block does NOT
+# hold here, because GuardReasoner-VL is multimodal. Two of those eleven attacks were
+# rebuilt by `b266892`, so 4 guards x {code_attack, ir_figstep} = 8 cells.
+# The published cells this replaces are campaign `paper_c_crossguard_nodecode`
+# (gpt-5-mini, n=100): guardreasoner 68/0, llama_guard_3 9/4, qwen3guard 42/1,
+# thinkguard 31/3 on {code_attack, ir_figstep}.
+#
+# ✅ The WildGuard MAIN block runs separately on xc
+# (`fidelity_rerun_stage5_nodecode_wildguard_xc.yaml`) -- different model set, so
+# splitting keeps each half well inside its cluster's cap.
+#
+# ✅ NO NEW STAGE 1: transform dirs are target- and defense-independent; the same fixed
+# encodings from NURC job 8957825 feed this unchanged.
+#
+# ── SERVER BUDGET ── qwen2_5_vl_7b + 4 guards = 5 servers; + orchestrator = 6, against
+# AICR's cap of 12 with the box EMPTY at submit time. Six spare slots.
+# Do NOT lower num_cluster_jobs to "fit more": the replica allocator is FLOOR DIVISION
+# (lesson: project_replica_allocator_floor_division).
+#
+# JUDGE: inline gpt-5-mini, matching the cells it replaces. 8 x 100 = 800 judgements, ~$2.
+#
+# Submit: sbatch scripts/run_experiment_aicr.sbatch autoattack_defense/fidelity_rerun_stage5_nodecode_crossguard_aicr
+# ============================================================
+
+num_main_job_threads: 6
+num_cluster_jobs: 6
+
+_code: &code outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260805_215649_22270770/code_attack
+_fig:  &fig  outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260805_215649_72871103/ir_figstep
+
+_base: &base
+  mode: defense+evaluate
+  defense: modality_complete
+  target_model: qwen2_5_vl_7b
+  prompt_range: [0, 99]
+  judge_model: gpt-5-mini
+  campaign: paper_c_fidelity_rerun_nodecode
+
+tasks:
+  # ── Qwen3Guard-Gen-8B ──
+  - {<<: *base, source_transform_subdir: *code, defense_config: {guard_model: qwen3guard_gen_8b, decode_text: false}}
+  - {<<: *base, source_transform_subdir: *fig,  defense_config: {guard_model: qwen3guard_gen_8b, decode_text: false}}
+
+  # ── ThinkGuard ──
+  - {<<: *base, source_transform_subdir: *code, defense_config: {guard_model: thinkguard, decode_text: false}}
+  - {<<: *base, source_transform_subdir: *fig,  defense_config: {guard_model: thinkguard, decode_text: false}}
+
+  # ── LlamaGuard-3-8B ──
+  - {<<: *base, source_transform_subdir: *code, defense_config: {guard_model: llama_guard_3_8b, decode_text: false}}
+  - {<<: *base, source_transform_subdir: *fig,  defense_config: {guard_model: llama_guard_3_8b, decode_text: false}}
+
+  # ── GuardReasoner-VL-7B (multimodal — this is why the text-cell identity fails here) ──
+  - {<<: *base, source_transform_subdir: *code, defense_config: {guard_model: guardreasoner_vl_7b, decode_text: false}}
+  - {<<: *base, source_transform_subdir: *fig,  defense_config: {guard_model: guardreasoner_vl_7b, decode_text: false}}
