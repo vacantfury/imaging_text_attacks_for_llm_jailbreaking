@@ -1,0 +1,51 @@
+# ============================================================
+# Paper C (AS-3) · METHOD-FIDELITY RERUN — STAGE 3b: InternVL3, ThinkGuard + LlamaGuard-3 (NURC)
+# ============================================================
+# The other 2 of the 5 guards in Table 1's InternVL3 block; runs CONCURRENTLY with
+# `fidelity_rerun_stage3_internvl3_xc.yaml` (which takes WildGuard, Qwen3Guard and
+# GuardReasoner-VL on xc). Split across two clusters rather than queued behind one
+# because each half then fits its cluster with a spare slot — the Qwen block's job
+# 163 was lost to a cap-exact submit.
+#
+# Read the xc preset's header for the full rationale, scope and judge reasoning.
+# In short: reproducibility duty, not a results rescue — the Qwen block's 13
+# comparable ensemble contrasts were ALL non-significant, and this block is expected
+# to behave the same. It runs so the paper can state that the affected columns were
+# regenerated on BOTH targets.
+#
+# 2 guards x {gb, mc, +rg} x {code_attack, ir_figstep} = 12 cells, n=100.
+# Servers: internvl3_8b + 2 guards = 3; + orchestrator = 4 = NURC's budget.
+# JUDGE: inline gpt-5-mini, 12 x 100 = 1200 judgements, ~$2-4.
+#
+# Submit: sbatch scripts/run_experiment.sbatch autoattack_defense/fidelity_rerun_stage3_internvl3_nurc
+# ============================================================
+
+num_main_job_threads: 4
+num_cluster_jobs: 4
+
+_code: &code outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260805_215649_22270770/code_attack
+_fig:  &fig  outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260805_215649_72871103/ir_figstep
+
+_base: &base
+  mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range: [0, 99]
+  judge_model: gpt-5-mini
+  campaign: paper_c_fidelity_rerun
+
+tasks:
+  # ── ThinkGuard ──
+  - {<<: *base, defense: guard_baseline,    source_transform_subdir: *code, defense_config: {guard_model: thinkguard}}
+  - {<<: *base, defense: guard_baseline,    source_transform_subdir: *fig,  defense_config: {guard_model: thinkguard}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *code, defense_config: {guard_model: thinkguard, decode_text: true, decode_style: recover}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *fig,  defense_config: {guard_model: thinkguard, decode_text: true, decode_style: recover}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *code, defense_config: {guard_model: thinkguard, decode_text: true, decode_style: recover, reguard_original: true}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *fig,  defense_config: {guard_model: thinkguard, decode_text: true, decode_style: recover, reguard_original: true}}
+
+  # ── LlamaGuard-3-8B ──
+  - {<<: *base, defense: guard_baseline,    source_transform_subdir: *code, defense_config: {guard_model: llama_guard_3_8b}}
+  - {<<: *base, defense: guard_baseline,    source_transform_subdir: *fig,  defense_config: {guard_model: llama_guard_3_8b}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *code, defense_config: {guard_model: llama_guard_3_8b, decode_text: true, decode_style: recover}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *fig,  defense_config: {guard_model: llama_guard_3_8b, decode_text: true, decode_style: recover}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *code, defense_config: {guard_model: llama_guard_3_8b, decode_text: true, decode_style: recover, reguard_original: true}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *fig,  defense_config: {guard_model: llama_guard_3_8b, decode_text: true, decode_style: recover, reguard_original: true}}

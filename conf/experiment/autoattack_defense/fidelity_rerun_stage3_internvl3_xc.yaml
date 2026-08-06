@@ -1,0 +1,81 @@
+# ============================================================
+# Paper C (AS-3) · METHOD-FIDELITY RERUN — STAGE 3a: InternVL3, guards A/B/C (xc)
+# ============================================================
+# The SECOND target of Table 1 (`tab:reguard`). The Qwen block is done and every
+# one of its 13 comparable ensemble contrasts came back non-significant
+# (experiment_results.md, "FIVE-GUARD ENSEMBLE REBUILT"), so this block is expected
+# to move nothing either. It runs anyway because the audit's duty is REPRODUCIBILITY:
+# the published InternVL3 columns were produced by an encoder `b266892` calls a bug,
+# and "we regenerated the affected columns on both targets" is the disclosure the
+# paper needs — regenerating one target and disclosing the other predates the fix is
+# the weaker paper.
+#
+# Scope enumerated against the tree, not estimated: campaign `paper_c_gen2_internvl3`
+# holds 5 guards x {gb, mc, +rg} x {code_attack, ir_figstep} = 30 quarantined cells.
+# This preset covers 3 of the 5 guards (18 cells); ThinkGuard + LlamaGuard-3 run
+# concurrently on NURC in `fidelity_rerun_stage3_internvl3_nurc.yaml`.
+#
+# ✅ BETTER-COVERED THAN THE QWEN BLOCK: InternVL3's `+rg` cells exist for all five
+# guards, so this yields a COMPLETE 15-cell published-vs-post-fix comparison. The Qwen
+# block has a 2-cell residual (ThinkGuard/LlamaGuard `+rg` live under campaign
+# `paper_c_reguard_5guard`, not on the hub).
+#
+# ✅ NO NEW STAGE 1: transform dirs are TARGET-INDEPENDENT — the same fixed encodings
+# built for the Qwen block (NURC job 8957825) feed any target unchanged.
+#
+# ── SCOPE: HARMFUL AXIS ONLY ── as established for the Qwen block: Table 1's
+# over-refusal columns draw from `orbench_benign_hard/non_llm_baseline_*` and
+# `.../ir_plain_*`, never from these two attacks, so no benign cell is affected.
+#
+# ── SERVER BUDGET: sized with MARGIN, deliberately not to the cap ──
+# internvl3_8b + 3 guards = 4 servers; + orchestrator = 5, against xc's cap of 6.
+# The Qwen block's first attempt (job 163) was sized to fill xc EXACTLY and got bumped
+# when another session took the slots between the capacity check and the submit — the
+# preflight caught it, but the run was lost. One spare slot is cheap insurance.
+# Do NOT lower num_cluster_jobs to fit more: the replica allocator is FLOOR DIVISION
+# (lesson: project_replica_allocator_floor_division).
+#
+# JUDGE: inline gpt-5-mini, matching the published pipeline (`reguard_5guard.yaml`)
+# — a reproducibility rebuild must be scored the way the cells it replaces were.
+# 18 x 100 = 1800 judgements, ~$3-6. Owner-authorized 2026-08-06.
+#
+# Submit: sbatch scripts/run_experiment_xc.sbatch autoattack_defense/fidelity_rerun_stage3_internvl3_xc
+# ============================================================
+
+num_main_job_threads: 6
+num_cluster_jobs: 5
+
+_code: &code outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260805_215649_22270770/code_attack
+_fig:  &fig  outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260805_215649_72871103/ir_figstep
+
+_base: &base
+  mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range: [0, 99]
+  judge_model: gpt-5-mini
+  campaign: paper_c_fidelity_rerun
+
+tasks:
+  # ── WildGuard ──
+  - {<<: *base, defense: guard_baseline,    source_transform_subdir: *code, defense_config: {guard_model: wildguard}}
+  - {<<: *base, defense: guard_baseline,    source_transform_subdir: *fig,  defense_config: {guard_model: wildguard}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *code, defense_config: {guard_model: wildguard, decode_text: true, decode_style: recover}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *fig,  defense_config: {guard_model: wildguard, decode_text: true, decode_style: recover}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *code, defense_config: {guard_model: wildguard, decode_text: true, decode_style: recover, reguard_original: true}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *fig,  defense_config: {guard_model: wildguard, decode_text: true, decode_style: recover, reguard_original: true}}
+
+  # ── Qwen3Guard-Gen-8B ──
+  - {<<: *base, defense: guard_baseline,    source_transform_subdir: *code, defense_config: {guard_model: qwen3guard_gen_8b}}
+  - {<<: *base, defense: guard_baseline,    source_transform_subdir: *fig,  defense_config: {guard_model: qwen3guard_gen_8b}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *code, defense_config: {guard_model: qwen3guard_gen_8b, decode_text: true, decode_style: recover}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *fig,  defense_config: {guard_model: qwen3guard_gen_8b, decode_text: true, decode_style: recover}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *code, defense_config: {guard_model: qwen3guard_gen_8b, decode_text: true, decode_style: recover, reguard_original: true}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *fig,  defense_config: {guard_model: qwen3guard_gen_8b, decode_text: true, decode_style: recover, reguard_original: true}}
+
+  # ── GuardReasoner-VL-7B ──
+  - {<<: *base, defense: guard_baseline,    source_transform_subdir: *code, defense_config: {guard_model: guardreasoner_vl_7b}}
+  - {<<: *base, defense: guard_baseline,    source_transform_subdir: *fig,  defense_config: {guard_model: guardreasoner_vl_7b}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *code, defense_config: {guard_model: guardreasoner_vl_7b, decode_text: true, decode_style: recover}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *fig,  defense_config: {guard_model: guardreasoner_vl_7b, decode_text: true, decode_style: recover}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *code, defense_config: {guard_model: guardreasoner_vl_7b, decode_text: true, decode_style: recover, reguard_original: true}}
+  - {<<: *base, defense: modality_complete, source_transform_subdir: *fig,  defense_config: {guard_model: guardreasoner_vl_7b, decode_text: true, decode_style: recover, reguard_original: true}}
