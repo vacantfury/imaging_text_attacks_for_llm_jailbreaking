@@ -1,0 +1,73 @@
+# Paper B (AS-2) · SYMMETRY TEST — STAGE 1: render the harmful counterpart.
+#
+# THE QUESTION. The sensitivity ladder (AICR 287575, 2026-08-06) established that
+# attaching a BLANK canvas to a benign text request shifts the refusal threshold:
+# no effect on genuinely neutral prompts (3 of 4 models ns), large effect on
+# borderline-benign ones (claude 12->63 = +51pp, gpt-4o-mini 12->46 = +34pp,
+# flash-lite 11->34 = +23pp, all p<=1.5e-06). That is the COST side.
+#
+# A threshold shift should have a BENEFIT side. If the same blank image moves the
+# model's decision boundary, it should also catch more borderline-HARMFUL
+# requests — lower ASR. This preset measures that, and the answer decides the
+# paper's thesis:
+#
+#   * harmful ASR falls under the blank canvas
+#       -> SYMMETRIC shift. The model genuinely became more cautious in both
+#          directions; the story is an ordinary safety-utility trade-off priced
+#          by a spurious feature. Real, but much less pointed.
+#   * harmful ASR is FLAT while benign refusal rose +23 to +51pp
+#       -> ASYMMETRIC shift. The caution fires on benign traffic and does not
+#          protect. This is the thesis: safety keyed on image presence is a
+#          shortcut that costs without buying. THE outcome that makes the paper.
+#   * harmful ASR RISES
+#       -> the image weakens safety on harmful input while tightening it on
+#          benign — the worst case for the vendor and a strong result, but it
+#          would contradict our own encoded-attack arm, so treat with suspicion
+#          and re-verify before reporting.
+#
+# WHY OR-BENCH-HARMFUL AND NOT PLAIN HARMBENCH — the load-bearing design choice.
+# OR-Bench ships `benign_hard` and `harmful` as CONSTRUCTED COUNTERPARTS from the
+# same pipeline and topic distribution. The benign cost peaked on `benign_hard`
+# (+51pp), so its matched harmful set is the apples-to-apples population for the
+# benefit side. Using HarmBench instead would compare a shift measured on
+# OR-Bench-borderline prompts against protection measured on a differently
+# constructed corpus, and any asymmetry could be the corpora rather than the
+# model. HarmBench-plain remains a worthwhile ADDITIONAL arm; it is not this one.
+#
+# KNOWN HEADROOM LIMITATION, stated up front. On plain (unencoded) harmful text
+# the frontier models sit LOW — the May archive measures claude ~4% and gpt-5.4
+# ~3.5%, against gemini-2.5-flash 27% and flash-lite 18% (gpt-5-nano-judged, so
+# approximate). A model already near 0% cannot show a drop, so a flat result on
+# claude/gpt-4o-mini is UNINFORMATIVE rather than evidence of asymmetry. The
+# gemini pair carries the headroom and therefore carries the test. This must be
+# said in the paper, not discovered by a reviewer.
+#
+# CLAUDE CARRIES A SECOND CAVEAT: the archive's claude plain-harmful text arm had
+# 17% EMPTY responses (Anthropic content filter), auto-scored as refusals. If
+# that recurs here, claude's cells measure the filter, not the model — the
+# analysis checks for it explicitly and excludes rather than quoting.
+#
+# SAME INTERVENTION AS THE LADDER, deliberately: `ir_blank` with keep_text=True,
+# one chain per dataset so both arms come from a single task and are byte-
+# identical on the text channel. Stage 1 of the ladder verified this holds
+# (100/100 identical text, 1 distinct image md5 across 100 files).
+#
+# COST: ZERO. `non_llm_baseline` is the identity encoder and `ir_blank` is a
+# non-LLM renderer, so this stage makes no model call.
+#
+# SUBMIT (AICR):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch imgaug_defense/symmetry_test_stage1'
+# Then paste the timestamped dir into symmetry_test_stage2.yaml.
+
+num_main_job_threads: 2
+
+tasks:
+  - mode: prompt_transform
+    source_file: data/orbench_harmful_prompts.jsonl
+    benchmark: harmbench          # pinned so the harm-rubric reporting path is used
+    prompt_range: [0, 99]
+    campaign: paper_b_symmetry_test
+    transformation_list:
+      - {type: non_llm_baseline}
+      - {type: ir_blank}
