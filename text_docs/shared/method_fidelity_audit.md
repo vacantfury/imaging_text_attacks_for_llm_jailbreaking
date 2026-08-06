@@ -302,3 +302,21 @@ and parser.
 5. Paper-side: five missing citations, "published" → softer wording, judge-rubric disclosure sentence,
    SemanticSmooth configuration label.
 6. `non_llm_artprompt` word selection (before any ArtPrompt number is reported).
+
+---
+
+## 7. Where this audit is recorded (so a paper session finds it without being told)
+
+| Surface | What it carries |
+|---|---|
+| **This file** | The full record — verdict per item, reference-code line citations, clean list. |
+| `TODO.md` **item 22** | The ordered fix list ①–⑦, with the paper-side (no-code) items separated out. Item 21 stays the home for CIDER/AMIA residue. |
+| `NOW.md` | One cold-start line: *do not cite the affected numbers*, plus pointers here and to item 22. |
+| `text_docs/autoattack_defense/experiment_results.md` | AS-3 banner — its four affected attacks (69 presets), the specific §"Why the frontier exists" claim that rests on `code_attack`, and its paper-side items. |
+| `text_docs/bestofn_attack/experiment_results.md` | AS-4 banner — `code_attack` is the strategy channel's load-bearing attack (42 presets), plus the con-10 2×2 confound. |
+| `text_docs/imgaug_defense/experiment_matrix.md` | AS-2 banner — the narrower scope (8 `code_attack` + 3 `semantic_camo` presets) and which cells are unaffected. |
+| `model_internals_safety/TODO.md` **item 21** | The sibling's share: the judge-rubric disclosure, the byte-identical-prompt verification, and the both-repos-or-neither constraint on ever changing that rubric text. |
+
+Per-paper banners state each paper's own affected scope, so an AS-2/AS-3/AS-4 session gets the finding from
+the doc it already opens rather than needing this file. When a fix lands, update the banner in the same
+session that re-runs the cells — a stale banner is worse than none.
