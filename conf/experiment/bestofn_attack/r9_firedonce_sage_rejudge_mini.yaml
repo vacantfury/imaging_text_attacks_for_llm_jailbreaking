@@ -1,0 +1,55 @@
+# bestofn_attack AS-4 — FIRED-ONCE rejudge: set_theory + formal_logic under SAGE.
+#
+# OWNER-APPROVED 2026-08-06 ("yes, go", ~$4.50 for 2 cells).
+#
+# ⚠️ HAND-WRITTEN, not from scripts/build_rejudge_preset.py — the generator selects whole
+# campaigns and would re-judge all six R9 cells (~$13) to get these two.
+#
+# ── THE QUESTION THIS SETTLES (it decides the paper's title and abstract) ────
+# The AIA draft's thesis is "borrowed strength": the code encoding FIRED ONCE succeeds on
+# 4.7%, best-of-N alone on <=3.0%, but search OVER the encoding reaches 67 -- 9-75x the sum
+# of the parts. (The rebuilt encoder moves those to per-draw 4.18% and ensemble 61.)
+#
+# R9 then measured, against the same SAGE defense at FIXED variation:
+#   set_theory ensemble 86 | formal_logic ensemble 85 | code ensemble 61
+# Both beat the paper's headline composed attack with NO search over the prompt. So:
+#
+#   * If set_theory/formal_logic FIRED ONCE are also ~5%, the search-amplifies-a-weak-
+#     encoding mechanism is GENERAL across three encodings, not a code quirk. The paper
+#     strengthens: same thesis, triple the evidence, title broadens from "a Code Encoding".
+#   * If they are already strong fired once, they never needed search, the composition
+#     framing is code-specific, and our own appendix contradicts the title.
+#
+# PER-DRAW ASR UNDER FIXED VARIATION *IS* THE FIRED-ONCE RATE: one prompt, one target
+# sample. Confirmed on the code arm, where R11 per-draw 4.18% reproduces the draft's 4.7%
+# (the delta is exactly the fidelity fix). That is why these two cells answer the question.
+#
+# ── WHY A REJUDGE IS NEEDED AT ALL ──────────────────────────────────────────
+# These two cells WERE rejudged on 2026-08-05, but that pass died: `asr: null` /
+# `status: partial_judge` on all six R9 cells (the inherited-verdict trap). Four cells were
+# recovered for free by harvesting the completed OpenAI batches -- but harvesting recovers
+# ENSEMBLES, not per-draw rates, and the batches have since aged off OpenAI's list. The dead
+# dirs are quarantined at outputs/_quarantine/inherited_verdict_dead_rejudge/.
+#
+# ⚠️ KNOWN GAP, deliberately NOT filled here: `plain x SAGE` (R8, campaign r8_factorial) is
+# ALSO a dead rejudge -- a THIRD instance of the same trap -- so the floor of the fired-once
+# column is likewise unavailable and would cost ~$2.25 more. Left out to stay inside the
+# approved spend; the decisive comparison (does a good encoding need search?) does not need
+# the floor. Flag it if the fired-once column is to be published as a complete table.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r9_firedonce_sage_rejudge_mini
+#
+# ── FOOTPRINT ───────────────────────────────────────────────────────────────
+# 2 cells x 10,000 = 20,000 judge calls, ~$4.50, ~20 min. No GPU (API judge).
+# Must run on aicr/nurc: xc's routing policy bars non-Bedrock API models.
+num_cluster_jobs: 1
+num_main_job_threads: 8
+tasks:
+# set_theory x SAGE x fixed  (R9, campaign bestofn_attack_r9_encgen)
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_sage__20260805_031934_70133438
+  judge_model: gpt-5-mini
+# formal_logic x SAGE x fixed  (R9, campaign bestofn_attack_r9_encgen)
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama3_1_8b_cluster_sage__20260805_031935_78777939
+  judge_model: gpt-5-mini
