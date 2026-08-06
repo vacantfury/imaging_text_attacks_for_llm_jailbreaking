@@ -52,7 +52,18 @@
 # rebuild must be scored the way the cells it replaces were.
 # 10 x 100 = 1000 judgements, ~$2-3 (plus a few cents of flash-lite paraphrase).
 #
-# Submit: sbatch scripts/run_experiment.sbatch autoattack_defense/fidelity_rerun_stage4_floor_baselines_qwen_aicr
+# ⚠️ ACTUALLY RAN ON NURC, NOT AICR (2026-08-06, job 8959850) — the filename is kept
+# because the preset had already been committed and pulled to the boxes under it, and
+# renaming a tracked preset that has produced results is the worse trap. Two reasons
+# it moved: (1) AICR was at 10 of 12 jobs with another session active, so the 2 slots
+# this needs were CAP-EXACT — the same condition that lost job 163; (2) the AICR
+# wrapper is `run_experiment_aicr.sbatch`, and submitting with the plain wrapper there
+# fails with `invalid partition specified: short`. NURC was empty (0 of 4) with two
+# spare slots. The preset itself is cluster-agnostic — target model plus judge, with
+# CLUSTER_PROFILE choosing the overlay — so nothing about the cells changed.
+#
+# Submit (NURC, as run): sbatch scripts/run_experiment.sbatch autoattack_defense/fidelity_rerun_stage4_floor_baselines_qwen_aicr
+# Submit (AICR, if rerouted): sbatch scripts/run_experiment_aicr.sbatch autoattack_defense/fidelity_rerun_stage4_floor_baselines_qwen_aicr
 # ============================================================
 
 num_main_job_threads: 4
