@@ -6,7 +6,8 @@
 # Reviewers asked whether the decoy-image amplification effect is specific
 # to "symbolic obfuscation" (set_theory/formal_logic/code_attack). This
 # preset generates Stage-1 chains for two NON-symbolic encoders —
-# semantic_camo (natural-language semantic camouflage, Jiang et al. 2025)
+# semantic_camo (natural-language semantic camouflage, Yan et al. 2025,
+# Findings of ACL; NOT Jiang et al., which is the CAMO cross-modal attack)
 # and classical_chinese_simplified (文言文 translation, CC-BOS direct
 # strategy, Huang et al. 2026) — on HarmBench rows 0-99, mirroring the
 # existing code_attack/formal_logic decoy runs (conf/experiment/experiment.yaml).
