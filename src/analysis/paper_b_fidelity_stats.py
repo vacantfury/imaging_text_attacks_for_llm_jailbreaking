@@ -35,7 +35,15 @@ from collections import defaultdict
 from .paper_c_stats import flags, mcnemar_exact, wilson
 
 GRID_GLOB = "outputs/imgaug_defense/defense+evaluate/harmbench/*"
-CAMPAIGN_PREFIX = "paper_b_fidelity_regrid"
+
+# Explicit allow-list, not a `paper_b_` prefix match: this working tree is shared
+# with concurrent sessions, and at least one other campaign
+# (`paper_b_oracle_rerun_free`) writes to the same directory. A prefix match would
+# silently mix another session's cells into these statistics.
+CAMPAIGNS = (
+    "paper_b_fidelity_regrid",           # + _camo, _sage, _claude_probe suffixes
+    "paper_b_mechanism_sweep",
+)
 
 
 def _arm(source_dir: str) -> str:
@@ -55,7 +63,8 @@ def _load() -> dict:
             r = json.load(open(f))
         except Exception:
             continue
-        if not str(r.get("campaign", "")).startswith(CAMPAIGN_PREFIX):
+        camp = str(r.get("campaign", ""))
+        if not camp.startswith(CAMPAIGNS):
             continue
         src = (r.get("upstream_ref") or {}).get("source_dir", "")
         attack = "semantic_camo" if "semantic_camo" in src else "code_attack"
