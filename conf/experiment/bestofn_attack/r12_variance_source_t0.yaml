@@ -1,0 +1,105 @@
+# bestofn_attack AS-4 — ROUND 12: WHERE DOES BEST-OF-N's VARIANCE COME FROM?
+#
+# OWNER-ORDERED 2026-08-06 ("think deep about main story, then plan experiments, then do
+# experiments"). Time is explicitly NOT a constraint on this design (owner, same day).
+#
+# ── THE CLAIM UNDER TEST ────────────────────────────────────────────────────
+# Best-of-N does not defeat a defense by "trying harder"; it HARVESTS VARIANCE, and there
+# are two channels:
+#   (A) ATTACKER-SUPPLIED — the input differs across draws (paraphrase / BoN augmentation).
+#   (B) DEFENSE-SUPPLIED  — the defense's own decision is a sample from a stochastic model,
+#                           so a byte-identical input gets a fresh verdict every draw.
+#
+# Channel (B) is free to the attacker and is a property of the DEFENSE ARCHITECTURE:
+#   * SAGE is a SINGLE call on the TARGET (src/defense/sage.py — the self-check and the
+#     answer are the same generation), and every preset runs the target at
+#     temperature 1.0. Its safety decision is therefore resampled on every draw.
+#   * guard_baseline calls LLMServiceFactory.create(guard_model) with NO config override,
+#     so llama_guard_3_8b inherits conf/llm/default.yaml `temperature: 0.0` — GREEDY.
+#     Same input, same verdict.
+#
+# Already measured at T=1.0 (R11, campaign bestofn_attack_r11_codefix), and the confound is
+# already controlled: per-draw leak rates are COMPARABLE — the gate passes 7.12% of draws,
+# SAGE lets 4.18% succeed — yet best-of-100 breaks 9 behaviors at the gate and 61 under
+# SAGE. At matched single-draw rates the stochastic defense loses 7x more. That is
+# channel (B), correlational. This round makes it CAUSAL by switching (B) OFF.
+#
+# ── THE DESIGN (2x2x2; the T=1.0 half already exists, so only 4 cells are new) ──
+#
+#                  | fixed input          | varied input
+#   ---------------|----------------------|---------------------------
+#   T=1.0          | target variance only | BOTH channels     <- R11, done
+#   T=0.0          | NO variance at all   | input variance only <- THIS PRESET
+#
+#   x {sage, guard_baseline(llama_guard_3_8b)}
+#
+# PRE-REGISTERED PREDICTIONS (score these honestly; a miss is a finding):
+#   P1. SAGE x fixed x T=0  -> ensemble COLLAPSES from 61 toward its own per-draw rate.
+#       With no variance of any kind, any-of-100 must equal any-of-1 up to serving noise.
+#       If it does NOT collapse, channel (B) is not the mechanism and the story is wrong.
+#   P2. gate x fixed x T=0  ~= gate x fixed x T=1 (9/100). The guard is already greedy, so
+#       removing TARGET sampling should barely move it. Any residual gap is vLLM batching
+#       nondeterminism, which is itself worth measuring (see P4).
+#   P3. gate x varied x T=0 ~= gate x varied x T=1 (77/100). Input variance is the ONLY
+#       channel that works against a deterministic gate, and it is untouched by T.
+#   P4. RESIDUAL NONDETERMINISM IS REAL AND SHOULD BE QUANTIFIED, NOT ASSUMED AWAY. At
+#       T=1.0 the gate passed 712 draws across 9 evading behaviors — not the 900 that
+#       perfect determinism predicts, so ~79% within-behavior consistency. Running all 100
+#       draws at T=0 (rather than 1 draw x 100) MEASURES that floor instead of assuming it.
+#       That is why this preset does NOT shortcut the fixed/T=0 cells to a single draw.
+#
+# ── WHY code_attack IS THE PROBE ENCODING ───────────────────────────────────
+# Largest dynamic range in the whole matrix: 4.18% per draw -> 61 ensemble under SAGE, and
+# 7.1% per draw -> 9 ensemble at the gate. set_theory/formal_logic sit at ~37% per draw and
+# 83% gate evasion, so they are near ceiling and would compress the effect. Extend to the
+# strong encodings only AFTER the effect is confirmed here.
+#
+# Inputs are the SAME transform dirs R11 consumed, so this is matched draw-for-draw to the
+# T=1.0 half. Verified on xc: 10,000 rows each, 0 rows containing `appendleft` (the
+# b266892 fidelity fix is in these prompts).
+#
+# ── WHERE THIS RUNS ─────────────────────────────────────────────────────────
+# xc: 6 servers (llama x4 + wildguard + llama_guard_3_8b) into xc's budget of 6, so
+# `total_requested > available_slots` is FALSE and NO capping fires. ⚠️ Do not lower
+# num_cluster_jobs to "save" GPUs — 5 slots for 6 instances across 3 models triggers
+# per_model_cap = 5//3 = 1 and collapses llama to a single replica.
+#
+#   ssh xc; cd ~/projects/llm_guardrail_security
+#   sbatch scripts/run_experiment_xc.sbatch bestofn_attack/r12_variance_source_t0
+#
+# ── JUDGE ───────────────────────────────────────────────────────────────────
+# wildguard on-cluster (FREE) for the SHAPE comparison only — it is compared
+# wildguard-to-wildguard against a matched T=1.0 wildguard pass, so the DIRECTION is
+# readable. ⚠️ NO wildguard number is reportable: code-bearing arms, wildguard over-flags
+# code 41-68%. Reportable ASR needs a gpt-5-mini rejudge (its own ask).
+# ✅ EXCEPTION — the two GATE cells carry a JUDGE-FREE metric: gate evasion is read off the
+# canned-refusal string ("I cannot assist with this request because the guard model..."),
+# so P2/P3/P4 can be scored with no judge at all.
+#
+# ── FOOTPRINT ───────────────────────────────────────────────────────────────
+# 4 cells x 10,000 = 40,000 generations. GPU only, $0 API.
+num_main_job_threads: 4
+num_cluster_jobs: 7          # 6 servers (llama x4 + wildguard + llama_guard_3_8b) + orchestrator
+
+_e: &e
+  mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  target_model_config: {temperature: 0.0}    # <-- THE INTERVENTION. R11 ran 1.0.
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r12_variance_source   # NEW campaign — never reuse r11_codefix;
+                                                 # these cells share output naming with the
+                                                 # T=1.0 half and campaign is the only safe
+                                                 # discriminator (latest-wins is unsafe).
+
+_CODE_FIXED:  &code_fixed  outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+_CODE_VARIED: &code_varied outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_code_attack_20260805_212855_68111123/code_attack
+
+tasks:
+  # ---- SAGE (stochastic self-check) at T=0 -> channel (B) switched OFF ------
+  - {<<: *e, source_transform_subdir: *code_fixed,  defense: sage}
+  - {<<: *e, source_transform_subdir: *code_varied, defense: sage}
+  # ---- gate (already greedy) at T=0 -> control, should barely move ----------
+  - {<<: *e, source_transform_subdir: *code_fixed,  defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}}
+  - {<<: *e, source_transform_subdir: *code_varied, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}}
