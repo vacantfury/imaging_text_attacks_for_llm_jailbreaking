@@ -1,0 +1,46 @@
+# ============================================================
+# Paper C (AS-3) · METHOD-FIDELITY RERUN — STAGE 5a/4 of 4: recover-only, GuardReasoner-VL-7B (NURC)
+# ============================================================
+# One quarter of `tab:ablation`'s cross-guard recover-only block. Read
+# `fidelity_rerun_stage5_nodecode_crossguard_aicr.yaml` for the scope and the reason
+# the arm has to be re-collected at all.
+#
+# ⚠️ WHY THIS IS SPLIT PER GUARD INSTEAD OF ONE 8-CELL PRESET.
+# The combined preset needs qwen2_5_vl_7b + FOUR guards = 5 servers, which fits only
+# AICR. It was submitted there (job 291407) and STALLED: AICR had 601 jobs queued and
+# 288 pending cluster-wide, so all four guard servers sat `PENDING (Priority)` behind
+# other users while the orchestrator idled 28 minutes with zero cells written, then was
+# cancelled. NURC is idle but caps at 4 jobs, and xc was busy (5 of 8 A100s at ~74 GiB).
+# One guard per preset = qwen + 1 guard = 2 servers + orchestrator = 3 jobs, which fits
+# NURC with a spare slot and never depends on another cluster's queue depth.
+# ⚠️ Do NOT merge these back into one preset to "save time": with 5 servers against 3
+# usable slots the replica allocator's FLOOR DIVISION silently gives some model zero
+# replicas (lesson: project_replica_allocator_floor_division).
+#
+# These run CHAINED via `sbatch --dependency=afterany`, so only one occupies NURC at a
+# time and the four complete unattended.
+#
+# 2 cells (code_attack + ir_figstep), n=100, inline gpt-5-mini, 200 judgements, <$1.
+# Replaces published campaign `paper_c_crossguard_nodecode` for this guard.
+#
+# Submit: sbatch scripts/run_experiment.sbatch autoattack_defense/fidelity_rerun_stage5_nodecode_guardreasoner_vl_7b_nurc
+# ============================================================
+
+num_main_job_threads: 2
+num_cluster_jobs: 3
+
+_code: &code outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260805_215649_22270770/code_attack
+_fig:  &fig  outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260805_215649_72871103/ir_figstep
+
+_base: &base
+  mode: defense+evaluate
+  defense: modality_complete
+  target_model: qwen2_5_vl_7b
+  prompt_range: [0, 99]
+  judge_model: gpt-5-mini
+  campaign: paper_c_fidelity_rerun_nodecode
+  defense_config: {guard_model: guardreasoner_vl_7b, decode_text: false}
+
+tasks:
+  - {<<: *base, source_transform_subdir: *code}
+  - {<<: *base, source_transform_subdir: *fig}
