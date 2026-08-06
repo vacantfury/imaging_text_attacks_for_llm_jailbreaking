@@ -388,6 +388,40 @@ session that re-runs the cells — a stale banner is worse than none.
 each finding against their own paper and record an opinion below → *then* the fixes are commissioned. **Nothing
 in §1–§2 is being fixed until that happens** — do not start a re-run off this document alone.
 
+> ### ⚠️ SCOPE WARNING — enumerate by PROVENANCE, not by directory name (AS-2 session, 2026-08-05)
+>
+> Any quarantine or re-run scoped by matching attack names against output paths **under-counts by roughly
+> two thirds**. A cell is affected if *any ancestor in its `upstream_ref.source_dir` chain* used an unfaithful
+> attack — and two large classes never carry the attack name in their own path:
+> * **`rejudge` cells** are named for the *judge* (`..._gpt-5-mini_...`), not the attack;
+> * **BoN / derived cells** are named for the *transform* (`variance_channel_bon_...`), not the base encoding.
+>
+> Measured 2026-08-05 by walking `upstream_ref` transitively:
+>
+> | machine | by name | **by provenance** | hidden |
+> |---|---|---|---|
+> | local | 503 | **912** | +409 |
+> | aicr | 427 | **589** | +162 |
+> | explorer (NURC) | 138 | **212** | +74 |
+> | xc | 259 | **466** | +207 |
+> | **total** | 1327 | **2179** | **+852** |
+>
+> **This revises AS-2's stated scope upward.** The banner in `text_docs/imgaug_defense/experiment_matrix.md`
+> says "8 `code_attack` + 3 `semantic_camo` presets"; provenance finds **86 affected `imgaug_defense` cells on
+> AICR alone, 71 of them invisible to name matching**. Paper B depends on these attacks more widely than the
+> per-preset count suggests.
+>
+> Read-only enumerator used: `prov_scope.py` (session scratchpad; ~60 lines, no repo dependency — it walks
+> `outputs/`, reads each `results.json`, and resolves `upstream_ref.source_dir` transitively). Worth promoting
+> into `scripts/` if the quarantine is re-run, since the same blind spot bit the original oracle-leak audit
+> (composed cells) and would bite a third time.
+>
+> **Note on the in-flight quarantine:** `outputs/_QUARANTINE_code_attack_appendleft_bug/` (83 dirs, local only,
+> flattened `__`-joined names, no README) was created by a concurrent session while this was being measured. It
+> covers `code_attack` + `variance_channel_bon` only, is name-scoped, and has not touched the three clusters.
+> Whoever finishes the quarantine should reconcile against the provenance list rather than extend the
+> name-matched one, and should carry a README like the two existing quarantine roots do.
+
 **How to fill this in.** One row per (finding × paper) that applies to you. Verdict vocabulary:
 
 * **CONFIRMED** — I checked the code/cells and the finding holds for my paper.
