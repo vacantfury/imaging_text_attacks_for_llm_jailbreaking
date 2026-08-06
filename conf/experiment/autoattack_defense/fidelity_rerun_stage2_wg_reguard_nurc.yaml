@@ -1,0 +1,44 @@
+# ============================================================
+# Paper C (AS-3) · METHOD-FIDELITY RERUN — STAGE 2 chunk 2b: WildGuard's `+rg` pair
+# ============================================================
+# The two cells the first slice missed. xc job 148 covered WildGuard's `gb` and
+# `mc` on both fixed attacks but NOT the reguard ablation (`+rg`), which Table 1
+# (`tab:reguard`) prints as its third column and which has its own quarantined
+# published cells (campaign `paper_c_reguard_ablation`: code_attack 36, figstep 0).
+#
+# Runs on NURC rather than xc because the companion 4-guard preset already fills
+# xc's server cap exactly (qwen + 4 guards + orchestrator = 6 = cap). Two clusters
+# in parallel, no contention: this needs qwen + wildguard = 2 servers, so
+# orchestrator + 2 = 3, inside NURC's budget of 4.
+#
+# Same reasoning, judge, and scope notes as
+# `fidelity_rerun_stage2_4guard_xc.yaml` — read that header first; in particular
+# (a) this is a reproducibility rebuild, NOT a results rescue (the "3x worse"
+# finding is retracted), and (b) the benign axis is out of scope because Table 1's
+# over-refusal columns draw from `non_llm_baseline` / `ir_plain`, never from these
+# two attacks.
+#
+# COST: 2 x 100 = 200 gpt-5-mini judgements, ~$0.3-0.7.
+#
+# Submit: sbatch scripts/run_experiment.sbatch autoattack_defense/fidelity_rerun_stage2_wg_reguard_nurc
+# ============================================================
+
+num_main_job_threads: 2
+num_cluster_jobs: 3
+
+_code: &code outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260805_215649_22270770/code_attack
+_fig:  &fig  outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260805_215649_72871103/ir_figstep
+
+_rg: &rg {guard_model: wildguard, decode_text: true, decode_style: recover, reguard_original: true}
+
+_base: &base
+  mode: defense+evaluate
+  target_model: qwen2_5_vl_7b
+  prompt_range: [0, 99]
+  judge_model: gpt-5-mini
+  defense: modality_complete
+  campaign: paper_c_fidelity_rerun
+
+tasks:
+  - {<<: *base, source_transform_subdir: *code, defense_config: *rg}
+  - {<<: *base, source_transform_subdir: *fig,  defense_config: *rg}
