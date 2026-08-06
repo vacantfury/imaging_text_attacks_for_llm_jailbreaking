@@ -24,15 +24,17 @@
 #      a genuine off-frontier point and the paper's scope claim would need rewriting
 #      rather than defending.
 #
-# ONE DECLARED DEVIATION, and it WEAKENS the detector — say so wherever a number
-# from this defense is reported:
-#   DENOISER = the authors' DnCNN (weights shipped in their repo) rather than their
-#   headline guided-diffusion denoiser, whose 2GB ImageNet checkpoint they do not
-#   ship. Their diffusion path denoises 350 iterations sampling every 50, so
-#   predict() sees SEVEN deltas and flags if ANY dips below tau; the DnCNN path
-#   denoises once, so we get ONE. Strictly fewer chances to trip => this config is a
-#   LOWER BOUND on CIDER's detection power, biased toward our own pre-registered
-#   expectation. Never report it as CIDER's true strength.
+# DENOISER — the authors' HEADLINE guided-diffusion path is now the default
+# (wired 2026-08-05). It noises each image to t and takes ONE p_sample step
+# keeping pred_xstart, independently at t = 50,100,...,350 — seven checkpoints,
+# flagging if ANY delta dips below tau. The UNet/diffusion code is vendored at
+# src/defense/vendor/guided_diffusion (OpenAI, MIT — the same copy CIDER vendors);
+# the ~2GB checkpoint is not redistributable through the repo and is downloaded
+# per machine (see diffusion_checkpoint below).
+#   `denoiser: dncnn` selects their shipped fallback, which denoises ONCE => one
+#   delta instead of seven => strictly fewer chances to trip => a LOWER BOUND on
+#   CIDER's detection power, biased toward our own pre-registered expectation.
+#   Only use it if the diffusion checkpoint is unavailable, and label it as such.
 #
 # ENCODER — CORRECTED 2026-08-05. This file previously set `clip_model` and claimed
 # that calling CLIP ViT-L/14-336 directly "reproduces their primary setup" because
@@ -44,6 +46,19 @@
 # transfer. Delta traces produced before this date are INVALID; discard them.
 
 encoder_model: llava-hf/llava-1.5-7b-hf
+
+# The authors' headline denoiser. Their threshold_selection.py uses
+# generate_denoised_img(model="diffusion", cps=8) with step=50, i.e.
+# range(50, 400, 50) => the seven checkpoints below.
+denoiser: diffusion
+denoise_steps: 350
+denoise_every: 50
+
+# ~2GB, NOT in the repo (too large, and not ours to redistribute). Download once
+# per machine:
+#   curl -L -o ~/models/cider_256x256_diffusion_uncond.pt \
+#     https://openaipublic.blob.core.windows.net/diffusion/jul-2021/256x256_diffusion_uncond.pt
+diffusion_checkpoint: ~/models/cider_256x256_diffusion_uncond.pt
 
 # The authors ship these weights at code/models/DnCNN/checkpoint.pth.tar. other_repos/
 # is gitignored, so the file is copied to each cluster by hand and this path points at

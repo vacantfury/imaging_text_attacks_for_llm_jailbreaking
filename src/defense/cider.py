@@ -170,6 +170,101 @@ def _load_dncnn(ckpt_path: str, device):
 _CIDER_RESIZE = 224
 
 
+# --------------------------------------------------------------------------
+# Guided-diffusion denoiser — the authors' HEADLINE path, reproducing
+# `models/diffusion_denoiser/imagenet/DRM.py::DiffusionRobustModel`.
+#
+# The UNet/diffusion code is vendored at src/defense/vendor/guided_diffusion
+# (OpenAI's guided-diffusion, MIT; the same copy CIDER itself vendors). It is
+# vendored rather than pip-installed because upstream's setup.py declares
+# `py_modules=["guided_diffusion"]` for what is actually a package, so
+# `pip install git+...` does not reliably install it — and because other_repos/
+# is gitignored, so the clusters would not receive it any other way.
+#
+# NOTE ON THE CLASSIFIER: DRM.py also loads a ViT classifier, but only its
+# `forward()` uses it. CIDER calls `.denoise()` exclusively, so the classifier is
+# omitted here — that removes a dependency without touching the denoise path.
+# --------------------------------------------------------------------------
+class _DiffusionArgs:
+    """Verbatim from DRM.py's Args (the 256x256 unconditional ImageNet model)."""
+    image_size = 256
+    num_channels = 256
+    num_res_blocks = 2
+    num_heads = 4
+    num_heads_upsample = -1
+    num_head_channels = 64
+    attention_resolutions = "32,16,8"
+    channel_mult = ""
+    dropout = 0.0
+    class_cond = False
+    use_checkpoint = False
+    use_scale_shift_norm = True
+    resblock_updown = True
+    use_fp16 = False
+    use_new_attention_order = False
+    clip_denoised = True
+    num_samples = 10000
+    batch_size = 16
+    use_ddim = False
+    model_path = ""
+    classifier_path = ""
+    classifier_scale = 1.0
+    learn_sigma = True
+    diffusion_steps = 1000
+    noise_schedule = "linear"
+    timestep_respacing = None
+    use_kl = False
+    predict_xstart = False
+    rescale_timesteps = False
+    rescale_learned_sigmas = False
+
+
+class _DiffusionDenoiser:
+    """One-shot denoise at a given noise level, exactly as DRM.denoise does.
+
+    For each checkpoint t, the image is noised to level t with `q_sample` and
+    then a SINGLE `p_sample` step is taken, keeping `pred_xstart`. The
+    checkpoints are therefore independent one-shot denoises at increasing noise
+    levels, NOT a progressive denoising chain — a detail easy to get wrong when
+    reading the paper's "350 denoising iterations" prose alone.
+    """
+
+    def __init__(self, checkpoint: str, device, seed: int = 0):
+        import torch
+        from .vendor.guided_diffusion.script_util import (
+            args_to_dict, create_model_and_diffusion, model_and_diffusion_defaults,
+        )
+
+        model, diffusion = create_model_and_diffusion(
+            **args_to_dict(_DiffusionArgs(), model_and_diffusion_defaults().keys())
+        )
+        state = torch.load(checkpoint, map_location="cpu", weights_only=False)
+        model.load_state_dict(state)
+        self.model = model.to(device).eval()
+        self.diffusion = diffusion
+        self.device = device
+        # The authors do not seed, so their deltas carry sampling noise run to
+        # run. We seed per call: same input -> same delta, which makes a
+        # calibration pass and a scoring pass comparable. This makes the detector
+        # deterministic, it does not change what it measures.
+        self.seed = seed
+
+    def denoise(self, x01, t: int):
+        """x01: [B,3,H,W] float in [0,1] -> denoised tensor in [0,1]."""
+        import torch
+
+        x_start = x01 * 2 - 1                      # their projection to [-1,1]
+        gen = torch.Generator(device=x_start.device).manual_seed(self.seed + t)
+        noise = torch.randn(x_start.shape, generator=gen,
+                            device=x_start.device, dtype=x_start.dtype)
+        t_batch = torch.tensor([t] * len(x_start), device=x_start.device)
+        with torch.no_grad():
+            x_t = self.diffusion.q_sample(x_start=x_start, t=t_batch, noise=noise)
+            out = self.diffusion.p_sample(
+                self.model, x_t, t_batch, clip_denoised=True)["pred_xstart"]
+        return torch.clamp((out + 1) / 2, 0, 1)    # back to [0,1]
+
+
 @register_defense
 class Cider(Defense):
     """Published cross-modal consistency detector, as a gate defense."""
@@ -178,6 +273,10 @@ class Cider(Defense):
 
     def __init__(self,
                  encoder_model: str = "llava-hf/llava-1.5-7b-hf",
+                 denoiser: str = "diffusion",
+                 diffusion_checkpoint: str = "",
+                 denoise_steps: int = 350,
+                 denoise_every: int = 50,
                  dncnn_checkpoint: str = "",
                  threshold: Optional[float] = None,
                  device: str = "cuda",
@@ -194,11 +293,21 @@ class Cider(Defense):
                 "text), NOT with CLIP's contrastive projection space — see this "
                 "module's docstring. Set `encoder_model` instead, and discard any "
                 "delta traces produced before 2026-08-05.")
-        super().__init__(encoder_model=encoder_model,
+        if denoiser not in ("diffusion", "dncnn"):
+            raise ValueError(
+                f"CIDER: denoiser must be 'diffusion' (the authors' headline "
+                f"path) or 'dncnn' (their shipped fallback), got {denoiser!r}.")
+        super().__init__(encoder_model=encoder_model, denoiser=denoiser,
+                         diffusion_checkpoint=diffusion_checkpoint,
+                         denoise_steps=denoise_steps, denoise_every=denoise_every,
                          dncnn_checkpoint=dncnn_checkpoint,
                          threshold=threshold, device=device,
                          batch_size=batch_size, trace_dir=trace_dir, **kwargs)
         self._encoder_name = encoder_model
+        self._denoiser_kind = denoiser
+        self._diffusion_ckpt = diffusion_checkpoint
+        # range(50, 400, 50) in their threshold_selection.py: seven checkpoints.
+        self._checkpoints = list(range(denoise_every, denoise_steps + 1, denoise_every))
         self._ckpt = dncnn_checkpoint
         self._tau = threshold
         self._device_str = device
@@ -228,13 +337,35 @@ class Cider(Defense):
             low_cpu_mem_usage=True,
         ).to(self._device).eval()
         self._processor = AutoProcessor.from_pretrained(self._encoder_name)
-        if not self._ckpt:
-            raise ValueError(
-                "CIDER needs dncnn_checkpoint — the denoiser weights shipped in "
-                "the authors' repo at code/models/DnCNN/checkpoint.pth.tar. Set it "
-                "in conf/defense/cider.yaml (other_repos/ is gitignored, so the "
-                "file must be placed on each cluster).")
-        self._denoiser = _load_dncnn(self._ckpt, self._device)
+
+        if self._denoiser_kind == "diffusion":
+            if not self._diffusion_ckpt:
+                raise ValueError(
+                    "CIDER needs diffusion_checkpoint — OpenAI's "
+                    "256x256_diffusion_uncond.pt (~2GB), which the authors' repo "
+                    "does not ship. Download it from "
+                    "https://openaipublic.blob.core.windows.net/diffusion/"
+                    "jul-2021/256x256_diffusion_uncond.pt and set the path in "
+                    "conf/defense/cider.yaml, or set denoiser: dncnn to run the "
+                    "weaker shipped fallback (a LOWER BOUND — see the docstring).")
+            logger.info(
+                f"CIDER: loading guided-diffusion denoiser (the authors' headline "
+                f"path), {len(self._checkpoints)} checkpoints at t="
+                f"{self._checkpoints}")
+            self._denoiser = _DiffusionDenoiser(self._diffusion_ckpt, self._device)
+        else:
+            if not self._ckpt:
+                raise ValueError(
+                    "CIDER needs dncnn_checkpoint — the denoiser weights shipped "
+                    "in the authors' repo at code/models/DnCNN/checkpoint.pth.tar. "
+                    "Set it in conf/defense/cider.yaml (other_repos/ is gitignored, "
+                    "so the file must be placed on each cluster).")
+            logger.warning(
+                "CIDER: using the DnCNN fallback, which denoises ONCE. This yields "
+                "one delta instead of the headline path's seven, so the detector "
+                "is strictly weaker and this run is a LOWER BOUND on CIDER's "
+                "detection power. Do not report it as CIDER's strength.")
+            self._denoiser = _load_dncnn(self._ckpt, self._device)
 
     # ---------------- the authors' encoder path ----------------
     def _submodule(self, name: str):
@@ -310,31 +441,43 @@ class Cider(Defense):
             with torch.no_grad():
                 t_emb = self._embed_text(texts)
 
-                # DnCNN operates on [0,1] pixels at 224x224.
+                # Denoisers operate on [0,1] pixels at 224x224.
                 raw = torch.stack([
                     torch.from_numpy(np.asarray(im).astype("float32") / 255.0)
                     .permute(2, 0, 1)
                     for im in images
                 ]).to(self._device)
-                dn_in = raw.to(next(self._denoiser.parameters()).dtype)
-                den = torch.clamp(self._denoiser(dn_in), 0, 1)
+
+                if self._denoiser_kind == "diffusion":
+                    denoised = [self._denoiser.denoise(raw, t)
+                                for t in self._checkpoints]
+                else:
+                    dn_in = raw.to(next(self._denoiser.parameters()).dtype)
+                    denoised = [torch.clamp(self._denoiser(dn_in), 0, 1)]
 
                 # Both arms go through the SAME image processor, so any
                 # normalisation/resize it applies cancels in the delta.
                 proc = self._processor.image_processor
-                px_o = proc(images=images, return_tensors="pt")["pixel_values"]
-                px_d = proc(images=[
-                    (d.permute(1, 2, 0).float().cpu().numpy() * 255)
-                    .astype("uint8") for d in den
-                ], return_tensors="pt")["pixel_values"]
-
                 dtype = next(self._vlm.parameters()).dtype
-                i_emb = self._embed_image(px_o.to(self._device, dtype))
-                d_emb = self._embed_image(px_d.to(self._device, dtype))
 
-                cos_o = F.cosine_similarity(t_emb, i_emb, dim=-1)
-                cos_d = F.cosine_similarity(t_emb, d_emb, dim=-1)
-                diffs = (cos_d - cos_o).detach().cpu().reshape(-1).tolist()
+                def _embed(tensor_or_pils):
+                    px = proc(images=tensor_or_pils, return_tensors="pt")["pixel_values"]
+                    return self._embed_image(px.to(self._device, dtype))
+
+                def _to_uint8(batch):
+                    return [(d.permute(1, 2, 0).float().cpu().numpy() * 255)
+                            .astype("uint8") for d in batch]
+
+                cos_o = F.cosine_similarity(t_emb, _embed(images), dim=-1)
+
+                # min over checkpoints: their predict() flags if ANY checkpoint's
+                # delta dips below tau, which is exactly min(delta) < tau.
+                per_ckpt = []
+                for den in denoised:
+                    cos_d = F.cosine_similarity(t_emb, _embed(_to_uint8(den)), dim=-1)
+                    per_ckpt.append(cos_d - cos_o)
+                diffs = (torch.stack(per_ckpt).min(dim=0).values
+                         .detach().cpu().reshape(-1).tolist())
                 if len(diffs) != len(ids):
                     raise RuntimeError(
                         f"CIDER: {len(diffs)} deltas for {len(ids)} inputs — the "
