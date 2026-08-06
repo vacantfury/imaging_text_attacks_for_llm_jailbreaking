@@ -55,13 +55,17 @@
 num_main_job_threads: 6
 num_cluster_jobs: 1          # API targets + API judge — no vLLM server needed.
 
-# <<< PASTE stage 1's two timestamped parents here. Each holds BOTH step subdirs:
-#       .../non_llm_baseline_ir_blank_<TS>_<RAND>/non_llm_baseline   (text arm)
-#       .../non_llm_baseline_ir_blank_<TS>_<RAND>/ir_blank           (blank arm)
-_r1_text:  &r1_text  PASTE/non_llm_baseline
-_r1_blank: &r1_blank PASTE/ir_blank
-_r2_text:  &r2_text  PASTE/non_llm_baseline
-_r2_blank: &r2_blank PASTE/ir_blank
+# Stage 1 (AICR job 287521, COMPLETED 26s, exit 0:0) verified 2026-08-06:
+#   * 100/100 IDENTICAL text between the two arms of each rung -> keep_text held,
+#     so the arms differ ONLY in image presence and the pairing is exact.
+#   * text arm carries image_encoded=None; blank arm carries one image per prompt.
+#   * 100 images per rung with exactly 1 DISTINCT md5 -> every prompt gets the
+#     byte-identical blank canvas, i.e. literally zero per-prompt information in
+#     the image channel. This is the isolation the whole claim rests on.
+_r1_text:  &r1_text  outputs/imgaug_defense/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_6183277/non_llm_baseline
+_r1_blank: &r1_blank outputs/imgaug_defense/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_6183277/ir_blank
+_r2_text:  &r2_text  outputs/imgaug_defense/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/non_llm_baseline
+_r2_blank: &r2_blank outputs/imgaug_defense/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/ir_blank
 
 _b: &b
   mode: defense+evaluate
