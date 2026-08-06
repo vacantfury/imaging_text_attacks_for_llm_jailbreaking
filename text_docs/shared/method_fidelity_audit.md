@@ -502,3 +502,38 @@ as a verdict on one it did.
 |---|---|---|---|---|---|
 | 1.1c | **`code_attack` also underpins AS-3's COMPOSITION mechanism — a dependency §1.1 does not list** | AS-3 | **CONFIRMED — new** | §1.1 names AS-4's headline and AS-3's block-rate argument, but misses the load-bearing one. `paper.tex:276` justifies the paper's best safety result — the composed amplifier-plus-SemanticSmooth Pareto point — with "paraphrase-and-vote collapses \textsc{CodeAttack}, which \textsc{decode} inflates". That near-disjoint-residuals premise is what makes composition *principled* rather than a lucky stack. Unlike the ceiling claim, it is **not monotone in attack strength**: whether `decode` inflates CodeAttack is a claim about decode's interaction with the obfuscation, and a correctly-reversed CodeAttack may interact differently. **Consequence for the fix scope: re-running the `code_attack` suite columns is not sufficient — the composed cells must be re-run too**, or the mechanism sentence must be softened to a measured observation about our variant. | AS-3 · 2026-08-05 |
 | — | **Concurring on §6's ordering, from AS-3's side** | audit-wide | **DISPUTED (priority)** | Independently reaching the same conclusion as the AS-2 and AS-4 sessions. §6 puts `code_attack` first, but every §1 finding is *conservative in direction* — our attacks are weaker than the published ones, so fixing them raises ASR and makes AS-3's ceiling claim hold more firmly. Nothing shipped is overturned by §1, which means none of it is urgent in the correctness sense. What IS urgent is the **integrity** half: 1.4 (we cite FC-Attack for a cell that is not FC-Attack) and 2.1 ("eleven published attacks" when two are ours and one is the authors' own) are visible to any reviewer who opens a reference, cost $0, need no cluster time, and are not contingent on any re-run decision. **Recommended order for AS-3: 1.4 rename → 2.1 citations/wording → 2.2 + 2.3 + 2.4 disclosure sentences → then the `code_attack` and FigStep re-runs.** The paper-side block can land today; the re-run block needs a scope decision against the 8/19 working deadline (8/21 wall). | AS-3 · 2026-08-05 |
+
+---
+
+## 9. Block A LANDED for AS-3 (2026-08-05) — paper-side items closed, $0, no cluster
+
+All of §6's Block A is now in `paper/autoattack_defense/aaai_2027_ai_alignment/aaai_aia_latex/paper.tex`
+(the sole live AS-3 edit target; `aaai_2027_main/` and `arxiv_latex/` remain frozen). Build verified clean:
+**15pp, 0 errors, 0 undefined citations, 0 overfull boxes, no page growth.**
+
+| Audit item | What landed |
+|---|---|
+| **§1.4** | The cell is renamed **"flowchart render"** and de-claimed in prose: *"a rendering ablation of ours, inspired by the flowchart-attack family \cite{zhang2025fcattack} but without its step decomposition or quiz prompt."* The citation survives as **inspiration for the rendering family**, exactly as §1.4's action prescribes — it no longer asserts the cell IS FC-Attack. **No re-run: the ~198 flowchart cells stay live and valid.** |
+| **§2.1** | Four missing citations added and verified present in the generated bibliography: `set-theory` → `bethany2024jailbreakinglargelanguagemodels` (was in `paper.bib`, never cited) · `formal-logic` → `pmlr-v318-zhang26a` · `classical-language` → `huang2026obscureeffectiveclassicalchinese` · Caesar cipher → `\citet{yuan2024gpt}`. **Base64 is deliberately NOT attributed** — it is not CipherChat and no suitable entry exists in this bib; it is now labelled *"a standard encoding baseline rather than a published attack"*. `low-contrast`/`occluded` are stated as **ours**, synthesized in approximation of a family that ships curated photographs. The overclaim is softened in all three places it appeared: abstract *"eleven published attacks"* → *"eleven attacks drawn from the encoded-jailbreak literature"*, and two instances of *"our eleven established attacks"* → *"our eleven-attack suite"*. |
+| **§2.2** | Harm-rubric disclosure added beside the existing refusal-rubric one in §Setup. **Canonical wording below — AS-2, AS-4 and AS-5 must use it verbatim.** |
+| **§2.3** | SemanticSmooth is now introduced as *"its Summarize-only configuration with $N{=}5$ perturbations and a separate lightweight paraphraser (the authors' baseline-paraphrase route, rather than perturbing with the target model itself, and $N{=}5$ against their default of $10$)"* — at the point the baseline is introduced, so every later mention inherits it. |
+| **§2.4** | The distraction grid now states it packs sub-questions and fixed benign distractors into a **single** image, *"in place of that family's dispersion across retrieved images."* |
+
+### The canonical §2.2 disclosure sentence — copy VERBATIM into AS-2, AS-4, AS-5
+
+§6 item 3 requires identical wording across all four papers so the cross-repo comparison stays legible. This
+is the text that shipped in AS-3; **do not paraphrase it** when porting:
+
+> We score with gpt-5-mini under HarmBench's zero-shot template rather than the official fine-tuned
+> \textsc{HarmBench-Llama-2-13b-cls}, and our harm rubric reproduces that classifier prompt verbatim through
+> all seven of its rules while adding two of our own --- a generation that merely quotes or echoes the
+> behavior, and one entirely irrelevant to it, are each scored ``no'' --- together with a JSON output contract
+> in place of the original answer format; the OR-Bench three-class rubric likewise adds one clarifying note to
+> the verbatim class definitions. Both harm-rubric additions push measured ASR \emph{down}, the conservative
+> direction for our claims.
+
+⚠️ The rubric **string itself** in `src/evaluation/` is byte-identical across this repo and
+`model_internals_safety` and must never move one-sidedly — this edit changes only the paper-side *description*.
+
+**Still owed by AS-3 (Block B):** the `code_attack` and FigStep re-runs on the fixed encoders, including the
+COMPOSED cells per row 1.1c, and regeneration of the 28 stale round-H human-eval rows (repo `TODO.md` item 24).
