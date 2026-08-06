@@ -19,6 +19,38 @@
 # type_name stays `amia_ia` for continuity with existing presets; BOTH of AMIA's
 # components are implemented as of 2026-08-05.
 
+# ⛔ MASKING IS CURRENTLY BLOCKED ON THE CLUSTERS (measured 2026-08-05, AICR).
+# `masking: true` below is the CORRECT setting and the code is complete, but it
+# cannot run against the installed transformers. VisRAG-Ret is a trust_remote_code
+# model whose vendored MiniCPM sources are frozen at their 2024 revision, and this
+# repo resolves transformers to 5.13.1 (pin `>=4.51,<6`). Four incompatibilities
+# surfaced in sequence; three are fixed in src/defense/amia_ia.py, the fourth is not:
+#   1. FIXED  `is_torch_fx_available` deleted from transformers.utils.import_utils
+#             -> _shim_transformers_for_visrag()
+#   2. FIXED  transformers 5 injects a synthetic rope_scaling whose key was renamed
+#             `type` -> `rope_type`  -> _denormalize_rope_scaling()
+#   3. FIXED  `_tied_weights_keys` renamed to `all_tied_weights_keys` (safe here:
+#             the model declares NO tied weights and loads 0 missing keys)
+#             -> _shim_tied_weights_keys()
+#   4. OPEN   modeling_minicpmv.py::_convert_to_tensors does
+#             `torch.tensor(input_ids, dtype=torch.int32)` and gets a `property`
+#             object -> TypeError. This is tokenizer SEMANTICS under transformers 5,
+#             not an API rename, so it cannot be shimmed without porting openbmb's
+#             tokenizer logic — which would put a hand-modified third-party baseline
+#             into the paper. Deliberately NOT attempted.
+#
+# We cannot pin transformers back: CIDER's encoder path targets the >=4.52 LLaVA
+# layout, so the two defenses would need incompatible pins in one environment.
+#
+# THE ROUTE OUT (filed in TODO.md, not built): masking depends ONLY on (image, text)
+# — exactly like CIDER's deltas — so it can be PRECOMPUTED in an isolated venv
+# holding transformers ~4.44, writing masked images once per channel for AMIA to
+# consume. That keeps the published method intact instead of patching it.
+#
+# UNTIL THEN, if AMIA must appear in a table, it runs with `masking: false` and the
+# label is "AMIA (IA-only)" in EVERY row, figure and sentence — see the note below;
+# the IA path needs no VisRAG and works today.
+#
 # ---- Automatic masking (paper §3.1) ----
 # true  = the FULL published method. Uses the verbatim Figure-3 prompt, which
 #         states the image "has been partially masked" — true only in this mode.

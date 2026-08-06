@@ -569,7 +569,19 @@ class Cider(Defense):
             try:
                 out_dir = Path(self._trace_dir)
                 out_dir.mkdir(parents=True, exist_ok=True)
-                trace = out_dir / f"{Path(source_dir).name}.jsonl"
+                # Key by CHAIN + STEP, not step alone. The step name is not unique:
+                # AS-3's suite happens to end every chain in a distinct renderer
+                # (ir_figstep, ir_occluded, ...), but Paper B's arms ALL end in
+                # `ir_constant` — code_attack's decoy, semantic_camo's decoy and the
+                # benign decoy would have written one `ir_constant.jsonl`, each
+                # silently overwriting the last. Since the calibration compares the
+                # benign delta distribution against the attack one, that collision
+                # would not error; it would just quietly calibrate tau against
+                # whichever channel finished last. (Found 2026-08-05 while staging
+                # the calibration; the pre-2026-08-05 CLIP-space traces are already
+                # quarantined, so nothing depends on the old names.)
+                src = Path(source_dir)
+                trace = out_dir / f"{src.parent.name}__{src.name}.jsonl"
                 with open(trace, "w") as fh:
                     for pid, d in deltas.items():
                         fh.write(json.dumps({"id": pid, "delta": d,

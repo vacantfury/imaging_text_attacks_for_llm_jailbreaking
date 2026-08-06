@@ -15,13 +15,20 @@ pre-registered prediction in conf/defense/cider.yaml.
 
 Usage:
     python src/analysis/paper_c_cider_threshold.py \
-        --benign 'outputs/autoattack_defense/cider_deltas/non_llm_baseline.jsonl' \
-                 'outputs/autoattack_defense/cider_deltas/ir_plain.jsonl' \
-        --attack 'outputs/autoattack_defense/cider_deltas/ir_*.jsonl'
+        --benign 'outputs/autoattack_defense/cider_deltas/*__non_llm_baseline.jsonl' \
+                 'outputs/autoattack_defense/cider_deltas/*__ir_plain.jsonl' \
+        --attack 'outputs/autoattack_defense/cider_deltas/*__ir_[!p]*.jsonl'
 
 Note the benign image channel is `ir_plain` and the benign text channel is
 `non_llm_baseline`; the attack globs must EXCLUDE those two or the calibration set
 leaks into the attack set.
+
+TRACE FILENAMES ARE `<chain_dir>__<step>.jsonl` (changed 2026-08-05). They used to
+be `<step>.jsonl`, which collided whenever two chains ended in the same renderer —
+Paper B's arms all end in `ir_constant`, so its benign and attack channels would
+have overwritten each other and tau would have been calibrated against whichever
+ran last. Globs therefore need the `*__` prefix; the label printed per row is the
+full chain+step, so the report still separates channels rather than pooling them.
 """
 from __future__ import annotations
 
