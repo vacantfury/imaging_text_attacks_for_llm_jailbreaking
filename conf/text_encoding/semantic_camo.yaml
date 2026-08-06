@@ -1,5 +1,9 @@
 # SemanticCamo attack encoder configuration
-# Reference: "SemanticCamo: Jailbreaking LLMs through Semantic Camouflage" (Jiang et al., 2025)
+# Reference: Yan, Yang, Wang, Feng, Zhang & Zhao, "SemanticCamo: Jailbreaking Large
+# Language Models through Semantic Camouflage", Findings of ACL 2025.
+# Bib key: `yan-etal-2025-semanticcamo`. (An earlier version of this header credited
+# "Jiang et al., 2025" — that is a DIFFERENT paper, `jiang2025crossmodalobfuscation`
+# = CAMO, the cross-modal math-indexed attack. Corrected 2026-08-05.)
 #
 # Implements Plan A_PLAN1: extract semantic features → reconstruct instructions.
 
