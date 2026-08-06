@@ -24,16 +24,26 @@
 #      a genuine off-frontier point and the paper's scope claim would need rewriting
 #      rather than defending.
 #
-# TWO DECLARED DEVIATIONS (both forced; both stated in the paper):
-#   1. DENOISER = the authors' DnCNN (weights shipped in their repo) rather than
-#      their headline guided-diffusion denoiser, whose 2GB ImageNet checkpoint they
-#      do not ship. Their own utils.py implements the DnCNN path and notes it
-#      denoises once per image, so the checkpoint sequence has length 1, not 7.
-#   2. ENCODER = CLIP ViT-L/14-336 called directly. Their embeddings come from the
-#      target MLLM's encoder and their primary target is LLaVA-1.5-7B, whose vision
-#      tower IS this CLIP checkpoint — so this reproduces their primary setup.
+# ONE DECLARED DEVIATION, and it WEAKENS the detector — say so wherever a number
+# from this defense is reported:
+#   DENOISER = the authors' DnCNN (weights shipped in their repo) rather than their
+#   headline guided-diffusion denoiser, whose 2GB ImageNet checkpoint they do not
+#   ship. Their diffusion path denoises 350 iterations sampling every 50, so
+#   predict() sees SEVEN deltas and flags if ANY dips below tau; the DnCNN path
+#   denoises once, so we get ONE. Strictly fewer chances to trip => this config is a
+#   LOWER BOUND on CIDER's detection power, biased toward our own pre-registered
+#   expectation. Never report it as CIDER's true strength.
+#
+# ENCODER — CORRECTED 2026-08-05. This file previously set `clip_model` and claimed
+# that calling CLIP ViT-L/14-336 directly "reproduces their primary setup" because
+# LLaVA-1.5-7B's vision tower is that CLIP checkpoint. That was WRONG. The authors
+# embed images through the vision tower AND the multi_modal_projector into the LLM's
+# input-embedding space, and embed text with the LLM's own embedding table —
+# CLIP's text encoder is never called (code/utils.py:200-281; paper §4.1, §6).
+# Cosine similarity in those two spaces is not the same quantity, so tau does not
+# transfer. Delta traces produced before this date are INVALID; discard them.
 
-clip_model: openai/clip-vit-large-patch14-336
+encoder_model: llava-hf/llava-1.5-7b-hf
 
 # The authors ship these weights at code/models/DnCNN/checkpoint.pth.tar. other_repos/
 # is gitignored, so the file is copied to each cluster by hand and this path points at

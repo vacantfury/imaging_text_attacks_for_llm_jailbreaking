@@ -9,7 +9,7 @@ frontier covers black-box VLM defense generally").
 MECHANISM, transcribed from the authors' released code (`other_repos/CIDER`,
 `code/defender.py` + `code/utils.py`), not from the paper prose:
 
-  1. Embed the text channel and the image with a shared vision--language encoder.
+  1. Embed the text channel and the image with the target MLLM's OWN encoders.
   2. Denoise the image, recording the embedding at each denoise checkpoint.
   3. Let delta = cos(text, img_denoised) - cos(text, img_original) at each checkpoint.
      Flag the input as adversarial if min(delta) < tau, i.e. if denoising costs
@@ -27,19 +27,38 @@ guard-threshold sweep. Run this defense once with `threshold: null` over the ben
 channel to collect deltas (everything passes, which also gives CIDER's over-refusal
 floor for free), then set `threshold` from `paper_c_cider_threshold.py`.
 
-TWO DECLARED DEVIATIONS, both forced and both stated in the paper:
+THE EMBEDDING SPACE IS THE MLLM'S, NOT CLIP'S — CORRECTED 2026-08-05. An earlier
+version of this file embedded with `CLIPModel.text_embeds` / `.image_embeds`, i.e.
+CLIP's *contrastive projection* space, justified on the grounds that LLaVA-1.5-7B's
+vision tower is CLIP ViT-L/14-336. That justification was wrong and the numbers it
+produced (the delta traces under `outputs/autoattack_defense/cider_deltas/` from
+2026-07-30) are INVALID. What the authors actually do, in both `LlavaEncoder` and
+`QwenEncoder` (`code/utils.py:200-281`):
 
-  * DENOISER. The authors' headline results use a guided-diffusion denoiser whose
-    ImageNet checkpoint (`256x256_diffusion_uncond.pt`, ~2GB) is NOT shipped in
-    their repo; the DnCNN alternative their own `utils.py` implements IS shipped
-    (`code/models/DnCNN/checkpoint.pth.tar`). We use their DnCNN weights and their
-    DnCNN architecture, vendored below with attribution. Their code notes DnCNN
-    "currently only denoise[s] once for each img", so the checkpoint sequence has
-    length 1 rather than the diffusion path's seven.
-  * ENCODER. Their embeddings come from the target MLLM's own encoder, and their
-    primary target is LLaVA-1.5-7B, whose vision tower IS CLIP ViT-L/14-336. We
-    call that CLIP checkpoint directly, which reproduces their primary setup
-    without loading a VLM in-process purely to read embeddings.
+  * image -> vision tower -> **multi_modal_projector** -> mean-pool patches,
+    landing in the LLM's input-embedding space (4096-d for LLaVA-1.5-7B);
+  * text  -> **model.get_input_embeddings()** -> mean-pool tokens, same space.
+
+CLIP's text encoder is never called at all. The paper says the same in prose --
+"the image and text encoder of the state-of-the-art MLLM LLaVA-v1.5-7B" (§4.1) --
+and attributes the threshold's cross-model transferability to "their shared
+transformer-based LLM backbones, which generate comparable representations" (§6),
+which is a statement about the LLM space, not CLIP's. Cosine similarity between
+mean-pooled LLM token embeddings and mean-pooled projected patches is a different
+quantity from CLIP contrastive similarity, and neither the delta distribution nor
+the calibrated tau transfers between them.
+
+ONE DECLARED DEVIATION THAT WEAKENS THE DETECTOR — state it wherever a number from
+this module is reported. The authors' headline denoiser is guided diffusion run for
+350 iterations with an embedding taken every 50 (`generate_denoised_img(...,
+model="diffusion", cps=8)`), so `predict()` gets SEVEN deltas per image and flags if
+ANY of them falls below tau. Its ImageNet checkpoint (`256x256_diffusion_uncond.pt`,
+~2GB) is not shipped in their repo. We fall back to the DnCNN path their `utils.py`
+also implements, whose weights ARE shipped -- but that denoises once, so we get ONE
+delta and take the min over a single value. That is strictly fewer chances to trip
+the detector, so this configuration is a LOWER BOUND on CIDER's detection power. It
+biases toward "CIDER does not flag our attacks", which is the direction of our own
+pre-registered expectation -- so it must never be reported as CIDER's true strength.
 
 WHAT WE EXPECT, PRE-REGISTERED. CIDER detects *optimization-based pixel
 perturbations*: the whole signal is that denoising strips adversarial noise. Our
@@ -145,6 +164,12 @@ def _load_dncnn(ckpt_path: str, device):
     return net.to(device).eval()
 
 
+# The authors resize every image to 224x224 before denoising and before
+# embedding (`utils.py:366`, `utils.py:487`). The DnCNN weights were trained at
+# that operating point, so this is not a free parameter.
+_CIDER_RESIZE = 224
+
+
 @register_defense
 class Cider(Defense):
     """Published cross-modal consistency detector, as a gate defense."""
@@ -152,42 +177,57 @@ class Cider(Defense):
     type_name = "cider"
 
     def __init__(self,
-                 clip_model: str = "openai/clip-vit-large-patch14-336",
+                 encoder_model: str = "llava-hf/llava-1.5-7b-hf",
                  dncnn_checkpoint: str = "",
                  threshold: Optional[float] = None,
                  device: str = "cuda",
                  batch_size: int = 16,
                  trace_dir: str = "outputs/autoattack_defense/cider_deltas",
                  **kwargs):
-        super().__init__(clip_model=clip_model, dncnn_checkpoint=dncnn_checkpoint,
+        # Fail loudly on the superseded key rather than swallowing it in kwargs
+        # and silently running the wrong embedding space again.
+        if "clip_model" in kwargs:
+            raise ValueError(
+                "CIDER: `clip_model` is no longer a valid option. CIDER embeds "
+                "with the target MLLM's own encoders (vision tower -> "
+                "multi_modal_projector, and the LLM input-embedding table for "
+                "text), NOT with CLIP's contrastive projection space — see this "
+                "module's docstring. Set `encoder_model` instead, and discard any "
+                "delta traces produced before 2026-08-05.")
+        super().__init__(encoder_model=encoder_model,
+                         dncnn_checkpoint=dncnn_checkpoint,
                          threshold=threshold, device=device,
                          batch_size=batch_size, trace_dir=trace_dir, **kwargs)
-        self._clip_name = clip_model
+        self._encoder_name = encoder_model
         self._ckpt = dncnn_checkpoint
         self._tau = threshold
         self._device_str = device
         self._batch_size = batch_size
         self._trace_dir = trace_dir
-        self._clip = None
+        self._vlm = None
         self._processor = None
         self._denoiser = None
         self._device = None
 
     # ---------------- lazy model construction ----------------
     def _load(self):
-        if self._clip is not None:
+        if self._vlm is not None:
             return
         import torch
-        from transformers import CLIPModel, CLIPProcessor
+        from transformers import AutoProcessor, LlavaForConditionalGeneration
 
         self._device = torch.device(
             self._device_str if torch.cuda.is_available() else "cpu")
         if self._device.type == "cpu":
-            logger.warning("CIDER: no CUDA visible — running CLIP + DnCNN on CPU, "
-                           "which is slow but correct.")
-        logger.info(f"CIDER: loading {self._clip_name} on {self._device}")
-        self._clip = CLIPModel.from_pretrained(self._clip_name).to(self._device).eval()
-        self._processor = CLIPProcessor.from_pretrained(self._clip_name)
+            logger.warning("CIDER: no CUDA visible — running the 7B encoder + "
+                           "DnCNN on CPU, which is slow but correct.")
+        logger.info(f"CIDER: loading encoder {self._encoder_name} on {self._device}")
+        self._vlm = LlavaForConditionalGeneration.from_pretrained(
+            self._encoder_name,
+            torch_dtype=torch.float16 if self._device.type == "cuda" else torch.float32,
+            low_cpu_mem_usage=True,
+        ).to(self._device).eval()
+        self._processor = AutoProcessor.from_pretrained(self._encoder_name)
         if not self._ckpt:
             raise ValueError(
                 "CIDER needs dncnn_checkpoint — the denoiser weights shipped in "
@@ -196,11 +236,62 @@ class Cider(Defense):
                 "file must be placed on each cluster).")
         self._denoiser = _load_dncnn(self._ckpt, self._device)
 
+    # ---------------- the authors' encoder path ----------------
+    def _submodule(self, name: str):
+        """Resolve a LLaVA submodule across transformers layouts.
+
+        transformers moved `vision_tower` / `multi_modal_projector` under
+        `.model` in 4.52; the authors' code predates that. Try both rather than
+        pinning a version, and fail loudly if neither exists — a silently missing
+        projector would leave us embedding in the wrong space all over again.
+        """
+        for holder in (self._vlm, getattr(self._vlm, "model", None)):
+            if holder is not None and hasattr(holder, name):
+                return getattr(holder, name)
+        raise AttributeError(
+            f"CIDER: could not find `{name}` on {type(self._vlm).__name__} or its "
+            f".model — the installed transformers layout is not one this encoder "
+            f"path handles. Fix the resolver rather than falling back, since any "
+            f"fallback would change the embedding space.")
+
+    def _embed_text(self, texts: list[str]):
+        """Mean-pooled LLM input embeddings, matching LlavaEncoder.embed_text.
+
+        The authors embed one string at a time with no padding. We batch with a
+        padded tokenizer but mask the pad positions out of the mean, which is
+        arithmetically identical to their per-item mean and much faster.
+        """
+        import torch
+
+        tok = self._processor.tokenizer
+        enc = tok(texts, return_tensors="pt", padding=True, truncation=True)
+        input_ids = enc["input_ids"].to(self._device)
+        mask = enc["attention_mask"].to(self._device).unsqueeze(-1)
+        emb = self._vlm.get_input_embeddings()(input_ids)
+        summed = (emb * mask).sum(dim=1)
+        counts = mask.sum(dim=1).clamp(min=1)
+        return (summed / counts).float()
+
+    def _embed_image(self, pixel_values):
+        """Mean-pooled projected patches, matching LlavaEncoder.embed_img."""
+        vision_tower = self._submodule("vision_tower")
+        projector = self._submodule("multi_modal_projector")
+
+        outputs = vision_tower(pixel_values, output_hidden_states=True)
+        layer = self._vlm.config.vision_feature_layer
+        if isinstance(layer, (list, tuple)):   # newer configs allow a list
+            layer = layer[0]
+        feat = outputs.hidden_states[layer]
+        feat = feat[:, 1:]                      # drop CLS, "by default" in their code
+        feat = projector(feat)
+        return feat.mean(dim=1).float()
+
     # ---------------- the detector ----------------
     def _deltas(self, items: list[tuple[str, str, object]]) -> dict[str, float]:
         """min(delta) per prompt id; delta = cos(text,denoised) - cos(text,orig)."""
         import numpy as np
         import torch
+        import torch.nn.functional as F
 
         self._load()
         deltas: dict[str, float] = {}
@@ -212,58 +303,42 @@ class Cider(Defense):
             # The paginating renderer can emit several pages; CIDER scores one
             # image, so take the first page and note it in the trace.
             images = [im[0] if isinstance(im, list) else im for im in images]
-            images = [im.convert("RGB") for im in images]
+            # Match the authors: RGB, resized to 224x224 before anything else.
+            images = [im.convert("RGB").resize((_CIDER_RESIZE, _CIDER_RESIZE))
+                      for im in images]
 
             with torch.no_grad():
-                enc = self._processor(text=texts, images=images, return_tensors="pt",
-                                      padding=True, truncation=True)
-                enc = {k: v.to(self._device) for k, v in enc.items()}
-                pixels = enc["pixel_values"]
+                t_emb = self._embed_text(texts)
 
-                # Use the FULL forward, not get_text_features/get_image_features:
-                # in transformers 5.x those return a BaseModelOutputWithPooling
-                # rather than a tensor. `text_embeds` / `image_embeds` are the
-                # PROJECTED embeddings CLIP's own contrastive similarity is defined
-                # over, which is the space a cosine similarity should live in, and
-                # the field names are stable across 4.x and 5.x.
-                clip_out = self._clip(input_ids=enc["input_ids"],
-                                      attention_mask=enc["attention_mask"],
-                                      pixel_values=pixels)
-                t_emb = clip_out.text_embeds
-                i_emb = clip_out.image_embeds
-                t_emb = t_emb / t_emb.norm(dim=-1, keepdim=True)
-                i_emb = i_emb / i_emb.norm(dim=-1, keepdim=True)
-
-                # DnCNN expects [0,1] pixels; CLIP's processor hands us normalised
-                # tensors, so denoise in CLIP's own space is wrong. Re-derive the
-                # [0,1] tensor from the PIL images at CLIP's input resolution.
-                size = pixels.shape[-1]
+                # DnCNN operates on [0,1] pixels at 224x224.
                 raw = torch.stack([
-                    torch.from_numpy(
-                        np.asarray(im.resize((size, size))).astype("float32") / 255.0
-                    ).permute(2, 0, 1)
+                    torch.from_numpy(np.asarray(im).astype("float32") / 255.0)
+                    .permute(2, 0, 1)
                     for im in images
                 ]).to(self._device)
-                den = torch.clamp(self._denoiser(raw), 0, 1)
+                dn_in = raw.to(next(self._denoiser.parameters()).dtype)
+                den = torch.clamp(self._denoiser(dn_in), 0, 1)
 
-                # Back into CLIP's normalisation for the denoised embedding.
-                mean = torch.tensor(self._processor.image_processor.image_mean,
-                                    device=self._device).view(1, 3, 1, 1)
-                std = torch.tensor(self._processor.image_processor.image_std,
-                                   device=self._device).view(1, 3, 1, 1)
-                clip_out_den = self._clip(input_ids=enc["input_ids"],
-                                          attention_mask=enc["attention_mask"],
-                                          pixel_values=(den - mean) / std)
-                d_emb = clip_out_den.image_embeds
-                d_emb = d_emb / d_emb.norm(dim=-1, keepdim=True)
+                # Both arms go through the SAME image processor, so any
+                # normalisation/resize it applies cancels in the delta.
+                proc = self._processor.image_processor
+                px_o = proc(images=images, return_tensors="pt")["pixel_values"]
+                px_d = proc(images=[
+                    (d.permute(1, 2, 0).float().cpu().numpy() * 255)
+                    .astype("uint8") for d in den
+                ], return_tensors="pt")["pixel_values"]
 
-                cos_o = (t_emb * i_emb).sum(-1)
-                cos_d = (t_emb * d_emb).sum(-1)
+                dtype = next(self._vlm.parameters()).dtype
+                i_emb = self._embed_image(px_o.to(self._device, dtype))
+                d_emb = self._embed_image(px_d.to(self._device, dtype))
+
+                cos_o = F.cosine_similarity(t_emb, i_emb, dim=-1)
+                cos_d = F.cosine_similarity(t_emb, d_emb, dim=-1)
                 diffs = (cos_d - cos_o).detach().cpu().reshape(-1).tolist()
                 if len(diffs) != len(ids):
                     raise RuntimeError(
                         f"CIDER: {len(diffs)} deltas for {len(ids)} inputs — the "
-                        f"CLIP batch and the id list disagree, which would "
+                        f"encoder batch and the id list disagree, which would "
                         f"mis-attribute every score in this chunk.")
                 for pid, delta in zip(ids, diffs):
                     # Keys are forced to str: a prompt id that arrives as a tensor

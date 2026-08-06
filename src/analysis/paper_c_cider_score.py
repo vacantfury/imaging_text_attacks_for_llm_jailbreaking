@@ -47,7 +47,10 @@ def main() -> None:
     ap.add_argument("--dirs", nargs="+", required=True,
                     help="prompt_transform STEP dirs (the ones holding prompts.jsonl)")
     ap.add_argument("--dncnn", required=True)
-    ap.add_argument("--clip", default="openai/clip-vit-large-patch14-336")
+    # CIDER embeds with the target MLLM's own encoders, not CLIP's contrastive
+    # space — corrected 2026-08-05, see src/defense/cider.py. Runs made before
+    # that date used CLIP and are invalid.
+    ap.add_argument("--encoder", default="llava-hf/llava-1.5-7b-hf")
     ap.add_argument("--trace-dir", default="outputs/autoattack_defense/cider_deltas")
     ap.add_argument("--limit", type=int, default=100,
                     help="prompts per dir; matches the grid's prompt_range [0,99]")
@@ -59,7 +62,7 @@ def main() -> None:
     if not step_dirs:
         raise SystemExit(f"no dirs matched: {args.dirs}")
 
-    det = Cider(clip_model=args.clip, dncnn_checkpoint=args.dncnn,
+    det = Cider(encoder_model=args.encoder, dncnn_checkpoint=args.dncnn,
                 threshold=None, trace_dir=args.trace_dir)
     os.makedirs(args.trace_dir, exist_ok=True)
 
