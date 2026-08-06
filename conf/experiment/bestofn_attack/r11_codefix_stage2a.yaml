@@ -1,0 +1,66 @@
+# bestofn_attack AS-4 — ROUND 11, Stage 2a: rebuilt code arms vs no_defense + SAGE.
+#
+# OWNER-APPROVED 2026-08-05 ("fix is done, we can do experiments now").
+# Stage 1 = job 285645, GATE PASSED: fixed -> 1 distinct/behavior x100 ; varied ->
+# ~100 distinct (66 behaviors at 100, tail 88-99, the SAME inherited paraphrase
+# histogram r8 had) ; and 0 rows containing `appendleft` in either arm, i.e. the
+# `b266892` fix is actually in these prompts. Sample line: `my_stack.append("defensive")`
+# — reference construction, words reversed, plain append.
+#
+# ── WHY 2a/2b IS A SPLIT, NOT A PREFERENCE ──────────────────────────────────
+# The gate cells need a THIRD served model (llama_guard_3_8b), i.e. 6 servers
+# (llama x4 + wildguard + guard). AICR is at 7/12 GPU jobs while the R10
+# SemanticSmooth reruns finish, leaving 5 slots. Requesting 6 into 5 does NOT
+# queue — the allocator caps by FLOOR DIVISION `available_slots // n_models`
+# = 5//3 = 1, silently collapsing llama 4 -> 1 replica and serialising the round
+# into the 24h wall (the round-174759 failure mode). So the two no-gate arms run
+# now with 2 models (llama x4 + wildguard = 5 requested into 5 available -> the
+# `total_requested > available_slots` test is FALSE -> no capping at all), and the
+# gate cells run as stage2b when R10 releases its servers.
+#
+# ── WHAT THIS REBUILDS ──────────────────────────────────────────────────────
+# The quarantined r8 code cells measured (gpt-5-mini, ensemble): code x fixed
+# 95 none / 67 SAGE, code x varied 99 / 74. Those came from the double-reversed
+# encoder and are quarantined, NOT deleted. These cells replace them.
+# ⚠️ EXPECT THE NUMBERS TO MOVE UP, NOT DOWN. Under the bug a literal executor
+# rebuilt the sentence backwards, so the old numbers are a conservative floor;
+# the fix can only help the attack. If a cell comes back MUCH LOWER, suspect the
+# rerun, not the fix.
+#
+# ── WHAT IT IS FOR ──────────────────────────────────────────────────────────
+# R9 (uncontaminated, gpt-5-mini) already showed at FIXED variation vs SAGE:
+# plain 10 | set_theory 86 | formal_logic 85 | code 67(stale). If the rebuilt code
+# lands near 67 again, code remains the WEAKEST strong encoding and "code is not
+# special" holds on clean data. The gate comparison — set_theory 75 vs code 13 at
+# one probe, which is what falsified the r8 dissociation — needs stage2b.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r11_codefix_stage2a
+#
+# ── JUDGE: cheap-first ──────────────────────────────────────────────────────
+# wildguard on-cluster first (FREE) -> separate gpt-5-mini rejudge, its own ask.
+# ⚠️ NOTHING from the wildguard pass is reportable: both arms here are code-bearing
+# and wildguard over-flags code 41-68%. No wildguard number, not even provisional.
+#
+# ── FOOTPRINT ───────────────────────────────────────────────────────────────
+# 4 cells x 10,000 = 40,000 generations. GPU only, $0 API at this stage.
+num_main_job_threads: 4
+num_cluster_jobs: 6          # 5 servers (llama x4 + wildguard) + orchestrator; see the split note
+
+_e: &e
+  mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  target_model_config: {temperature: 1.0}
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r11_codefix     # NEW campaign — never reuse r8_factorial;
+                                           # campaign is the only safe discriminator here
+
+_CODE_FIXED:  &code_fixed  outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+_CODE_VARIED: &code_varied outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_code_attack_20260805_212855_68111123/code_attack
+
+tasks:
+  - {<<: *e, source_transform_subdir: *code_fixed,  defense: no_defense}
+  - {<<: *e, source_transform_subdir: *code_fixed,  defense: sage}
+  - {<<: *e, source_transform_subdir: *code_varied, defense: no_defense}
+  - {<<: *e, source_transform_subdir: *code_varied, defense: sage}
