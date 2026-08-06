@@ -1,0 +1,68 @@
+# ============================================================
+# Paper C (AS-3) · METHOD-FIDELITY RERUN — STAGE 1: re-encode  (2026-08-05)
+# ============================================================
+# Rebuilds the two attack columns invalidated by the method-fidelity audit, on
+# the FIXED encoders (commit b266892). Stage 1 only: no target queries, no
+# judging, no GPU.
+#
+#   §1.1 code_attack — the old encoder pushed with `deque.appendleft` over an
+#        already-reversed list, so the emitted program was self-inconsistent and
+#        was not CodeAttack. Fixed to `words[::-1]` + plain `append`; renders
+#        byte-exact against the reference template. DETERMINISTIC, no LLM, $0.
+#   §1.3 ir_figstep — was missing BOTH halves of FigStep's construction (no
+#        declarative paraphrase, not the canonical instruction). The fixed module
+#        needs an aux-LLM paraphrase step; `conf/imaging/figstep.yaml` carries
+#        gpt-4.1-mini, so this is the ONLY cost here: 4 x 100 = ~400 short calls,
+#        well under $1.
+#
+# Old cells for both attacks are QUARANTINED, not deleted:
+#   outputs/_quarantine/{code_attack_appendleft,figstep_incomplete}_20260805/
+#
+# Both benchmarks are re-encoded because AS-3 reports BOTH axes: HarmBench for
+# ensemble ASR and OR-Bench-Hard for over-refusal. Re-encoding only the harmful
+# half would leave the benign column keyed to a superseded encoder.
+#
+# >>> STAGE 2 IS DELIBERATELY NOT CHAINED <<<
+# defense+evaluate consumes a TIMESTAMPED subdir, so the anchors can only be
+# filled once this lands. On completion, read the four printed dirs into
+# fidelity_rerun_stage2_eval.yaml. Stage 2 must also re-run the COMPOSED cells,
+# not just the suite columns (audit row 1.1c: paper.tex:276 rests on
+# "paraphrase-and-vote collapses CodeAttack, which decode inflates", a claim that
+# is NOT monotone in attack strength).
+#
+# Servers: none. num_cluster_jobs = orchestrator only.
+# ============================================================
+
+num_main_job_threads: 4
+num_cluster_jobs: 1
+
+tasks:
+  # ── §1.1 CodeAttack · harmful axis (deterministic, no LLM) ──
+  - mode: prompt_transform
+    source_file: data/harmbench_prompts.jsonl
+    prompt_range: [0, 99]
+    transformation_list:
+      - type: code_attack
+
+  # ── §1.1 CodeAttack · benign axis (over-refusal) ──
+  - mode: prompt_transform
+    source_file: data/orbench_benign_hard_prompts.jsonl
+    prompt_range: [0, 99]
+    transformation_list:
+      - type: code_attack
+
+  # ── §1.3 FigStep · harmful axis (aux-LLM paraphrase → typographic render) ──
+  - mode: prompt_transform
+    source_file: data/harmbench_prompts.jsonl
+    prompt_range: [0, 99]
+    transformation_list:
+      - type: ir_figstep
+        params: {keep_text: false}
+
+  # ── §1.3 FigStep · benign axis (over-refusal) ──
+  - mode: prompt_transform
+    source_file: data/orbench_benign_hard_prompts.jsonl
+    prompt_range: [0, 99]
+    transformation_list:
+      - type: ir_figstep
+        params: {keep_text: false}
