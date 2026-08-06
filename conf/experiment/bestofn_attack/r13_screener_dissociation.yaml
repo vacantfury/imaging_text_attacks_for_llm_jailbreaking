@@ -1,0 +1,96 @@
+# bestofn_attack AS-4 — ROUND 13: THE SCREENER DISSOCIATION.
+#
+# OWNER-ORDERED 2026-08-06 ("continue" on the defense-architecture sweep).
+#
+# ── THE SHARPEST TEST OF THE VARIANCE-CHANNEL ACCOUNT ────────────────────────
+# R12 showed SAGE collapses 61 -> 12 at target T=0 while a greedy gate does not
+# (9 -> 8). A LAZY reading of that is "self-check defenses are weak to resampling".
+# THIS ROUND SEPARATES THE LAZY READING FROM THE REAL ONE, using two defenses from
+# the SAME published family that differ in EXACTLY ONE THING — who screens:
+#
+#   llm_self_defense  (Phute et al.)  filter_model=None -> screens with the TARGET,
+#                                     which runs at temperature 1.0.
+#                                     => STOCHASTIC verdict  => PREDICT COLLAPSE at T=0.
+#   selfdefend        (Wang et al.)   shadow_model: llama3_8b_cluster -> screens with a
+#                                     SEPARATE model, created via
+#                                     LLMServiceFactory.create() with NO config override,
+#                                     so it inherits conf/llm/default.yaml temperature 0.0.
+#                                     => DETERMINISTIC verdict => PREDICT NULL at T=0.
+#
+# Both are self-check architectures. Both wrap the same attack. If "self-check is weak"
+# were the mechanism, BOTH would collapse. If the mechanism is WHOSE SAMPLING THE VERDICT
+# RIDES ON, only llm_self_defense collapses. That is the whole round.
+#
+# This is not a post-hoc pairing: src/defense/defender_factory.py already describes these
+# two as straddling the boundary — "llm_self_defense screens with the TARGET (borrows,
+# should vary by target), selfdefend screens with a fixed SEPARATE shadow model (borrows
+# nothing, should not vary)". That note was written for the OLD borrowed-strength account;
+# the variance-channel account inherits the same split for a different reason, which is
+# itself evidence the split is real and not fitted to this round.
+#
+# ── PRE-REGISTERED PREDICTIONS (score honestly; a miss kills the taxonomy) ───
+#   P5. llm_self_defense: ensemble DROPS substantially T=1.0 -> T=0.0, SAGE-like.
+#   P6. selfdefend:       ensemble ~UNCHANGED, gate-like.
+#   P7. The INTERACTION is the result: |Δ(llm_self_defense)| >> |Δ(selfdefend)|.
+#       If both drop -> the mechanism is target sampling generally, not the verdict's
+#       source, and the paper's taxonomy is wrong. If neither drops -> R12 was a SAGE
+#       quirk. Either outcome is publishable and must be reported as measured.
+#   ⚠️ Both arms lose the target's ANSWER sampling at T=0 as well (the R12 confound,
+#      recorded in experiment_results.md). That is precisely why this is a DIFFERENCE
+#      test: answer-sampling loss is COMMON to both arms, so it cancels in the contrast.
+#      This design is confound-free in a way R12's SAGE-vs-gate comparison was not.
+#
+# ── IT ALSO REPAYS BUG DEBT ─────────────────────────────────────────────────
+# The audit on 2026-08-06 found 51 of 79 quarantined AS-4 cell-types have NO live
+# replacement, including the whole P6 self-check panel (campaigns
+# bestofn_attack_p6_selfcheck / _pilot, quarantined under the code_attack appendleft
+# bug). These 4 cells rebuild the llama arm of that panel on the FIXED encoder as a
+# by-product, which is why the sweep is worth running as science rather than as debt.
+#
+# ── ENCODING ────────────────────────────────────────────────────────────────
+# code/FIXED only. Fixed input is the condition where channel (B) is the ONLY variance
+# source, so it is where the contrast is cleanest. Varied input adds channel (A) to both
+# arms and shrinks the effect; run it only if the fixed contrast lands.
+#
+# ── WHERE / SERVERS ─────────────────────────────────────────────────────────
+# xc, verified idle immediately before submission (0 SLURM jobs, all 8 GPUs at 0 MiB —
+# the box owner's torchrun job has ended). 3 models: llama3_1_8b_cluster (target) x4 +
+# llama3_8b_cluster (selfdefend shadow) x1 + wildguard (judge) x1 = 6 servers into xc's
+# budget of 6, so `total_requested > available_slots` is FALSE and NO capping fires.
+# ⚠️ A CLEAN PRE-FLIGHT PROVES ONLY THAT SLURM IS CONTENT, NOT THAT MEMORY EXISTS —
+# re-check `nvidia-smi` + `ps -eo cmd | grep [v]llm` if this is ever resubmitted.
+#
+#   ssh xc; cd ~/projects/llm_guardrail_security
+#   sbatch scripts/run_experiment_xc.sbatch bestofn_attack/r13_screener_dissociation
+#
+# ── JUDGE ───────────────────────────────────────────────────────────────────
+# wildguard on-cluster (FREE) for the SHAPE; ⚠️ NOT reportable (code-bearing arm,
+# wildguard over-flags code 41-68%, and it disagreed with gpt-5-mini on the SIGN of the
+# R11 fixed-vs-varied SAGE contrast). Reportable magnitudes need a gpt-5-mini rejudge
+# (~$9 for these 4 cells), its own ask. The CONTRAST P7 is a same-judge difference-of-
+# differences, so wildguard can establish the direction on its own.
+#
+# ── FOOTPRINT ───────────────────────────────────────────────────────────────
+# 4 cells x 10,000 = 40,000 target generations + one screen call each. GPU only, $0 API.
+num_main_job_threads: 4
+num_cluster_jobs: 7          # 6 servers (llama3_1 x4 + llama3_8b shadow + wildguard) + orchestrator
+
+_e: &e
+  mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r13_screener          # NEW campaign; never reuse p6_selfcheck,
+                                                 # whose cells are quarantined and share
+                                                 # output naming (latest-wins is unsafe).
+
+_CODE_FIXED: &code_fixed outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+
+tasks:
+  # ---- CLASS A: verdict rides on the TARGET's sampling -> predict COLLAPSE ----
+  - {<<: *e, source_transform_subdir: *code_fixed, defense: llm_self_defense, target_model_config: {temperature: 1.0}}
+  - {<<: *e, source_transform_subdir: *code_fixed, defense: llm_self_defense, target_model_config: {temperature: 0.0}}
+  # ---- CLASS B: verdict rides on a SEPARATE greedy shadow -> predict NULL -----
+  - {<<: *e, source_transform_subdir: *code_fixed, defense: selfdefend, target_model_config: {temperature: 1.0}}
+  - {<<: *e, source_transform_subdir: *code_fixed, defense: selfdefend, target_model_config: {temperature: 0.0}}
