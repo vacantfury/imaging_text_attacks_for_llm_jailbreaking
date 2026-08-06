@@ -320,6 +320,25 @@ and parser.
 
 ## 6. Order of work — **RE-DERIVED 2026-08-05 from the §8 verdicts**
 
+> ### ⚠️ OWNER RULING 2026-08-05 — the A/B blocks are REFERENCE, not a schedule
+> **"Block A / Block B" is a grouping of findings by cost, nothing more. It is NOT the running order, and no
+> session should treat "Block A is ungated, land it now" as authority to write paper text.** The owner's
+> standing order governs sequencing, and it is the opposite: **experiments FIRST, lit-review second, writing
+> THIRD, human eval LAST** (the cspaper handling order; experimental completeness is the reject barrier).
+>
+> **Why:** paper text has to be written against the numbers we actually have. Landing prose ahead of the
+> re-runs means writing sentences whose numbers are still moving — the surrounding claims get rebuilt anyway
+> once the fixed encoders land, so the work is done twice and, worse, the draft spends time asserting things
+> the evidence has not caught up to. Cheapness is not a reason to go first; a $0 edit that has to be redone
+> is not free.
+>
+> **How to read §6 from here on:** use the A/B split to understand *what each fix costs and what it depends
+> on*, then schedule by real experimental progress. When a re-run lands, write up that result. Do not walk
+> the list top-to-bottom.
+>
+> *(Seed: this session did Block A before the re-runs on the strength of the "not gated on anything; can land
+> immediately" line below, and was corrected. That line is describing a dependency, not granting priority.)*
+
 > The original order put `code_attack` first, on the guard-visibility argument now retracted in §1.1. All
 > three paper sessions disputed that priority independently and converged on the same replacement: **every §1
 > finding is conservative in direction** — our attacks are *weaker* than the published ones, so fixing them
@@ -505,7 +524,16 @@ as a verdict on one it did.
 
 ---
 
-## 9. Block A LANDED for AS-3 (2026-08-05) — paper-side items closed, $0, no cluster
+## 9. AS-3's paper-side fidelity items — LANDED 2026-08-05 (but out of order; see §6's ruling)
+
+> ⚠️ **Sequencing note:** this work was done BEFORE the re-runs, which is the wrong order (§6 ruling above:
+> experiments first, writing third). It is kept rather than reverted because the edits are provenance and
+> labelling fixes — citations, an attack rename, disclosure sentences — **none of which depends on a number**,
+> so the re-runs cannot invalidate them. That is the exception, not the rule: any edit whose sentence carries
+> a measured value waits for the measurement. The suite paragraph in particular will need a second pass once
+> the fixed `code_attack` and FigStep columns land, because the per-attack load-bearing counts quoted there
+> are computed from those cells.
+
 
 All of §6's Block A is now in `paper/autoattack_defense/aaai_2027_ai_alignment/aaai_aia_latex/paper.tex`
 (the sole live AS-3 edit target; `aaai_2027_main/` and `arxiv_latex/` remain frozen). Build verified clean:
