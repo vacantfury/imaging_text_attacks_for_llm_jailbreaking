@@ -1,0 +1,82 @@
+# bestofn_attack AS-4 — ROUND 11, Stage 1: rebuild the code_attack arms on the FIXED encoder.
+#
+# OWNER-APPROVED 2026-08-05 ("fix is done, we can do experiments now").
+#
+# ── WHY ──────────────────────────────────────────────────────────────────────
+# The method-fidelity audit (text_docs/shared/method_fidelity_audit.md §1.1) found
+# `code_attack` used `appendleft` over a reversed word list, which double-reverses:
+# the deque ends up in ORIGINAL order while decode() still says "concatenate in
+# reverse", so a model following the comment literally rebuilds the sentence
+# BACKWARDS. Fixed in `b266892` to the reference's `words[::-1]` + plain `append`
+# (+ `_split_words` for the reference's `[\s\-]+` hyphen split).
+#
+# ⚠️ THE AUDIT'S STATED CONSEQUENCE WAS WRONG AND IS NOT THE REASON FOR THIS RERUN.
+# §1.1 claimed the bug put the payload "in plain reading order in the prompt" so a
+# guard saw more signal. Verified false (AS-4 + AS-2 verdicts, §8): BOTH versions
+# emit the words in the SAME reverse order — `appendleft` vs `append` changes the
+# runtime deque, not the emitted text, and a guard reads text rather than executing
+# a deque. So no AS-4 gate number was ever inflated by this. The rerun is for
+# METHOD FIDELITY (we name the object "BoN-wrapped CodeAttack" and cite Ren et al.),
+# and because the fix may make the attack STRONGER — a literal executor previously
+# got a scrambled sentence, so the bias ran conservative.
+#
+# ── CONTAMINATION TEST (exact; use this, not a name heuristic) ───────────────
+# A transform dir is contaminated iff its prompts.jsonl contains `appendleft`.
+# The loose "mentions code_attack" heuristic OVER-COUNTS ~2x, because
+# `variance_channel_bon` dirs are code-channel on some timestamps and plain
+# paraphrase on others. Repo-wide: 7 dirs -> 221 cells (AS-3 174 / AS-4 34 /
+# AS-2 10 / oracle 3). AS-4's are quarantined under
+# outputs/_QUARANTINE_code_attack_appendleft_bug/ (cluster 34 cells + 2 transforms;
+# local 77 cells + 6 transforms) — QUARANTINED, NOT deleted, because the draft still
+# cites them and the AIA abstract is 08-12.
+#
+# ── THE TWO ARMS (mirrors r8_factorial_stage1 exactly, so the rebuild is matched) ──
+#   code x FIXED  — code_attack applied directly to the 100x100 BoN dataset. The
+#                   encoder is deterministic, so all 100 draws of a behavior are
+#                   identical: 1 distinct prompt per behavior (the FIXED condition).
+#   code x VARIED — the SAME paraphrase source r8 used
+#                   (variance_channel_bon_20260718_050204_64308095), re-encoded.
+#                   VERIFIED CLEAN 2026-08-05: 0 rows contain `appendleft`, 10000
+#                   rows — it is the paraphrase channel, never the code channel, so
+#                   it is reusable and keeps the rebuild matched draw-for-draw to r8.
+#
+# ⚠️ NEW CAMPAIGN NAME on purpose (`bestofn_attack_r11_codefix`), NOT r8_factorial:
+# the quarantined r8 cells and these share output naming, and `canonicalize_guard`/
+# `variance_channel_bon` are NOT unique keys. Campaign is the only safe discriminator
+# (project_cell_selection_latest_wins_is_unsafe) — never let latest-wins choose.
+#
+# ── VERIFY BEFORE STAGE 2 (the gate that r8 taught us not to skip) ──────────
+#   code x fixed  -> distinct `encoded` per behavior == 1
+#   code x varied -> distinct `encoded` per behavior ~= 100
+#   BOTH arms     -> 0 rows containing `appendleft`   <-- the fix landed
+#   Read the `encoded` field. Reading a nonexistent key (e.g. `prompt`) yields None
+#   for every row and collapses to "1 distinct", faking an ARM-B failure — that trap
+#   fired twice in r8.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r11_codefix_stage1
+#
+# ── FOOTPRINT ────────────────────────────────────────────────────────────────
+# Non-LLM encoder, no image render, no served model: $0, minutes, no GPU.
+num_main_job_threads: 2
+num_cluster_jobs: 1          # orchestrator only -- nothing is served at this stage
+
+tasks:
+  # ---- code x FIXED --------------------------------------------------------
+  - mode: prompt_transform
+    source_file: data/harmbench_bon_100.jsonl
+    prompt_range: [0, 9999]
+    benchmark: harmbench
+    campaign: bestofn_attack_r11_codefix
+    transformation_list:
+      - type: code_attack
+        params: {}
+
+  # ---- code x VARIED (paraphrase -> code), same source r8 used -------------
+  - mode: prompt_transform
+    source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/variance_channel_bon_20260718_050204_64308095/variance_channel_bon
+    prompt_range: [0, 9999]
+    benchmark: harmbench
+    campaign: bestofn_attack_r11_codefix
+    transformation_list:
+      - type: code_attack
+        params: {}
