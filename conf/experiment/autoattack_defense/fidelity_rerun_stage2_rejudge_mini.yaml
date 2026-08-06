@@ -1,0 +1,53 @@
+# ============================================================
+# Paper C (AS-3) · METHOD-FIDELITY RERUN — gpt-5-mini REJUDGE  (2026-08-05)
+# ============================================================
+# The REPORTABLE pass over xc job 148's 12 cells (12/12 succeeded, canaries clean:
+# n=100 each, 0 empty responses, 0 parse failures).
+#
+# WHY THIS IS REQUIRED, NOT POLISH: job 148 was judged by WildGuard (free, cluster).
+# WildGuard is INVALID as an ASR judge — it flags harmful INTENT rather than task
+# completion and over-flags encoded/code attacks by 41-68%. Every historical AS-3
+# cell is gpt-5-nano or gpt-5-mini judged, so comparing job 148's numbers against
+# the record would be the apples-to-oranges error the standing rule forbids.
+# gpt-5-mini is the paper's decided main judge; this run is what makes the
+# pre-fix vs post-fix comparison legitimate.
+#
+# ZERO target cost: `rejudge` re-scores STORED responses and never re-queries the
+# target or the guard. 12 cells x 100 = 1200 judgements, ~$2-4 (about half if
+# llm_utils v5 auto-routes to the OpenAI Batch API, which it should — the job is
+# over the $1 batch threshold). Owner authorized 2026-08-05.
+#
+# ⚠️ BATCH TIMEOUT TRAP: a timed-out rejudge leaves the PREVIOUS judge's verdicts
+# in raw_results.jsonl while results.json carries `asr: null`. NEVER compute a
+# metric from a rejudge dir without checking `asr is not None` first, and harvest
+# the completed OpenAI batch rather than re-billing.
+#
+# Judge methods differ per axis and must not be swapped:
+#   harmbench            -> harmbench (harm rubric, reports asr)
+#   orbench_benign_hard  -> orbench   (3-class refusal rubric, reports refusal_rate)
+#
+# No servers: judging is an API call. num_cluster_jobs = orchestrator only.
+# ============================================================
+
+num_main_job_threads: 4
+num_cluster_jobs: 1
+
+_h: &h {mode: rejudge, judge_model: gpt-5-mini, judge_method: harmbench, campaign: paper_c_fidelity_rerun_mini}
+_b: &b {mode: rejudge, judge_model: gpt-5-mini, judge_method: orbench,   campaign: paper_c_fidelity_rerun_mini}
+
+tasks:
+  # ── HARMFUL axis (ASR) ──
+  - {<<: *h, responses_from: outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_no_defense_code_attack_20260806_024100_84741354}
+  - {<<: *h, responses_from: outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_guard_baseline_code_attack_20260806_024100_6860754}
+  - {<<: *h, responses_from: outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_code_attack_20260806_024100_48322184}
+  - {<<: *h, responses_from: outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_no_defense_ir_figstep_20260806_024100_24186089}
+  - {<<: *h, responses_from: outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_guard_baseline_ir_figstep_20260806_024334_70225113}
+  - {<<: *h, responses_from: outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_ir_figstep_20260806_024529_37835907}
+
+  # ── BENIGN axis (over-refusal) ──
+  - {<<: *b, responses_from: outputs/autoattack_defense/defense+evaluate/orbench_benign_hard/qwen2_5_vl_7b_no_defense_code_attack_20260806_024642_96836357}
+  - {<<: *b, responses_from: outputs/autoattack_defense/defense+evaluate/orbench_benign_hard/qwen2_5_vl_7b_guard_baseline_code_attack_20260806_024806_88969015}
+  - {<<: *b, responses_from: outputs/autoattack_defense/defense+evaluate/orbench_benign_hard/qwen2_5_vl_7b_modality_complete_code_attack_20260806_024825_54760196}
+  - {<<: *b, responses_from: outputs/autoattack_defense/defense+evaluate/orbench_benign_hard/qwen2_5_vl_7b_no_defense_ir_figstep_20260806_025222_43620609}
+  - {<<: *b, responses_from: outputs/autoattack_defense/defense+evaluate/orbench_benign_hard/qwen2_5_vl_7b_guard_baseline_ir_figstep_20260806_025232_43308472}
+  - {<<: *b, responses_from: outputs/autoattack_defense/defense+evaluate/orbench_benign_hard/qwen2_5_vl_7b_modality_complete_ir_figstep_20260806_025318_83229463}
