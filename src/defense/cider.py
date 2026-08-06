@@ -79,6 +79,7 @@ rather than a pass rate).
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -168,6 +169,28 @@ def _load_dncnn(ckpt_path: str, device):
 # embedding (`utils.py:366`, `utils.py:487`). The DnCNN weights were trained at
 # that operating point, so this is not a free parameter.
 _CIDER_RESIZE = 224
+
+
+def _resolve_checkpoint(path: str, what: str, how_to_get_it: str) -> str:
+    """Expand `~`/env vars in a checkpoint path and fail with an actionable message.
+
+    Both checkpoint paths in conf/defense/cider.yaml are home-relative
+    (`~/models/...`) ON PURPOSE: the three clusters have three different home
+    directories, and the weights are too large (2GB) / not ours to redistribute,
+    so they are placed per machine rather than committed. But nothing in the
+    config layer expands `~` — `load_conf` returns the raw string and `torch.load`
+    passes it to `open()`, which treats a leading `~` as a literal directory name.
+    Without this, a correctly-provisioned cluster still dies with a bare
+    `FileNotFoundError: '~/models/...'` several minutes into a run, after the 7B
+    encoder has already loaded. Expanding at the point of USE (not in __init__)
+    keeps the portable form in the recorded provenance config, which is the
+    honest record: the path IS machine-relative.
+    """
+    resolved = os.path.expanduser(os.path.expandvars(path))
+    if not os.path.exists(resolved):
+        raise FileNotFoundError(
+            f"CIDER: {what} not found at {resolved!r} (from {path!r}). {how_to_get_it}")
+    return resolved
 
 
 # --------------------------------------------------------------------------
@@ -352,7 +375,14 @@ class Cider(Defense):
                 f"CIDER: loading guided-diffusion denoiser (the authors' headline "
                 f"path), {len(self._checkpoints)} checkpoints at t="
                 f"{self._checkpoints}")
-            self._denoiser = _DiffusionDenoiser(self._diffusion_ckpt, self._device)
+            self._denoiser = _DiffusionDenoiser(
+                _resolve_checkpoint(
+                    self._diffusion_ckpt, "diffusion checkpoint",
+                    "Download it once per machine: curl -L -o "
+                    "~/models/cider_256x256_diffusion_uncond.pt "
+                    "https://openaipublic.blob.core.windows.net/diffusion/"
+                    "jul-2021/256x256_diffusion_uncond.pt"),
+                self._device)
         else:
             if not self._ckpt:
                 raise ValueError(
@@ -365,7 +395,13 @@ class Cider(Defense):
                 "one delta instead of the headline path's seven, so the detector "
                 "is strictly weaker and this run is a LOWER BOUND on CIDER's "
                 "detection power. Do not report it as CIDER's strength.")
-            self._denoiser = _load_dncnn(self._ckpt, self._device)
+            self._denoiser = _load_dncnn(
+                _resolve_checkpoint(
+                    self._ckpt, "DnCNN checkpoint",
+                    "Copy it from the authors' repo: "
+                    "other_repos/CIDER/code/models/DnCNN/checkpoint.pth.tar "
+                    "-> ~/models/cider_dncnn_checkpoint.pth.tar on each cluster."),
+                self._device)
 
     # ---------------- the authors' encoder path ----------------
     def _submodule(self, name: str):
