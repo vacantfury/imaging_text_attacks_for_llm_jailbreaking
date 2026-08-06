@@ -18,7 +18,6 @@ from src.prompt_transformations.transformation_factory import register_transform
 from .base_transformation import ImageRendererTransformation
 from .renderers.plain_image_renderer import PlainImageRenderer
 from .renderers.fc_typography_image_renderer import FCTypographyImageRenderer
-from .renderers.figstep_image_renderer import FigstepImageRenderer
 from .renderers.fc_flowchart_image_renderer import FCFlowchartImageRenderer
 from .renderers.blank_image_renderer import BlankImageRenderer
 from .renderers.constant_image_renderer import ConstantImageRenderer
@@ -37,14 +36,23 @@ class IRFCTypoTransformation(ImageRendererTransformation):
     renderer_class = FCTypographyImageRenderer
 
 
-@register_transformation
-class IRFigstepTransformation(ImageRendererTransformation):
-    type_name = "ir_figstep"
-    renderer_class = FigstepImageRenderer
+# ir_figstep is NOT here: FigStep needs an aux-LLM declarative-paraphrase step, so
+# it owns a module like the other LLM-using image attacks → image/figstep.py.
 
 
 @register_transformation
 class IRFCFlowchartTransformation(ImageRendererTransformation):
+    """Flowchart-style RENDER — **ours, not FC-Attack.**
+
+    Renders the request into a single Graphviz node. It is NOT FC-Attack (Zhang
+    et al., EMNLP Findings 2025), which decomposes the request into partially
+    completed STEP nodes via a fine-tuned generator and delivers them with its own
+    quiz-competition instruction; we do neither, and the vertical/horizontal
+    builders emit one node with no edges at all. Cite `zhang2025fcattack` only as
+    the inspiration for the render FAMILY, never as the method of this cell, and
+    name the cell "flowchart render" in tables (AS-3 session's resolution, 2026-08-05).
+    Record: text_docs/shared/method_fidelity_audit.md §1.4.
+    """
     type_name = "ir_fc_flowchart"
     renderer_class = FCFlowchartImageRenderer
 

@@ -253,8 +253,12 @@ pool is 12 hard-coded questions cycled deterministically.
 ## 3. Minor (P3)
 
 * **`deep_inception`** — template matches the released one and defaults (science fiction / 5 / 5) are the
-  paper's; two typographic slips: `"a step to {q} **to** against the super evil doctor"` (extra *to*) and
-  `"Summarize **what** their discussion results in each layer"`. Cosmetic, but they are in every prompt.
+  paper's. ~~Two typographic slips~~ **— WITHDRAWN 2026-08-05, this was an audit error.** Both strings occur
+  in the authors' OWN released prompt data (`other_repos/DeepInception/res/`): `"Summarize **what** their
+  discussion results…"` is in fact the *dominant* form there (129 occurrences vs 23 for `"Summarize their…"`),
+  and `"…{q} **to** against the super evil doctor"` is a minority-but-genuine variant (~11 vs ~99). Neither is
+  a divergence from the published attack, so the code is left unchanged — "fixing" toward one variant the
+  authors themselves did not settle would be a silent instrument change for no fidelity gain.
 * **`non_llm_artprompt` prompt body** — a faithful merge of the reference's `gen` + `alphabet` variants, but
   drops the original's *"Each letter is in a grid with 5 columns and 5 rows."* hint and silently corrects the
   reference's `"Spilt"` typo. Both harmless; note them if the prompt is ever quoted.
@@ -338,6 +342,24 @@ and parser.
    the cross-repo comparison stays legible, and change only the paper-side description — the rubric *string*
    is byte-identical across repos and must never move one-sidedly. §2.3 (SemanticSmooth config label) applies
    to AS-3 **and AS-4**; §2.4 to AS-3.
+
+> ### ✅ CODE FIXES LANDED 2026-08-05 — Block B's code half is DONE; only the RE-RUNS remain
+> Owner scope ruling 2026-08-05: *"you just consider code fix, rerun is not your thing"* — re-run scheduling
+> and the paper-draft edits (Block A) belong to the paper sessions. What landed, each verified against the
+> reference before commit:
+>
+> | Fix | Verification |
+> |---|---|
+> | **§1.1 `code_attack`** — `words[::-1]` + plain `append`, verbatim `decode()` comment, `[\s\-]+` split, exact blank-line layout | renders **byte-exact** against `code_python_stack.txt` on 4 inputs incl. 1-word and hyphenated; `appendleft` gone, so the contamination test cleanly separates old cells from new |
+> | **§1.2 `llm_semantic_camo`** — returns step 2's **prompt**; `TARGET_PREFIX` forced to `""` so the generic decode prefix is never prepended | dry-render confirms the target now receives a request to fulfil, not a pre-written answer |
+> | **§1.3 `ir_figstep`** — own module `image/figstep.py`: aux-LLM declarative paraphrase + FigStep's canonical text instruction, image-only by default | registry intact (33), no-model guard fires, render path green; `paraphrase: false` kept as a loudly-labelled ablation |
+> | **§1.4 `ir_fc_flowchart`** — de-claimed in code: docstring states it is **ours, not FC-Attack**, and names the table label to use | construct OK |
+> | **§1.5 `non_llm_artprompt`** — `word_selection` now defaults to `'llm'` using ArtPrompt's **verbatim** masking prompt; positional heuristics demoted to warned ablations and refuse to pass as ArtPrompt | guard fires without a model; parser accepts the reference reply format and rejects a word absent from the prompt |
+>
+> **Still owned by the paper sessions:** every re-run (the 221 `appendleft` cells + AS-3's composed cells +
+> the FigStep column), and all of Block A. **`ir_figstep` now needs a `model`** — `conf/imaging/figstep.yaml`
+> carries `gpt-4.1-mini`, so existing presets work unchanged, but the render step now costs one aux-LLM call
+> per behavior.
 
 **Block B — code fixes (cheap) + re-runs (the expensive part; scope is the owner's call).**
 
