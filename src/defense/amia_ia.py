@@ -169,6 +169,48 @@ def _shim_transformers_for_visrag() -> None:
                 f"{module.__name__} for VisRAG-Ret's remote code")
 
 
+def _denormalize_rope_scaling(config) -> None:
+    """Undo transformers 5's synthetic `rope_scaling`, which MiniCPM cannot read.
+
+    Second transformers-5 incompatibility in VisRAG-Ret's frozen remote code
+    (the first is the fx shim above). `modeling_minicpm.py::_init_rope` branches:
+
+        if self.config.rope_scaling is None:   <- no scaling, the default path
+            ...
+        else:
+            scaling_type = self.config.rope_scaling["type"]
+
+    VisRAG-Ret's config.json declares `"rope_scaling": null`, so on the
+    transformers it was released against it took the FIRST branch. transformers 5
+    normalises rope config and INJECTS `{'rope_theta': 10000.0, 'rope_type':
+    'default'}` in its place, which is truthy, so the old code falls into the
+    else-branch and dies on `KeyError: 'type'` (the key was renamed `rope_type`).
+
+    Restoring `None` when the injected dict means "no scaling" reproduces the
+    released model's actual behaviour — this changes what transformers ADDED, not
+    what openbmb published. The elif translates a genuine scaling spec into the
+    old key rather than silently discarding it, so a future checkpoint that
+    really does use RoPE scaling still gets the right rope, and an unrecognised
+    shape raises instead of being guessed at.
+    """
+    scaling = getattr(config, "rope_scaling", None)
+    if not isinstance(scaling, dict) or "type" in scaling:
+        return                                   # already old-style, or absent
+    rope_type = scaling.get("rope_type")
+    if rope_type == "default":
+        config.rope_scaling = None               # what config.json actually says
+        logger.debug("AMIA masking: cleared transformers-5 synthetic rope_scaling")
+    elif rope_type is not None:
+        config.rope_scaling = {**scaling, "type": rope_type}
+        logger.debug(f"AMIA masking: translated rope_scaling rope_type="
+                     f"{rope_type!r} to the legacy 'type' key")
+    else:
+        raise RuntimeError(
+            f"AMIA masking: VisRAG-Ret's config carries a rope_scaling dict this "
+            f"code does not recognise ({scaling!r}). Refusing to guess — a wrong "
+            f"rope would silently change the masker's embeddings.")
+
+
 class _VisRagMasker:
     """Text-relevance-driven patch masking. Lazily loads VisRAG-Ret."""
 
@@ -201,15 +243,20 @@ class _VisRagMasker:
         # MUST precede the transformers import chain below: the shim has to be in
         # place before `trust_remote_code` executes VisRAG-Ret's modeling files.
         _shim_transformers_for_visrag()
-        from transformers import AutoModel, AutoTokenizer
+        from transformers import AutoConfig, AutoModel, AutoTokenizer
 
         self._device = torch.device(
             self._device_str if torch.cuda.is_available() else "cpu")
         logger.info(f"AMIA masking: loading {self._model_name} on {self._device}")
         self._tokenizer = AutoTokenizer.from_pretrained(
             self._model_name, trust_remote_code=True)
+        # Load the config separately so the rope_scaling that transformers 5
+        # injects can be undone BEFORE the decoder layers are built from it.
+        config = AutoConfig.from_pretrained(self._model_name, trust_remote_code=True)
+        _denormalize_rope_scaling(config)
         self._model = AutoModel.from_pretrained(
             self._model_name,
+            config=config,
             torch_dtype=torch.bfloat16 if self._device.type == "cuda" else torch.float32,
             trust_remote_code=True,
         ).to(self._device).eval()
