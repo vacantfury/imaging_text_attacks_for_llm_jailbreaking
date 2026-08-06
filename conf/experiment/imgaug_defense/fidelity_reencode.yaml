@@ -1,0 +1,58 @@
+# Paper B (AS-2) · METHOD-FIDELITY RE-ENCODE — stage 1 of 2.
+#
+# WHY: the 2026-08-05 fidelity audit found two of AS-2's attacks were not the
+# published methods, and both were FIXED in `b266892`. The fix changes the
+# ENCODINGS themselves, so every downstream cell must be re-collected from fresh
+# transforms — a defense+evaluate rerun pointed at the old `prompt_transform`
+# dirs would silently re-measure the unfaithful attack.
+#   * `code_attack` (audit §1.1) — `appendleft` over a reversed list double-reversed
+#     the deque, so `decode()` reconstructed the behaviour BACKWARDS. Fixed to the
+#     reference's `words[::-1]` + plain `append`. Validated 2026-08-05: our push
+#     block is now byte-identical to `data_preparation.py::format_and_push`, and
+#     decode() recovers the original behaviour exactly.
+#   * `llm_semantic_camo` (audit §1.2) — returned step 2's ANSWER (a
+#     helper-written harmful document) instead of step 2's PROMPT. Fixed to return
+#     the prompt, so the TARGET performs the harmful generation as in the paper.
+#
+# THIS PRESET ONLY BUILDS ENCODINGS. Stage 2 (the defense+evaluate grid) is a
+# separate preset because `defense+evaluate` needs stage 1's timestamped subdir,
+# which does not exist until this runs.
+#
+# COST: code_attack and ir_constant are pure string/image ops with NO model calls
+# (verified). Only semantic_camo spends: ~200 helper calls on the extraction +
+# step-1 feature prompts, gpt-4.1-mini, ≈ $0.15 total. No GPU needed.
+#
+# ARM STRUCTURE — one chained task per attack yields BOTH arms from ONE encoding,
+# which is what the paired text-vs-decoy contrast requires:
+#   step 1 (`code_attack` / `llm_semantic_camo`) -> the TEXT arm
+#   step 2 (`ir_constant`, mountain.png)         -> the DECOY arm
+# mountain.png is the paper's decoy asset. Do NOT substitute another: a claims
+# audit on 2026-08-02 found four decoy assets had been mixed across tables, and
+# the published numbers are mountain-only.
+
+num_main_job_threads: 4
+
+_decoy: &decoy
+  type: ir_constant
+  params: {image_path: src/prompt_transformations/image/images/mountain.png}
+
+tasks:
+  # ---- code_attack, on the FIXED encoder (free) ----
+  - mode: prompt_transform
+    benchmark: harmbench
+    source_file: data/harmbench_prompts.jsonl
+    prompt_range: [0, 99]
+    campaign: paper_b_fidelity_reencode
+    transformation_list:
+      - {type: code_attack}
+      - *decoy
+
+  # ---- semantic camouflage, on the FIXED encoder (~$0.15 of helper calls) ----
+  - mode: prompt_transform
+    benchmark: harmbench
+    source_file: data/harmbench_prompts.jsonl
+    prompt_range: [0, 99]
+    campaign: paper_b_fidelity_reencode
+    transformation_list:
+      - {type: llm_semantic_camo}
+      - *decoy
