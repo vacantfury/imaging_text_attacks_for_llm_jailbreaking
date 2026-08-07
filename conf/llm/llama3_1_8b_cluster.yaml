@@ -9,9 +9,23 @@ model:
   model: meta-llama/Llama-3.1-8B-Instruct
 
 cluster:
-  # num_instances=4 for the P2 (temperature-1.0) re-run: llama's six cells sum to 51h of
-  # measured work, so 4 replicas bring the per-target makespan down to its longest SINGLE
-  # cell (SemanticSmooth+CodeAttack, 18.1h at T=0) — the floor, since load-balancing is
-  # per-cell. 4 replicas + wildguard + orchestrator = 6 jobs, inside AICR's budget of 7
-  # and the repo's MAX_SUBMIT_JOBS_PER_USER=8, leaving slots for the Paper C work.
-  num_instances: 4
+  # 🔴 NEVER LET THIS MODEL LAND ON A V100 — it is the workhorse TARGET.
+  # R14 (2026-08-07) died at the 8h wall because SLURM put it on d1007 (v100-sxm2,
+  # ~900 GB/s) while the IDLE wildguard judge sat on d4055 (h200, ~4.8 TB/s). The only
+  # reason for that split: conf/llm/wildguard.yaml already carried this exclusion list and
+  # this file did not. Decode is memory-bandwidth bound, so the GPU class is worth ~5x —
+  # more than replicas and concurrency combined. The field is LIVE despite being unused in
+  # src/: llm_utils/cluster_server_manager.py:1005 resolves it to a concrete `--exclude=`
+  # node list via sinfo (GPU types are not all SLURM features, so --constraint can't
+  # express them). Leaves a100 + h200 on NURC.
+  gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]
+
+  # num_instances=3, NOT 4 — 4 is self-defeating on NURC. The allocator is FLOOR DIVISION
+  # (`per_model_cap = max(available_slots // n_models, 1)`), and NURC's gpu QOS caps GPU
+  # jobs at 4 (MaxJobsPU=4, MaxTRESPU=gres/gpu=4). A 2-model round asking 4+1=5 against
+  # available_slots=4 caps BOTH models to 4//2=2 → you get 2 llama replicas. Asking 3+1=4
+  # is not > 4, so no capping fires and you get all 3. On AICR (budget 7) 3 replicas +
+  # wildguard + orchestrator = 5 jobs, still inside budget — one fewer replica than the old
+  # value, which only affects makespan when several cells run in parallel, since
+  # load-balancing is per-cell and the floor is the longest SINGLE cell either way.
+  num_instances: 3

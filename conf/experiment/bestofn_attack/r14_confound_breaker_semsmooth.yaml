@@ -1,3 +1,9 @@
+# ⛔ HISTORICAL — DO NOT SUBMIT. Superseded 2026-08-07 by
+# r14b_confound_breaker_semsmooth.yaml, which carries the same science with three throughput
+# fixes. This file is kept for its reasoning (the confound, the quadrant argument, the two
+# AICR/NURC failure post-mortems); its RUN died at the 8h QOS wall at ~30% with no data.
+# See text_docs/bestofn_attack/experiment_results.md, "ROUND 14 — FAILED".
+#
 # bestofn_attack AS-4 — ROUND 14: THE CONFOUND BREAKER.
 #
 # OWNER-APPROVED 2026-08-06 ("go", ~$12).
