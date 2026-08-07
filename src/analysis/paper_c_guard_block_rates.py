@@ -46,6 +46,19 @@ CAMPAIGNS = {'gb': 'paper_c_guard_panel', 'mc': 'paper_c_guard_panel',
              '+rg': 'paper_c_reguard_ablation'}
 GUARD = 'wildguard'   # the guard both mechanism claims are stated on in the paper
 
+# The method-fidelity audit (`b266892`) fixed two of the eleven attacks and QUARANTINED
+# every cell they produced -- including the two this file's headline claim is about.
+# Without the swap below, `code_attack` and `ir_figstep` silently print `--`, and the
+# CodeAttack mechanism claim -- the whole point of the script -- reports nothing while
+# the paper keeps printing its pre-audit numbers. A dash is not a null result.
+FIXED = {'code_attack', 'ir_figstep'}
+RERUN_CAMPAIGNS = {'gb': 'paper_c_fidelity_rerun', 'mc': 'paper_c_fidelity_rerun',
+                   '+rg': 'paper_c_fidelity_rerun'}
+
+
+def _campaign_for(cond: str, chain: str) -> str:
+    return (RERUN_CAMPAIGNS if chain in FIXED else CAMPAIGNS).get(cond)
+
 
 def _cond(defense: str, dc: dict) -> str:
     if defense == 'guard_baseline':
@@ -67,8 +80,6 @@ def collect(guard: str = GUARD) -> dict:
         if dc.get('guard_model') != guard:
             continue
         cond = _cond(r.get('defense'), dc)
-        if CAMPAIGNS.get(cond) != r.get('campaign'):
-            continue
         if r.get('target_model') != 'qwen2_5_vl_7b':
             continue
         d = os.path.dirname(f)
@@ -76,6 +87,8 @@ def collect(guard: str = GUARD) -> dict:
         chain = next((c for c in sorted(CHAINS, key=len, reverse=True)
                       if '_' + c + '_' in name), None)
         if chain is None:
+            continue
+        if _campaign_for(cond, chain) != r.get('campaign'):
             continue
         raw = os.path.join(d, 'raw_results.jsonl')
         if not os.path.isfile(raw):
