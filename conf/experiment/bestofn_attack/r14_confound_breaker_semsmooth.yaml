@@ -83,6 +83,22 @@
 # cancelling re-pays them. Weigh that before killing a semantic_smooth run: wait if the
 # queue is moving, reroute only when another cluster is genuinely idle.
 #
+# ⏱️ IT RAN, SLOWLY — ~21h, and the cause is a KNOWN OPEN CONFIG DEFECT, not this round.
+# NURC job 8989121 measured 2,131 target calls in 110 min (~19/min) against 25,000 needed.
+# The server was NOT the limit: `Running: 20 reqs, Waiting: 0, GPU KV cache usage: 20.8%`
+# — the client never queues it and 79% of the KV cache sits idle. That is TODO item 12's
+# `max_concurrency: 20` throttle (conf/llm/default.yaml:17), an API-rate-limit default
+# wrongly applied to the SLURM_CLUSTER route where no rate limit exists. Second confirmed
+# instance after job 106 (70B), so it is not a big-model artefact.
+# It also caused the 11 `vLLM API error: Request timed out` lines in the .err: at 20
+# concurrent each request decodes ~10 tok/s, and `max_tokens: 16384` needs ~1600s against
+# SlurmClusterService's 600s httpx timeout. 11/25,000 = 0.04%, immaterial to amplification.
+# NOT killed and restarted, deliberately: the ~$6 of gemini paraphrases already completed
+# live only in orchestrator memory (no cache), so a restart re-pays them — and the owner's
+# standing instruction is that time is not the constraint. Before the NEXT long cluster
+# round, fix the config; interim per-preset escape is
+# `target_model_config: {max_concurrency: 128}` (forwarded verbatim by task.py:483).
+#
 # Servers: llama3_1_8b_cluster x4 + wildguard x1 = 5 requested.
 #
 #   sbatch scripts/run_experiment.sbatch bestofn_attack/r14_confound_breaker_semsmooth
