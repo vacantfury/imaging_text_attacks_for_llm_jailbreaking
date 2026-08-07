@@ -7,3 +7,9 @@ model:
 # Qwen2.5-VL-7B requires ~16-20GB VRAM — exclude small GPUs
 cluster:
   gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4"]
+  time_limit: "04:00:00"      # short → SLURM can backfill this 1-GPU job into a gap.
+                              # AICR's profile default is 24h, which is unbackfillable at
+                              # our fairshare: on 2026-08-07 three of these servers sat
+                              # PD(Priority) for 5h at priority 171 (queue ahead: 628-833)
+                              # while ~55 of 136 rtx-batch GPUs were idle. A 6-cell round
+                              # on this model needs <30 min of compute.

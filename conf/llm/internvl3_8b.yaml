@@ -8,3 +8,5 @@ model:
 cluster:
   gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4"]
   trust_remote_code: true
+  time_limit: "04:00:00"      # short → SLURM can backfill this 1-GPU job into a gap
+                              # (see conf/llm/qwen2_5_vl_7b.yaml for the 2026-08-07 stall)
