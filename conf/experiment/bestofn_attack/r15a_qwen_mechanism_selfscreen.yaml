@@ -1,0 +1,86 @@
+# bestofn_attack AS-4 — ROUND 15a: REBUILD THE MECHANISM PANEL ON QWEN-2.5-7B (group A).
+#
+# OWNER-ORDERED 2026-08-07: "we just keep running bug-substitute experiments."
+#
+# ── WHAT DEBT THIS PAYS ─────────────────────────────────────────────────────
+# The four-machine inventory (2026-08-07, experiment_results.md) found that AFTER the
+# 2026-08-05 fidelity fixes, **llama3_1_8b_cluster is the ONLY target with a reportable
+# post-fix panel** (20 gpt-5-mini cells). Every other target is pre-fix or wildguard-only,
+# so the paper's multi-target claims currently rest on data the fixes invalidated.
+# qwen2_5_7b_instruct's quarantined cell-types include no_defense, sage, llm_self_defense,
+# selfdefend, guard_baseline and canonicalize_guard — this round rebuilds the first three.
+#
+# ── WHY THIS PANEL AND NOT A BROADER SWEEP ──────────────────────────────────
+# The claim that SURVIVED 2026-08-07 is the R12+R13 mechanism result: a defense leaks to
+# best-of-N iff its verdict is a SAMPLE. It is currently a ONE-TARGET result. Replicating it
+# on a second target is worth more than adding defenses on the target we already have, and
+# it repays bug debt at the same time. (The H1-vs-H2 confound is NOT addressed here — R14b
+# failed to break it and the owner has set that aside for now.)
+#
+# ── PRE-REGISTERED PREDICTIONS (score honestly; a miss is a finding) ────────
+# Same structure as R12/R13 on llama. Screener taxonomy decides the split:
+#   sage              -> screens with the TARGET (single call, temp follows the target)
+#                        => STOCHASTIC verdict => PREDICT COLLAPSE at T=0.
+#   llm_self_defense   -> filter_model: null => also screens with the TARGET
+#                        => STOCHASTIC verdict => PREDICT COLLAPSE at T=0.
+#   no_defense        -> no verdict at all; the T=1->T=0 change removes only the target's
+#                        ANSWER sampling => PREDICT a SMALL drop, and it is the CONTROL that
+#                        says how much of any collapse is answer-sampling rather than
+#                        verdict-sampling. Without it the sage/llm_self_defense drops are
+#                        uninterpretable, which is why it is in this preset and not dropped
+#                        as "a baseline we already have" — we do NOT have a post-fix one.
+# If sage/llm_self_defense collapse on qwen the way they did on llama, the mechanism is
+# target-general. If they do not, the R12/R13 result is llama-specific and the paper must
+# say so.
+#
+# ── SIZING: WHY THIS FITS NURC's 8h WALL (the check R14a skipped) ───────────
+# Target calls/draw: no_defense 1, sage 1, llm_self_defense 2 (generate + screen).
+#   (1 + 1 + 2) x 10,000 draws x 2 temperatures = 80,000 target calls.
+# Measured rate after the R14b fixes: ~413/min on 2 effective replicas at conc 64 on
+# a100/h200. Three replicas here => ~600/min => ~2.2h. Wall is 8h. Wide margin.
+# ⚠️ If a future edit adds semantic_smooth (5 calls/draw) to this preset, redo this
+# arithmetic — that alone would add 100,000 calls and blow the wall.
+#
+# ── SERVERS: EXACTLY 4, DELIBERATELY ────────────────────────────────────────
+# Models = qwen2_5_7b_instruct (x3) + wildguard (x1) = 4. NURC's gpu QOS is MaxJobsPU=4 /
+# MaxTRESPU=gres/gpu=4, and the allocator caps only when total_requested > available_slots.
+# 4 is not > 4, so NO capping fires and all 3 replicas are served.
+# ⚠️ selfdefend and guard_baseline are NOT in this preset on purpose: each needs a THIRD
+# model (llama3_8b_cluster shadow / llama_guard_3_8b), which makes 3+1+1=5 > 4 and collapses
+# every model to ONE replica. They run as separate small presets (15b/15c) instead.
+#
+# ── WHERE: NURC, and why not the others (checked, not assumed, 2026-08-07) ──
+# AICR: another session holds 8 jobs (Paper C guard round) with 5 servers PENDING against
+#       941 cluster-wide pending jobs — taking quota there would starve its round.
+# xc:   another session started a gemma-3-12b round 9 minutes before this was written.
+# NURC: free. 8h wall is the constraint, and the sizing above respects it.
+#
+#   ssh explorer; cd ~/projects/llm_guardrail_security
+#   sbatch scripts/run_experiment.sbatch bestofn_attack/r15a_qwen_mechanism_selfscreen
+#
+# ── JUDGE ───────────────────────────────────────────────────────────────────
+# wildguard on-cluster (FREE) collects the responses; ⚠️ NOT reportable on this code-bearing
+# arm (over-flags code 41-68%). Target generation is the expensive part and a rejudge never
+# re-queries the target, so the gpt-5-mini pass is a cheap separate step (~$1.4 for 6 cells
+# at the measured $0.225/1000-call rate) and its own ask. Do not report wildguard numbers.
+num_main_job_threads: 3
+num_cluster_jobs: 5          # 4 servers (qwen x3 + wildguard) + orchestrator
+
+_e: &e
+  mode: defense+evaluate
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  target_model: qwen2_5_7b_instruct
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r15_qwen_mechanism
+
+tasks:
+  # ---- CONTROL: no verdict at all — isolates answer-sampling from verdict-sampling ----
+  - {<<: *e, defense: no_defense, target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: no_defense, target_model_config: {temperature: 0.0, max_concurrency: 64}}
+  # ---- STOCHASTIC VERDICT (screens with the TARGET) -> predict COLLAPSE at T=0 ----
+  - {<<: *e, defense: sage, target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: sage, target_model_config: {temperature: 0.0, max_concurrency: 64}}
+  - {<<: *e, defense: llm_self_defense, target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: llm_self_defense, target_model_config: {temperature: 0.0, max_concurrency: 64}}
