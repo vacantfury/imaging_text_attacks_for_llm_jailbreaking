@@ -1,0 +1,89 @@
+# Paper B (AS-2) · ECSO AMPLIFICATION — DEPLOYABLE-ARM RE-COLLECTION.
+#
+# WHY THIS EXISTS. `tab:main`'s ECSO decoy column is the ORACLE arm. ECSO's
+# `query_source` defaults to `"original"` (src/defense/ecso.py:108), in which the
+# defense reads the UNENCODED harmful request — an oracle no deployed defender
+# facing an encoded attack possesses. Every archived ECSO cell with an empty
+# `defense_config` therefore ran the oracle, and three of the ten published decoy
+# numbers match an oracle cell exactly with no deployable counterpart
+# (gemini-2.0-flash/code 21, flash-lite/formal 10, gpt-4o-mini/formal 4). The
+# remaining six match nothing in any tree, so the table is only partly traceable.
+# The pre-restructure abstract stated the deployable arm was reported throughout;
+# the paper nowhere discloses otherwise. Full record: experiment_matrix.md
+# "ORACLE-ARM DEFECT" + its provenance follow-up, both 2026-08-06.
+#
+# WHAT IT PRODUCES. The ECSO text-vs-decoy grid on the DEPLOYABLE arm
+# (`query_source: encoded`), one judge, one window — the number the paper can
+# honestly print for surface (1). Existing scattered deployable cells suggest the
+# effect survives but far smaller and encoding-conditioned (code_attack
+# flash-lite 68->49, gpt-4o-mini 54->32; formal_logic nothing: 56->56 and 39->38
+# in AICR 301749). This preset replaces that guesswork with a clean grid.
+#
+# NOTE THE PAPER WAS ALREADY HALF-RIGHT: its own abstract said the effect is
+# "null for formal-logic encodings on three of four models". The encoding-
+# conditioning was correct and stays. It is the MAGNITUDE the oracle inflated.
+#
+# PAIRING PROTOCOL HELD — verified 2026-08-06, not assumed:
+#   * formal_logic — the decoy chain's `upstream_ref.source_dir` IS the May
+#     encoding used as the text arm here, so both arms descend from one canonical
+#     encoding.
+#   * code_attack — text and decoy are SIBLING STEPS of one chain
+#     (`code_attack_ir_constant_20260805_213025_3168031`), same encoding by
+#     construction. This is the POST-FIX 2026-08-05 chain; the May-era code_attack
+#     mountain chains are QUARANTINED under the `code_attack_appendleft` bug and
+#     are deliberately NOT used.
+#   * Both decoys: 100 images, exactly 1 distinct md5 = the mountain decoy, which
+#     is the render `tab:main` publishes (blank/rabbit are the App G diversity
+#     arms).
+#
+# CLAUDE + CODE_ATTACK IS OMITTED, not overlooked: the Anthropic API filter
+# returns empty for 82-93% of code-completion prompts regardless of defense, so
+# those cells measure the filter. The paper already excludes them. Claude's
+# formal_logic cells are real and are included.
+#
+# 14 cells = (3 models x 2 attacks + claude x 1 attack) x 2 arms.
+#
+# COST: 14 cells x 100 prompts; ECSO issues up to 2 target calls per prompt, plus
+# the gpt-5-mini judge on all 1400. claude is the expensive quarter. Estimated
+# $4-6. An ESTIMATE, not a quote — owner-approved 2026-08-06.
+#
+# SUBMIT (AICR):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch imgaug_defense/ecso_deployable_grid'
+
+num_main_job_threads: 6
+num_cluster_jobs: 1          # API targets + API judge — no vLLM server needed.
+
+_code_text:  &code_text  outputs/imgaug_defense/prompt_transform/harmbench/code_attack_ir_constant_20260805_213025_3168031/code_attack
+_code_decoy: &code_decoy outputs/imgaug_defense/prompt_transform/harmbench/code_attack_ir_constant_20260805_213025_3168031/ir_constant
+_form_text:  &form_text  backup_files/arr_may_submission_files/outputs/prompt_transform/harmbench/formal_logic_ir_plain_20260525_010219_56487445/llm_formal_logic
+_form_decoy: &form_decoy outputs/imgaug_defense/prompt_transform/harmbench/llm_formal_logic_ir_constant_20260803_064343_72332881/ir_constant
+
+_b: &b
+  mode: defense+evaluate
+  defense: ecso
+  defense_config: {query_source: encoded}   # THE POINT OF THIS PRESET — deployable
+  benchmark: harmbench
+  judge_method: harmbench
+  prompt_range: [0, 99]
+  judge_model: gpt-5-mini
+  campaign: paper_b_ecso_deployable_grid
+
+tasks:
+  # ---- code_attack ----
+  - {<<: *b, target_model: gemini-2.5-flash,      source_transform_subdir: *code_text}
+  - {<<: *b, target_model: gemini-2.5-flash,      source_transform_subdir: *code_decoy}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *code_text}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *code_decoy}
+  - {<<: *b, target_model: gpt-4o-mini,           source_transform_subdir: *code_text}
+  - {<<: *b, target_model: gpt-4o-mini,           source_transform_subdir: *code_decoy}
+
+  # ---- formal_logic ----
+  - {<<: *b, target_model: gemini-2.5-flash,      source_transform_subdir: *form_text}
+  - {<<: *b, target_model: gemini-2.5-flash,      source_transform_subdir: *form_decoy}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *form_text}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *form_decoy}
+  - {<<: *b, target_model: gpt-4o-mini,           source_transform_subdir: *form_text}
+  - {<<: *b, target_model: gpt-4o-mini,           source_transform_subdir: *form_decoy}
+  - {<<: *b, target_model: claude-sonnet-4-6,     source_transform_subdir: *form_text}
+  - {<<: *b, target_model: claude-sonnet-4-6,     source_transform_subdir: *form_decoy}
