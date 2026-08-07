@@ -59,13 +59,33 @@
 # Target queries are cluster-served ($0). The gpt-5-nano judge here is the DEFENSE'S OWN
 # internal vote, not our ASR judge — it is part of the published method, not a shortcut.
 #
-# ── WHERE ───────────────────────────────────────────────────────────────────
-# aicr ONLY. semantic_smooth calls gemini + OpenAI, and xc's routing policy bars
-# non-Bedrock API models (conf/clusters/xc.yaml).
-# Servers: llama3_1_8b_cluster x4 + wildguard x1 = 5 requested; AICR had 3 GPU jobs at
-# submission (9 free), so available_slots = min(5, 9) = 5 and NO capping fires.
+# ── WHERE: NURC (aicr FAILED — read this before rerouting) ──────────────────
+# aicr OR nurc — semantic_smooth calls gemini + OpenAI, and xc's routing policy bars
+# non-Bedrock API models (conf/clusters/xc.yaml). NOT xc.
 #
-#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r14_confound_breaker_semsmooth
+# ⚠️ FIRST ATTEMPT DEADLOCKED ON AICR (job 312598, cancelled after 2h48).
+# Pre-flight PASSED — "existing GPU jobs=3, servers_wanted=5 -> available_slots=5" — and
+# then all five servers sat PENDING (Priority) for the entire run while the orchestrator
+# blocked in acquire_endpoint(). Root cause: **the pre-flight measures MY job-count
+# headroom against MY cap of 12, NOT whether SLURM can actually schedule the jobs.**
+# AICR had 60 GPU jobs running cluster-wide. The `available_slots < 1` guard exists
+# precisely to stop "a PENDING server would deadlock the run", but it checks quota, not
+# capacity, so it cannot catch this. Third member of the family, after the xc port
+# collision and the xc box-owner GPU contention: A CLEAN PRE-FLIGHT IS NOT EVIDENCE THAT
+# A ROUND CAN RUN.
+# Before submitting a multi-server round, check REAL schedulability, not just the cap:
+#   ssh <cluster> 'sinfo -p gpu -t idle -h -o "%D %N"'   # idle nodes, or
+#   ssh <cluster> 'squeue -t R -h -o "%b" | grep -c gpu' # cluster-wide GPU pressure
+# NURC had 5 idle GPU nodes when this was rerouted; AICR had none.
+#
+# 💸 THE RETRY COSTS REAL MONEY. The gemini paraphrases (25,000 calls, ~$6) COMPLETED
+# before the deadlock and live only in the orchestrator's memory — there is no cache, so
+# cancelling re-pays them. Weigh that before killing a semantic_smooth run: wait if the
+# queue is moving, reroute only when another cluster is genuinely idle.
+#
+# Servers: llama3_1_8b_cluster x4 + wildguard x1 = 5 requested.
+#
+#   sbatch scripts/run_experiment.sbatch bestofn_attack/r14_confound_breaker_semsmooth
 #
 # ── JUDGE ───────────────────────────────────────────────────────────────────
 # wildguard on-cluster (FREE) for shape; ⚠️ not reportable (code-bearing arm). The
