@@ -1,6 +1,15 @@
 # Paper B (AS-2) · PRESENCE CONTROLS — STAGE 2: is it PRESENCE, and can it be
 # instructed away?
 #
+# 🔴 HISTORICAL CORRECTION (2026-08-07). Everywhere this header says "mountain
+# decoy", the arm that ACTUALLY ran is the clip-art rabbit line drawing — stage 1
+# dropped its `image_path` silently and the renderer used its default. See the
+# `_rabbit` anchor below for the full note. The pre-run reasoning is left intact
+# because it is the record of what was intended; the conclusion is unaffected and
+# in fact strengthened (blank and rabbit share NO content and neither carries
+# readable text, so the OCR explanation dies in both arms). Do not "fix" the
+# reasoning text below to match — fix nothing, read the anchor.
+#
 # Two questions in one job, on the rung that carries the headline number
 # (rung 2, OR-Bench borderline-benign, where the blank canvas gives +23 to +51pp).
 #
@@ -62,11 +71,20 @@ num_cluster_jobs: 1          # API targets + API judge — no vLLM server needed
 # identical text between arms, 100 images with exactly 1 distinct md5).
 _text:  &text  outputs/imgaug_defense/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/non_llm_baseline
 _blank: &blank outputs/imgaug_defense/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/ir_blank
-# Mountain decoy chained off that same text step — AICR 313305, verified
-# 2026-08-06: 100 images, exactly 1 distinct md5, count=100, status=success, and
-# `upstream_ref.source_dir` IS the `non_llm_baseline` step above, so all three
-# image-channel arms share one canonical text.
-_mtn:   &mtn   outputs/imgaug_defense/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_constant_20260807_021721_85989010/ir_constant
+# 🔴 THIS ARM IS THE RABBIT, NOT THE MOUNTAIN (corrected 2026-08-07).
+# Stage 1 wrote `image_path:` as a SIBLING of `type:`, where TransformationSpec
+# silently dropped it, so ConstantImageRenderer fell back to its default
+# `rabit.jpeg` (1189x1418). The cells are clean and the statistics are valid —
+# only the label was wrong, and the paper said "mountain decoy" for a day.
+# Verified from the stored config (no `image_path` key) and the rendered image
+# dimensions. The paper now calls this arm the clip-art line drawing, which is
+# what it is. Stage 1 is fixed and TransformationSpec sets extra="forbid", so
+# re-running it renders the actual mountain and would NOT be comparable to these
+# cells — treat this anchor as immutable history.
+# AICR 313305, 2026-08-06: 100 images, exactly 1 distinct md5, count=100,
+# status=success, and `upstream_ref.source_dir` IS the `non_llm_baseline` step
+# above, so all three image-channel arms share one canonical text.
+_rabbit: &rabbit outputs/imgaug_defense/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_constant_20260807_021721_85989010/ir_constant
 
 # Neutral by design: states what the image is, asks for it to be disregarded, and
 # injects NO safety framing that could move refusal on its own.
@@ -97,11 +115,11 @@ tasks:
   - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *blank}
   - {<<: *b, target_model: gemini-2.5-flash,      source_transform_subdir: *blank}
 
-  # ---- arm 3: mountain decoy (Q1 — is it presence?) ----
-  - {<<: *b, target_model: claude-sonnet-4-6,     source_transform_subdir: *mtn}
-  - {<<: *b, target_model: gpt-4o-mini,           source_transform_subdir: *mtn}
-  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *mtn}
-  - {<<: *b, target_model: gemini-2.5-flash,      source_transform_subdir: *mtn}
+  # ---- arm 3: line-drawing decoy (Q1 — is it presence?) ----
+  - {<<: *b, target_model: claude-sonnet-4-6,     source_transform_subdir: *rabbit}
+  - {<<: *b, target_model: gpt-4o-mini,           source_transform_subdir: *rabbit}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *rabbit}
+  - {<<: *b, target_model: gemini-2.5-flash,      source_transform_subdir: *rabbit}
 
   # ---- arm 4: blank canvas + "ignore it" (Q2 — instructable?) ----
   - {<<: *b, target_model: claude-sonnet-4-6,     source_transform_subdir: *blank, system_message: *ignore}
