@@ -133,18 +133,59 @@ def collect() -> dict:
         t = _ts(os.path.basename(d))
         if key not in cells or t > cells[key][0]:
             cells[key] = (t, d)
+
+    # POST-FIX OVERRIDE for gb/mc (2026-08-07). The loop above pins `panel_camp`
+    # (`paper_c_guard_panel` / `paper_c_gen2_internvl3`), whose `code_attack` and `ir_figstep`
+    # cells the method-fidelity audit quarantined — so the eleven-attack assembled vector was
+    # silently built from nine. `ro` and `mc_matched` are NOT overridden: they come from the
+    # `no_decode` campaigns, which were never re-run (see the FigStep gap flagged in main()).
+    from src.analysis import paper_c_select as S
+    shared = S.scan()
+    for target in TARGETS:
+        for cond in ('gb', 'mc'):
+            found, _ = S.postfix_dirs(shared, target, GUARD, cond)
+            for chain, d in found.items():
+                cells[(target, cond, chain)] = ('', d)
     return cells
 
 
-def load_overlay() -> dict:
-    """(target, cond, chain) -> {id: bool}, from the cluster-extracted stopgap."""
+def figstep_gap(cells: dict) -> list:
+    """Which recover-only cells are missing because the fidelity fix quarantined them.
+
+    `ir_figstep` was one of the two attacks `b266892` corrected. The guard panel was re-run
+    under `paper_c_fidelity_rerun`; the `no_decode` campaigns were NOT, so their FigStep cells
+    (both `ro` and the matched `mc`) are quarantined with no replacement. This is a genuine
+    experimental gap, not a selection bug — it is reported rather than silently skipped, and
+    the six-attack table below is a FIVE-attack table until those cells are re-collected.
+    """
+    return [(t, c) for t in TARGETS for c in ('ro', 'mc_matched')
+            if (t, c, 'ir_figstep') not in cells]
+
+
+def load_overlay(warn: bool = True) -> dict:
+    """(target, cond, chain) -> {id: bool}, from the cluster-extracted stopgap.
+
+    🔴 THE OVERLAY BYPASSES THE QUARANTINE (found 2026-08-07). It was extracted on AICR
+    BEFORE the method-fidelity fix, and it carries `ir_figstep` — one of the two attacks
+    `b266892` corrected and whose cells were quarantined everywhere else. So InternVL3's
+    recover-only arm reads a healthy 11/11 while Qwen's honestly reports 10/11: the
+    difference is not data, it is a stale JSON re-injecting a cell the quarantine removed.
+    Reported loudly rather than dropped, because dropping it silently would swap one
+    invisible error for another — but no InternVL3 recover-only number should be published
+    until that cell is re-collected alongside Qwen's.
+    """
     if not os.path.exists(OVERLAY):
         return {}
     raw = json.load(open(OVERLAY))
-    return {(t, cond, chain): flags
-            for t, conds in raw.items()
-            for cond, chains in conds.items()
-            for chain, flags in chains.items()}
+    out = {(t, cond, chain): flags
+           for t, conds in raw.items()
+           for cond, chains in conds.items()
+           for chain, flags in chains.items()}
+    stale = sorted({(t, c) for (t, c, ch) in out if ch in ('ir_figstep', 'code_attack')})
+    if warn and stale:
+        print(f'⚠️  OVERLAY carries PRE-FIX chains for {stale} — these bypass the quarantine '
+              f'and must be re-collected before publication.')
+    return out
 
 
 def score(cells: dict, target: str, cond: str, chains: list,

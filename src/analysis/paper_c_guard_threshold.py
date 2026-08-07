@@ -106,14 +106,22 @@ def load_floor_labels() -> tuple[dict[tuple[str, str], bool], float]:
         s = _load_json(os.path.join(src, 'results.json')) or {}
         if s.get('target_model') != TARGET:
             continue
-        if s.get('campaign') != 'paper_c_guard_panel_floor':
-            continue
         if r.get('defense') != 'no_defense':
             continue
         enc = r.get('encoding')
         chain = enc if enc in CHAINS else next(
             (c for c in CHAINS if f'_{c}_' in src or src.endswith('/' + c)), None)
         if chain is None:
+            continue
+        # POST-FIX floor scoping (2026-08-07) — the campaign check must come AFTER the chain
+        # is known, because which campaign is correct DEPENDS on the chain: `code_attack` and
+        # `ir_figstep` were re-run under `paper_c_fidelity_rerun` and their original floor
+        # cells quarantined. Pinning only the floor campaign made this function's
+        # `raise SystemExit(missing …)` fire on those two — loud here, unlike the silent
+        # short ensembles the same pin caused elsewhere.
+        if s.get('campaign') != ('paper_c_fidelity_rerun'
+                                 if chain in ('code_attack', 'ir_figstep')
+                                 else 'paper_c_guard_panel_floor'):
             continue
         t = _stamp(os.path.basename(d))
         if chain not in newest or t > newest[chain][0]:

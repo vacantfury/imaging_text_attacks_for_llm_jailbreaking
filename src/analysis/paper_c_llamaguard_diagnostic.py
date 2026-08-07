@@ -78,7 +78,26 @@ def _stamp(n):
 
 
 def collect(target, campaign):
-    """(cond, guard, chain) -> newest rejudge dir. Same rule as the paper's."""
+    """(cond, guard, chain) -> cell dir, POST-FIX.
+
+    ⚠️ REWRITTEN 2026-08-07. The `campaign` argument is now advisory: selection comes from
+    `paper_c_select`, which draws `code_attack` and `ir_figstep` from `paper_c_fidelity_rerun`
+    rather than from the panel campaign that no longer holds them. This file diagnoses
+    LlamaGuard-3's behaviour on CODE specifically, so the old pin dropped precisely the
+    attack it exists to explain.
+    """
+    from src.analysis import paper_c_select as S
+    shared = S.scan()
+    sel = {}
+    for guard in GUARDS:
+        for cond in ('gb', 'mc'):
+            found, _ = S.postfix_dirs(shared, target, guard, cond)
+            for chain, d in found.items():
+                sel[(cond, guard, chain)] = d   # bare dir: analyze() unpacks .items() directly
+    return sel
+
+
+def _collect_legacy(target, campaign):
     sel = {}
     for d in glob.glob(REJUDGE):
         r = _lj(os.path.join(d, 'results.json'))
