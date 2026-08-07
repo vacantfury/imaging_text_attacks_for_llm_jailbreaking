@@ -1,0 +1,102 @@
+# ============================================================
+# Paper C (AS-3) · ORACLE-LEAK RERUN — SemanticSmooth on InternVL3, DEPLOYABLE arm
+# ============================================================
+# Closes the last experimental gap in TODO 18(a). Every other ECSO/SemanticSmooth
+# row of Table 1 now has both arms; this one had 2 of 11 attacks and NO benign cell,
+# so its deployable ensemble currently computes to "37%" over a 2-attack partial
+# union -- a number that reads like a result and is an artifact.
+#
+# ---- WHY THIS ARM EXISTS ----
+# SemanticSmooth's internal vote judge (`semantic_smooth.py`) reads a query to pick
+# which of its 5 paraphrased responses to return. `query_source: original` (the
+# knob's default, and what every published cell ran) hands it the UNENCODED harmful
+# request -- an oracle a defender facing an encoded attack does not possess.
+# `encoded` is the threat-model-faithful arm. The paper already commits to this in
+# print for the composed result ("we report the deployable arm throughout and treat
+# the oracle-assisted figures as superseded"), while Table 1's baseline headers are
+# still the oracle arm; this run is what makes that sentence true.
+#
+# ---- SCOPE: 9 attacks + 1 benign, not 11 + 2, and each omission is an identity ----
+# `code_attack` and `ir_figstep` already ran on BOTH arms in the method-fidelity
+# stage 4 (campaign `paper_c_fidelity_rerun`) -- they are the two attacks `b266892`
+# fixed, so they had to be re-collected there anyway.
+# The benign TEXT channel (`non_llm_baseline`) is the IDENTITY transform: verified
+# on disk, 100/100 rows have `encoded == original`, so the knob cannot change what
+# the vote judge sees. Its `original` cell (26.0) IS its `encoded` cell.
+# ⚠️ Do NOT generalize that identity to ECSO: ECSO short-circuits on text-only input
+# (`ecso.py` returns the initial responses before `query_source` is ever read), which
+# is why ECSO needs no deployable cipher cell either -- a DIFFERENT mechanism
+# reaching the same conclusion. Both were checked in code, not assumed.
+#
+# ---- TRANSFORM DIRS ARE PINNED TO THE PUBLISHED CELLS ----
+# Every `source_transform_subdir` below is the exact dir the matching `original`
+# cell consumed (campaign `paper_c_semanticsmooth_baseline_internvl3`), so the two
+# arms are the same behaviors under the same encodings and the paired McNemar is
+# valid. Verified present on NURC before submit.
+#
+# ---- PREDICTION, WRITTEN BEFORE THE RUN ----
+# TODO 18 derives from the mechanism that the oracle made SemanticSmooth look
+# WEAKER, not stronger: stage 4 only SELECTS among 5 already-generated responses and
+# never blocks, so a plaintext-fed judge detects harm better -> returns the
+# harmful-labelled response -> measured ASR goes UP. So we predict the deployable
+# ensemble lands at or BELOW the published 77%, and the Qwen arm is consistent
+# (79 -> 81, p=0.69, null). If it instead drops far below 77, watch the risk TODO 18(c)
+# names: a genuinely stronger SemanticSmooth compresses the marginal value of our
+# amplifier in the stacking/Pareto result, which must then be re-checked, not buried.
+#
+# ---- RESOURCES ----
+# 10 cells x n=100. Per prompt SemanticSmooth spends 5 paraphrase + 5 target + 5 vote
+# calls, so the judge count is NOT the cost driver:
+#   ~5000 gemini-2.5-flash-lite (paraphrase) + ~5000 gpt-5-nano (internal vote)
+#   + ~1000 gpt-5-mini (project judge)          ~= $2.5-3
+#   GPU: 1 server (internvl3_8b; SemanticSmooth is guard-free) + orchestrator = 2
+#        SLURM jobs against NURC's cap of 4.     wall: ~2h
+# AICR was cap-exact (12/12, another session's run) at submit time; NURC held 0 of
+# our jobs and all 10 transform dirs.
+#
+# ---- GUARD ON THE RESULT ----
+# Confirm cells by `results.json` with a non-None `asr`, never by a directory count
+# (failed tasks still create empty dirs). Expect 11/11 coverage from
+# `paper_c_floor_baselines.py` arm B afterwards -- anything less is still partial.
+#
+# Submit: sbatch scripts/run_experiment.sbatch autoattack_defense/oracle_rerun_semsm_internvl3_deployable
+# ============================================================
+
+num_main_job_threads: 5
+num_cluster_jobs: 2
+
+_harm: &harm
+  mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range: [0, 99]
+  benchmark: harmbench
+  judge_method: harmbench
+  judge_model: gpt-5-mini
+  defense: semantic_smooth
+  campaign: paper_c_oracle_rerun_semantic_smooth
+  defense_config: {query_source: encoded}
+
+_benign: &benign
+  mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range: [0, 99]
+  benchmark: orbench_benign_hard
+  judge_model: gpt-5-mini
+  defense: semantic_smooth
+  campaign: paper_c_oracle_rerun_semantic_smooth_benign
+  defense_config: {query_source: encoded}
+
+tasks:
+  # ---- the nine attacks still owed (code_attack + ir_figstep done in stage 4) ----
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/classical_chinese_simplified_ir_constant_20260710_002424_56524373/llm_classical_language}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/non_llm_cipher_20260718_183504_42666777/non_llm_cipher}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260718_183457_77423812/ir_low_contrast}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260718_183457_84223144/ir_occluded}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260718_183500_58590499/ir_mm_typo}
+  - {<<: *harm, source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid}
+
+  # ---- benign IMAGE channel; the text channel is the identity transform (see header) ----
+  - {<<: *benign, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260718_183504_7866920/ir_plain}
