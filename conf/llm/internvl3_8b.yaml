@@ -8,5 +8,8 @@ model:
 cluster:
   gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4"]
   trust_remote_code: true
+  partition: rtx-devel       # AICR devel: ~11 idle RTX-Pro-6000 vs a 628-833 priority
+                             # wall in rtx-batch; devel caps at 4h, which is exactly the
+                             # time_limit above. Only override for a >4h round.
   time_limit: "04:00:00"      # short → SLURM can backfill this 1-GPU job into a gap
                               # (see conf/llm/qwen2_5_vl_7b.yaml for the 2026-08-07 stall)
