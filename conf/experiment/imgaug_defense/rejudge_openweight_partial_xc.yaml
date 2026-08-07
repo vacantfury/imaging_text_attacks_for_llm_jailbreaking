@@ -1,0 +1,28 @@
+# Paper B (AS-2) · REJUDGE — xc half of the open-weight partial_judge recovery.
+#
+# Twin of `rejudge_openweight_partial.yaml`; see that file's header for the full
+# diagnosis (llm_utils v5 batch auto-routing + the 3600s batch_timeout abandoning
+# the judge). Split by cluster only because the stored responses live where they
+# were collected: this is the one cell that ran on xc.
+#
+# THE CELL. qwen2_5_vl_7b / benign rung B (borderline) / blank-canvas arm. This
+# is the arm that carries the headline contrast for that model, so the round's
+# key open-weight number is unavailable until it lands.
+#
+# NO TARGET COST — `rejudge` re-scores stored responses; the vLLM server is not
+# needed. Judge-only, ~$0.07.
+#
+# SUBMIT:
+#   ssh xc 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_xc.sbatch imgaug_defense/rejudge_openweight_partial_xc'
+
+num_main_job_threads: 1
+num_cluster_jobs: 1          # judge is an API model — no vLLM server needed.
+
+tasks:
+  - mode: rejudge
+    responses_from: outputs/imgaug_defense/defense+evaluate/jailbreakbench_benign/qwen2_5_vl_7b_no_defense_non_llm_baseline_ir_blank_20260807_084227_74119019
+    benchmark: jailbreakbench_benign
+    judge_method: jbb_refusal
+    judge_model: gpt-5-mini
+    campaign: paper_b_threshold_shift_openweight

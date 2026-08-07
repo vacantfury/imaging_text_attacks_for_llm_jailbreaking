@@ -655,6 +655,10 @@ class JudgeLLMConfig(BaseModel):
     model: str = "gpt-5-nano"
     max_tokens: int = 16384
     temperature: float = 0.0
+    # None = llm_utils auto-routing (batch iff worst-case cost >= $1); False =
+    # always realtime. conf/evaluation/default.yaml pins this False — see the
+    # comment there for the 2026-08-07 partial_judge incident it prevents.
+    use_batch_api: Optional[bool] = None
 
 
 class EvaluationConfig(BaseModel):
