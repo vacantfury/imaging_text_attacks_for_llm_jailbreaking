@@ -21,22 +21,16 @@ def ens(cond,g):
     return (100.0*sum(u.values())/len(u) if u else float('nan')), per, len(per)
 def main() -> None:
     global sel
-    sel={}
-    for d in glob.glob('outputs/autoattack_defense/rejudge/harmbench/*gpt-5-mini*'):
-        r=lj(d+'/results.json')
-        if not r or r.get('asr') is None: continue
-        enc=r.get('encoding'); src=(r.get('upstream_ref') or {}).get('source_dir','')
-        chain=enc if enc in CHAINS else next((c for c in CHAINS if f'_{c}_' in src),None)
-        if chain is None: continue
-        s=lj(src+'/results.json') or {}
-        dc=s.get('defense_config') or {}; guard=dc.get('guard_model','none'); camp=s.get('campaign')
-        dtext=dc.get('decode_text'); dstyle=dc.get('decode_style')
-        if camp=='paper_c_guard_panel' and r.get('defense')=='guard_baseline' and guard in GUARDS: cond=('gb',guard)
-        elif camp=='paper_c_guard_panel' and r.get('defense')=='modality_complete' and guard in GUARDS and dtext==True and dstyle=='recover': cond=('mc',guard)
-        elif camp=='paper_c_reguard_ablation' and guard in GUARDS: cond=('mcrg',guard)
-        else: continue
-        k=(cond[0],cond[1],chain); t=ts(os.path.basename(d))
-        if k not in sel or t>sel[k][0]: sel[k]=(t,d)
+    # POST-FIX selection (rewritten 2026-08-07). The old inline selector pinned
+    # `paper_c_guard_panel`, whose code_attack + ir_figstep cells are quarantined, so every
+    # ensemble below silently OR-reduced over nine attacks — and this file's headline column
+    # is literally `code_attack coverage`, i.e. the one it dropped.
+    from src.analysis import paper_c_select as S
+    shared=S.scan(); sel={}
+    for guard in GUARDS:
+        for cond,out_cond in (('gb','gb'),('mc','mc'),('rg','mcrg')):
+            found,_=S.postfix_dirs(shared,'qwen2_5_vl_7b',guard,cond)
+            for chain,d in found.items(): sel[(out_cond,guard,chain)]=('',d)
     print(f'{"guard":20}{"gb":>6}{"mc":>6}{"mc+rg":>7}    code_attack coverage gb/mc/mcrg    n(gb/mc/mcrg)')
     print('-'*92)
     for g in GUARDS:
