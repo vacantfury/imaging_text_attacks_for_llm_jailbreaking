@@ -1,7 +1,22 @@
 """Paper C result figures — ensemble bars + safety-utility tradeoff frontier.
-Numbers are the gpt-5-mini VALIDATED Qwen2.5-VL results (experiment_results.md §5-Guard Panel + §RQ4).
-Regenerate with `python src/analysis/paper_c_figures.py`; add the InternVL3 2nd-model data to the DATA
-block when gen2_internvl3 lands. Uses the scientific-visualization skill's publication style."""
+
+⚠️ STALENESS DEFECT, FOUND AND FIXED 2026-08-07. This file held a HARDCODED data block
+carrying PRE-AUDIT numbers. The method-fidelity audit (`b266892`) rebuilt `code_attack` and
+`ir_figstep` and Table 1 was recomputed on the post-fix cells on 2026-08-06 — but nothing
+recomputed the FIGURES, so both of them plotted a grid the paper no longer reports (Qwen
+gb WildGuard 75 against Table 1's 77, +rg Qwen3Guard 43 against 50, GuardReasoner 58 against
+63). A hardcoded table cannot fail, which is why `verify()` now exists: it rebuilds every
+entered ASR from the data through the shared selector and RAISES on drift. Same defect class
+and same remedy as `paper_c_pareto.py`.
+
+ASR constants are transcribed from `tab:reguard` in the AIA paper and machine-checked by
+`verify()`. Over-refusal constants are transcribed from the same table (integers, as the
+table rounds — keeping figure and table byte-identical is deliberate) and are NOT
+machine-checked: they come from the benign `orbench_benign_hard` panel, which the encoder
+fidelity fix does not touch.
+
+Regenerate with `.venv/bin/python -m src.analysis.paper_c_figures` (runs verify() first).
+Uses the scientific-visualization skill's publication style."""
 import sys, os
 SKILL = "/Users/haoyu/.claude/skills/scientific-visualization"
 sys.path.insert(0, SKILL + "/scripts"); sys.path.insert(0, SKILL + "/assets")
@@ -31,8 +46,14 @@ def wilson_err(vals, n=100, z=1.96):
         lo.append(v - (c-h)*100); hi.append((c+h)*100 - v)
     return np.array([lo, hi])
 
-def plot_model(MCv, MCRGv, ORv, ORrgv, m_mc, m_rg, ls, ax, errors=True):
-    """One target's amplifier -> +reguard arrows.
+def plot_model(GBv, MCv, MCRGv, ORgbv, ORv, ORrgv, m_mc, m_rg, ls, ax, errors=True):
+    """One target's guard-alone -> amplifier -> +reguard trajectory.
+
+    The guard-alone leg was added 2026-08-07 on a reviewer's ask: Table 1 shows the
+    gb->mc transition is often qualitatively different from mc->+rg (it can move the
+    wrong way), and a figure that starts at mc invites the reader to credit the whole
+    displacement to the amplifier. It is drawn as a faint triangle with a dotted leg so
+    the mc->+rg arrow -- the contrast that survives correction -- stays dominant.
 
     `errors=True` draws Wilson 95% whiskers on both axes of every point (review 18's
     presentation ask: "plotting points without uncertainty visually overstates how
@@ -43,6 +64,11 @@ def plot_model(MCv, MCRGv, ORv, ORrgv, m_mc, m_rg, ls, ax, errors=True):
     100-prompt text channel and a 100-prompt image channel, so n=200.
     """
     for i in range(len(MCv)):
+        ax.annotate('', xy=(ORv[i], MCv[i]), xytext=(ORgbv[i], GBv[i]),
+                    arrowprops=dict(arrowstyle='->', color=OI[i], lw=0.9, alpha=0.42,
+                                    linestyle=':'))
+        ax.scatter(ORgbv[i], GBv[i], facecolors='none', edgecolors=OI[i], marker='^',
+                   s=26, zorder=2, lw=0.9, alpha=0.75)
         if errors:
             for xv, yv in ((ORv[i], MCv[i]), (ORrgv[i], MCRGv[i])):
                 ax.errorbar(xv, yv,
@@ -54,22 +80,55 @@ def plot_model(MCv, MCRGv, ORv, ORrgv, m_mc, m_rg, ls, ax, errors=True):
         ax.scatter(ORv[i],   MCv[i],   facecolors='none', edgecolors=OI[i], marker=m_mc, s=34, zorder=3, lw=1.3)
         ax.scatter(ORrgv[i], MCRGv[i], color=OI[i],       marker=m_rg, s=34, zorder=3)
 
-# ---- DATA (Qwen2.5-VL, gpt-5-mini, n=100) — all FIVE guards ----
+# ---- DATA (Qwen2.5-VL, gpt-5-mini, n=100) — all FIVE guards, POST-FIX (tab:reguard) ----
 GUARDS = ['WildGuard','Qwen3Guard','GuardReasoner','LlamaGuard-3','ThinkGuard']
+GUARD_KEY = {'WildGuard':'wildguard', 'Qwen3Guard':'qwen3guard_gen_8b',
+             'GuardReasoner':'guardreasoner_vl_7b', 'LlamaGuard-3':'llama_guard_3_8b',
+             'ThinkGuard':'thinkguard'}
 FLOOR = 89                          # no_defense ensemble (guard-independent)
-GB   = [75,76,84,71,78]             # guard alone
-MC   = [72,65,71,79,77]             # + recover+decode amplifier
-MCRG = [43,43,58,48,54]             # + reguard layer
-MC_OR   = [64,59,59.5,28,45]        # benign over-refusal %, avg(text,image), mc
-MCRG_OR = [84,80.5,86.5,32.5,65.5]  #                                        mc+reguard
+FLOOR_OR = 26                       # undefended benign over-refusal
+GB   = [77,75,84,66,79]             # guard alone
+MC   = [68,68,71,78,81]             # + recover+decode amplifier
+MCRG = [43,50,63,49,58]             # + reguard layer
+GB_OR   = [49,47,67,28,47]          # benign over-refusal %, avg(text,image), gb
+MC_OR   = [64,59,60,28,45]          #                                         mc
+MCRG_OR = [84,81,87,33,66]          #                                         mc+reguard
 
-# ---- DATA (InternVL3-8B, gpt-5-mini, n=100) — first 3 guards, generalization ----
-FLOOR2 = 91
-GB2   = [81,81,90]
-MC2   = [63,69,67]
-MCRG2 = [48,56,65]
-MC_OR2   = [84,80,82]
-MCRG_OR2 = [90,86,92]
+# ---- DATA (InternVL3-8B, gpt-5-mini, n=100) — all FIVE guards, POST-FIX ----
+# Not plotted (Fig 2 is deliberately Qwen-only, see below) but kept correct: a stale
+# spare data block is how the Qwen block went stale in the first place.
+FLOOR2 = 94
+FLOOR_OR2 = 53
+GB2   = [86,83,88,82,83]
+MC2   = [70,76,76,81,81]
+MCRG2 = [49,55,69,61,62]
+GB_OR2   = [70,69,81,54,67]
+MC_OR2   = [84,80,82,55,72]
+MCRG_OR2 = [90,86,92,57,79]
+
+
+def verify() -> None:
+    """Rebuild every entered ASR from the data and RAISE on mismatch.
+
+    The over-refusal series are not covered (different benchmark tree); they are
+    transcribed from the same table and move only if that table is rebuilt.
+    """
+    from src.analysis import paper_c_select as S
+    bad = []
+    for target, series in (('qwen2_5_vl_7b', {'gb': GB, 'mc': MC, 'rg': MCRG}),
+                           ('internvl3_8b', {'gb': GB2, 'mc': MC2, 'rg': MCRG2})):
+        sel = S.scan()
+        for cond, vals in series.items():
+            for g, entered in zip(GUARDS, vals):
+                found, missing = S.postfix_dirs(sel, target, GUARD_KEY[g], cond)
+                S.require_full(found, missing, f'{target}/{g}/{cond}')
+                actual = round(S.rate(S.ens(found.values())))
+                if actual != entered:
+                    bad.append(f'{target} {g} {cond}: entered {entered}, data says {actual}')
+    if bad:
+        raise SystemExit('🔴 FIGURE DATA IS STALE — regenerating would plot a grid the '
+                         'paper no longer reports:\n  ' + '\n  '.join(bad))
+    print('verify: all 30 entered ASR values reproduce from the data.')
 
 
 def main() -> None:
@@ -78,6 +137,7 @@ def main() -> None:
     except Exception as e:
         print("style preset fallback:", e)
         plt.rcParams.update({'font.size':8,'axes.labelsize':9,'font.family':'sans-serif'})
+    verify()
     os.makedirs(FIGS, exist_ok=True)
 
     # ---- Fig 1: ensemble ASR grouped bars (5 guards + Wilson 95% CI error bars) ----
@@ -110,7 +170,7 @@ def main() -> None:
     # five guards on InternVL3"). Showing one COMPLETE panel removes both the
     # clutter and the partial-coverage objection; Table 1 carries both targets.
     fig, ax = plt.subplots(figsize=(3.5,2.95))
-    plot_model(MC,  MCRG,  MC_OR,  MCRG_OR,  'o', 's', '-', ax)    # Qwen2.5-VL (5 guards)
+    plot_model(GB, MC, MCRG, GB_OR, MC_OR, MCRG_OR, 'o', 's', '-', ax)  # Qwen2.5-VL (5 guards)
     ax.set_xlabel('Benign over-refusal (%)  →  worse utility')
     ax.set_ylabel('Ensemble ASR (%)  →  worse safety')
 
@@ -133,11 +193,12 @@ def main() -> None:
                     fontsize=6.8, color=dark(OI[i]), fontweight='bold', zorder=5)
 
     # Bottom-LEFT: the only quadrant no series occupies (everything runs down-right).
-    ax.text(0.02, 0.03, 'Qwen2.5-VL-7B\nopen → filled  =  amplifier → +reguard',
+    ax.text(0.02, 0.03,
+            'Qwen2.5-VL-7B\nopen triangle: guard alone  >  open circle: + amplifier\n>  filled square: + amplifier + reguard',
             transform=ax.transAxes, fontsize=6.4, ha='left', va='bottom', color='0.30', linespacing=1.4)
     ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
     ax.tick_params(labelsize=7.5)
-    ax.set_ylim(33, 90)   # widened for the Wilson whiskers added for review 18
+    ax.set_ylim(33, 92)   # widened again for the guard-alone points (up to 84 ASR)
     fig.tight_layout(); save(fig, "tradeoff_frontier")
     print("wrote:", os.listdir(FIGS))
 

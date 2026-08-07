@@ -78,14 +78,44 @@ def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
 
 # ---------------------------------------------------------------- per-behavior vectors
 
-def ensemble_by_behavior(cells: dict, guard: str, cond: str) -> dict[str, bool]:
-    """OR-reduction across the eleven attacks, per behavior. The union IS the metric."""
+_SEL_CACHE: dict = {}
+
+
+def _postfix_harm_dirs(target: str, guard: str, cond: str) -> dict:
+    """{chain: dir} for the HARM axis, POST-FIX, via the shared selector.
+
+    ⚠️ FIXED 2026-08-07. This module read the harm cells from `paper_c_replication.collect`,
+    a campaign-pinned scan that predates the method-fidelity rerun. After `code_attack` and
+    `ir_figstep` were rebuilt under `paper_c_fidelity_rerun` and the originals quarantined,
+    those two chains vanished from that scan --- and `ensemble_by_behavior` did
+    `if d is None: continue`, so every "ensemble" below silently OR-reduced over NINE
+    attacks. Symptom: WildGuard/Qwen gb printed 58 where Table 1 says 77. The benign axis is
+    untouched (the encoder fix does not reach `orbench_benign_hard`), so only the harm side
+    is re-sourced here.
+    """
+    key = (target, guard, cond)
+    if key not in _SEL_CACHE:
+        from src.analysis import paper_c_select as S
+        sel = _SEL_CACHE.setdefault("_scan", S.scan())
+        found, missing = S.postfix_dirs(sel, target, guard, cond)
+        S.require_full(found, missing, f"review19 {target}/{guard}/{cond}")
+        _SEL_CACHE[key] = found
+    return _SEL_CACHE[key]
+
+
+def ensemble_by_behavior(target: str, guard: str, cond: str) -> dict[str, bool]:
+    """OR-reduction across the eleven attacks, per behavior. The union IS the metric.
+
+    A missing chain RAISES rather than shortening the union: a nine-attack ensemble
+    reported as an eleven-attack one is the defect this module shipped for two days.
+    """
+    dirs = _postfix_harm_dirs(target, guard, cond)
     union: dict[str, bool] = {}
     for enc in CHAINS:
-        d = cells.get((RUN, guard, cond, enc))
-        if d is None:
-            continue
-        for pid, hit in per_prompt(d, "asr").items():
+        if enc not in dirs:
+            raise SystemExit(f"🔴 {target}/{guard}/{cond}: chain {enc} missing — "
+                             "an ensemble over a subset is not the paper's metric.")
+        for pid, hit in per_prompt(dirs[enc], "asr").items():
             union[pid] = union.get(pid, False) or hit
     return union
 
@@ -117,7 +147,7 @@ def two_axes_and_bootstrap(target: str, rng: np.random.Generator) -> list[dict]:
     out = []
     for guard in GUARDS:
         for cond in CONDS:
-            asr_vec = ensemble_by_behavior(cells, guard, cond)
+            asr_vec = ensemble_by_behavior(target, guard, cond)
             ref_vec = refusal_by_behavior(cells, guard, cond)
             if not asr_vec or not ref_vec:
                 continue
