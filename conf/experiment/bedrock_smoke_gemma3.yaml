@@ -1,0 +1,48 @@
+# Bedrock invoke smoke — google/gemma-3-12b-it (xc).
+# ============================================================
+# WHY THIS MODEL SPECIFICALLY. cspaper review-1 Con 6 says our hosted-vs-
+# open-weight contrast changes six things at once (model family, pretraining,
+# post-training alignment, vision encoder, inference implementation, vendor
+# filtering) and therefore cannot attribute the benign-refusal inflation to the
+# serving stack. Gemma-3 is the fix: it is vision-capable, OPEN-WEIGHT, and
+# served BOTH by Bedrock and by our own vLLM. Running the identical manipulation
+# through both paths holds the weights fixed and varies only the serving stack —
+# turning Con 6's conceded confound into the paper's cleanest causal claim.
+#
+# This preset only answers the prerequisite: does the account actually invoke it?
+# Availability is ACCOUNT-level and the catalog is not evidence (owner rule
+# 2026-07-22: never assume from the registry or a web catalog — confirm per
+# model on xc and record in the devices repo,
+# `knowledge/clusters/xc_bedrock_model_status.md`).
+#
+# `google.gemma-3-12b-it` appears in this account's list-foundation-models with
+# IMAGE in inputModalities (checked 2026-08-07), and is registered as
+# LLMModel.BEDROCK_GEMMA_3_12B. Both are necessary, neither is sufficient.
+#
+# ⚠️ `params:` NESTING IS MANDATORY — a top-level `model:` on the step is
+# silently ignored and falls back to the default gpt-4.1-mini, which on a box
+# with no OpenAI key surfaces as "OpenAI API key not found" rather than as the
+# config error it is. TransformationSpec now sets extra="forbid" so this raises
+# at startup instead (2026-08-07); this header is kept because the trap was
+# documented here and STILL recurred elsewhere.
+#
+# COST: one call, negligible.
+#
+# SUBMIT (xc):
+#   ssh xc 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_xc.sbatch bedrock_smoke_gemma3'
+
+num_main_job_threads: 1
+
+tasks:
+  # Innocuous source ON PURPOSE — the jbb "benign" set is jailbreak-adjacent and
+  # trips both encoder refusals and Bedrock's content filter, which would muddy
+  # an INVOKE smoke. A neutral prompt isolates the thing under test.
+  - mode: prompt_transform
+    source_file: data/smoke_innocuous.jsonl
+    benchmark: harmbench          # arbitrary — only names the output subdir.
+    prompt_range: [0, 0]
+    transformation_list:
+      - type: set_theory
+        params:
+          model: google.gemma-3-12b-it
