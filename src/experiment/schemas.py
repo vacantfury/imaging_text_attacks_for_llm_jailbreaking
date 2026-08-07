@@ -20,7 +20,8 @@ Modes:
       portfolio / best-of-all ASR). No model or judge I/O.
 """
 from typing import Annotated, Any, List, Literal, Optional, Union
-from pydantic import BaseModel, Discriminator, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel, ConfigDict, Discriminator, Field, field_validator, model_validator)
 
 from src.utils.provenance import SCHEMA_VERSION
 
@@ -373,7 +374,20 @@ class _TaskBase(BaseModel):
 
 
 class TransformationSpec(BaseModel):
-    """One entry in PromptTransformTask.transformation_list."""
+    """One entry in PromptTransformTask.transformation_list.
+
+    `extra="forbid"` is LOAD-BEARING, not tidiness. Renderer arguments must be
+    nested under `params:`; written as siblings of `type:` they used to be
+    silently DROPPED, and the step then ran on its renderer defaults with no
+    error anywhere. That cost a real mislabel: `presence_controls_stage1.yaml`
+    wrote `image_path: .../mountain.png` as a sibling, so the run rendered the
+    DEFAULT rabbit instead, and the paper reported that arm as the mountain
+    decoy for a day (caught 2026-08-07 by checking rendered image dimensions
+    against the config). Forbidding extras turns that class of typo into a
+    startup ValidationError.
+    """
+    model_config = ConfigDict(extra="forbid")
+
     type: str                                  # transformation type_name
     params: dict[str, Any] = Field(default_factory=dict)
 

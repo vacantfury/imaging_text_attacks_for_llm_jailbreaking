@@ -31,6 +31,13 @@ tasks:
     campaign: paper_b_presence_controls
     transformation_list:
       - type: ir_constant
-        # The mountain decoy the paper's Tab. refusal already uses, so the two
-        # image classes are comparable to what is published.
-        image_path: src/prompt_transformations/image/images/mountain.png
+        # ⚠️ `params:` NESTING IS MANDATORY. This block previously wrote
+        # `image_path:` as a SIBLING of `type:`, where TransformationSpec
+        # silently dropped it — the 2026-08-07 run therefore rendered the
+        # DEFAULT rabbit (1189x1418) and the paper labelled that arm "mountain"
+        # for a day. TransformationSpec now sets extra="forbid" so the same typo
+        # raises at startup instead of running the wrong image.
+        params:
+          # The mountain decoy the paper's Tab. refusal already uses, so the two
+          # image classes are comparable to what is published.
+          image_path: src/prompt_transformations/image/images/mountain.png
