@@ -55,8 +55,14 @@ TARGETS = {
 # `..._nodecode`, and I briefly reported a re-run as owed that had already been done.)
 RERUN_RO_CAMP = 'paper_c_fidelity_rerun_nodecode'
 
-# Published Table 2 values, six IMAGE attacks only, Qwen/WildGuard/gpt-5-mini.
-CHECKSUM_QWEN_IMAGE = {'ro': 2.0, 'mc': 10.7}
+# POST-FIX Table 2 values, Qwen/WildGuard/gpt-5-mini, on the FIVE image attacks measured in
+# BOTH arms (2026-08-07). The old constants (2.0 / 10.7) were the pre-audit six-attack means.
+# They cannot simply be rebuilt at six, because `ro` was re-collected post-audit and the
+# matched `mc` was not: `ro` has FigStep and `mc` does not. Comparing a six-attack mean to a
+# five-attack one would flatter no-decode by exactly the attack the two arms do not share, so
+# the checksum is stated on the matched subset and the FigStep gap is reported separately.
+CHECKSUM_QWEN_IMAGE = {'ro': 2.4, 'mc': 12.0}
+CHECKSUM_MATCHED_ONLY = True   # compute both means over chains present in BOTH arms
 
 REJUDGE_GLOB = 'outputs/autoattack_defense/rejudge/harmbench/*'
 
@@ -233,20 +239,27 @@ def main() -> None:
     cells = collect()
     overlay = load_overlay()
 
-    print("=== CHECKSUM vs published Table 2 (Qwen, 6 IMAGE attacks) ===")
+    # Both arms scored over the chains they SHARE, so the two means are comparable.
+    matched = [c for c in IMAGE_CHAINS
+               if ('qwen2_5_vl_7b', 'ro', c) in cells
+               and ('qwen2_5_vl_7b', 'mc_matched', c) in cells] if CHECKSUM_MATCHED_ONLY \
+        else IMAGE_CHAINS
+    print(f"=== CHECKSUM vs Table 2 (Qwen, {len(matched)} IMAGE attacks, matched arms) ===")
     ok = True
     for cond, recorded in CHECKSUM_QWEN_IMAGE.items():
         # mc is checked in its MATCHED form (same campaign as the recover-only
         # cells) --- that is the comparison the published table makes.
         _, mean, n, _, miss = score(cells, 'qwen2_5_vl_7b',
                                     'mc_matched' if cond == 'mc' else cond,
-                                    IMAGE_CHAINS, overlay)
+                                    matched, overlay)
         bad = not (mean == mean and abs(mean - recorded) <= 0.6)
         ok &= not bad
         print(f"  {cond:3} image-only mean={mean:5.1f}  recorded={recorded:5.1f}"
-              f"  ({n}/6 attacks){'  <-- MISMATCH' if bad else ''}"
+              f"  ({n}/{len(matched)} attacks){'  <-- MISMATCH' if bad else ''}"
               f"{'  missing=' + ','.join(miss) if miss else ''}")
     print("CHECKSUM", "PASS" if ok else "FAIL")
+    for t, c in figstep_gap(cells):
+        print(f"  ⚠️  no post-fix FigStep cell for {t}/{c} — excluded from the matched mean")
 
     print("\n=== CON 7: eleven-attack ablation, both targets (WildGuard, gpt-5-mini) ===")
     print(f"  {'target':16} {'config':26} {'mean ASR':>9} {'ensemble':>9}  coverage")

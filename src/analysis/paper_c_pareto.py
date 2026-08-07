@@ -18,6 +18,16 @@ provenance, because three separate hand-rederivations of the undefended floor di
 the checksummed `paper_c_ensemble.py` before this rule was adopted. Wilson intervals are exact
 functions of (k, n=100), so the CIs need no data access either.
 
+⚠️ THE COST OF THAT CHOICE, and the guard that pays it (2026-08-07). An entered table is a
+SECOND HOME for every number in it, so when `b266892` rebuilt the two fixed encoders and the
+oracle audit moved the baselines to the deployable arm, this file kept printing the pre-fix
+frontier -- silently, because a hardcoded table cannot fail. The appendix's budget ladder then
+published a dominated ECSO row at an ASR that no longer existed. The entered table stays (its
+reason is sound), but `verify()` now rebuilds every ASR from the shared selector and the
+baseline script and RAISES on any mismatch, so the second home can no longer drift from the
+first. Over-refusal is not cross-checked here -- it has no second computation to check against
+-- so it carries `paper_c_overrefusal_decomp` as its named provenance instead.
+
     python -m src.analysis.paper_c_pareto
 """
 from __future__ import annotations
@@ -35,44 +45,55 @@ N = 100  # every cell is n=100 behaviors
 POINTS = {
     'qwen2_5_vl_7b': [
         ('undefended',        89, 26, 'T1 header'),
-        ('ECSO',              90, 27, 'T1 header'),
-        ('SemanticSmooth',    80, 25, 'baseline run 235412'),
-        ('WildGuard gb',      75, 49, 'T1 + decomp'),
-        ('WildGuard mc',      72, 64, 'T1'),
+        ('ECSO',              86, 27, 'T1 header, deployable arm'),
+        ('SemanticSmooth',    81, 24, 'T1 header, deployable arm'),
+        ('WildGuard gb',      77, 49, 'T1 + decomp'),
+        ('WildGuard mc',      68, 64, 'T1'),
         ('WildGuard +rg',     43, 84, 'T1'),
-        ('Qwen3Guard gb',     76, 47, 'T1 + decomp'),
-        ('Qwen3Guard mc',     65, 59, 'T1'),
-        ('Qwen3Guard +rg',    43, 81, 'T1'),
+        ('Qwen3Guard gb',     75, 47, 'T1 + decomp'),
+        ('Qwen3Guard mc',     68, 59, 'T1'),
+        ('Qwen3Guard +rg',    50, 81, 'T1'),
         ('GuardReasoner gb',  84, 67, 'T1 + decomp'),
         ('GuardReasoner mc',  71, 60, 'T1'),
-        ('GuardReasoner +rg', 58, 87, 'T1'),
-        ('LlamaGuard-3 gb',   71, 28, 'T1 + decomp'),
-        ('LlamaGuard-3 mc',   79, 28, 'T1'),
-        ('LlamaGuard-3 +rg',  48, 33, 'T1'),
-        ('ThinkGuard gb',     78, 47, 'T1 + decomp'),
-        ('ThinkGuard mc',     77, 45, 'T1'),
-        ('ThinkGuard +rg',    54, 66, 'T1'),
+        ('GuardReasoner +rg', 63, 87, 'T1'),
+        ('LlamaGuard-3 gb',   66, 28, 'T1 + decomp'),
+        ('LlamaGuard-3 mc',   78, 28, 'T1'),
+        ('LlamaGuard-3 +rg',  49, 33, 'T1'),
+        ('ThinkGuard gb',     79, 47, 'T1 + decomp'),
+        ('ThinkGuard mc',     81, 45, 'T1'),
+        ('ThinkGuard +rg',    58, 66, 'T1'),
     ],
     'internvl3_8b': [
-        ('undefended',        91, 53, 'T1 header'),
-        ('ECSO',              91, 47, 'T1 header'),
-        ('WildGuard gb',      81, 70, 'T1 + decomp'),
-        ('WildGuard mc',      63, 84, 'T1'),
-        ('WildGuard +rg',     48, 90, 'T1'),
-        ('Qwen3Guard gb',     81, 69, 'T1 + decomp'),
-        ('Qwen3Guard mc',     69, 80, 'T1'),
-        ('Qwen3Guard +rg',    56, 86, 'T1'),
-        ('GuardReasoner gb',  90, 81, 'T1 + decomp'),
-        ('GuardReasoner mc',  67, 82, 'T1'),
-        ('GuardReasoner +rg', 65, 92, 'T1'),
-        ('LlamaGuard-3 gb',   79, 54, 'T1 + decomp'),
-        ('LlamaGuard-3 mc',   83, 55, 'T1'),
+        ('undefended',        94, 53, 'T1 header'),
+        ('ECSO',              95, 50, 'T1 header, deployable arm'),
+        # SemanticSmooth WAS missing from this target's set, which is why the appendix
+        # said "17 configurations on InternVL3". The second-target run exists and is in
+        # Table 1's header; omitting it understated the frontier by one point.
+        ('SemanticSmooth',    83, 50, 'T1 header, deployable arm'),
+        ('WildGuard gb',      86, 70, 'T1 + decomp'),
+        ('WildGuard mc',      70, 84, 'T1'),
+        ('WildGuard +rg',     49, 90, 'T1'),
+        ('Qwen3Guard gb',     83, 69, 'T1 + decomp'),
+        ('Qwen3Guard mc',     76, 80, 'T1'),
+        ('Qwen3Guard +rg',    55, 86, 'T1'),
+        ('GuardReasoner gb',  88, 81, 'T1 + decomp'),
+        ('GuardReasoner mc',  76, 82, 'T1'),
+        ('GuardReasoner +rg', 69, 92, 'T1'),
+        ('LlamaGuard-3 gb',   82, 54, 'T1 + decomp'),
+        ('LlamaGuard-3 mc',   81, 55, 'T1'),
         ('LlamaGuard-3 +rg',  61, 57, 'T1'),
-        ('ThinkGuard gb',     82, 67, 'T1 + decomp'),
-        ('ThinkGuard mc',     77, 72, 'T1'),
-        ('ThinkGuard +rg',    59, 79, 'T1'),
+        ('ThinkGuard gb',     83, 67, 'T1 + decomp'),
+        ('ThinkGuard mc',     81, 72, 'T1'),
+        ('ThinkGuard +rg',    62, 79, 'T1'),
     ],
 }
+
+# Entered label -> (guard key, condition) for the cross-check. The three header rows
+# are checked against `paper_c_floor_baselines` instead, since they are not guard cells.
+GUARD_KEY = {'WildGuard': 'wildguard', 'Qwen3Guard': 'qwen3guard_gen_8b',
+             'GuardReasoner': 'guardreasoner_vl_7b', 'LlamaGuard-3': 'llama_guard_3_8b',
+             'ThinkGuard': 'thinkguard'}
+COND_KEY = {'gb': 'gb', 'mc': 'mc', '+rg': 'rg'}
 
 BUDGETS = [30, 35, 40, 50, 60, 70, 80, 95]
 
@@ -102,7 +123,57 @@ def pareto(points: list) -> list:
     return sorted(out, key=lambda x: x[2])
 
 
+def verify() -> None:
+    """Rebuild every entered ASR from the data and RAISE on mismatch.
+
+    This is the guard the docstring promises. Guard cells come from the shared selector
+    (`paper_c_select`), the three header rows from `paper_c_floor_baselines`'s deployable
+    arm -- the same two functions the paper's own tables are built from, so a divergence
+    here means the entered table has gone stale, not that the data moved.
+    """
+    from src.analysis import paper_c_select as S
+    from src.analysis import paper_c_floor_baselines as F
+
+    shared, bad = S.scan(), []
+    fsel = F.scan()
+    base = {'undefended': 'no_defense', 'ECSO': 'ecso', 'SemanticSmooth': 'semantic_smooth'}
+
+    for target, pts in POINTS.items():
+        rebuilt = {}
+        for guard_lab, guard in GUARD_KEY.items():
+            for lab, cond in COND_KEY.items():
+                found, missing = S.postfix_dirs(shared, target, guard, cond)
+                if missing:
+                    bad.append('%s %s %s: only %d/11 chains (%s)'
+                               % (target, guard_lab, lab, 11 - len(missing), missing))
+                    continue
+                rebuilt['%s %s' % (guard_lab, lab)] = round(S.rate(S.ens(found.values())))
+        for lab, defense in base.items():
+            if defense == 'no_defense':
+                dirs, missing = F.collect(fsel, F.PUBLISHED[(defense, target)], defense,
+                                          target, '-', swap=(F.RERUN, '-'))
+            else:
+                dirs, missing, _ = F.collect_deployable(
+                    fsel, F.PUBLISHED[(defense, target)], F.ORACLE[defense], defense,
+                    target, (F.RERUN, 'original'), (F.RERUN, 'encoded'))
+            if missing:
+                bad.append('%s %s: only %d/11 chains (%s)'
+                           % (target, lab, 11 - len(missing), missing))
+                continue
+            rebuilt[lab] = round(F.rate(F.ensemble(dirs)))
+        for label, asr, _over, src in pts:
+            if label in rebuilt and rebuilt[label] != asr:
+                bad.append('%s %-18s entered %d, data says %d   [%s]'
+                           % (target, label, asr, rebuilt[label], src))
+    if bad:
+        raise SystemExit('🔴 POINTS is STALE — the entered frontier no longer matches the '
+                         'data:\n  ' + '\n  '.join(bad))
+    print('✅ every entered ASR reproduces from the data (guard cells via paper_c_select, '
+          'headers via paper_c_floor_baselines deployable arm)')
+
+
 def report() -> None:
+    verify()
     for target, pts in POINTS.items():
         print('\n' + '=' * 78)
         print('%s   --- %d measured configurations' % (target, len(pts)))
