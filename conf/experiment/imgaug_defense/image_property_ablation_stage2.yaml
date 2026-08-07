@@ -139,7 +139,10 @@ tasks:
   - {<<: *b, target_model: gemini-2.5-flash, source_transform_subdir: *rabbit}
 
   # ===== claude-sonnet-4-6 — 4 load-bearing arms only (cost, see header) =====
-  # text baseline, the reference canvas, and the matched-size OCR pair.
+  # text baseline, this sweep's reference canvas, and the matched-size OCR pair.
+  # NOTE (2026-08-07): `_b512` is this sweep's OWN reference, NOT the published
+  # presence-control blank — that one rendered at the renderer defaults and is
+  # 1024x768. See the stage-1 header.
   - {<<: *b, target_model: claude-sonnet-4-6, source_transform_subdir: *text}
   - {<<: *b, target_model: claude-sonnet-4-6, source_transform_subdir: *b512}
   - {<<: *b, target_model: claude-sonnet-4-6, source_transform_subdir: *bWide}

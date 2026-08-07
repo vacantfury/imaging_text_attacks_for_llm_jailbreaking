@@ -1,0 +1,43 @@
+# Gemma-3-12B-it (google) — SELF-SERVED arm of the same-weights serving-stack
+# contrast (Paper B / AS-2, cspaper review-1 Con 6).
+#
+# WHY THIS CONFIG EXISTS. Con 6's charge is that our hosted-vs-open-weight
+# comparison varies six things at once — model family, pretraining, post-training
+# alignment, vision encoder, inference implementation and vendor-side filtering —
+# so no difference can be attributed to any one of them. Gemma-3-12B is the
+# escape: the SAME open checkpoint is reachable through AWS Bedrock
+# (`google.gemma-3-12b-it`, a managed host) and through our own vLLM (this file,
+# `google/gemma-3-12b-it`). Running one manipulation down both routes holds the
+# first four constant BY CONSTRUCTION and leaves only the serving stack.
+#
+# The two ids differ by a single character — `.` for Bedrock, `/` for HF. That is
+# a mix-up waiting to happen, so the pairing is a registry FACT, not a naming
+# convention: both rows carry `weights="gemma-3-12b-it"` in llm_utils >= v5.3.0
+# and `LLMModel.BEDROCK_GEMMA_3_12B.self_route()` returns this one. Verify the
+# pair rather than eyeballing the strings.
+#
+# GATED DOWNLOAD. google/gemma-3-12b-it is `gated: manual` on the Hub. The xc
+# HF token has the license accepted (verified 2026-08-07 by an authorized HEAD
+# on the first weight shard: 200, 4.98 GB), so no owner hands are needed. The
+# other clusters' tokens are NOT verified for this repo — check before assuming
+# this config works there.
+#
+# SIZING. ~24 GB in bf16 (5 shards) — comfortable on one 80 GB A100 with the
+# default gpu_memory_utilization. No tensor parallelism, so no multi-GPU
+# nondeterminism in the reduction order.
+
+model:
+  model: google/gemma-3-12b-it
+  max_tokens: 4096          # matches the VLM panel (conf/llm/qwen2_5_vl_7b.yaml)
+
+cluster:
+  # Gemma-3 is multimodal and its tokenizer ships a chat template that handles
+  # image parts, so NO chat_template override. Contrast the classifier models,
+  # which need `passthrough` because their training prompts are pre-formatted.
+  #
+  # NOTE the contrast with Gemma-2 (conf/llm/gemma2_9b_it.yaml): that model's
+  # 8192 sliding-window ceiling forced a measured 3072-token cap. Gemma-3 has a
+  # 128k context, so the repo-default max_model_len (20480) sits far below the
+  # architectural ceiling and needs no cap.
+  gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4"]   # 12B bf16 needs >24 GB
+  time_limit: "04:00:00"    # backfill-friendly; this round needs well under 1h

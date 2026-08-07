@@ -64,7 +64,15 @@ _base: &base
   campaign: paper_b_image_property_ablation
 
 tasks:
-  # --- 2. reference: the published blank canvas -------------------------
+  # --- 2. reference canvas for THIS sweep -------------------------------
+  #     ⚠️ NOT the published presence-control blank, despite what an earlier
+  #     version of this comment said (corrected 2026-08-07). The published arm
+  #     (presence_controls_stage2.yaml `_blank`) passed only `keep_text`, so it
+  #     rendered at BlankImageRenderer's DEFAULTS — measured 1024x768, not
+  #     512x512. This arm is a deliberate 512x512; it anchors the resolution
+  #     axis below and is paired against the text arm INSIDE this job, which is
+  #     all the sweep needs. Do not describe it as re-measuring the published
+  #     cell, and do not compare it across jobs (targets are nondeterministic).
   - <<: *base
     transformation_list:
       - type: ir_blank
