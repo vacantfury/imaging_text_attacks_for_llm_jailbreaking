@@ -7,8 +7,18 @@ model:
 # Pixtral-12B requires ~24GB VRAM — exclude small GPUs
 cluster:
   gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4"]
-  partition: rtx-devel       # AICR devel: ~11 idle RTX-Pro-6000 vs a 628-833 priority
-                             # wall in rtx-batch; devel caps at 4h, which is exactly the
-                             # time_limit above. Only override for a >4h round.
   time_limit: "04:00:00"      # short → SLURM can backfill this 1-GPU job into a gap
                               # (see conf/llm/qwen2_5_vl_7b.yaml for the 2026-08-07 stall)
+
+  # `partition` names cluster-specific hardware, so it belongs here and NOT in the
+  # bare `cluster:` block above — a per-model `cluster:` value wins on EVERY
+  # cluster, and "rtx-devel" does not exist on xc or NURC (see the
+  # _load_cluster_config docstring: this is the leak the profiles layer exists for).
+  profiles:
+    aicr:
+      # rtx-batch made us wait 5h on 2026-08-07: priority 171 against a 628-833
+      # pending wall, while ~55 of its 136 GPUs sat idle. rtx-devel had ~11 idle
+      # GPUs and one blocked job, and caps at 4h — exactly the time_limit above.
+      # Cap: devel enforces QOSMaxGRESPerUser=2, so the 3rd server queues behind
+      # the first two rather than starting at once. Still minutes, not hours.
+      partition: rtx-devel
