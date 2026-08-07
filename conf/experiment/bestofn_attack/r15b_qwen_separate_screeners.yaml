@@ -1,0 +1,70 @@
+# bestofn_attack AS-4 — ROUND 15b: QWEN-2.5-7B, the SEPARATE-SCREENER arms.
+#
+# OWNER-ORDERED 2026-08-07 ("we just keep running bug-substitute experiments").
+# Companion to r15a (self-screening arms). Together they rebuild qwen's mechanism panel.
+#
+# ⚠️ SUBMIT ONLY AFTER r15a HAS FINISHED. NURC's gpu QOS is MaxJobsPU=4 / MaxTRESPU=gres/gpu=4
+# and r15a holds all four. Submitting alongside it leaves these servers PENDING while the
+# orchestrator blocks in acquire_endpoint() — the AICR deadlock, reproduced on NURC.
+# Check first:  ssh explorer 'squeue -u $USER -h -O tres-per-node:.20 | grep -c gpu'  -> 0
+#
+# ── WHY THESE TWO ARE SPLIT OUT FROM r15a, AND WHY THEY SHARE ONE PRESET ────
+# Each needs its own THIRD served model:
+#   selfdefend      -> shadow_model: llama3_8b_cluster   (SEPARATE, GREEDY screener)
+#   guard_baseline  -> guard_model:  llama_guard_3_8b    (SEPARATE, GREEDY classifier)
+# So this preset serves FOUR models: qwen + llama3_8b_cluster + llama_guard_3_8b + wildguard.
+# Requested 3+1+1+1 = 6 > available_slots 4, so the allocator's
+# `max(available_slots // n_models, 1)` = 4//4 = 1 caps every model to ONE replica -> 4
+# servers, exactly the cap. That capping is EXPECTED here and is not the R14a defect.
+# Keeping them together rather than as two 3-model presets is deliberate: a 3-model preset
+# ALSO caps to 1 replica (4//3 = 1), so splitting would buy no extra parallelism and would
+# cost a second full round of server startup. One run, same replica count.
+#
+# ── THE PREDICTION THAT MAKES THIS PAIR WORTH RUNNING ───────────────────────
+# This is the CLASS-B half of R13's dissociation, on a second target. Both screeners are
+# SEPARATE from the target and GREEDY (created via LLMServiceFactory.create() with no config
+# override, so both inherit conf/llm/default.yaml temperature 0.0):
+#   P9.  selfdefend      ensemble ~UNCHANGED from T=1.0 to T=0.0.
+#   P10. guard_baseline  ensemble ~UNCHANGED from T=1.0 to T=0.0.
+# Read against r15a's sage/llm_self_defense arms, which are predicted to COLLAPSE. The
+# INTERACTION across the two presets is the result: same split as llama -> the mechanism is
+# target-general; everything collapses or nothing does -> R12/R13 is llama-specific and the
+# paper must say so.
+# ⚠️ 15a and 15b must share judge, encoder and draw count for that contrast to be legal.
+# They do: same transform dir, same wildguard judge, same 10,000 draws. Never change one
+# without the other.
+#
+# ── SIZING (the check R14a skipped) ─────────────────────────────────────────
+# Both defenses cost 1 TARGET call/draw — the screening call goes to the other model — so
+# the target does 4 cells x 10,000 = 40,000 calls, with 40,000 screener calls in parallel on
+# a different GPU. At the post-R14b rate (~200/min for a single a100/h200 replica at conc
+# 64) that is ~3.5h against an 8h wall. Fits, with less margin than 15a: if this is
+# submitted late, re-check progress against `scontrol show job <id> | grep TimeLimit`.
+#
+#   ssh explorer; cd ~/projects/llm_guardrail_security
+#   sbatch scripts/run_experiment.sbatch bestofn_attack/r15b_qwen_separate_screeners
+#
+# ── JUDGE ───────────────────────────────────────────────────────────────────
+# wildguard (FREE) collects responses; NOT reportable on this code-bearing arm. gpt-5-mini
+# rejudge is a separate cheap step (~$0.9 for these 4 cells) and its own ask.
+num_main_job_threads: 2
+num_cluster_jobs: 5          # 4 servers (qwen + shadow + guard + wildguard, 1 each) + orchestrator
+
+_e: &e
+  mode: defense+evaluate
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  target_model: qwen2_5_7b_instruct
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r15_qwen_mechanism
+
+tasks:
+  # ---- SEPARATE + GREEDY shadow -> predict NULL at T=0 ----
+  - {<<: *e, defense: selfdefend, target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: selfdefend, target_model_config: {temperature: 0.0, max_concurrency: 64}}
+  # ---- SEPARATE + GREEDY classifier gate -> predict NULL at T=0 ----
+  - {<<: *e, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b},
+     target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b},
+     target_model_config: {temperature: 0.0, max_concurrency: 64}}
