@@ -1,0 +1,91 @@
+# bestofn_attack AS-4 — ROUND 14: THE CONFOUND BREAKER.
+#
+# OWNER-APPROVED 2026-08-06 ("go", ~$12).
+#
+# ── THE CONFOUND IN OUR OWN ACCOUNT (found 2026-08-06, before the paper asserted it) ──
+# R12+R13 established that a defense leaks to best-of-N iff its verdict is a SAMPLE.
+# But every stochastic-verdict defense we tested draws that sample FROM THE TARGET:
+#
+#   defense            screener              stochastic?
+#   sage               TARGET                yes
+#   llm_self_defense   TARGET                yes
+#   selfdefend         separate shadow       no (greedy)
+#   guard_baseline     separate classifier   no (greedy)
+#
+# `target-vs-separate` is PERFECTLY CONFOUNDED with `stochastic-vs-greedy`. The data
+# therefore cannot distinguish:
+#   (H1) OURS — the verdict is a SAMPLE, so resampling re-rolls it.
+#   (H2) OLD BORROWED-STRENGTH — a defense that REUSES THE TARGET inherits the target's
+#        behaviour, and that is what best-of-N exploits.
+# Both predict exactly the four numbers we have. Publishing H1 on this evidence would be
+# asserting more than we measured.
+#
+# ── WHY semantic_smooth IS THE ONLY AVAILABLE CELL THAT BREAKS IT ───────────
+# It is the missing quadrant: a SEPARATE screener that is STOCHASTIC.
+#   - perturbation_model: gemini-2.5-flash-lite  (NOT the target)
+#   - perturbation_temperature: 0.7              (its own randomness)
+#   - n_copies: 5 -> 5 paraphrases + 5 target queries + 5 gpt-5-nano votes per prompt
+# Its verdict is a majority vote over 5 paraphrases redrawn on every call, so the verdict
+# is a sample that has NOTHING to do with the target's temperature.
+#
+# ⚠️ DEFAULTS DELIBERATELY NOT OVERRIDDEN. The published config is the measurement;
+# overriding perturbation_model is for an appendix parity check only.
+#
+# ── OPPOSITE PREDICTIONS (this is the point) ────────────────────────────────
+#   P8-H1 (ours):   amplification stays HIGH at target T=0. Its variance is internal, so
+#                   dropping target temperature should barely touch it. Concretely: amp
+#                   well above the 2.5-4.4x band that ALL FOUR previous defenses collapse
+#                   into at T=0.
+#   P8-H2 (old):    amplification is LOW at BOTH temperatures, because semantic_smooth
+#                   never reuses the target and so has nothing to borrow.
+# One number decides it: **amplification at target T=0.0**. High -> H1, our account
+# survives and the mechanism is genuinely "sampled verdict". Low -> H2, the mechanism is
+# target-reuse, and the paper's central claim must be rewritten as the borrowed-strength
+# account after all. Report whichever lands.
+#
+# ── WHY N=100 ON 25 BEHAVIOURS RATHER THAN N=25 ON 100 ──────────────────────
+# The BoN dataset is BEHAVIOUR-MAJOR (verified: rows 0-99 = behaviour 0 draws 0-99,
+# rows 100-199 = behaviour 1, ...), so `prompt_range: [0, 2499]` selects the FIRST 25
+# BEHAVIOURS AT FULL N=100. That keeps N identical to every existing cell, so
+# amplification (ensemble / per-draw) compares directly with no recomputation. The cost
+# is a coarser ensemble denominator (25 behaviours, ±4% granularity) — acceptable because
+# the predicted contrast is large (high vs the 2.5-4.4x band), not marginal.
+# ⚠️ A contiguous prompt_range CANNOT express "first 25 draws of every behaviour" under
+# behaviour-major ordering; that would need a rebuilt transform dir. Do not assume it can.
+#
+# ── COST ────────────────────────────────────────────────────────────────────
+# 2 cells x 2,500 prompts x 5 copies = 12,500 gemini-2.5-flash-lite paraphrases +
+# 12,500 gpt-5-nano internal votes PER CELL (25,000 + 25,000 total). Estimated ~$11-12.
+# Target queries are cluster-served ($0). The gpt-5-nano judge here is the DEFENSE'S OWN
+# internal vote, not our ASR judge — it is part of the published method, not a shortcut.
+#
+# ── WHERE ───────────────────────────────────────────────────────────────────
+# aicr ONLY. semantic_smooth calls gemini + OpenAI, and xc's routing policy bars
+# non-Bedrock API models (conf/clusters/xc.yaml).
+# Servers: llama3_1_8b_cluster x4 + wildguard x1 = 5 requested; AICR had 3 GPU jobs at
+# submission (9 free), so available_slots = min(5, 9) = 5 and NO capping fires.
+#
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r14_confound_breaker_semsmooth
+#
+# ── JUDGE ───────────────────────────────────────────────────────────────────
+# wildguard on-cluster (FREE) for shape; ⚠️ not reportable (code-bearing arm). The
+# statistic that matters — amplification — is a within-cell RATIO of ensemble to per-draw
+# under the SAME judge, so wildguard can establish which hypothesis wins on its own.
+# gpt-5-mini rejudge (~$2) for publishable magnitudes, its own ask.
+num_main_job_threads: 2
+num_cluster_jobs: 6          # 5 servers (llama x4 + wildguard) + orchestrator
+
+_e: &e
+  mode: defense+evaluate
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  prompt_range: [0, 2499]                 # 25 behaviours x 100 draws (behaviour-major)
+  target_model: llama3_1_8b_cluster
+  defense: semantic_smooth
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r14_confound
+
+tasks:
+  - {<<: *e, target_model_config: {temperature: 1.0}}
+  - {<<: *e, target_model_config: {temperature: 0.0}}
