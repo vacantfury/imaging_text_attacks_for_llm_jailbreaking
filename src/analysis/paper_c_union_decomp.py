@@ -56,36 +56,28 @@ def flags(d):
 
 
 def select_cells():
-    sel = {}  # (cond, guard, chain) -> (ts, dir)
-    for d in glob.glob('outputs/autoattack_defense/rejudge/harmbench/*gpt-5-mini*'):
-        r = lj(d + '/results.json')
-        if not r or r.get('asr') is None:
-            continue
-        src = (r.get('upstream_ref') or {}).get('source_dir', '')
-        s = lj(src + '/results.json') or {}
-        if s.get('target_model') != TARGET:
-            continue
-        enc = r.get('encoding')
-        chain = enc if enc in CHAINS else next((c for c in CHAINS if f'_{c}_' in src or src.endswith('/' + c)), None)
-        if chain is None:
-            continue
-        dc = s.get('defense_config') or {}
-        guard = dc.get('guard_model', 'none')
-        camp = s.get('campaign')
-        reg = bool(dc.get('reguard_original'))
-        if camp == 'paper_c_guard_panel_floor' and r.get('defense') == 'no_defense':
-            cond, gk = 'floor', 'none'
-        elif camp == 'paper_c_guard_panel' and r.get('defense') == 'guard_baseline' and guard in GUARDS:
-            cond, gk = 'gb', guard
-        elif camp == 'paper_c_guard_panel' and r.get('defense') == 'modality_complete' and guard in GUARDS \
-                and dc.get('decode_text') is True and dc.get('decode_style') == 'recover' and not reg:
-            cond, gk = 'mc', guard
-        else:
-            continue
-        k = (cond, gk, chain)
-        t = ts(os.path.basename(d))
-        if k not in sel or t > sel[k][0]:
-            sel[k] = (t, d)
+    """(cond, guard, chain) -> (ts, dir), POST-FIX. cond in floor/gb/mc/+rg.
+
+    ⚠️ REWRITTEN 2026-08-07 — the previous body pinned `paper_c_guard_panel`, whose
+    `code_attack` and `ir_figstep` cells the method-fidelity audit quarantined. This file is
+    where that loss bites hardest: it decomposes the UNION by per-attack contribution, and
+    CodeAttack is the largest single contributor. Dropping it does not merely shrink the
+    union — it rewrites which attack the decomposition names as dominant.
+
+    Selection now comes from `paper_c_select`, including the two rebuilt chains and the
+    quarantine trees. `decomp()` reports how many chains it saw, so a short suite stays visible.
+    """
+    from src.analysis import paper_c_select as S
+
+    shared = S.scan()
+    sel = {}
+    for chain, d in S.scan_floor(TARGET).items():
+        sel[('floor', 'none', chain)] = ('', d)
+    for guard in GUARDS:
+        for cond, out_cond in (('gb', 'gb'), ('mc', 'mc'), ('rg', '+rg')):
+            found, _ = S.postfix_dirs(shared, TARGET, guard, cond)
+            for chain, d in found.items():
+                sel[(out_cond, guard, chain)] = ('', d)
     return sel
 
 
