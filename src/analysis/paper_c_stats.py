@@ -106,60 +106,53 @@ def cells():
 
 
 def build(target):
-    if target == 'internvl3_8b':
-        panels = rgcamps = floorcamps = {'paper_c_gen2_internvl3'}
-    else:
-        panels = {'paper_c_guard_panel'}
-        # Two campaigns carry the reguard arm: the original 3-guard ablation and
-        # the later 5-guard completion. Both are the same condition.
-        rgcamps = {'paper_c_reguard_ablation', 'paper_c_reguard_5guard'}
-        floorcamps = {'paper_c_guard_panel_floor'}
+    """(cond, guard, chain) -> (timestamp, dir), POST-FIX. cond in floor/gb/mc/mcrg.
+
+    ⚠️ REWRITTEN 2026-08-07. The previous body pinned `paper_c_guard_panel` (and
+    `paper_c_gen2_internvl3`) directly. The method-fidelity audit rebuilt `code_attack` and
+    `ir_figstep` under `paper_c_fidelity_rerun` and quarantined the originals, so those two
+    chains disappeared from every cell here — and `ens_flags` skipped missing chains without
+    comment, so each ENSEMBLE quietly OR-reduced over nine attacks. Every Wilson CI and every
+    McNemar p-value this file produced was therefore computed on a different attack suite than
+    the paper's headline metric, with no visible symptom.
+
+    Selection now comes from `paper_c_select`; coverage is asserted in `ens_flags`.
+    """
+    from src.analysis import paper_c_select as S
 
     sel = {}
-    for d, s, defense, enc, mpath in cells():
-        if s.get('target_model') != target:
-            continue
-        chain = enc if enc in CHAINS else next(
-            (c for c in CHAINS if f'_{c}_' in mpath or mpath.endswith('/' + c)), None)
-        if chain is None:
-            continue
-        dc = s.get('defense_config') or {}
-        guard = dc.get('guard_model', 'none')
-        camp = s.get('campaign')
-        reg = bool(dc.get('reguard_original'))
-        t = ts(os.path.basename(d))
-        # The undefended floor is guard-independent, but every contrast against
-        # it is paired per behavior, so it is stored under each guard's key to
-        # keep the downstream lookup uniform.
-        if camp in floorcamps and defense == 'no_defense':
-            for g in GUARDS:
-                k0 = ('floor', g, chain)
-                if k0 not in sel or t > sel[k0][0]:
-                    sel[k0] = (t, d)
-            continue
-        if camp in panels and defense == 'guard_baseline' and guard in GUARDS:
-            cond = 'gb'
-        elif camp in panels and defense == 'modality_complete' and guard in GUARDS and not reg \
-                and dc.get('decode_text') is True and dc.get('decode_style') == 'recover':
-            cond = 'mc'
-        elif camp in rgcamps and guard in GUARDS and reg:
-            cond = 'mcrg'
-        else:
-            continue
-        k = (cond, guard, chain)
-        if k not in sel or t > sel[k][0]:
-            sel[k] = (t, d)
+    shared = S.scan()
+    for chain, d in S.scan_floor(target).items():
+        # The floor is guard-independent, but every contrast against it is paired per
+        # behavior, so it is stored under each guard's key to keep lookups uniform.
+        for g in GUARDS:
+            sel[('floor', g, chain)] = ('', d)
+    for guard in GUARDS:
+        for cond, out_cond in (('gb', 'gb'), ('mc', 'mc'), ('rg', 'mcrg')):
+            found, _ = S.postfix_dirs(shared, target, guard, cond)
+            for chain, d in found.items():
+                sel[(cond_key := out_cond, guard, chain)] = ('', d)
     return sel
 
 
 def ens_flags(sel, cond, g):
-    u = {}
+    """OR-reduce the 11 per-attack flags. A SHORT suite raises instead of returning a number.
+
+    This assertion is the whole lesson of the 2026-08-07 sweep: the old version's `continue`
+    on a missing chain is what let a nine-attack ensemble be reported as an eleven-attack one.
+    """
+    u, missing = {}, []
     for c in CHAINS:
         k = (cond, g, c)
         if k not in sel:
+            missing.append(c)
             continue
         for i, f in flags(sel[k][1]).items():
             u[i] = u.get(i, False) or f
+    if missing:
+        raise SystemExit(f'🔴 {cond}/{g}: only {len(CHAINS) - len(missing)}/{len(CHAINS)} '
+                         f'chains, missing {missing}. An ensemble over a subset is not the '
+                         f'paper\'s metric — do not report it.')
     return u
 
 

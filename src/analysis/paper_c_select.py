@@ -56,7 +56,12 @@ SHORT = {'wildguard': 'WG', 'llama_guard_3_8b': 'LG3', 'qwen3guard_gen_8b': 'Q3G
          'thinkguard': 'TG', 'guardreasoner_vl_7b': 'GR'}
 JUDGE = 'gpt-5-mini'
 RERUN = 'paper_c_fidelity_rerun'
-FLOOR_CAMP = 'paper_c_guard_panel_floor'
+# The undefended floor is campaign-scoped PER TARGET — Qwen's lives in its own floor
+# campaign, InternVL3's inside the gen-2 panel. Several other campaigns (the replicates,
+# round1/round3) also hold no_defense cells for these targets, so an unscoped floor scan
+# would silently mix rounds.
+FLOOR_CAMP = {'qwen2_5_vl_7b': 'paper_c_guard_panel_floor',
+              'internvl3_8b': 'paper_c_gen2_internvl3'}
 BONFERRONI = 0.05 / 20
 
 CAMPS = {
@@ -165,7 +170,7 @@ def scan_floor(target: str, judge: str = JUDGE) -> dict:
             chain = chain_of(os.path.basename(d), src)
             if not chain:
                 continue
-            if meta.get('campaign') != (RERUN if chain in FIXED else FLOOR_CAMP):
+            if meta.get('campaign') != (RERUN if chain in FIXED else FLOOR_CAMP[target]):
                 continue
             t = ts(os.path.basename(d))
             if chain not in best or t > best[chain][0]:
