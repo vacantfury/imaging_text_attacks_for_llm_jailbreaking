@@ -43,3 +43,14 @@ model:
 
 cluster:
   gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]
+  # Same rtx-devel routing the three TARGET models got on 2026-08-07, extended to the
+  # guards because a guard is half of every defended cell: with the targets moved off
+  # rtx-batch and the guards left on it, a defended round still waits on the queue the
+  # move existed to escape (measured 2026-08-07: 98 running / 82 pending, five guard
+  # servers PD(Priority) for 40 min without moving). rtx-devel caps at 4h and enforces
+  # QOSMaxGRESPerUser=2, so the round is chunked to target + ONE guard per job
+  # (scripts/build_heldout_presets.py::build_chunk) -- 2 servers fits the cap exactly.
+  time_limit: "04:00:00"      # short → backfillable, and matches rtx-devel's hard cap
+  profiles:
+    aicr:
+      partition: rtx-devel

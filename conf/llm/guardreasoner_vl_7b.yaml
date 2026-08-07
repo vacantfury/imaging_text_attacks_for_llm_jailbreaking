@@ -29,3 +29,8 @@ cluster:
   # it only delays declaring failure, it never slows a healthy server.
   endpoint_wait_timeout: 1800
   gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]
+  # rtx-devel routing — see conf/llm/wildguard.yaml for the measured reason.
+  time_limit: "04:00:00"
+  profiles:
+    aicr:
+      partition: rtx-devel

@@ -7,3 +7,9 @@ cluster:
   num_gpus: 1
   mem_gb: 40
   gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]
+  # rtx-devel routing — see conf/llm/wildguard.yaml for the measured reason (guards
+  # left on rtx-batch keep a defended round queued even after the targets moved off it).
+  time_limit: "04:00:00"
+  profiles:
+    aicr:
+      partition: rtx-devel

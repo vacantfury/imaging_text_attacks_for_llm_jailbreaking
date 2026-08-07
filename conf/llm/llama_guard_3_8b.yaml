@@ -12,6 +12,11 @@ model:
 # same reasons as the other guards (no hardware bf16, judge/classifier role).
 cluster:
   gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4", "p100"]
+  # rtx-devel routing — see conf/llm/wildguard.yaml for the measured reason.
+  time_limit: "04:00:00"
+  profiles:
+    aicr:
+      partition: rtx-devel
   # chat_template: left unset (None) — the model card's usage example calls
   # tokenizer.apply_chat_template() directly with no manual prompt
   # construction, i.e. the tokenizer ships its own safety-taxonomy chat
