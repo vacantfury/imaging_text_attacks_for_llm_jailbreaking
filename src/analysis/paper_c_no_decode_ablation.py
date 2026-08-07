@@ -48,6 +48,12 @@ TARGETS = {
     'qwen2_5_vl_7b': ('paper_c_guard_panel', 'paper_c_no_decode_n100'),
     'internvl3_8b':  ('paper_c_gen2_internvl3', 'paper_c_no_decode_internvl3'),
 }
+# The two fidelity-fixed chains were RE-RUN for the recover-only arm too, under their own
+# campaign. Both original campaigns above had their `ir_figstep` cells quarantined, so
+# without this the arm reads 10/11 and its ensemble is a lower bound. (Added 2026-08-07
+# after a scan of mine filtered on the substring `no_decode`, which does NOT match
+# `..._nodecode`, and I briefly reported a re-run as owed that had already been done.)
+RERUN_RO_CAMP = 'paper_c_fidelity_rerun_nodecode'
 
 # Published Table 2 values, six IMAGE attacks only, Qwen/WildGuard/gpt-5-mini.
 CHECKSUM_QWEN_IMAGE = {'ro': 2.0, 'mc': 10.7}
@@ -90,26 +96,33 @@ def _flags(d: str) -> dict:
 def collect() -> dict:
     """(target, cond, chain) -> newest rejudge dir, cond in {gb, mc, ro}."""
     cells: dict = {}
-    for d in glob.glob(REJUDGE_GLOB):
+    # BOTH trees. The re-run recover-only cells were judged DIRECTLY with gpt-5-mini and never
+    # produced a rejudge dir, so globbing only `rejudge/` leaves `ir_figstep` missing and the
+    # arm reads 10/11 — the same narrow-glob defect found in `paper_c_conditional` the same day.
+    for d in (glob.glob(REJUDGE_GLOB)
+              + glob.glob('outputs/autoattack_defense/defense+evaluate/harmbench/*')):
         r = _load(os.path.join(d, 'results.json'))
         if not r or r.get('asr') is None or r.get('judge_model') != JUDGE:
             continue
-        target = r.get('target_model')
+        src = (r.get('upstream_ref') or {}).get('source_dir', '')
+        up = _load(os.path.join(src, 'results.json')) or {}
+        # A rejudge's upstream owns campaign/defense/guard; a direct cell's upstream is its
+        # prompt_transform dir, which owns none of them — so upstream must not win there.
+        s = up if up.get('mode') == 'defense+evaluate' else r
+        target = r.get('target_model') or s.get('target_model')
         if target not in TARGETS:
             continue
         panel_camp, ro_camp = TARGETS[target]
-        src = (r.get('upstream_ref') or {}).get('source_dir', '')
         enc = r.get('encoding')
         chain = enc if enc in CHAINS else next(
-            (c for c in CHAINS if f'_{c}_' in src), None)
+            (c for c in CHAINS if f'_{c}_' in src or f'_{c}_' in os.path.basename(d)), None)
         if chain is None:
             continue
-        s = _load(os.path.join(src, 'results.json')) or {}
         dc = s.get('defense_config') or {}
         guard, camp = dc.get('guard_model'), s.get('campaign')
         if guard != GUARD:
             continue
-        defense, dtext = r.get('defense'), dc.get('decode_text')
+        defense, dtext = s.get('defense') or r.get('defense'), dc.get('decode_text')
         # `reguard_original` marks the +rg condition, which lives in the SAME
         # campaign as mc on InternVL3 (11 mc cells + 11 +rg cells, identical in
         # every other config field). Without this exclusion a newest-wins rule
@@ -120,7 +133,8 @@ def collect() -> dict:
             cond = 'gb'
         elif defense == 'modality_complete' and camp == panel_camp and dtext is True:
             cond = 'mc'
-        elif defense == 'modality_complete' and camp == ro_camp and dtext is False:
+        elif (defense == 'modality_complete' and dtext is False
+              and camp == (RERUN_RO_CAMP if chain in ('code_attack', 'ir_figstep') else ro_camp)):
             cond = 'ro'
         elif defense == 'modality_complete' and camp == ro_camp and dtext is True:
             # The matched within-campaign mc: same run, same six image chains as
