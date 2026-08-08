@@ -1,0 +1,85 @@
+# bestofn_attack AS-4 — ROUND 17: COMPLETE LLAMA'S TEMPERATURE PANEL (the missing 6 cells).
+#
+# FREE — every model is cluster-served. No API spend, no gate.
+#
+# ── WHY THIS ROUND EXISTS: A CORRECTION, NOT A NEW IDEA ─────────────────────
+# On 2026-08-08 the causal temperature result was reported as holding on llama, citing
+# amplification figures 14.6x / 6.1x / 3.4x / 3.0x. Campaign-pinned checking showed that was
+# WRONG: llama's `r11_codefix` and `r12_variance_source` campaigns vary the ATTACK
+# (`variance_channel_bon` vs fixed `code_attack`) at T=1.0 throughout — they are not a
+# temperature experiment at all. Only `r13_screener` varies temperature, and only for two
+# defenses. So llama's panel is PARTIAL:
+#
+#   HAVE (r13, T resolved from xc MLflow — the params are NOT on AICR, which is why an
+#         earlier check reported them unrecoverable):
+#     llm_self_defense  T=1.0 -> ensemble 88/100 (per-draw 14.35%)   [run 137c8d49...]
+#     llm_self_defense  T=0.0 -> ensemble 43/100 (per-draw 16.36%)   [run ade0d88d...]
+#     selfdefend        T=1.0 -> ensemble 21/100 (per-draw  6.21%)   [run cb58e280...]
+#     selfdefend        T=0.0 -> ensemble 13/100 (per-draw  4.98%)   [run 0d55a876...]
+#   MISSING — and the first of these is the one that makes the rest interpretable:
+#     no_defense x2 (THE CONTROL), sage x2, guard_baseline x2.
+#
+# Without a T=0.0 control, llama's raw drops (llm_self_defense 51%, selfdefend 38%) cannot be
+# netted against answer-sampling, so they support a DIRECTION and nothing quantitative. qwen's
+# control drops 12% and gemma's 29% — that spread is far too wide to borrow a control across
+# targets. This round supplies llama's own.
+#
+# ── WHY IT IS WORTH GPU TIME ────────────────────────────────────────────────
+# It converts the paper's central causal claim from two targets to three, at zero API cost.
+# The taxonomy prediction, pre-registered here:
+#     sage            screens with the TARGET  => STOCHASTIC verdict => LARGE net collapse
+#     guard_baseline  separate greedy classifier => NULL
+#     no_defense      no verdict => the control; its drop is pure answer-sampling
+# Read together with the r13 cells already in hand, a confirming result gives llama the same
+# stochastic-vs-greedy split gemma showed at every N.
+#
+# ── COMPARABILITY: VERIFIED, NOT ASSUMED ────────────────────────────────────
+# r13 consumed transform `code_attack_20260805_212854_26701649/code_attack` — byte-identical
+# to the dir R15 (qwen) and R16 (gemma) used. Checked on xc before writing this preset. So all
+# three targets share encoder, draw count and benchmark, and the cross-target comparison is
+# legal. ⚠️ Do not repoint `source_transform_subdir`; it is the whole basis of the comparison.
+#
+# ── SIZING AGAINST THE 24h WALL ─────────────────────────────────────────────
+# Target calls/draw: no_defense 1, sage 1, guard_baseline 1 (its gate call goes to the
+# separate guard model). (1+1+1) x 10,000 x 2 temperatures = 60,000 target calls.
+# llama-3.1-8B on A100 ran ~900 responses/min/replica in R15-era measurements, so ~22 min on 3
+# replicas. Even at gemma's pathological ~49/min it is ~6.8h. Wall is 24h. Wide margin either
+# way — and note gemma's slowness is architectural (sliding-window attention, 256k vocab), not
+# a property of 8-9B models, so llama should NOT be sized off gemma's rate.
+#
+# ── SERVERS: 5 of xc's budget 6 ─────────────────────────────────────────────
+# llama3_1_8b_cluster x3 + llama_guard_3_8b + wildguard = 5, which is NOT > 6, so the
+# floor-division allocator does not fire and llama keeps all three replicas.
+#
+#   ssh xc; cd ~/projects/llm_guardrail_security
+#   sbatch scripts/run_experiment_xc.sbatch bestofn_attack/r17_llama_temperature_completion
+#
+# ── JUDGE ───────────────────────────────────────────────────────────────────
+# wildguard on-cluster (FREE). ⚠️ NOT reportable on this code-bearing arm. The r13 cells this
+# round joins were themselves collected on wildguard and REJUDGED to gpt-5-mini, so these 6
+# need the same treatment before they enter any table: ~$13.5 for 6 cells x 10,000 draws at
+# the measured realtime rate. That is a SEPARATE ask and is not covered by the R16 approval.
+num_main_job_threads: 3      # = llama replica count
+num_cluster_jobs: 6          # 5 servers (llama x3 + llama_guard_3_8b + wildguard) + orchestrator
+
+_e: &e
+  mode: defense+evaluate
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  target_model: llama3_1_8b_cluster
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r17_llama_temperature
+
+tasks:
+  # ---- THE CONTROL: no verdict at all. Without it the r13 cells stay uninterpretable. ----
+  - {<<: *e, defense: no_defense, target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: no_defense, target_model_config: {temperature: 0.0, max_concurrency: 64}}
+  # ---- STOCHASTIC VERDICT (screens with the TARGET) -> predict LARGE net collapse ----
+  - {<<: *e, defense: sage, target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: sage, target_model_config: {temperature: 0.0, max_concurrency: 64}}
+  # ---- SEPARATE + GREEDY classifier gate -> predict NULL ----
+  - {<<: *e, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b},
+     target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b},
+     target_model_config: {temperature: 0.0, max_concurrency: 64}}
