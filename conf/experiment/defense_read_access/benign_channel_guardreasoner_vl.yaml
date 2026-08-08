@@ -1,0 +1,90 @@
+# AS-7 · BENIGN CHANNEL COVERAGE — guardreasoner-vl-7b (MULTIMODAL)   [chunk 3 of 3]
+#
+# THE QUESTION, AND IT IS A DIFFERENT ONE. The two text-only guards are being
+# asked whether their image-channel decision is a constant. This guard is the
+# paper's proposed FIX -- it is multimodal, and the harmful round showed it
+# blocking 99/100 in BOTH channels. A defense that blocks everything would
+# produce exactly that number, so the harmful column alone cannot tell a working
+# multimodal guard apart from a stuck-closed one. The benign column is the only
+# thing that separates them, and it is what turns "use a multimodal guard" from
+# an unpriced recommendation into a costed one.
+#
+# READ-OUT, RECORDED BEFORE THE RUN:
+#   * benign IMAGE blocked well below harmful IMAGE (99)
+#       -> the fix DISCRIMINATES on the image channel. The channel gap is
+#          genuinely closable, and the paper gains a constructive result whose
+#          price (the residual false-positive rate) is stated rather than hidden.
+#   * benign IMAGE blocked ~ harmful IMAGE (~99 on both)
+#       -> the "fix" is blanket blocking: it closes the gap by refusing the
+#          channel, not by classifying it. This is the strongest available
+#          outcome for the paper -- the obvious fix does not survive its own
+#          benign column -- and it must not be softened into a partial success.
+#   * benign IMAGE blocked well ABOVE benign TEXT blocked
+#       -> the guard is harsher on pixels than on words regardless of content;
+#          the image channel is being taxed, not inspected.
+#
+# WHY BOTH BENIGN SETS. ORBench-hard is adversarially selected (benign prompts
+# that already trip aligned models), so its false-positive rate is inflated BY
+# CONSTRUCTION and must never be reported as a deployment rate. ORBench-1k is
+# the ordinary sample. Reporting both bounds the claim from each side.
+#
+# THE no_defense DENOMINATOR lives in chunk 1 (benign_channel_wildguard) and is
+# shared: it is a property of the target and the arms, not of the guard, so
+# re-running it per chunk would only add three redundant copies.
+#
+# WHY CHUNKED BY GUARD. AICR rtx-devel caps gres/gpu=2 TOTAL per user, so a
+# preset may hold at most TWO vLLM servers. Here that is the target and one
+# guard; the ORBench judge is the target model itself, so it costs no extra
+# server. A 4-server preset does not fail loudly -- it STARVES in endpoint-wait
+# and burns its wall producing nothing. The three chunks are chained with
+# --dependency=afterany so they never contend.
+#
+# COST: $0. Target, guard and judge are all self-served on our own GPUs. No API
+# judge is needed because the reported quantity -- the guard block rate -- is an
+# EXACT string match on the canned block text, computed from stored rows.
+#
+# SUBMIT THE WHOLE ROUND (aicr) -- chained so the three chunks never contend
+# for the 2-GPU cap. Guard the dependency variable: an EMPTY $LAST expands to
+# `--dependency=afterany:` and sbatch fails with "Job dependency problem".
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && LAST=""; \
+#     for g in wildguard llamaguard3 guardreasoner_vl; do \
+#       if [ -n "$LAST" ]; then DEP="--dependency=afterany:$LAST"; else DEP=""; fi; \
+#       LAST=$(sbatch $DEP --parsable scripts/run_experiment_aicr.sbatch \
+#              defense_read_access/benign_channel_$g); echo "$g -> $LAST"; \
+#     done'
+
+num_main_job_threads: 4
+num_cluster_jobs: 3          # orchestrator + target(=judge) + 1 guard server
+
+_hard_t: &hard_t outputs/defense_read_access/prompt_transform/orbench_benign_hard/non_llm_baseline_ir_plain_20260808_192521_31033573/non_llm_baseline
+_hard_i: &hard_i outputs/defense_read_access/prompt_transform/orbench_benign_hard/non_llm_baseline_ir_plain_20260808_192521_31033573/ir_plain
+_k1_t:   &k1_t   outputs/defense_read_access/prompt_transform/orbench_benign_1k/non_llm_baseline_ir_plain_20260808_192521_50285191/non_llm_baseline
+_k1_i:   &k1_i   outputs/defense_read_access/prompt_transform/orbench_benign_1k/non_llm_baseline_ir_plain_20260808_192521_50285191/ir_plain
+
+# Judge is the TARGET model: the paper's benign number is the guard block rate
+# (exact-match, judge-independent), so the ORBench refusal judge here is a
+# secondary read-out and does not warrant an API call or a second server.
+_hard: &hard
+  mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range: [0, 99]
+  benchmark: orbench_benign_hard
+  judge_method: orbench
+  judge_model: internvl3_8b
+  campaign: as7_benign_channel
+
+_k1: &k1
+  mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range: [0, 99]
+  benchmark: orbench_benign_1k
+  judge_method: orbench
+  judge_model: internvl3_8b
+  campaign: as7_benign_channel
+
+tasks:
+  # ---- guardreasoner-vl-7b (MULTIMODAL) on both channels, both benign sets -------------
+  - {<<: *hard, defense: guard_baseline, defense_config: {guard_model: guardreasoner_vl_7b}, source_transform_subdir: *hard_t}
+  - {<<: *hard, defense: guard_baseline, defense_config: {guard_model: guardreasoner_vl_7b}, source_transform_subdir: *hard_i}
+  - {<<: *k1,   defense: guard_baseline, defense_config: {guard_model: guardreasoner_vl_7b}, source_transform_subdir: *k1_t}
+  - {<<: *k1,   defense: guard_baseline, defense_config: {guard_model: guardreasoner_vl_7b}, source_transform_subdir: *k1_i}

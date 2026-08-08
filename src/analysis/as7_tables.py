@@ -60,7 +60,13 @@ REFUSAL_MARKERS = (
 )
 
 CAMPAIGNS = ("as7_protocol_grant", "as7_channel_asr", "paper_b_guard_channel",
-             "as7_read_position")
+             "as7_read_position", "as7_benign_channel")
+
+# Campaigns whose prompts are BENIGN. Their block count is a false-positive
+# count, not a miss count, so several checks below invert for them: 0 blocked is
+# the expected healthy value (and, on the image channel, the finding), while
+# blocking everything is the failure signature.
+BENIGN_CAMPAIGNS = ("as7_benign_channel",)
 
 OUTPUT_GLOBS = (
     "outputs/defense_read_access/defense+evaluate/*/*/results.json",
@@ -115,10 +121,18 @@ def collect(root: str = ".") -> dict:
                 continue
             out_dir = os.path.dirname(rj)
             source = d.get("source_transform_subdir", "") or ""
-            hb = (d.get("eval_stats") or {}).get("HarmBenchEvaluator") or {}
+            # The benign arms are scored by ORBenchEvaluator, the harmful ones by
+            # HarmBenchEvaluator, so `n` cannot be read off a fixed key. Prefer
+            # HarmBench (harmful cells may carry more than one evaluator) and
+            # otherwise take whichever evaluator reported a count.
+            ev = d.get("eval_stats") or {}
+            hb = ev.get("HarmBenchEvaluator") or next(
+                (v for v in ev.values()
+                 if isinstance(v, dict) and "total_evaluated" in v), {})
 
             blocked = refused = 0
             flags: dict[str, bool] = {}
+            block_flags: dict[str, bool] = {}
             raw = os.path.join(out_dir, "raw_results.jsonl")
             if os.path.exists(raw):
                 with open(raw) as fh:
@@ -130,7 +144,13 @@ def collect(root: str = ".") -> dict:
                         if asr is None:
                             asr = (r.get("judgment") or {}).get("asr")
                         flags[pid] = bool(asr)
-                        if GUARD_REFUSAL_TEXT in resp:
+                        # Per-prompt block decision, kept separately from `flags`
+                        # so a block rate can be tested PAIRED across channels
+                        # (same prompt id, text arm vs image arm). `flags` stays
+                        # the ASR channel and is meaningless on benign cells.
+                        is_block = GUARD_REFUSAL_TEXT in resp
+                        block_flags[pid] = is_block
+                        if is_block:
                             blocked += 1
                         elif any(m in resp[:120].lower() for m in REFUSAL_MARKERS):
                             refused += 1
@@ -145,12 +165,15 @@ def collect(root: str = ".") -> dict:
                 "encoding": _encoding_of(source),
                 "arm": _arm_of(source, os.path.basename(out_dir)),
                 "asr": d.get("asr"),
+                "refusal_rate": d.get("refusal_rate"),
+                "benchmark": d.get("benchmark"),
                 "n": hb.get("total_evaluated"),
                 "fallback": hb.get("fallback_parse_count"),
                 "warnings": len(d.get("warnings") or []),
                 "blocked": blocked,
                 "target_refused": refused,
                 "flags": flags,
+                "block_flags": block_flags,
             })
     cells.sort(key=lambda c: (c["campaign"], str(c["target"]), c["defense"],
                               str(c["guard"]), c["encoding"], c["arm"],
@@ -209,6 +232,28 @@ def contrast(a: dict | None, b: dict | None) -> dict | None:
 # integrity
 # ---------------------------------------------------------------------------
 
+def block_contrast(a: dict | None, b: dict | None) -> dict | None:
+    """Paired contrast a -> b over the guard's BLOCK decision.
+
+    Same shape as `contrast`, but reads `block_flags` instead of `flags`. Valid
+    only between two cells over the SAME prompt set (e.g. the text and image
+    arms of one benign round, which are paired per prompt id by construction);
+    never between a harmful and a benign set.
+    """
+    if not a or not b or not a.get("block_flags") or not b.get("block_flags"):
+        return None
+    common = sorted(set(a["block_flags"]) & set(b["block_flags"]))
+    if not common:
+        return None
+    only_a = sum(1 for k in common if a["block_flags"][k] and not b["block_flags"][k])
+    only_b = sum(1 for k in common if b["block_flags"][k] and not a["block_flags"][k])
+    r1 = 100.0 * sum(a["block_flags"][k] for k in common) / len(common)
+    r2 = 100.0 * sum(b["block_flags"][k] for k in common) / len(common)
+    p = exact_mcnemar(only_a, only_b)
+    return {"from": round(r1), "to": round(r2), "delta": round(r2 - r1),
+            "b": only_a, "c": only_b, "p": p, "stars": stars(p), "n": len(common)}
+
+
 def integrity(cells) -> list[str]:
     bad = []
     for c in cells:
@@ -219,10 +264,19 @@ def integrity(cells) -> list[str]:
             problems.append(f"fallback={c['fallback']}")
         if c["warnings"]:
             problems.append(f"warnings={c['warnings']}")
-        # A gate cell whose block count is 0 AND whose ASR is 0 is the classic
-        # stuck-guard signature (nothing blocked, nothing answered) -- flag it.
-        if c["defense"] == "guard_baseline" and c["blocked"] == 0 and (c["asr"] or 0) == 0:
-            problems.append("possible stuck guard (0 blocked, 0 ASR)")
+        benign = c["campaign"] in BENIGN_CAMPAIGNS
+        if c["defense"] == "guard_baseline":
+            if benign:
+                # On BENIGN prompts the stuck-guard signature inverts. Zero
+                # blocks is the expected healthy value -- and on the image
+                # channel it is the paper's finding, so the harmful-side check
+                # would fire on exactly the cell we are trying to report.
+                # What is pathological here is a guard that blocks EVERYTHING.
+                if c["n"] and c["blocked"] == c["n"]:
+                    problems.append("possible stuck-closed guard (blocks all benign)")
+            elif c["blocked"] == 0 and (c["asr"] or 0) == 0:
+                # Nothing blocked and nothing answered: the classic stuck guard.
+                problems.append("possible stuck guard (0 blocked, 0 ASR)")
         if problems:
             bad.append(f"{c['target']}/{c['defense']}/{c['guard']}/{c['encoding']}"
                        f"/{c['arm']}/qs={c['query_source']}: {', '.join(problems)}")
@@ -286,6 +340,50 @@ def emit(numbers: dict) -> str:
         out.append(f"%   {c['target']:22} {str(c['guard']):21} {c['arm']:6} "
                    f"blocked={c['blocked']:>3}/{c['n']} refused={c['target_refused']:>3} "
                    f"asr={c['asr']}")
+
+    # ---- channel DISCRIMINATION (tab:discrim) -----------------------------
+    # The benign column is what separates "the guard detects badly" from "the
+    # guard has no information". Discrimination = harmful blocked - benign
+    # blocked on the SAME channel and guard.
+    #
+    # NOTE ON THE STATISTIC: harmful (HarmBench) and benign (ORBench) are
+    # DIFFERENT prompt sets, so this difference is UNPAIRED -- no McNemar is
+    # reported for it and none should be. The paired test that IS valid is the
+    # cross-CHANNEL one within a single benign set (same prompt ids, text arm
+    # vs image arm); it is emitted underneath.
+    out.append("% ==== tab:discrim  (harmful-blocked minus benign-blocked, UNPAIRED) ====")
+    ben = [c for c in cells if c["campaign"] in BENIGN_CAMPAIGNS]
+    for guard in ("wildguard", "llama_guard_3_8b", "guardreasoner_vl_7b"):
+        for arm in ("TEXT", "IMAGE"):
+            h = _find(chan, campaign="as7_channel_asr", target="internvl3_8b",
+                      defense="guard_baseline", guard=guard, arm=arm)
+            row = [f"%   {guard:21} {arm:6}",
+                   f"harmful={h['blocked']:>3}/{h['n']}" if h else "harmful=  --"]
+            for bench in ("orbench_benign_hard", "orbench_benign_1k"):
+                b = _find(ben, benchmark=bench, defense="guard_baseline",
+                          guard=guard, arm=arm)
+                short = "hard" if bench.endswith("hard") else "1k  "
+                if b:
+                    row.append(f"benign_{short}={b['blocked']:>3}/{b['n']}")
+                    if h and h["n"] and b["n"]:
+                        d = 100.0 * h["blocked"] / h["n"] - 100.0 * b["blocked"] / b["n"]
+                        row.append(f"discrim={d:+5.0f}pp")
+                else:
+                    row.append(f"benign_{short}=  --")
+            out.append(" ".join(row))
+
+    out.append("% ==== benign cross-channel block rate (PAIRED, exact McNemar) ====")
+    for bench in ("orbench_benign_hard", "orbench_benign_1k"):
+        for guard in ("wildguard", "llama_guard_3_8b", "guardreasoner_vl_7b"):
+            t = _find(ben, benchmark=bench, defense="guard_baseline",
+                      guard=guard, arm="TEXT")
+            i = _find(ben, benchmark=bench, defense="guard_baseline",
+                      guard=guard, arm="IMAGE")
+            st = block_contrast(t, i)
+            if st:
+                out.append(f"%   {bench:20} {guard:21} "
+                           f"text={st['from']:>3} image={st['to']:>3} "
+                           f"delta={st['delta']:+4}{st['stars']} p={st['p']:.2e}")
     return "\n".join(out)
 
 
@@ -299,11 +397,20 @@ def verify(numbers: dict, tex_path: str) -> list[str]:
         tex = fh.read()
     missing = []
     for c in numbers["cells"]:
+        tag = (f"{c['campaign']}/{c['target']}/{c['defense']}/{c['guard']}"
+               f"/{c['encoding']}/{c['arm']}/qs={c['query_source']}")
+        # Benign cells report no ASR (ORBench scores refusal), so the ASR check
+        # below would skip them entirely and their block rates -- the whole
+        # point of the benign round -- would ship unguarded. Check those first.
+        if c["campaign"] in BENIGN_CAMPAIGNS:
+            if c["defense"] == "guard_baseline":
+                blk = f"{c['blocked']}/{c['n']}"
+                if blk not in tex:
+                    missing.append(f"benign block rate {blk} absent from tex -- {tag}")
+            continue
         if c["asr"] is None:
             continue
         asr = f"{c['asr']:.0f}"
-        tag = (f"{c['campaign']}/{c['target']}/{c['defense']}/{c['guard']}"
-               f"/{c['encoding']}/{c['arm']}/qs={c['query_source']}")
         # Token match, not literal `$39$`: the tables legitimately format values
         # as `$57|50$`, `$\mathbf{9}$`, `$+4$`. The guard's job is to catch a
         # measured value that CHANGED and was never carried into the paper, so
