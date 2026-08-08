@@ -1,0 +1,95 @@
+# Paper B (AS-2) · ADAPTIVE ATTACK C — payload-in-image. STAGE 2: evaluate.
+#
+# Consumes stage 1 (`adaptive_payload_in_image_render`). The two source dirs are
+# filled in once that job lands — they are timestamped, so they cannot be
+# predicted.
+#
+# THE QUESTION, stated so the result cannot be fitted afterwards. The paper's
+# defended configuration (ECSO + decoy) holds encoded attacks to single-digit ASR,
+# and the best existing adaptive attack (A, attacker-supplied image carrying a
+# compliance instruction) recovers only 6 -> 24% on gpt-4o-mini against a 78%
+# undefended baseline. Attack C moves the PAYLOAD into the image instead of an
+# instruction. Read the outcome against the two comparator arms already collected
+# at n=100 on these exact encodings (mechanism sweep + fidelity re-collection):
+#
+#   * C >> the decoy arm, approaching or exceeding the no_defense TEXT arm
+#       -> the defense's protection is an artifact of the payload being readable
+#          as text. An adaptive attacker relocates it and the defense stops
+#          working. This is the security result: the paper becomes an attack
+#          paper with the decoy work as its motivation.
+#   * C ~ the decoy arm (still single-digit / low)
+#       -> the defense genuinely covers image-resident payloads, and the paper's
+#          most likely reviewer objection is closed with a measurement instead of
+#          a Limitations sentence. The audit framing stands and is stronger.
+#   * C is high under no_defense but low under ecso/sage
+#       -> the cleanest possible version of the mechanism claim: the attack works,
+#          and the defense is what stops it. Report per-defense, not pooled.
+#
+# `no_defense` IS NOT OPTIONAL — it is the attack's own ceiling. Without it a low
+# ASR under ECSO is uninterpretable: it could mean the defense caught the attack,
+# or that rendering the payload as an image simply broke the attack for reasons
+# having nothing to do with any defense (an unreadable render, a target that
+# ignores image text). The no_defense column separates those two, and they have
+# opposite consequences for the paper.
+#
+# OPEN-WEIGHT TARGETS ONLY IN THIS PRESET, deliberately. Their GPU serving is
+# free, so this whole preset costs judge dollars only. gpt-4o-mini — the model
+# the existing adaptive table uses — is held back to a separate preset to be run
+# only if the open-weight result is worth paying to extend. Sequencing the free
+# evidence first is the point.
+#
+# n=100, matching the main grid, the mechanism sweep and the fidelity
+# re-collection, so every comparator arm is same-n and prompt-paired. (Note the
+# paper's existing adaptive table is n=50; if attack C is reported beside it,
+# those cells want re-running at 100 rather than mixing — flagged, not silently
+# mixed.)
+#
+# COST: 18 cells x 100 prompts. Targets cluster-served (free); spend is the
+# gpt-5-mini judge only, ~$0.36. An ESTIMATE, not a quote.
+#
+# SUBMIT (AICR), after pasting the stage-1 dirs below:
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch presence_tax/adaptive_payload_in_image_eval'
+
+num_main_job_threads: 8
+num_cluster_jobs: 5          # 1 orchestrator + 3 target servers + headroom
+
+# <<< PASTE stage 1's two timestamped dirs here. They will look like:
+#   outputs/presence_tax/prompt_transform/harmbench/code_attack_ir_plain_<TS>_<RAND>/ir_plain
+#   outputs/presence_tax/prompt_transform/harmbench/llm_semantic_camo_ir_plain_<TS>_<RAND>/ir_plain
+_ca_img: &ca_img outputs/presence_tax/prompt_transform/harmbench/code_attack_ir_plain_20260806_021056_74911174/ir_plain
+_sc_img: &sc_img outputs/presence_tax/prompt_transform/harmbench/llm_semantic_camo_ir_plain_20260806_021056_20452752/ir_plain
+
+_b: &b
+  mode: defense+evaluate
+  benchmark: harmbench
+  prompt_range: [0, 99]
+  judge_model: gpt-5-mini
+  campaign: paper_b_adaptive_payload_in_image
+
+_ecso: &ecso
+  defense: ecso
+  defense_config: {query_source: encoded}   # deployable arm — no oracle read
+
+tasks:
+  # ---- code_attack payload rendered into the image ----
+  - {<<: *b, defense: no_defense, target_model: qwen2_5_vl_7b, source_transform_subdir: *ca_img}
+  - {<<: *b, defense: no_defense, target_model: internvl3_8b,  source_transform_subdir: *ca_img}
+  - {<<: *b, defense: no_defense, target_model: pixtral_12b,   source_transform_subdir: *ca_img}
+  - {<<: [*b, *ecso],             target_model: qwen2_5_vl_7b, source_transform_subdir: *ca_img}
+  - {<<: [*b, *ecso],             target_model: internvl3_8b,  source_transform_subdir: *ca_img}
+  - {<<: [*b, *ecso],             target_model: pixtral_12b,   source_transform_subdir: *ca_img}
+  - {<<: *b, defense: sage,       target_model: qwen2_5_vl_7b, source_transform_subdir: *ca_img}
+  - {<<: *b, defense: sage,       target_model: internvl3_8b,  source_transform_subdir: *ca_img}
+  - {<<: *b, defense: sage,       target_model: pixtral_12b,   source_transform_subdir: *ca_img}
+
+  # ---- semantic_camo payload rendered into the image ----
+  - {<<: *b, defense: no_defense, target_model: qwen2_5_vl_7b, source_transform_subdir: *sc_img}
+  - {<<: *b, defense: no_defense, target_model: internvl3_8b,  source_transform_subdir: *sc_img}
+  - {<<: *b, defense: no_defense, target_model: pixtral_12b,   source_transform_subdir: *sc_img}
+  - {<<: [*b, *ecso],             target_model: qwen2_5_vl_7b, source_transform_subdir: *sc_img}
+  - {<<: [*b, *ecso],             target_model: internvl3_8b,  source_transform_subdir: *sc_img}
+  - {<<: [*b, *ecso],             target_model: pixtral_12b,   source_transform_subdir: *sc_img}
+  - {<<: *b, defense: sage,       target_model: qwen2_5_vl_7b, source_transform_subdir: *sc_img}
+  - {<<: *b, defense: sage,       target_model: internvl3_8b,  source_transform_subdir: *sc_img}
+  - {<<: *b, defense: sage,       target_model: pixtral_12b,   source_transform_subdir: *sc_img}

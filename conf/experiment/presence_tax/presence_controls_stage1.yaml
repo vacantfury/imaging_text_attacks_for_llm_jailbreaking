@@ -1,0 +1,43 @@
+# Paper B (AS-2) · PRESENCE CONTROLS — STAGE 1: render the mountain decoy arm.
+#
+# WHY. The main thesis says image PRESENCE shifts the refusal threshold. The
+# sensitivity ladder tested exactly ONE image (a blank canvas), and we already
+# have evidence the effect is not image-invariant in MAGNITUDE — on
+# claude-sonnet-4-6 at the topic-matched rung, the blank canvas gives 3->36
+# (+33pp) while the mountain decoy gives 3->63 (+60pp, paper Tab. refusal). So
+# presence appears sufficient to trigger the shift while magnitude depends on the
+# image. The headline number (+51pp, claude, rung 2 borderline-benign) rests on
+# one image class at a rung where we have NO second class at all. This preset
+# renders that second class so the claim can say "presence" honestly.
+#
+# SAME CHAIN AS THE LADDER, deliberately: chained off the SAME
+# `non_llm_baseline` step the ladder's text and blank arms descend from, so all
+# arms are byte-identical on the text channel and paired per prompt id.
+#
+# COST: ZERO. `ir_constant` loads a fixed file from disk; no model call.
+#
+# SUBMIT (AICR):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch presence_tax/presence_controls_stage1'
+# Then paste the timestamped dir into presence_controls_stage2.yaml.
+
+num_main_job_threads: 2
+
+tasks:
+  - mode: prompt_transform
+    source_transform_subdir: outputs/presence_tax/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/non_llm_baseline
+    benchmark: jailbreakbench_benign
+    prompt_range: [0, 99]
+    campaign: paper_b_presence_controls
+    transformation_list:
+      - type: ir_constant
+        # ⚠️ `params:` NESTING IS MANDATORY. This block previously wrote
+        # `image_path:` as a SIBLING of `type:`, where TransformationSpec
+        # silently dropped it — the 2026-08-07 run therefore rendered the
+        # DEFAULT rabbit (1189x1418) and the paper labelled that arm "mountain"
+        # for a day. TransformationSpec now sets extra="forbid" so the same typo
+        # raises at startup instead of running the wrong image.
+        params:
+          # The mountain decoy the paper's Tab. refusal already uses, so the two
+          # image classes are comparable to what is published.
+          image_path: src/prompt_transformations/image/images/mountain.png

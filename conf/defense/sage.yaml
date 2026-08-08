@@ -36,6 +36,6 @@ wrapper: published
 # `as_system` delivers the SAGE protocol as the SYSTEM message (user turn stays
 # raw) instead of wrapping the user message. Used by the tab:bypass SAGE-
 # redundancy rerun (2026-08-03; the original May-era as-system runs were lost —
-# provenance audit in text_docs/imgaug_defense/paper_b_rebuttal_results.md).
+# provenance audit in text_docs/presence_tax/paper_b_rebuttal_results.md).
 # Default MUST stay false: every tab:main SAGE number is user-wrap.
 as_system: false

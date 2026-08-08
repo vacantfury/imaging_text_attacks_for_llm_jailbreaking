@@ -19,7 +19,7 @@
 #
 # NOTE the label matters for one experiment: this is the ONLY `alignment_tier:
 # strong` cluster-served VLM in the llm_utils registry, so the alignment-tier
-# scan (conf/experiment/imgaug_defense/alignment_tier_scan.yaml) lost its
+# scan (conf/experiment/presence_tax/alignment_tier_scan.yaml) lost its
 # strong-tier arm to this. That scan therefore spans mid and weak only.
 
 model:

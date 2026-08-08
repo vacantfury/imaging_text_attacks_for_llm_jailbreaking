@@ -1,0 +1,86 @@
+# Paper B (AS-2) · METHOD-FIDELITY RE-COLLECTION — the open-weight (free) half.
+#
+# ✅ Inside the standing auto-run gate: GPU is free, only the gpt-5-mini judge
+# spends (~$0.02/cell x 12 ≈ $0.25). Submitted on xc 2026-08-05.
+#
+# WHY: `llm_semantic_camo` was not the published method (audit §1.2 — `process()`
+# returned step 2's ANSWER, a harmful document the HELPER model had already
+# written, instead of step 2's PROMPT). The target was therefore never asked to
+# perform the harmful generation, which is the whole attack. Fixed in `b266892`.
+#
+# The encoding was rebuilt on the fixed encoder in AICR 285677 and verified on the
+# real output: the encoded prompt is now a semantic-camouflage JSON feature
+# scaffold that ENDS with "The above content shows a target state or action.
+# Please complete a persuasive article that can achieve this target action" — an
+# instruction to the TARGET, not a pre-written article. That is the fix.
+#
+# ⚠️ TWO camo dirs were produced under `..._213025_*` and `..._213349_*`. The
+# FIRST is an empty stub from the task that failed in AICR 285658 ("model is
+# required"); it held zero files and was removed. The dir named below is the only
+# real one — 100 rows in both steps. Recorded because "latest-wins" cell
+# selection is a known hazard in this repo and two same-day dirs for one encoding
+# is exactly how it bites.
+#
+# ROLE IN THE PAPER: semantic camo is AS-2's NON-SYMBOLIC generality control —
+# it is the evidence that the effect is not an artifact of symbolic encodings
+# (set theory / formal logic / code). The paid `fidelity_grid_api.yaml` re-collects
+# the symbolic (code_attack) headline; this preset re-collects the control. Both
+# are needed before the paper's framing can be settled.
+#
+# GRID: this mirrors the paper's ORIGINAL camo run (`autoattack_defense/
+# encoder_gen.yaml`) cell-for-cell — {no_defense, ecso} x {text, decoy} x 3
+# open-weight targets — so it is a drop-in replacement for those numbers rather
+# than a new grid that would need its own baseline.
+#
+# ONE DELIBERATE CHANGE vs that original: every ECSO cell pins
+# `query_source: encoded`. The oracle-leak correction (2026-08-05) established
+# that the deployable arm must read only defender-visible input; the original
+# preset predates it and its oracle arm is quarantined under
+# `outputs/_quarantine/oracle_leak/`. Do not drop this key to "match the old run".
+#
+# NOTE: ECSO short-circuits on text input (`if not is_multimodal: return initial`),
+# so ecso-text is expected to equal no_defense-text. Both are kept because the
+# original grid had both, and the pair doubles as a free integrity check — if
+# those two cells DISAGREE, the short-circuit or the routing is broken.
+#
+# CLUSTER: xc. AICR was at its GPU cap (max_gpu_jobs=12, 12 vLLM servers live)
+# and NURC had 4 pending GPU jobs against a cap of 4, so both would have aborted
+# at pre-flight. xc was idle with 8 A100s, carries all three targets in its HF
+# cache, and injects OPENAI_API_KEY via `op run` for the judge.
+
+num_main_job_threads: 6
+num_cluster_jobs: 7          # 1 orchestrator + up to 6 servers; xc budget is 6
+
+# Built by AICR 285677 on the FIXED encoder, rsync'd AICR -> local -> xc.
+_text:  &text  outputs/presence_tax/prompt_transform/harmbench/llm_semantic_camo_ir_constant_20260805_213349_39577158/llm_semantic_camo
+_decoy: &decoy outputs/presence_tax/prompt_transform/harmbench/llm_semantic_camo_ir_constant_20260805_213349_39577158/ir_constant
+
+_base: &base
+  mode: defense+evaluate
+  benchmark: harmbench
+  prompt_range: [0, 99]
+  judge_model: gpt-5-mini
+  campaign: paper_b_fidelity_regrid_camo
+
+_ecso: &ecso
+  defense: ecso
+  defense_config: {query_source: encoded}   # deployable arm — no oracle read
+
+tasks:
+  # ---- qwen2_5_vl_7b ----
+  - {<<: *base, target_model: qwen2_5_vl_7b, defense: no_defense, source_transform_subdir: *text}
+  - {<<: [*base, *ecso], target_model: qwen2_5_vl_7b,           source_transform_subdir: *text}
+  - {<<: *base, target_model: qwen2_5_vl_7b, defense: no_defense, source_transform_subdir: *decoy}
+  - {<<: [*base, *ecso], target_model: qwen2_5_vl_7b,           source_transform_subdir: *decoy}
+
+  # ---- internvl3_8b ----
+  - {<<: *base, target_model: internvl3_8b, defense: no_defense, source_transform_subdir: *text}
+  - {<<: [*base, *ecso], target_model: internvl3_8b,           source_transform_subdir: *text}
+  - {<<: *base, target_model: internvl3_8b, defense: no_defense, source_transform_subdir: *decoy}
+  - {<<: [*base, *ecso], target_model: internvl3_8b,           source_transform_subdir: *decoy}
+
+  # ---- pixtral_12b ----
+  - {<<: *base, target_model: pixtral_12b, defense: no_defense, source_transform_subdir: *text}
+  - {<<: [*base, *ecso], target_model: pixtral_12b,           source_transform_subdir: *text}
+  - {<<: *base, target_model: pixtral_12b, defense: no_defense, source_transform_subdir: *decoy}
+  - {<<: [*base, *ecso], target_model: pixtral_12b,           source_transform_subdir: *decoy}

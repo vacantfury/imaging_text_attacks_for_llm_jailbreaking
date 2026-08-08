@@ -1,0 +1,146 @@
+# Paper B (AS-2) · IMAGE-PROPERTY ABLATION — STAGE 1: render 10 image variants.
+#
+# WHY. cspaper review-1 Con 2 / Q3: we call the manipulation "image presence"
+# but every treatment is a FIXED image, and our fixed images differ in
+# resolution, aspect ratio, colour, OCR-ability and provider-side preprocessing.
+# The reviewer's charge is that we have shown "several content-unrelated images
+# move the threshold", not that a binary has_image variable is responsible. The
+# paper currently answers by SOFTENING the claim. That is a retreat from the
+# title. This round varies the image properties one at a time so the claim can
+# be made or narrowed on evidence.
+#
+# THE KEY CONTRAST IS #5 vs #10 — blank 1024x141 (no text) against the mountain
+# decoy (1024x141, a caption rendered as an image). Identical dimensions, one
+# OCR-able and one not. That single pair separates "the model read something"
+# from "an image was attached", which is exactly Con 2's doubt and Q3's ask. It
+# became MORE valuable on 2026-08-07: the presence-control's second class turned
+# out to be the rabbit, not the mountain (see the defect note below), so neither
+# published presence arm carries readable text and the paper has no matched-size
+# OCR contrast at all right now.
+#
+# ⚠️ ARM IDENTITY LIVES IN THE CONFIG, NEVER IN THE PATH. Nine of these ten
+# tasks end in a step called `ir_blank`, so every one of them writes to
+# `<...>_ir_blank_<ts>_<rand>/ir_blank` and the dirs are distinguishable ONLY by
+# timestamp+rand. Reading the arm from the last path component — the substring
+# bug that has now bitten three times in this paper — collapses all nine into
+# one. Read `results_history[*].ir_blank.config` (width/height/bg_color/
+# degradation) instead; that IS the arm identity. `scripts/` has no helper for
+# this yet; the stage-2 preset is written from the manifest printed after this
+# job (command in the stage-2 header).
+#
+# ⚠️ `params:` NESTING IS MANDATORY. Renderer arguments written as siblings of
+# `type:` were silently DROPPED until 2026-08-07 — that is precisely how the
+# presence-control mountain arm rendered the default rabbit and went into the
+# paper mislabelled for a day. TransformationSpec now sets extra="forbid", so
+# the same typo raises at startup. Do not "simplify" the params: blocks away.
+#
+# PAIRING. All ten chain off the SAME `non_llm_baseline` step the ladder, the
+# blank arm and the presence controls descend from, so every arm is
+# byte-identical on the text channel and paired per prompt id. Rung 2
+# (OR-Bench borderline-benign) is the rung that carries the headline shift.
+#
+# BYTE-IDENTITY. Every arm here is deterministic and constant across the 100
+# prompts (one distinct image hash per condition) — the property the presence
+# claim rests on. A Gaussian-noise arm was designed and DROPPED for this reason:
+# `_apply_degradation` calls np.random.normal with no seed, so it would have
+# produced 100 distinct images per cell and quietly broken that property.
+#
+# COST: ZERO. Blank canvases and a fixed file on disk; no model call.
+#
+# SUBMIT (AICR):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch presence_tax/image_property_ablation_stage1'
+
+num_main_job_threads: 4
+
+# The text arm (condition 1) is the source step itself — no render needed.
+_source: &src outputs/presence_tax/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/non_llm_baseline
+
+_base: &base
+  mode: prompt_transform
+  source_transform_subdir: *src
+  benchmark: jailbreakbench_benign
+  prompt_range: [0, 99]
+  campaign: paper_b_image_property_ablation
+
+tasks:
+  # --- 2. reference canvas for THIS sweep -------------------------------
+  #     ⚠️ NOT the published presence-control blank, despite what an earlier
+  #     version of this comment said (corrected 2026-08-07). The published arm
+  #     (presence_controls_stage2.yaml `_blank`) passed only `keep_text`, so it
+  #     rendered at BlankImageRenderer's DEFAULTS — measured 1024x768, not
+  #     512x512. This arm is a deliberate 512x512; it anchors the resolution
+  #     axis below and is paired against the text arm INSIDE this job, which is
+  #     all the sweep needs. Do not describe it as re-measuring the published
+  #     cell, and do not compare it across jobs (targets are nondeterministic).
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 512, height: 512, bg_color: "#FFFFFF", keep_text: true}
+
+  # --- 3-4. RESOLUTION, colour and aspect held at the reference ---------
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 256, height: 256, bg_color: "#FFFFFF", keep_text: true}
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 1536, height: 1536, bg_color: "#FFFFFF", keep_text: true}
+
+  # --- 5. ASPECT RATIO matched to the mountain decoy, NO readable text ---
+  #     Pairs with condition 10. This is the OCR-ability contrast.
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 1024, height: 141, bg_color: "#FFFFFF", keep_text: true}
+
+  # --- 6. transposed aspect ratio, same pixel count as #5 ---------------
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 141, height: 1024, bg_color: "#FFFFFF", keep_text: true}
+
+  # --- 7-8. COLOUR, resolution and aspect held at the reference ---------
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 512, height: 512, bg_color: "#000000", keep_text: true}
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 512, height: 512, bg_color: "#808080", keep_text: true}
+
+  # --- 9. FILE FORMAT / compression, held against condition 10 ----------
+  #     The mountain decoy at jpeg_quality 40 vs the same image at 100 (#10):
+  #     identical visual content, different encoding, and a degraded caption is
+  #     measurably harder to OCR — so this arm moves the format axis AND probes
+  #     OCR legibility on the one arm that has text to degrade.
+  #     NOT a blank canvas: q40 on a UNIFORM white field is a no-op, producing
+  #     bytes identical to condition 2 (verified 2026-08-07 before submission —
+  #     the arm was originally written that way and would have bought a
+  #     duplicate cell at full price).
+  - <<: *base
+    transformation_list:
+      - type: ir_constant
+        params:
+          keep_text: true
+          image_path: src/prompt_transformations/image/images/mountain.png
+          jpeg_quality: 40
+
+  # --- 10. OCR-ABLE: the mountain decoy (caption rendered as an image) ---
+  - <<: *base
+    transformation_list:
+      - type: ir_constant
+        params:
+          keep_text: true
+          image_path: src/prompt_transformations/image/images/mountain.png
+
+  # --- 11. drawn content, non-OCR-able: the line drawing ----------------
+  #     Continuity with the published presence control (which is THIS image).
+  - <<: *base
+    transformation_list:
+      - type: ir_constant
+        params:
+          keep_text: true
+          image_path: src/prompt_transformations/image/images/rabit.jpeg

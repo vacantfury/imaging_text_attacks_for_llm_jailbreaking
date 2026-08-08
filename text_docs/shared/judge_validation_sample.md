@@ -1,6 +1,6 @@
 # Judge validation (Round J) — sample, results & selection
 
-*Shared across ALL papers that report HarmBench ASR — Paper B (imgaug_defense), Paper C
+*Shared across ALL papers that report HarmBench ASR — Paper B (presence_tax), Paper C
 (autoattack_defense), Paper D (bestofn_defense): same attack/defense suite, same judge.*
 
 > **✅ RESOLVED 2026-07-15 — FINAL JUDGE SELECTION.** **`gpt-5-mini`** is the single headline ASR judge

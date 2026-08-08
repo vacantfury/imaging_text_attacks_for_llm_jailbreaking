@@ -1,0 +1,63 @@
+# Paper B (AS-2) · SAME-WEIGHTS SERVING-STACK CONTRAST — STAGE 1b: the two extra
+# image arms, chained off the xc-local canonical text built by stage 1a.
+#
+# WHY A SECOND STAGE. Stage 1a's chain produced the canonical text step and the
+# reference blank in one dir. These two arms must descend from the SAME text
+# step, and a preset cannot reference a dir its own job has not written yet — so
+# they land here, pinned to stage 1a's timestamped output.
+#
+# TEXT CHANNEL VERIFIED (2026-08-07, before this preset was written): stage 1a's
+# `non_llm_baseline/prompts.jsonl` hashes to
+#   4edb2e25c64a2f82635129356eb663f0f7b5ad75eba3583d1eb5106875d1c718
+# over sorted (id, encoded, original) — IDENTICAL to the published AICR job
+# 287521 text arm. The xc rebuild is therefore the same text the ladder and the
+# presence controls used, and these cells are comparable to them in text channel.
+#
+# WHAT THE TWO ARMS ARE FOR. `tab:imgprops` established that image PROPERTIES
+# set the size of the benign-refusal shift, by a strongly MODEL-dependent margin
+# (gpt-4o-mini flat within 8pp across ten arms; flash-lite spread 34pp). These
+# two arms carry that question onto the serving-stack axis: with weights held
+# fixed, does the SAME checkpoint price image properties differently depending
+# on who serves it? The pair is size-matched and differs only in OCR-ability —
+# 1024x141 blank vs the 1024x141 rendered caption — which is the sharpest
+# property contrast the paper has.
+#
+# ⚠️ ARM IDENTITY IS IN THE CONFIG, NEVER THE PATH. Both tasks below write to a
+# dir whose last component is the step name (`ir_blank` / `ir_constant`), and
+# stage 1a already produced an `ir_blank`. Read
+# `results_history[*].<leaf>.config` (width/height/image_path) to tell them
+# apart — the substring bug has bitten this paper three times.
+#
+# COST: ZERO. A generated canvas and a fixed file on disk; no model call.
+#
+# SUBMIT (xc) — the pinned dir below is stage 1a's output:
+#   ssh xc 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_xc.sbatch presence_tax/serving_stack_stage1b'
+
+num_main_job_threads: 2
+
+# Stage 1a = xc job 204, 2026-08-07. Text channel hash-verified against the
+# published AICR arm (see header).
+_src: &src outputs/presence_tax/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260807_223202_80871327/non_llm_baseline
+
+_base: &base
+  mode: prompt_transform
+  source_transform_subdir: *src
+  benchmark: jailbreakbench_benign
+  prompt_range: [0, 99]
+  campaign: paper_b_serving_stack
+
+tasks:
+  # --- size-matched blank, NO readable text (pairs with the mountain below) ---
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 1024, height: 141, bg_color: "#FFFFFF", keep_text: true}
+
+  # --- same size, OCR-able: the caption rendered as an image ------------------
+  - <<: *base
+    transformation_list:
+      - type: ir_constant
+        params:
+          keep_text: true
+          image_path: src/prompt_transformations/image/images/mountain.png

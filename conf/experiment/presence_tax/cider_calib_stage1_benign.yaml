@@ -1,0 +1,72 @@
+# Paper B (AS-2) · CIDER CALIBRATION, STAGE 1 — render the benign channels.
+#
+# ⏸ STAGED, NOT RUN (owner instruction 2026-08-05: "first prepare everything
+# before we can real run experiments of them ... but do not really do
+# experiments"). Submit command at the bottom.
+#
+# COST: ZERO. Both transformations are non-LLM renderers (`ir_plain` draws text
+# onto a canvas, `ir_constant` attaches a fixed image), so this makes no model
+# call of any kind — no target, no judge, no API key. It is pure input
+# preparation, which is why it is a separate stage: `prompt_transform` output
+# lands in a TIMESTAMPED directory that a later task cannot reference by path, so
+# stage 2 has to be a second submission with the real dir pasted in.
+#
+# WHY IT EXISTS — the existing benign channel is TOO SMALL to calibrate on.
+# CIDER's tau is a percentile of the delta distribution on CLEAN images:
+#     tau = numpy.percentile(clean_deltas, (1 - fpr_ratio) * 100)
+# The only benign image channel in the repo is
+#   outputs/autoattack_defense/prompt_transform/jailbreakbench_benign/
+#     ir_plain_20260717_011251_92087856   -> prompt_range [0, 19], n = 20.
+# At the default fpr_ratio 0.95 that asks for the 5th percentile of 20 numbers,
+# i.e. essentially the single smallest observation — an estimator with enormous
+# variance, and tau IS the operating point that decides what CIDER blocks. A
+# noisy tau would make CIDER look arbitrarily strong or weak for reasons that
+# have nothing to do with CIDER. data/jbb_benign_prompts.jsonl holds 100 prompts,
+# all of which are used here.
+#
+# TWO BENIGN CHANNELS, deliberately, because they answer different questions:
+#   ir_plain     — benign text rendered INTO the image. This is the channel
+#                  src/analysis/paper_c_cider_threshold.py documents as "the
+#                  benign image channel", so it keeps AS-2's tau comparable with
+#                  the AS-3 usage the script was written for.
+#   ir_constant  — benign text + the SAME fixed mountain decoy Paper B attacks
+#                  with. This is what benign traffic actually looks like in THIS
+#                  paper's deployment condition, so it is the honest
+#                  false-positive budget for the mechanism sweep.
+# Calibrating on both and reporting which was used is cheaper than defending one
+# choice; if the two taus disagree materially, that disagreement is itself a
+# finding about how sensitive CIDER is to the benign reference.
+#
+# NOTE the benign channel is missing from AICR entirely (checked 2026-08-05:
+# outputs/autoattack_defense/prompt_transform/jailbreakbench_benign/ does not
+# exist there), so this stage must run on whichever cluster will run stage 2
+# rather than being rsynced up.
+#
+# SUBMIT (AICR; nothing here needs a GPU, but the wrapper's default is fine):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch presence_tax/cider_calib_stage1_benign'
+# Then read the two timestamped dirs out of
+#   outputs/presence_tax/prompt_transform/jailbreakbench_benign/
+# and paste them into cider_calib_stage2.yaml.
+
+num_main_job_threads: 2
+
+# The exact decoy Paper B attacks with — same file, so the benign and attack
+# arms differ only in the TEXT, never in the image.
+_decoy: &decoy
+  type: ir_constant
+  params: {image_path: src/prompt_transformations/image/images/mountain.png}
+
+_base: &base
+  mode: prompt_transform
+  benchmark: jailbreakbench_benign
+  source_file: data/jbb_benign_prompts.jsonl
+  prompt_range: [0, 99]            # all 100 benign prompts
+  campaign: paper_b_cider_calibration
+
+tasks:
+  # Benign text rendered into the image (the AS-3-comparable clean channel).
+  - {<<: *base, transformation_list: [{type: ir_plain}]}
+
+  # Benign text + the fixed decoy (Paper B's actual deployment condition).
+  - {<<: *base, transformation_list: [*decoy]}

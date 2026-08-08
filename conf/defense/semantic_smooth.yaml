@@ -35,7 +35,7 @@ perturbation_max_tokens: 2048
 #     2026-08 ran this, and it is ORACLE-ASSISTED: a deployed defender facing an
 #     encoded attack does not possess the unencoded intent (found in the
 #     all-defense audit 2026-08-04; record in
-#     text_docs/imgaug_defense/paper_b_rebuttal_results.md).
+#     text_docs/presence_tax/paper_b_rebuttal_results.md).
 #   encoded — the defender-visible input text (threat-model-faithful).
 # SCOPE, and why this differs from ECSO's leak: the paraphrase step ALWAYS reads
 # p.encoded, so this leak affects only which candidate response the vote SELECTS,
