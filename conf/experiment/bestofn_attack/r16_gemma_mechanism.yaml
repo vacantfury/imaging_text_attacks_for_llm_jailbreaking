@@ -1,0 +1,112 @@
+# bestofn_attack AS-4 — ROUND 16: REBUILD THE MECHANISM PANEL ON GEMMA-2-9B (all 10 cells).
+#
+# OWNER-ORDERED (standing): "we just keep running bug-substitute experiments." Free — every
+# model here is cluster-served, so there is no API spend to gate on.
+#
+# ── WHAT DEBT THIS PAYS ─────────────────────────────────────────────────────
+# The four-machine inventory (2026-08-07) found llama3_1_8b_cluster is the ONLY target with
+# a reportable post-fix panel. R15 rebuilt qwen2_5_7b_instruct. This rebuilds gemma2_9b_it,
+# the third target the paper's multi-target claims rest on. Gemma's pre-fix cells are
+# quarantined and cannot be quoted.
+#
+# ── WHY ALL TEN CELLS FIT ONE PRESET HERE, UNLIKE R15 ───────────────────────
+# R15 had to split 6+4 because R15a ran on NURC, whose gpu QOS caps at 4 servers: a 4-model
+# preset requests 3+1+1+1=5 > 4 and the floor-division allocator `max(slots//n_models, 1)`
+# collapses EVERY model to one replica. xc's budget is 6, and this preset requests
+#   gemma2_9b_it x2  +  llama3_8b_cluster x1  +  llama_guard_3_8b x1  +  wildguard x1  =  5
+# which is NOT > 6, so no capping fires and gemma keeps both replicas. One server startup,
+# one round, and — unlike R15 — every cell scored by the same judge in the same run with no
+# cross-cluster transfer to reconcile afterwards.
+# ⚠️ Do NOT run this preset on NURC. There it silently becomes 1 replica per model.
+#
+# ── PRE-REGISTERED PREDICTIONS (score honestly; a miss is a finding) ─────────
+# Same screener taxonomy as R12/R13 (llama, confirmed) and R15 (qwen, PARTIAL):
+#   sage             -> screens with the TARGET       => STOCHASTIC verdict => COLLAPSE at T=0
+#   llm_self_defense -> filter_model: null, so also the TARGET => STOCHASTIC => COLLAPSE
+#   selfdefend       -> separate GREEDY shadow (llama3_8b) => NULL
+#   guard_baseline   -> separate GREEDY classifier (llama_guard_3_8b) => NULL
+#   no_defense       -> CONTROL: no verdict at all, so its T=1->T=0 drop is pure
+#                       answer-sampling. Every other collapse is read NET OF THIS.
+#
+# ⚠️ R15 IS THE REASON THIS ROUND MATTERS, AND THE REASON TO WATCH THE CEILING.
+# On qwen the extremes replicated (sage collapsed 92%, selfdefend 5% — below the control)
+# but the two MIDDLE terms came out SWAPPED (guard_baseline 30% > llm_self_defense 21%).
+# That may be a wildguard ceiling artefact: qwen's no_defense and llm_self_defense both sat
+# at 98/100 ensemble at T=1.0, where no large collapse can be expressed. A gpt-5-mini
+# rejudge of R15 is in flight (AICR job 318884) to test exactly that.
+# So for THIS round, check saturation BEFORE interpreting the middle terms: if gemma's
+# no_defense ensemble comes back at ~98-100/100 under wildguard, the same ceiling applies
+# and the middle-term ordering here is uninterpretable until its own gpt-5-mini rejudge.
+# The extremes are not ceiling-limited and stand either way.
+# Two targets agreeing on the extremes and disagreeing on the middle would itself be the
+# finding: the sample-vs-fixed distinction is real at the poles and not a clean ranking.
+#
+# ── SIZING AGAINST THE 24h WALL (the check R14a skipped and lost a round to) ─
+# Target calls/draw: no_defense 1, sage 1, llm_self_defense 2, selfdefend 1, guard_baseline 1
+#   (1+1+2+1+1) x 10,000 draws x 2 temperatures = 120,000 target calls.
+# Screener calls run on the OTHER GPUs in parallel and do not compete for the target.
+# R15 measured ~917 calls/min per replica for a 7B at conc 64 on A100s; gemma-2-9B generates
+# with a 3072-token cap (vs 16384 for llama/qwen) so its calls are SHORTER, not longer.
+# 120,000 / (2 x ~900/min) ≈ 70 min, and the longest single cell (llm_self_defense, 20,000
+# calls on one bound replica) is ~22 min. Wall is 24h. The widest margin of any round today.
+#
+# ── WHERE: xc, and why it is the RIGHT box rather than the leftover one ──────
+# Checked 2026-08-08, not assumed:
+#   xc:   COMPLETELY IDLE — 0 jobs, all 8 A100-80GB at 0 MiB used, 24h wall. All four models
+#         cached under /home/thomas/huggingface_cache/hub (gemma-2-9b-it verified present).
+#         Budget 6 fits this preset at full replica count; NURC and AICR would not.
+#   NURC: home quota EXHAUSTED — `mkdir` fails "Disk quota exceeded" (the filesystem has
+#         112T free; this is a per-user cap). Another session is clearing it. Nothing can be
+#         written there, so nothing can run there.
+#   AICR: holding the AS-3 held-out grid (317813-317821, 8 PENDING) + a sibling session's two
+#         vLLM servers + this paper's R15 rejudge. Taking GPU quota there starves them.
+# The source transform (10,000 draws) was verified PRESENT on xc before submission — a
+# defense+evaluate reads source_transform_subdir from LOCAL disk, so a preset that runs on
+# one cluster does not automatically run on another.
+#
+#   ssh xc; cd ~/projects/llm_guardrail_security
+#   sbatch scripts/run_experiment_xc.sbatch bestofn_attack/r16_gemma_mechanism
+#
+# ── GEMMA-SPECIFIC TRAP ALREADY HANDLED IN conf/llm/gemma2_9b_it.yaml ───────
+# Gemma-2's 8192 sliding-window ceiling forces max_model_len=8192 AND max_tokens=3072.
+# Without the max_tokens cap every call 400s and the judge scores the error string as
+# "not harmful" -> a silent, fully-fake ASR 0.00 (it ate all 6 gemma cells of round 174759,
+# 2026-07-21..24). The config carries both; do not override max_tokens from this preset.
+# CAVEAT owed to Limitations: gemma gets a 3072-token generation budget vs 16384 for
+# llama/qwen, so its long tail is truncated where theirs is not. Real asymmetry, not a bug.
+#
+# ── JUDGE ───────────────────────────────────────────────────────────────────
+# wildguard on-cluster (FREE) collects the responses. ⚠️ NOT reportable on this code-bearing
+# arm — wildguard over-flags code by 41-68%. Target generation is the expensive part and a
+# rejudge never re-queries the target, so the gpt-5-mini pass is a cheap separate step
+# (10 cells x 10,000 = 100,000 calls ≈ $22.5 realtime, ~half that if it batch-routes) and is
+# ITS OWN ASK. Do not report a wildguard number from this round.
+num_main_job_threads: 2      # = gemma replica count; extra threads would only queue on acquire_endpoint
+num_cluster_jobs: 6          # 5 servers (gemma x2 + shadow + guard + wildguard) + orchestrator
+
+_e: &e
+  mode: defense+evaluate
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  target_model: gemma2_9b_it
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r16_gemma_mechanism
+
+tasks:
+  # ---- CONTROL: no verdict at all — isolates answer-sampling from verdict-sampling ----
+  - {<<: *e, defense: no_defense, target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: no_defense, target_model_config: {temperature: 0.0, max_concurrency: 64}}
+  # ---- STOCHASTIC VERDICT (screens with the TARGET) -> predict COLLAPSE at T=0 ----
+  - {<<: *e, defense: sage, target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: sage, target_model_config: {temperature: 0.0, max_concurrency: 64}}
+  - {<<: *e, defense: llm_self_defense, target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: llm_self_defense, target_model_config: {temperature: 0.0, max_concurrency: 64}}
+  # ---- SEPARATE + GREEDY shadow -> predict NULL at T=0 ----
+  - {<<: *e, defense: selfdefend, target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: selfdefend, target_model_config: {temperature: 0.0, max_concurrency: 64}}
+  # ---- SEPARATE + GREEDY classifier gate -> predict NULL at T=0 ----
+  - {<<: *e, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b},
+     target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b},
+     target_model_config: {temperature: 0.0, max_concurrency: 64}}
