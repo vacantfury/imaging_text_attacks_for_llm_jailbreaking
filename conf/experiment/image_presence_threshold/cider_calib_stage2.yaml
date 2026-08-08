@@ -1,0 +1,85 @@
+# Paper B (AS-2) · CIDER CALIBRATION, STAGE 2 — measure the delta distributions.
+#
+# ⏸ STAGED, NOT RUN, and NOT RUNNABLE AS-IS: the two benign paths below are
+# PLACEHOLDERS. Run cider_calib_stage1_benign.yaml first, then paste its two
+# timestamped dirs in where marked. Submitting before that will fail on a missing
+# source dir (loudly, which is the intended behaviour).
+#
+# WHAT THIS PRODUCES: one delta trace per channel under
+# outputs/image_presence_threshold/cider_deltas/<chain>__<step>.jsonl. `threshold: null` is
+# the CALIBRATION PASS — CIDER scores every image and blocks NOTHING, so the run
+# also yields CIDER's over-refusal floor on the benign channels for free. Feed the
+# traces to:
+#   python src/analysis/paper_c_cider_threshold.py \
+#     --benign 'outputs/image_presence_threshold/cider_deltas/ir_plain_*__ir_plain.jsonl' \
+#              'outputs/image_presence_threshold/cider_deltas/ir_constant_*__ir_constant.jsonl' \
+#     --attack 'outputs/image_presence_threshold/cider_deltas/code_attack_*__ir_constant.jsonl' \
+#              'outputs/image_presence_threshold/cider_deltas/llm_semantic_camo_*__ir_constant.jsonl'
+# which emits tau per benign-FPR budget plus the separability AUC. Write the chosen
+# tau into conf/defense/cider.yaml `threshold:` — NEVER hand-pick it.
+#
+# TRACE NAMES CARRY THE CHAIN (changed 2026-08-05). Every arm in this paper ends
+# in a step called `ir_constant`, so the old `<step>.jsonl` key would have made the
+# benign decoy, code_attack's decoy and camo's decoy overwrite one file — tau would
+# then have been calibrated against whichever channel happened to finish last, with
+# no error anywhere. Hence the `*__` globs above.
+#
+# GPU IS REQUIRED AND IS NOT AUTOMATIC ON THE CPU PARTITION. CIDER loads
+# llava-1.5-7b plus the guided-diffusion UNet IN-PROCESS (not as a vLLM server),
+# and the orchestrator wrapper defaults to a CPU partition with 16G RAM, where a
+# 7B model in float32 (~28GB) simply OOMs. Each cluster's wrapper was patched on
+# 2026-08-05 to bounce presets naming this defense to a GPU partition, the same
+# mechanism `mllm_protector` already used. If a run reports "no CUDA visible",
+# that patch is missing on that box — check before blaming the defense.
+#
+# num_main_job_threads: 1 IS LOAD-BEARING, not conservatism. A separate Defense
+# instance is constructed per task, so each concurrent task loads its OWN copy of
+# llava-1.5-7b (~14GB fp16) and the diffusion UNet. Four threads would ask one card
+# for ~64GB before a single delta is computed. The tasks are only 4 x 100 prompts,
+# so running them in sequence costs minutes, not hours.
+num_main_job_threads: 1
+
+_base: &base
+  mode: defense+evaluate
+  target_model: qwen2_5_vl_7b        # free cluster GPU; the target is incidental
+                                     # here — deltas depend only on (text, image)
+                                     # and are computed BEFORE any target call.
+  judge_model: gpt-5-mini
+  campaign: paper_b_cider_calibration
+  defense: cider
+  defense_config:
+    threshold: null                  # CALIBRATION PASS — score all, block none
+    trace_dir: outputs/image_presence_threshold/cider_deltas
+
+# COST: 4 cells x 100 prompts. Target is cluster-served (free); the only spend is
+# the judge, ~400 gpt-5-mini judgments ≈ $0.08 — under the standing $1 bar. The
+# judge is gpt-5-mini rather than a free cluster judge on purpose: the benign
+# cells' refusal numbers ARE the reported over-refusal floor for CIDER, so judging
+# them cheaply now would only force a rejudge later for the same money.
+
+tasks:
+  # ---- BENIGN calibration channels (clean images -> the tau distribution) ----
+  # <<< PASTE stage 1's dirs here. They will look like:
+  #     outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/ir_plain_<TS>_<RAND>/ir_plain
+  #     outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/ir_constant_<TS>_<RAND>/ir_constant
+  - <<: *base
+    benchmark: jailbreakbench_benign
+    prompt_range: [0, 99]
+    source_transform_subdir: REPLACE_ME_benign_ir_plain
+
+  - <<: *base
+    benchmark: jailbreakbench_benign
+    prompt_range: [0, 99]
+    source_transform_subdir: REPLACE_ME_benign_ir_constant
+
+  # ---- ATTACK channels (Paper B's decoy arm, FIXED encoders) ----
+  # These paths are real and already on every cluster.
+  - <<: *base
+    benchmark: harmbench
+    prompt_range: [0, 99]
+    source_transform_subdir: outputs/image_presence_threshold/prompt_transform/harmbench/code_attack_ir_constant_20260805_213025_3168031/ir_constant
+
+  - <<: *base
+    benchmark: harmbench
+    prompt_range: [0, 99]
+    source_transform_subdir: outputs/image_presence_threshold/prompt_transform/harmbench/llm_semantic_camo_ir_constant_20260805_213349_39577158/ir_constant

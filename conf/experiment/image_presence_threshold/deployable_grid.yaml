@@ -1,0 +1,40 @@
+# Threat-model-faithful ECSO grid (owner-approved 2026-08-04): re-collect the
+# amplification contrast with the defense reading ONLY the encoded input
+# (query_source: encoded), all cells same-day so no drift between arms.
+#
+# Scope note: gemini-2.0-flash is DEPRECATED (vendor 404) and cannot be
+# re-collected — the deployable grid covers the other four models; its May
+# numbers stay in the oracle-arm table, labeled.
+#
+# 16 NEW cells; the pilot (jobs 257409 + 258275, 2026-08-03) already collected
+# the 8 gemini-2.5-flash{,-lite} ecso-decoy + no_def-decoy cells.
+# ECSO-text needs no separate no_def-text cell: ECSO short-circuits on text
+# input (returns INITIAL unchanged), so an ECSO-text cell IS the no-defense
+# text baseline — which is exactly the paper's text-vs-decoy contrast.
+num_main_job_threads: 8
+
+_t_formal: &tf backup_files/arr_may_submission_files/outputs/prompt_transform/harmbench/formal_logic_ir_plain_20260525_010219_56487445/llm_formal_logic
+_t_code: &tc backup_files/arr_may_submission_files/outputs/prompt_transform/harmbench/code_attack_ir_plain_20260524_085040_58051887/code_attack
+_d_formal: &df outputs/image_presence_threshold/prompt_transform/harmbench/llm_formal_logic_ir_constant_20260803_064343_72332881/ir_constant
+_d_code: &dc outputs/image_presence_threshold/prompt_transform/harmbench/code_attack_ir_constant_20260803_064343_29961556/ir_constant
+
+tasks:
+  # ---- ECSO text baselines (short-circuit = no-defense text), all 4 models ----
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tc, defense: ecso, defense_config: {query_source: encoded}, target_model: gemini-2.5-flash-lite, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tf, defense: ecso, defense_config: {query_source: encoded}, target_model: gemini-2.5-flash-lite, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tc, defense: ecso, defense_config: {query_source: encoded}, target_model: gemini-2.5-flash, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tf, defense: ecso, defense_config: {query_source: encoded}, target_model: gemini-2.5-flash, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tc, defense: ecso, defense_config: {query_source: encoded}, target_model: gpt-4o-mini, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tf, defense: ecso, defense_config: {query_source: encoded}, target_model: gpt-4o-mini, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tc, defense: ecso, defense_config: {query_source: encoded}, target_model: claude-sonnet-4-6, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *tf, defense: ecso, defense_config: {query_source: encoded}, target_model: claude-sonnet-4-6, judge_model: gpt-5-mini}
+  # ---- ECSO decoy, deployable arm — models the pilot did not cover ----
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *dc, defense: ecso, defense_config: {query_source: encoded}, target_model: gpt-4o-mini, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *df, defense: ecso, defense_config: {query_source: encoded}, target_model: gpt-4o-mini, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *dc, defense: ecso, defense_config: {query_source: encoded}, target_model: claude-sonnet-4-6, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *df, defense: ecso, defense_config: {query_source: encoded}, target_model: claude-sonnet-4-6, judge_model: gpt-5-mini}
+  # ---- no_defense decoy (decoy-alone control) — models the pilot did not cover ----
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *dc, defense: no_defense, target_model: gpt-4o-mini, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *df, defense: no_defense, target_model: gpt-4o-mini, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *dc, defense: no_defense, target_model: claude-sonnet-4-6, judge_model: gpt-5-mini}
+  - {mode: defense+evaluate, benchmark: harmbench, source_transform_subdir: *df, defense: no_defense, target_model: claude-sonnet-4-6, judge_model: gpt-5-mini}

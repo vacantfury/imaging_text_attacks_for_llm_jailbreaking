@@ -1,0 +1,47 @@
+# Paper B (AS-2) · ECSO CONTENT DEPENDENCE — STAGE 1: render the blank-decoy arm.
+#
+# THE SENTENCE THIS BUYS. The restructured intro wants to say: ECSO protects
+# against an image that carries NOTHING and fails against an image that carries
+# the payload — a defense triggered by a blank canvas but not by a harmful one.
+# That is the single sharpest illustration of the paper's spine, and right now it
+# rests on a comparison ACROSS encodings and models (the paper's 63pp decoy figure
+# is code_attack/flash-lite; the stacked run's null is formal_logic/gpt-4o-mini),
+# which is not a valid contrast. The sentence stays bracketed in the draft until
+# this run either supports it or kills it.
+#
+# WHAT STAGE 1 DOES. Chains `ir_blank` off the SAME May-2026 formal_logic encoding
+# that the text and ir_plain arms already descend from. `keep_text` defaults True,
+# so the encoded payload stays on the text channel and the image is a pure blank
+# canvas. That yields three arms sharing one canonical encoding:
+#
+#   text      encoded payload in text, NO image          [existing dir]
+#   decoy     encoded payload in text + BLANK image      [this preset]
+#   ir_plain  encoded payload in text + payload RENDERED [existing dir]
+#
+# Arms differ ONLY in what the image channel carries. Pairing is per prompt id.
+#
+# WHY BLANK AND NOT THE MOUNTAIN DECOY. The blank canvas is the stricter control —
+# it cannot be OCR'd, cannot relate to the request, and carries literally zero
+# information — and the paper's own decoy-diversity appendix already establishes
+# that blank reproduces the amplification. It is also the exact intervention used
+# by the sensitivity ladder and symmetry test, so all three new experiments share
+# one image condition instead of three.
+#
+# COST: ZERO. `ir_blank` is a non-LLM renderer and the encoding is reused, so this
+# stage makes no model call.
+#
+# SUBMIT (AICR):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch image_presence_threshold/ecso_content_dependence_stage1'
+# Then paste the timestamped dir into ecso_content_dependence_stage2.yaml.
+
+num_main_job_threads: 2
+
+tasks:
+  - mode: prompt_transform
+    source_transform_subdir: backup_files/arr_may_submission_files/outputs/prompt_transform/harmbench/formal_logic_ir_plain_20260525_010219_56487445/llm_formal_logic
+    benchmark: harmbench
+    prompt_range: [0, 99]
+    campaign: paper_b_ecso_content_dependence
+    transformation_list:
+      - {type: ir_blank}

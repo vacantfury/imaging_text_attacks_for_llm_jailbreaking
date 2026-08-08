@@ -1,0 +1,87 @@
+# Paper B (AS-2) · ADAPTIVE ATTACK C — payload-in-image, API TARGET (capability control).
+#
+# WHY THIS EXISTS. The open-weight run (AICR 286839, 18 cells, n=100) came back a
+# clean NEGATIVE for attack C: on every target, moving the payload into the image
+# LOWERED ASR relative to the text arm, and there is no cell where it significantly
+# beat text. That is a reportable result — it closes the "no adaptive attack puts
+# the payload in the image" hole the reviewers flagged — but it has exactly ONE
+# serious threat to validity, and this preset is that threat's test.
+#
+# THE THREAT: CAPABILITY, NOT MECHANISM. The three open-weight targets are 7-12B,
+# and the collapse ordered itself by capability rather than by anything about the
+# defense:
+#
+#   code_attack, no_defense, n=100        text  ->  payload-in-image
+#     qwen2.5-VL-7B  (strongest OCR)        65  ->  38
+#     Pixtral-12B                           62  ->   7
+#     InternVL3-8B                          62  ->   5
+#
+# The failure mode is NOT refusal and NOT transcription error — InternVL reproduces
+# the rendered deque contents verbatim and then DESCRIBES the code instead of
+# completing it, leaving `// step 1` / `// step 2` as literal placeholders. So the
+# attack dies on instruction-FOLLOWING through the image channel, and that is
+# precisely the axis on which a stronger model differs. If the effect is a small
+# model's inability to treat image-borne text as a command, a frontier model should
+# recover much of the lost ASR and the negative result does not generalise.
+#
+# gpt-4o-mini IS THE RIGHT CONTROL, for a reason specific to this paper: it is
+# already the model in the paper's existing adaptive table, and its text + decoy
+# comparator arms for code_attack exist at n=100 under all three defenses
+# (verified 2026-08-06). So this drops straight into a table that is already built,
+# with no new baseline to collect.
+#
+# CODE_ATTACK ONLY, deliberately. gpt-4o-mini has NO llm_semantic_camo comparator
+# arms in the tree, so a semantic_camo cell here would be uninterpretable without
+# collecting two more arms first. code_attack is also where the open-weight
+# collapse was largest (62-65 -> 5-38), so it is the sharper test of the two.
+#
+# PRE-REGISTERED READ-OUT, recorded BEFORE the run:
+#   * gpt-4o-mini payload-in-image ~ its text arm (recovering most of the drop)
+#       -> the open-weight collapse was a CAPABILITY artifact. The negative result
+#          must be reported as model-class-bounded, and the paper says the obvious
+#          adaptive attack fails on small VLMs but not on frontier ones. This is
+#          the outcome that most changes what the paper may claim.
+#   * gpt-4o-mini payload-in-image << its text arm, like the open-weight targets
+#       -> the modality asymmetry survives a capability jump. The negative result
+#          generalises and the mechanism claim (instruction-following is privileged
+#          in the TEXT channel) is the paper's finding, stated without hedging.
+#   * payload-in-image high under no_defense but cut by ecso/sage
+#       -> the defenses genuinely cover image-resident payloads on a capable
+#          target; report per-defense, not pooled.
+#
+# CONFOUND THIS RUN DOES NOT RESOLVE, and which any sentence using these numbers
+# must carry: `keep_text: false` relocates the WHOLE encoded prompt — the
+# code-completion INSTRUCTION as well as the harmful payload. So attack C tests
+# "instruction and payload in the image", not "payload in the image" alone. The
+# surgical variant (instruction stays in text, only the deque contents render)
+# would separate the two and is the natural follow-up; it is NOT in this preset.
+#
+# COST: 3 cells x 100 prompts on an API target that also runs each defense's own
+# calls (ecso and sage query it twice), plus the gpt-5-mini judge. Estimated
+# ~$0.35-0.50 total, under the standing $1 bar. An ESTIMATE, not a quote.
+#
+# SUBMIT (AICR — the payload-in-image renders live there):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch image_presence_threshold/adaptive_payload_in_image_api'
+
+num_main_job_threads: 3
+num_cluster_jobs: 1          # API target + API judge — no vLLM server needed.
+
+# Stage-1 render from AICR 286828, byte-identical payload to the text and decoy
+# arms (chained from the same fixed code_attack encoding), so the three arms stay
+# prompt-paired and the McNemar contrast against text/decoy is valid.
+_ca_img: &ca_img outputs/image_presence_threshold/prompt_transform/harmbench/code_attack_ir_plain_20260806_021056_74911174/ir_plain
+
+_b: &b
+  mode: defense+evaluate
+  benchmark: harmbench
+  prompt_range: [0, 99]
+  judge_model: gpt-5-mini
+  target_model: gpt-4o-mini
+  source_transform_subdir: *ca_img
+  campaign: paper_b_adaptive_payload_in_image
+
+tasks:
+  - {<<: *b, defense: no_defense}
+  - {<<: *b, defense: ecso, defense_config: {query_source: encoded}}   # deployable arm — no oracle read
+  - {<<: *b, defense: sage}

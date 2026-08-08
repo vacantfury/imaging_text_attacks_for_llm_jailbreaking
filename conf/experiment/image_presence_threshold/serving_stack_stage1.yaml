@@ -1,0 +1,55 @@
+# Paper B (AS-2) · SAME-WEIGHTS SERVING-STACK CONTRAST — STAGE 1a: rebuild the
+# canonical text channel ON xc, plus the reference blank canvas.
+#
+# WHY THIS RUNS ON xc AND NOT AICR. Answers cspaper review-1 Con 6, whose charge
+# is that our hosted-vs-open-weight comparison varies six things at once (model
+# family, pretraining, post-training alignment, vision encoder, inference
+# implementation, vendor-side filtering) and therefore cannot attribute the
+# benign-refusal inflation to the serving stack. The fix is Gemma-3-12B-it: the
+# SAME open checkpoint served BOTH by AWS Bedrock (`google.gemma-3-12b-it`) and
+# by our own vLLM (`google/gemma-3-12b-it`). xc is the ONLY box that can reach
+# Bedrock, and it also has the GPUs to self-serve, so both arms run in ONE
+# orchestrator process — which is what keeps the contrast internal.
+#
+# ⚠️ WHY STAGE 1 IS REBUILT INSTEAD OF REUSED. The ladder / presence-control /
+# property-sweep stage-1 dirs were produced on AICR, and `outputs/` is gitignored
+# and only ever travels DOWNWARD (owner's rsync). xc has never seen them. So the
+# text channel is regenerated here from the SAME dataset at the SAME range with
+# the SAME non-LLM transform — all deterministic — and stage 2 chains off THIS
+# dir. Provenance is honest: these cells descend from an xc-local render, not
+# from job 287521.
+#
+# ⚠️ VERIFY BEFORE SUBMITTING STAGE 2 (do not skip). The point of rebuilding is
+# that the text is byte-identical to the published canonical text. PROVE it —
+# compare this job's `non_llm_baseline/prompts.jsonl` hash against the local copy
+# from job 287521. The command is in the stage-2 header. If it differs, stop:
+# something is not deterministic and the contrast has an unmeasured confound.
+#
+# TWO STEPS, ONE TASK. The chain [non_llm_baseline, ir_blank] writes BOTH the
+# canonical text step and the blank render into one timestamped dir — exactly
+# how the published presence-control arm was built. `ir_blank` takes no size
+# params on purpose, so it renders at BlankImageRenderer's DEFAULTS (1024x768),
+# which is what the published `_blank` arm is. (The property sweep's "512^2"
+# reference is a DIFFERENT, explicitly-sized arm — see that preset's header.)
+#
+# COST: ZERO. A non-LLM text transform and a generated canvas; no model call.
+#
+# SUBMIT (xc):
+#   ssh xc 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_xc.sbatch image_presence_threshold/serving_stack_stage1'
+
+num_main_job_threads: 2
+
+tasks:
+  # Rung 2 = OR-Bench borderline-benign, prompts 0-99 — the rung that carries
+  # the headline shift. `benchmark:` names the JUDGE (jbb refusal rubric), not
+  # the dataset; the dataset is `source_file` below.
+  - mode: prompt_transform
+    source_file: data/orbench_benign_hard_prompts.jsonl
+    benchmark: jailbreakbench_benign
+    prompt_range: [0, 99]
+    campaign: paper_b_serving_stack
+    transformation_list:
+      - type: non_llm_baseline
+      - type: ir_blank
+        params: {keep_text: true}

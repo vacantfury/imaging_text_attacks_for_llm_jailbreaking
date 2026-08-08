@@ -414,7 +414,7 @@ argument (its basis was retracted; the argument stands).
 | `NOW.md` | One cold-start line: *do not cite the affected numbers*, plus pointers here and to item 22. |
 | `text_docs/autoattack_defense/experiment_results.md` | AS-3 banner — its four affected attacks (69 presets), the specific §"Why the frontier exists" claim that rests on `code_attack`, and its paper-side items. |
 | `text_docs/bestofn_attack/experiment_results.md` | AS-4 banner — `code_attack` is the strategy channel's load-bearing attack (42 presets), plus the con-10 2×2 confound. |
-| `text_docs/presence_tax/experiment_matrix.md` | AS-2 banner — the narrower scope (8 `code_attack` + 3 `semantic_camo` presets) and which cells are unaffected. |
+| `text_docs/image_presence_threshold/experiment_matrix.md` | AS-2 banner — the narrower scope (8 `code_attack` + 3 `semantic_camo` presets) and which cells are unaffected. |
 | `model_internals_safety/TODO.md` **item 21** | The sibling's share: the judge-rubric disclosure, the byte-identical-prompt verification, and the both-repos-or-neither constraint on ever changing that rubric text. |
 
 Per-paper banners state each paper's own affected scope, so an AS-2/AS-3/AS-4 session gets the finding from
@@ -447,8 +447,8 @@ in §1–§2 is being fixed until that happens** — do not start a re-run off t
 > | xc | 259 | **466** | +207 |
 > | **total** | 1327 | **2179** | **+852** |
 >
-> **This revises AS-2's stated scope upward.** The banner in `text_docs/presence_tax/experiment_matrix.md`
-> says "8 `code_attack` + 3 `semantic_camo` presets"; provenance finds **86 affected `presence_tax` cells on
+> **This revises AS-2's stated scope upward.** The banner in `text_docs/image_presence_threshold/experiment_matrix.md`
+> says "8 `code_attack` + 3 `semantic_camo` presets"; provenance finds **86 affected `image_presence_threshold` cells on
 > AICR alone, 71 of them invisible to name matching**. Paper B depends on these attacks more widely than the
 > per-preset count suggests.
 >

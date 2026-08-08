@@ -1,0 +1,92 @@
+# Paper B (AS-2) · QWEN-VL GENERATIONAL LADDER: was the benign threshold shift
+# INTRODUCED by recent post-training?
+#
+# THE QUESTION. The five-model scan (xc job 215, 2026-08-07) turned up a
+# contrast it was not designed to test: `qwen2.5-vl-7b` moved +0pp under the
+# blank canvas while `qwen3-vl-8b` moved +32pp (p < 1e-4). Same family, same
+# size class, same job, same canonical text — one generation apart. If that
+# holds up it is the sharpest mechanism lead this paper has, because it points
+# at post-training rather than at architecture, scale, vendor or serving stack,
+# all of which are approximately held fixed across the pair.
+#
+# WHY THE PAIR IS NOT ENOUGH. Two points cannot distinguish "a generational
+# trend" from "qwen3-vl happens to be odd". Adding the OLDEST rung makes it a
+# series with a predicted shape:
+#
+#   qwen2-vl-7b  ->  qwen2.5-vl-7b  ->  qwen3-vl-8b
+#   (oldest post-training)              (newest)
+#
+# READ-OUT, RECORDED BEFORE THE RUN:
+#   * monotone increase (~0 -> ~0 -> +32, or a graded climb)
+#       -> the effect was introduced by recent post-training. This is the
+#          paper's mechanism claim, and it is a claim about WHEN, which is
+#          checkable by anyone with the three public checkpoints.
+#   * qwen2-vl ALSO large, qwen2.5-vl the outlier
+#       -> not generational. The +0pp on qwen2.5-vl is then the thing needing
+#          explanation, not the +32pp. Report the non-monotonicity; do not
+#          narrate a trend through it.
+#   * all three near-null
+#       -> ⚠️ STOP AND CHECK THE RIG before interpreting. qwen3-vl measured
+#          +32pp with 32/0 discordant pairs two days earlier off this same
+#          text dir; a null here would more likely mean a broken cell than a
+#          reversed model. Verify against job 215's stored rows first.
+#
+# ALL THREE RUNGS RUN IN ONE JOB, DELIBERATELY. qwen2.5-vl and qwen3-vl were
+# already measured in job 215 and could have been reused, but these targets are
+# NOT deterministic, so a ladder assembled across jobs would carry run-to-run
+# drift inside the very comparison it exists to make. Re-measuring both costs
+# ~$0.4 of judge and buys a within-job paired contrast. Do not "optimize" this
+# back into a one-cell run against the old numbers.
+#
+# SERVING PROFILE IS MATCHED ACROSS THE THREE RUNGS (see conf/llm/qwen2_vl_7b.yaml
+# for the reasoning) — same max_tokens, same excluded GPU classes. A per-rung
+# serving tweak would put a confound through the ladder.
+#
+# ARMS. The published presence control: canonical text vs the blank canvas at
+# the renderer's DEFAULTS (1024x768 — NOT the property sweep's 512x512
+# reference). Both chain off the same `non_llm_baseline` step job 215 used, so
+# the ladder is directly comparable to the scan's other models.
+#
+# JUDGE pinned to gpt-5-mini + jbb_refusal, matching every benign-refusal number
+# in the paper.
+#
+# COST: 6 cells x 100 prompts. Targets are self-served on our own GPUs = FREE.
+# Only the judge costs: ~600 gpt-5-mini refusal calls, ~$0.6. An ESTIMATE.
+#
+# REQUIRES llm_utils >= v5.4.0 (adds the QWEN2_VL_7B registry row). Verify the
+# box's installed version before submitting — a stale env fails at model
+# resolution, not at import, so the job dies partway rather than at startup.
+#
+# SUBMIT (xc):
+#   ssh xc 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_xc.sbatch image_presence_threshold/generational_ladder'
+
+num_main_job_threads: 4
+num_cluster_jobs: 4          # orchestrator + 3 vLLM servers (one per rung).
+
+# Shared with the five-model scan (xc job 215) — same canonical text, same
+# published 1024x768 blank.
+_text:  &text  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260807_223202_80871327/non_llm_baseline
+_blank: &blank outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260807_223202_80871327/ir_blank
+
+_b: &b
+  mode: defense+evaluate
+  defense: no_defense
+  prompt_range: [0, 99]
+  benchmark: jailbreakbench_benign
+  judge_method: jbb_refusal
+  judge_model: gpt-5-mini
+  campaign: paper_b_generational_ladder
+
+tasks:
+  # ---- rung 1: oldest post-training ----------------------------------------
+  - {<<: *b, target_model: qwen2_vl_7b,          source_transform_subdir: *text}
+  - {<<: *b, target_model: qwen2_vl_7b,          source_transform_subdir: *blank}
+
+  # ---- rung 2 --------------------------------------------------------------
+  - {<<: *b, target_model: qwen2_5_vl_7b,        source_transform_subdir: *text}
+  - {<<: *b, target_model: qwen2_5_vl_7b,        source_transform_subdir: *blank}
+
+  # ---- rung 3: newest post-training ----------------------------------------
+  - {<<: *b, target_model: qwen3_vl_8b_instruct, source_transform_subdir: *text}
+  - {<<: *b, target_model: qwen3_vl_8b_instruct, source_transform_subdir: *blank}

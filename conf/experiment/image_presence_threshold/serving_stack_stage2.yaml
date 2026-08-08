@@ -1,0 +1,113 @@
+# Paper B (AS-2) · SAME-WEIGHTS SERVING-STACK CONTRAST — STAGE 2.
+#
+# THE QUESTION. cspaper review-1 Con 6: our hosted-vs-open-weight comparison
+# varies six things at once — model family, pretraining, post-training
+# alignment, vision encoder, inference implementation, and vendor-side
+# filtering — so no observed difference can be attributed to any single one.
+# The draft currently CONCEDES this. This round removes the confound instead of
+# conceding it: Gemma-3-12B-it is one open checkpoint reachable two ways, so
+# running the identical manipulation down both routes holds the first four
+# fixed BY CONSTRUCTION and leaves only the serving stack.
+#
+#   arm A  google.gemma-3-12b-it   Provider.BEDROCK        managed US host
+#   arm B  google/gemma-3-12b-it   Provider.SLURM_CLUSTER  our own vLLM
+#
+# THE PAIRING IS A REGISTRY FACT, NOT A NAMING COINCIDENCE. The two ids differ
+# by a single character (`.` vs `/`). llm_utils >= v5.3.0 gives both rows
+# `weights="gemma-3-12b-it"`, so the pair is machine-checkable:
+#   LLMModel.BEDROCK_GEMMA_3_12B.self_route() is LLMModel.GEMMA_3_12B_IT
+# Verified on xc 2026-08-07 (jurisdiction us vs self). If that assertion ever
+# fails, this preset is measuring two different models and MUST NOT be reported.
+#
+# READ-OUT, RECORDED BEFORE THE RUN (so the result cannot be narrated after):
+#   * both routes inflate, magnitudes close
+#       -> the effect is a property of the WEIGHTS, not the deployment. Con 6's
+#          confound is answered in the strongest way available to us: the same
+#          checkpoint behaves the same however it is served, so the hosted-model
+#          pattern in the paper cannot be dismissed as a serving artefact.
+#   * both inflate, hosted MORE
+#       -> part of the shift is contributed by the serving stack (vendor-side
+#          filtering / system framing). Report the SPLIT: the weights carry X,
+#          the stack adds Y. This is the most informative outcome and is a
+#          finding in its own right.
+#   * only the hosted route inflates
+#       -> the effect is a deployment artefact on this model, NOT a property of
+#          the checkpoint. That NARROWS the paper's claim and must be reported
+#          as such, not softened. It would also explain why our open-weight
+#          models looked different, which is exactly Con 6's suspicion.
+#   * neither inflates
+#       -> Gemma-3-12B is simply not susceptible; the arms say nothing about
+#          the serving stack. Report as a null on this model and do not
+#          generalise from it.
+#
+# FOUR ARMS PER ROUTE, ONE CANONICAL TEXT. text / blank(default 1024x768) /
+# blank(1024x141) / mountain(1024x141). The first two answer Con 6 directly
+# (does presence move the threshold on each route). The last two are size-
+# matched and differ only in OCR-ability — they ask whether the PROPERTY
+# sensitivity found in tab:imgprops is itself stack-dependent, on fixed weights.
+# All four descend from one `non_llm_baseline` step whose text channel was
+# hash-verified identical to the published AICR arm (stage-1b header).
+#
+# ⚠️ INTERNAL CONTRASTS ONLY. These targets are not deterministic at
+# temperature 0. Every comparison here is arm-vs-arm WITHIN this job. Do NOT
+# compare these cells against the ladder's, the presence controls', or
+# tab:imgprops' cells — different job, different model, different day.
+#
+# JUDGE. gpt-5-mini + jbb_refusal, pinned to match every other benign-refusal
+# number in this paper. NOTE this is the documented exception to xc's routing
+# preference (conf/clusters/xc.yaml prefers Bedrock-served API models and sends
+# other API work to aicr/nurc): the science requires the VALIDATED gpt-5-mini
+# judge specifically, because swapping the instrument would make these cells
+# incomparable with the results they exist to defend. Bedrock does NOT serve
+# gpt-5-mini; the key is injected by the wrapper via `op run` (verified live on
+# xc 2026-08-07). Targets and judge are separate concerns — the Bedrock arm is
+# a TARGET, the judge is OpenAI on both arms, identical across routes.
+#
+# COST: 8 cells x 100 prompts, one target call each (no defense) + gpt-5-mini
+# refusal judge. The vLLM arm is free (own GPU); Bedrock Gemma-3-12B is an
+# open-weight model at open-weight prices (~$0.2-0.3 for 400 calls); the judge
+# dominates at ~$0.10/cell => ~$1 total. An ESTIMATE, not a quote.
+# ⚠️ RECORDED COST WILL READ $0 FOR THE BEDROCK ARM: LLMModel.BEDROCK_GEMMA_3_12B
+# carries no input_price/output_price in the registry, so the usage math has
+# nothing to multiply. Do not read a $0 in results.json as "this was free".
+#
+# SUBMIT (xc — the ONLY cluster that can reach Bedrock; weights pre-fetched
+# 2026-08-07, 23 GB in the box HF cache, so the vLLM server does not download):
+#   ssh xc 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_xc.sbatch image_presence_threshold/serving_stack_stage2'
+
+num_main_job_threads: 4
+num_cluster_jobs: 2          # orchestrator + ONE vLLM server (the self-served arm).
+
+# Stage 1a = xc job 204; stage 1b = xc job 205 (both 2026-08-07).
+# Every arm verified by MEASURED image size + stored config, not by path:
+#   text    n=100, no images
+#   b1024   1024x768, 1 distinct hash   (renderer default = the published arm)
+#   bWide   1024x141, 1 distinct hash   (size-matched, no readable text)
+#   mtn     1024x141, 1 distinct hash   (size-matched, OCR-able caption)
+_text:  &text  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260807_223202_80871327/non_llm_baseline
+_b1024: &b1024 outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260807_223202_80871327/ir_blank
+_bWide: &bWide outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260807_223531_99880874/ir_blank
+_mtn:   &mtn   outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_constant_20260807_223531_31001376/ir_constant
+
+_b: &b
+  mode: defense+evaluate
+  defense: no_defense
+  prompt_range: [0, 99]
+  benchmark: jailbreakbench_benign
+  judge_method: jbb_refusal
+  judge_model: gpt-5-mini
+  campaign: paper_b_serving_stack
+
+tasks:
+  # ============ arm A — MANAGED HOST (AWS Bedrock), same weights ============
+  - {<<: *b, target_model: google.gemma-3-12b-it, source_transform_subdir: *text}
+  - {<<: *b, target_model: google.gemma-3-12b-it, source_transform_subdir: *b1024}
+  - {<<: *b, target_model: google.gemma-3-12b-it, source_transform_subdir: *bWide}
+  - {<<: *b, target_model: google.gemma-3-12b-it, source_transform_subdir: *mtn}
+
+  # ============ arm B — SELF-SERVED (our vLLM), same weights ================
+  - {<<: *b, target_model: google/gemma-3-12b-it, source_transform_subdir: *text}
+  - {<<: *b, target_model: google/gemma-3-12b-it, source_transform_subdir: *b1024}
+  - {<<: *b, target_model: google/gemma-3-12b-it, source_transform_subdir: *bWide}
+  - {<<: *b, target_model: google/gemma-3-12b-it, source_transform_subdir: *mtn}

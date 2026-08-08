@@ -34,7 +34,7 @@ from collections import defaultdict
 
 from .paper_c_stats import flags, mcnemar_exact, wilson
 
-GRID_GLOB = "outputs/presence_tax/defense+evaluate/harmbench/*"
+GRID_GLOB = "outputs/image_presence_threshold/defense+evaluate/harmbench/*"
 
 # Explicit allow-list, not a `paper_b_` prefix match: this working tree is shared
 # with concurrent sessions, and at least one other campaign
