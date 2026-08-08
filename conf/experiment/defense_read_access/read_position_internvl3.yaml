@@ -1,0 +1,79 @@
+# AS-7 · READ-POSITION ISOLATION (ECSO stage grid) — internvl3_8b
+#
+# WHY THIS EXISTS: it answers cspaper review 1, con 1 — the one experimental
+# reject barrier. That review says, correctly, that the paper's "oracle inflation
+# is ordered by read position" claim is NOT isolated: tab:readladder varies the
+# defense (gate / ECSO / SemanticSmooth), the arm (text / decoy) and the algorithm
+# all at once, so the ordering could be defense-specific behaviour rather than
+# read position. As stated, that criticism is right.
+#
+# THE ISOLATION. ECSO reads the {query} slot at THREE internal points:
+#     TELL  — the harm verdict  (this IS the defense's decision)
+#     CAP   — captioning the image (shapes the evidence the decision acts on)
+#     SAFE  — the regeneration  (shapes only the final wording)
+# Until 2026-08-08 `query_source` switched all three together. It now accepts a
+# PER-STAGE dict, so we can grant the oracle to EXACTLY ONE stage while holding
+# defense, arm, attack, target, judge and prompt set fixed. Read position is then
+# the only variable in the design. That is precisely the experiment the reviewer
+# asks for ("control the defense family and vary only which representation fills
+# a defined internal slot").
+#
+# THE ENDPOINTS ARE ALREADY MEASURED — do not re-run them. Campaign
+# `as7_protocol_grant` holds all-encoded (deployable) and all-original (oracle)
+# for these same targets, encodings, decoy anchors and judge:
+#     internvl3 code 48/12 · internvl3 formal 43/26 · pixtral code 52/29 · pixtral formal 47/35
+# This grid adds only the three single-stage conditions between them.
+#
+# PRE-REGISTERED READ-OUT (recorded BEFORE the run, per house rule):
+#   * TELL-only recovers most of the full-oracle inflation, CAP/SAFE little
+#       -> read POSITION carries it, and specifically the decision point.
+#          The paper's ordering claim becomes causal within a defense. Best case.
+#   * all three stages contribute roughly equally
+#       -> inflation is about total plaintext exposure, NOT position. The
+#          mechanism claim must be RETRACTED and replaced with an exposure claim.
+#          This is a real possible outcome and it is not a failed experiment.
+#   * SAFE-only dominates
+#       -> the effect is regeneration wording, not detection. Would substantially
+#          change the paper's story; report it as the finding.
+#   * no single stage moves anything, but all-original does
+#       -> interaction between stages; report as such, claim no ordering.
+#
+# ⚠️ INTEGRITY: `query_source: original` (bare string) still means all three
+# stages, exactly as every recorded campaign ran — verified 2026-08-08 by
+# construction test. Invalid stage names/values raise BEFORE any model call.
+#
+# COST: 6 cells x 100 prompts. Target self-served (ECSO's TELL/CAP/SAFE are all
+# target calls) = FREE. Judge only: ~600 gpt-5-mini calls, ~$0.6. An ESTIMATE.
+#
+# SUBMIT (AICR; chain — rtx-devel caps 2 GPUs TOTAL across all my jobs):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch --dependency=afterany:<job> scripts/run_experiment_aicr.sbatch \
+#       defense_read_access/read_position_internvl3'
+
+num_main_job_threads: 2
+num_cluster_jobs: 2          # orchestrator + the target server (ECSO needs no guard)
+
+_code_decoy: &code_decoy outputs/image_presence_threshold/prompt_transform/harmbench/code_attack_ir_constant_20260805_213025_3168031/ir_constant
+_form_decoy: &form_decoy outputs/image_presence_threshold/prompt_transform/harmbench/llm_formal_logic_ir_constant_20260803_064343_72332881/ir_constant
+
+_b: &b
+  mode: defense+evaluate
+  defense: ecso
+  target_model: internvl3_8b
+  prompt_range: [0, 99]
+  benchmark: harmbench
+  judge_method: harmbench
+  judge_model: gpt-5-mini
+  campaign: as7_read_position
+
+tasks:
+
+  # ---- code_attack: oracle granted to ONE stage at a time ----
+  - {<<: *b, defense_config: {query_source: {tell: original}}, source_transform_subdir: *code_decoy}
+  - {<<: *b, defense_config: {query_source: {cap: original}}, source_transform_subdir: *code_decoy}
+  - {<<: *b, defense_config: {query_source: {safe: original}}, source_transform_subdir: *code_decoy}
+
+  # ---- formal_logic: oracle granted to ONE stage at a time ----
+  - {<<: *b, defense_config: {query_source: {tell: original}}, source_transform_subdir: *form_decoy}
+  - {<<: *b, defense_config: {query_source: {cap: original}}, source_transform_subdir: *form_decoy}
+  - {<<: *b, defense_config: {query_source: {safe: original}}, source_transform_subdir: *form_decoy}

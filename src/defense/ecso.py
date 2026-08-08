@@ -105,12 +105,40 @@ class ECSO(Defense):
         # query) is what every recorded campaign ran and is ORACLE-ASSISTED
         # under the encoded-attack threat model: a deployed defender only sees
         # the encoded input. "encoded" is the threat-model-faithful arm.
-        source = self._config.get("query_source", "original")
-        if source not in ("original", "encoded"):
-            raise ValueError(f"unknown ECSO query_source {source!r}")
+        # PER-STAGE FORM (added 2026-08-08 for AS-7's read-position isolation).
+        # `query_source` may be either:
+        #   "original" | "encoded"                 -> applies to all three stages
+        #   {tell: ..., cap: ..., safe: ...}       -> per-stage, omitted keys
+        #                                             default to "encoded"
+        # Why per-stage: the whole-defense switch confounds "the defense read the
+        # plaintext" with "the defense read it AT THE POINT THAT DECIDES". TELL is
+        # the harm verdict, CAP shapes the caption, SAFE shapes the regeneration.
+        # Granting the oracle to exactly one of them, holding defense/arm/attack/
+        # target/judge fixed, varies read POSITION and nothing else.
+        STAGES = ("tell", "cap", "safe")
+        raw = self._config.get("query_source", "original")
+        if isinstance(raw, str):
+            if raw not in ("original", "encoded"):
+                raise ValueError(f"unknown ECSO query_source {raw!r}")
+            source_by_stage = {s: raw for s in STAGES}
+        elif isinstance(raw, dict):
+            unknown = set(raw) - set(STAGES)
+            if unknown:
+                raise ValueError(
+                    f"unknown ECSO query_source stage(s) {sorted(unknown)}; "
+                    f"valid stages are {STAGES}")
+            source_by_stage = {s: raw.get(s, "encoded") for s in STAGES}
+            bad = {s: v for s, v in source_by_stage.items()
+                   if v not in ("original", "encoded")}
+            if bad:
+                raise ValueError(f"unknown ECSO query_source value(s) {bad}")
+        else:
+            raise TypeError(
+                f"ECSO query_source must be a str or a per-stage dict, got {type(raw)}")
+        logger.info(f"ECSO query_source by stage: {source_by_stage}")
 
-        def _query_text(p: Prompt) -> str:
-            if source == "encoded":
+        def _query_text(p: Prompt, stage: str) -> str:
+            if source_by_stage[stage] == "encoded":
                 return p.encoded or p.original or ""
             return p.original or p.encoded or ""
 
@@ -140,7 +168,7 @@ class ECSO(Defense):
         for p in prompts:
             response = initial_by_id.get(p.id, "")[:self.TELL_RESPONSE_TRUNCATE_CHARS]
             tell_text = TELL_PROMPT_TEMPLATE.format(
-                query=_query_text(p), response=response,
+                query=_query_text(p, "tell"), response=response,
             )
             # TELL includes the image so the model has full context.
             img_messages = build_conversation_message(p, True, source_dir)
@@ -166,7 +194,7 @@ class ECSO(Defense):
         for p in prompts:
             if p.id not in unsafe_ids:
                 continue
-            cap_text = CAP_PROMPT_TEMPLATE.format(query=_query_text(p))
+            cap_text = CAP_PROMPT_TEMPLATE.format(query=_query_text(p, "cap"))
             img_messages = build_conversation_message(p, True, source_dir)
             _, img = img_messages[0]
             cap_convs.append((p.id, [(cap_text, img)]))
@@ -184,7 +212,7 @@ class ECSO(Defense):
                 continue
             caption = caption_by_id.get(p.id, "")
             safe_text = SAFE_PROMPT_TEMPLATE.format(
-                caption=caption, query=_query_text(p),
+                caption=caption, query=_query_text(p, "safe"),
             )
             # No image this round — eyes closed.
             safe_convs.append((p.id, [(safe_text, None)]))
