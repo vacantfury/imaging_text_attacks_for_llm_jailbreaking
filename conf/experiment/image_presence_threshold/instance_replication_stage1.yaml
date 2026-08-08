@@ -1,0 +1,138 @@
+# Paper B (AS-2) · IMAGE-INSTANCE REPLICATION — STAGE 1 (render only, $0, no GPU)
+#
+# WHY. The most-requested experiment across BOTH cspaper rounds (R1 con 6, R2
+# con 2 + Q2): every property level in `tab:imgprops` is ONE rendered file, so
+# the paired design gives high power for THOSE EXACT FILES and none for the
+# property CLASS. R2 puts it directly: "the observed black-versus-white or
+# caption-versus-blank effects could be idiosyncratic to the particular rendered
+# files, renderer behavior, or model preprocessing." The paper's open-checkpoint
+# claim -- image SIZE is the carrying axis on `qwen3-vl-8b` (256^2 vs 1536^2,
+# p=0.0004) while colour and JPEG quality are inert -- is exactly the kind of
+# claim that objection targets.
+#
+# DESIGN: a 4x3 factorial, size x fill, one arm per cell.
+#   sizes  256^2 / 512^2 / 1024^2 / 1536^2      (the axis under test)
+#   fills  #FFFFFF / #808080 / #000000          (three independent instances)
+# Reading it BOTH ways is the point and costs nothing extra:
+#   * DOWN a fill column -> does the size trend hold for white, for grey, AND
+#     for black? If yes, the axis is size, not one particular file.
+#   * ACROSS a size row -> is colour really inert, replicated at four sizes
+#     instead of asserted from one?
+# Two claims replicated by one grid. Four size levels rather than the paper's
+# two also turns "256 differs from 1536" into a shape (monotone or not).
+#
+# ⚠️ WHY WE DO NOT RANDOMIZE IMAGES ACROSS PROMPTS, though R2 Q2 asks for it.
+# Byte-identity WITHIN an arm is load-bearing for this paper's core claim: an
+# image that does not vary across prompts cannot carry per-prompt information,
+# which is what licenses "the cue carries no information about the request".
+# Randomizing files across prompts would destroy that control to answer a
+# narrower question. Instead every arm stays byte-identical internally and the
+# INSTANCE varies BETWEEN arms -- which estimates the same between-image
+# variance the reviewer wants, without giving up the design's main virtue.
+# State this reasoning in the rebuttal; it is a deliberate deviation, not an
+# oversight.
+#
+# ⚠️ HONEST SCOPE. A pure-white 512x512 PNG is unique -- there is no second
+# "independent draw" of it. So fills are the instance dimension, and they are a
+# legitimate one PRECISELY BECAUSE the paper claims colour is inert on this
+# checkpoint: if that claim holds, the three fills are interchangeable members
+# of "a content-free image of size S". If it fails, that is itself a finding and
+# the size reading has to be re-examined. Do not describe this as "N independent
+# renders per level"; describe it as what it is.
+#
+# ⚠️ ARM IDENTITY IS THE STORED CONFIG, NEVER THE PATH. All twelve tasks end in
+# a step called `ir_blank`, so every dir is `<...>_ir_blank_<ts>_<rand>/ir_blank`
+# and they are distinguishable ONLY by timestamp+rand. Read
+# `results_history[*].ir_blank.config` (width/height/bg_color). Reading the arm
+# from the last path component is the substring bug that has bitten this paper
+# three times.
+#
+# ⚠️ `params:` NESTING IS MANDATORY. Renderer arguments written as siblings of
+# `type:` were silently DROPPED until 2026-08-07 (that is how a presence-control
+# arm rendered the default rabbit and went into the paper mislabelled for a day).
+# TransformationSpec now sets extra="forbid", so a mistake fails loudly.
+#
+# THE TEXT CHANNEL IS REUSED, NOT REGENERATED -- the same canonical
+# `non_llm_baseline` dir the ladder, the presence controls and the property
+# sweep all chain off, verified present on AICR before writing this file. That
+# is what lets these arms sit in the same table as the existing rows instead of
+# forming a separate island.
+#
+# COST: $0. Every arm is a non-LLM renderer driven by fixed params off a fixed
+# text dir -- no model call, nothing nondeterministic, NO GPU. Stage 2 (the
+# qwen3-vl queries + judge) is a separate preset, written from the manifest this
+# job prints.
+#
+# SUBMIT (AICR — needs no GPU; runs on the cpu partition):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch image_presence_threshold/instance_replication_stage1'
+#
+# THEN: read the twelve dirs + their configs out of the run, and write
+# `instance_replication_stage2.yaml` against them. Do NOT guess the paths.
+
+num_main_job_threads: 4
+num_cluster_jobs: 1          # renders only — no vLLM server, no GPU.
+
+_source: &src outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/non_llm_baseline
+
+_base: &base
+  mode: prompt_transform
+  source_transform_subdir: *src
+  benchmark: jailbreakbench_benign
+  prompt_range: [0, 99]
+  campaign: paper_b_instance_replication
+
+tasks:
+  # ---- fill #FFFFFF (white) across the size axis ---------------------------
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 256, height: 256, bg_color: "#FFFFFF", keep_text: true}
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 512, height: 512, bg_color: "#FFFFFF", keep_text: true}
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 1024, height: 1024, bg_color: "#FFFFFF", keep_text: true}
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 1536, height: 1536, bg_color: "#FFFFFF", keep_text: true}
+
+  # ---- fill #808080 (mid-grey) across the size axis ------------------------
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 256, height: 256, bg_color: "#808080", keep_text: true}
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 512, height: 512, bg_color: "#808080", keep_text: true}
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 1024, height: 1024, bg_color: "#808080", keep_text: true}
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 1536, height: 1536, bg_color: "#808080", keep_text: true}
+
+  # ---- fill #000000 (black) across the size axis ---------------------------
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 256, height: 256, bg_color: "#000000", keep_text: true}
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 512, height: 512, bg_color: "#000000", keep_text: true}
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 1024, height: 1024, bg_color: "#000000", keep_text: true}
+  - <<: *base
+    transformation_list:
+      - type: ir_blank
+        params: {width: 1536, height: 1536, bg_color: "#000000", keep_text: true}
