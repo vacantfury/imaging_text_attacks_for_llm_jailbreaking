@@ -34,6 +34,7 @@ import argparse
 import glob
 import json
 import os
+import re
 from math import comb
 
 # ---------------------------------------------------------------------------
@@ -302,7 +303,11 @@ def verify(numbers: dict, tex_path: str) -> list[str]:
         asr = f"{c['asr']:.0f}"
         tag = (f"{c['campaign']}/{c['target']}/{c['defense']}/{c['guard']}"
                f"/{c['encoding']}/{c['arm']}/qs={c['query_source']}")
-        if f"${asr}$" not in tex and f"{{{asr}}}" not in tex:
+        # Token match, not literal `$39$`: the tables legitimately format values
+        # as `$57|50$`, `$\mathbf{9}$`, `$+4$`. The guard's job is to catch a
+        # measured value that CHANGED and was never carried into the paper, so
+        # "does this number appear as a number anywhere" is the right strength.
+        if not re.search(rf"(?<![0-9.]){re.escape(asr)}(?![0-9.])", tex):
             missing.append(f"ASR {asr} absent from tex -- {tag}")
         # Block rates are PRINTED only by the channel-coverage tables; the
         # protocol-grant tables report ASR. Checking block rates there would
