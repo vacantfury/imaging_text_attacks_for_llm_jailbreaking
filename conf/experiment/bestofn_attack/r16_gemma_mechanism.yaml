@@ -1,3 +1,12 @@
+# ⛔ HISTORICAL — DO NOT SUBMIT. Superseded 2026-08-08 by the three chained presets
+#    r16a_gemma_control_and_sage / r16b_gemma_selfscreen / r16c_gemma_separate_screeners.
+#    This version ran as xc job 222 and was CANCELLED 1h in: the sizing below is WRONG by
+#    ~18x. It projected ~900 responses/min/replica from qwen-7B; gemma-2-9B measures ~650
+#    generation tokens/s per A100 replica = ~49 responses/min, putting all ten cells at
+#    20-25h against a 24h wall. Nothing was lost (no cell had completed), but nothing was
+#    gained either. Kept for the record — the corrected throughput lives in
+#    conf/llm/gemma2_9b_it.yaml, and the split rationale in r16a's header.
+#
 # bestofn_attack AS-4 — ROUND 16: REBUILD THE MECHANISM PANEL ON GEMMA-2-9B (all 10 cells).
 #
 # OWNER-ORDERED (standing): "we just keep running bug-substitute experiments." Free — every

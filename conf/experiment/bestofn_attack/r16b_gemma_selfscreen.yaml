@@ -1,0 +1,41 @@
+# bestofn_attack AS-4 — ROUND 16b: GEMMA-2-9B, the llm_self_defense arm.
+#
+# Second of the three chained R16 jobs. Read `r16a_gemma_control_and_sage.yaml` for the full
+# rationale: why R16 is split (gemma sustains ~49 responses/min/replica, ~18x slower than the
+# qwen-based projection that killed job 222), what R15 settled, and the chain command.
+#
+# ── WHY THIS ARM GETS A JOB TO ITSELF ───────────────────────────────────────
+# llm_self_defense costs **2 target calls per draw** (generate, then screen the response), so
+# these 2 cells are 40,000 target calls — the same work as 16a's or 16c's four cells. Bundling
+# it with either of them would have produced a job ~50% over the others and back into wall
+# risk. Its longest single cell is 20,000 calls on one bound replica ≈ 6.8h at the measured
+# rate; the wall is 24h.
+#
+# ── WHY THIS IS THE ARM THAT MATTERS MOST ───────────────────────────────────
+# This is the cell the whole taxonomy now turns on. llm_self_defense screens with the TARGET
+# (`filter_model: null`), so its verdict is a SAMPLE and the two-tier claim predicts it should
+# collapse like SAGE. On llama it half-did (2.6x vs sage's 4.4x at T=0.0); on qwen it did NOT
+# — +6% to +14% net of control across every N from 5 to 100, indistinguishable from the
+# separate/greedy screeners, while sage sat at +57% to +82%. Gemma breaks the tie:
+#   * large collapse here  -> qwen is the outlier, the sample-vs-fixed taxonomy may stand;
+#   * small collapse here  -> the taxonomy is dead on two of three targets and the paper's
+#                             claim narrows to "SAGE-style re-query defenses leak", which is
+#                             a smaller but honest and still novel result.
+# ⚠️ Score it NET OF 16a's control, at matched N. Do not compare a raw drop here against a
+# raw drop in another round — the control differs per target.
+num_main_job_threads: 2      # only 2 cells; a 3rd thread would idle on acquire_endpoint
+num_cluster_jobs: 5          # 4 servers (gemma x3 + wildguard) + orchestrator
+
+_e: &e
+  mode: defense+evaluate
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  target_model: gemma2_9b_it
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r16_gemma_mechanism
+
+tasks:
+  # ---- STOCHASTIC VERDICT (screens with the TARGET) -> taxonomy predicts COLLAPSE at T=0 ----
+  - {<<: *e, defense: llm_self_defense, target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: llm_self_defense, target_model_config: {temperature: 0.0, max_concurrency: 64}}

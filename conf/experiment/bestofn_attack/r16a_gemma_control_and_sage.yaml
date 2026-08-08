@@ -1,0 +1,79 @@
+# bestofn_attack AS-4 — ROUND 16a: GEMMA-2-9B, the CONTROL + SAGE arms.
+#
+# OWNER-ORDERED (standing): "we just keep running bug-substitute experiments." Free.
+#
+# ── WHY R16 IS NOW THREE JOBS INSTEAD OF ONE ────────────────────────────────
+# The single-preset version (`r16_gemma_mechanism.yaml`, xc job 222) was CANCELLED 1h in.
+# Its header sized the round at ~900 responses/min/replica by analogy with qwen-7B; gemma-2-9B
+# actually sustains ~650 generation tokens/s per A100 replica = **~49 responses/min** at its
+# ~800-token median. That is ~18x slower, and it put all ten cells at 20-25h against a 24h
+# wall — a coin flip on losing the round the way R14a was lost. Measured, not estimated:
+# `Running: 64, Waiting: 0` with GPU KV usage 73-85%, i.e. the GPU is genuinely loaded and
+# raising max_concurrency would NOT have helped (contrast R14a, where it was the fix).
+# Full record → conf/llm/gemma2_9b_it.yaml (MEASURED THROUGHPUT block) and experiment_results.md.
+#
+# Splitting is the fix that does not cost data: three jobs of ~40,000 target calls each, run
+# back-to-back via `--dependency=afterany`, so no single job depends on a throughput estimate
+# being right. Budget per job at 3 replicas: 40,000 / (3 x 49/min) ≈ 4.5h, and even if the
+# measured rate is 2x optimistic it is ~9h — against a 24h wall either way.
+#   16a = no_defense (control) + sage      <- THIS FILE, 4 cells
+#   16b = llm_self_defense                 <- 2 cells but 2 target calls/draw, so equal work
+#   16c = selfdefend + guard_baseline      <- 4 cells, needs the two extra screener models
+# ⚠️ All three MUST share judge, encoder and draw count or the cross-defense contrast is
+# illegal. They do: same transform dir, same wildguard judge, same 10,000 draws. Never
+# change one without the other two.
+#
+# ── WHY THE CONTROL IS IN THE *SAME* JOB AS SAGE ────────────────────────────
+# Every collapse in this round is read NET OF the no_defense control, so the control is not
+# optional bookkeeping — without it a sage collapse cannot be separated from plain
+# answer-sampling. Pairing them in one job means the headline contrast survives even if 16b
+# or 16c never runs.
+#
+# ── WHAT R15 CHANGED ABOUT WHAT THIS ROUND IS FOR ───────────────────────────
+# R15 (qwen) + its gpt-5-mini rejudge + a best-of-N sweep over the same rows settled that:
+#   * SAGE collapses enormously (+57% to +82% net of control at every N from 5 to 100), and
+#   * llm_self_defense — target-screened and stochastic, so the taxonomy predicts it should
+#     behave like SAGE — collapses only +6% to +14%, i.e. like the SEPARATE/GREEDY screeners.
+# So the two-tier "a defense leaks iff its verdict is a SAMPLE" claim did NOT replicate on a
+# second target; what replicated is "SAGE is special". This round asks whether that narrower
+# claim holds on a THIRD target. A gemma result where sage is huge and llm_self_defense is
+# small confirms the narrowed claim; a gemma result where BOTH are large would say qwen is
+# the odd one out and the taxonomy may yet stand. Either way it is reportable.
+# ⚠️ Do NOT re-derive the qwen ceiling worry here. The relevant number is the CONTROL: read
+# no_defense first, and if it saturates at N=100, use the best-of-N curve (any N <= 100 is
+# already inside these 10,000 rows) rather than commissioning a different judge.
+#
+# ── WHERE: xc (idle, 8x A100, 24h wall). Chain 16a -> 16b -> 16c. ───────────
+#   ssh xc; cd ~/projects/llm_guardrail_security
+#   A=$(sbatch --parsable scripts/run_experiment_xc.sbatch bestofn_attack/r16a_gemma_control_and_sage)
+#   B=$(sbatch --parsable --dependency=afterany:$A scripts/run_experiment_xc.sbatch bestofn_attack/r16b_gemma_selfscreen)
+#   sbatch --dependency=afterany:$B scripts/run_experiment_xc.sbatch bestofn_attack/r16c_gemma_separate_screeners
+# NURC is unwritable (per-user quota exhausted); AICR is holding the AS-3 grid + a sibling's
+# GPU servers. Source transform verified present on xc — a defense+evaluate reads it from
+# LOCAL disk.
+#
+# ── JUDGE ───────────────────────────────────────────────────────────────────
+# wildguard on-cluster (FREE). ⚠️ NOT reportable on this code-bearing arm (over-flags code
+# 41-68%). A gpt-5-mini rejudge is a cheap separate step and its own ask. Note what R15's
+# rejudge taught: the ENSEMBLE barely moved under the better judge (98->98, 12->17) while
+# PER-DRAW ASR fell hard (67.3 -> 51.8) — so wildguard ensembles are usable for SHAPE here,
+# and it is the per-draw and amplification numbers that must wait for the rejudge.
+num_main_job_threads: 3      # = gemma replica count
+num_cluster_jobs: 5          # 4 servers (gemma x3 + wildguard) + orchestrator
+
+_e: &e
+  mode: defense+evaluate
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  target_model: gemma2_9b_it
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r16_gemma_mechanism
+
+tasks:
+  # ---- CONTROL: no verdict at all — isolates answer-sampling from verdict-sampling ----
+  - {<<: *e, defense: no_defense, target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: no_defense, target_model_config: {temperature: 0.0, max_concurrency: 64}}
+  # ---- THE ARM THAT REPLICATED ON TWO TARGETS: predict a LARGE collapse at T=0 ----
+  - {<<: *e, defense: sage, target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: sage, target_model_config: {temperature: 0.0, max_concurrency: 64}}

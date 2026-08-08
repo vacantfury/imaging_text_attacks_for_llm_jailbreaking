@@ -41,4 +41,19 @@ cluster:
   # to 19.3h and its longest single cell is 9.7h, so makespan is 9.7h at BOTH 2 and 4
   # replicas (per-cell balancing means the longest cell is the floor) — the 2 freed slots
   # go to Qwen, whose 45.4h total genuinely needs 3. Raise again if Gemma runs alone.
-  num_instances: 2
+  #
+  # 🔴 MEASURED THROUGHPUT, 2026-08-08 — DO NOT SIZE A GEMMA ROUND OFF QWEN'S RATE.
+  # R16's first attempt (xc job 222) was sized at ~900 responses/min/replica by analogy with
+  # qwen-7B and had to be cancelled 1h in: gemma-2-9B sustains only ~650 generation tokens/s
+  # per A100 replica at concurrency 64 — about **49 responses/min** at its ~800-token median,
+  # roughly 18x slower than the projection. The tell was `Running: 64, Waiting: 0` with GPU KV
+  # usage at 73-85%: unlike the R14a case, that is NOT a client-side throttle, the GPU is
+  # genuinely loaded, so raising max_concurrency does NOT help. Gemma-2 is architecturally
+  # slow in vLLM (sliding-window attention + logit softcapping + a 256k vocab making sampling
+  # expensive). Budget ~3.4h per 10,000-call cell per replica and split rounds accordingly.
+  #
+  # 3 (was 2) as of 2026-08-08: xc's budget of 6 fits gemma x3 plus the three screener/judge
+  # models (3+1+1+1 = 6, not > 6, so the floor-division allocator does not fire). On NURC's
+  # cap of 4 that same preset collapses every model to ONE replica — check the host's budget
+  # against the model count before assuming this number is live.
+  num_instances: 3

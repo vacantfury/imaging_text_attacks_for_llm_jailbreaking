@@ -1,0 +1,49 @@
+# bestofn_attack AS-4 — ROUND 16c: GEMMA-2-9B, the SEPARATE-SCREENER arms.
+#
+# Third of the three chained R16 jobs. Read `r16a_gemma_control_and_sage.yaml` for the full
+# rationale: why R16 is split (gemma sustains ~49 responses/min/replica, ~18x slower than the
+# qwen-based projection that killed job 222), what R15 settled, and the chain command.
+#
+# ── WHY THESE TWO SHARE A JOB, AND WHY IT IS LAST ───────────────────────────
+# Each needs its own THIRD served model:
+#   selfdefend      -> shadow_model: llama3_8b_cluster   (SEPARATE, GREEDY screener)
+#   guard_baseline  -> guard_model:  llama_guard_3_8b    (SEPARATE, GREEDY classifier)
+# So this job serves FOUR models — gemma x3 + shadow + guard + wildguard = **6 servers**,
+# exactly xc's budget. 6 is NOT > 6, so the floor-division allocator does not fire and gemma
+# keeps all three replicas. It runs LAST because it is the only one of the three that needs
+# the full budget: if the chain is interrupted, the two jobs that already ran are the ones
+# carrying the control and the decisive arms.
+# ⚠️ On NURC (cap 4) this preset silently collapses every model to ONE replica (4//4 = 1).
+# Do not run it there — and NURC is unwritable anyway until its quota clears.
+#
+# ── PREDICTION, AND WHY IT IS WEAKER THAN IT LOOKS ──────────────────────────
+# Both screeners are separate from the target and greedy (created via LLMServiceFactory
+# .create() with no override, so both inherit conf/llm/default.yaml temperature 0.0), so the
+# taxonomy predicts ~NO collapse from T=1.0 to T=0.0 beyond the control's.
+# ⚠️ Honest caveat carried from R15: on qwen these two arms sat near the FLOOR (ensembles of
+# 20/100 and 9/100), and a relative drop computed on a denominator that small is unstable —
+# guard_baseline's net-of-control reading swung +47%, +19%, +27%, +21%, -1%, +10% across
+# N = 2..100 with no monotone trend. That is noise, not structure. So a "null" here is only
+# weak evidence for the taxonomy, and a large swing is likewise not strong evidence against
+# it. Report these arms with their denominators visible, never as a bare percentage.
+num_main_job_threads: 3      # = gemma replica count
+num_cluster_jobs: 7          # 6 servers (gemma x3 + shadow + guard + wildguard) + orchestrator
+
+_e: &e
+  mode: defense+evaluate
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  target_model: gemma2_9b_it
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r16_gemma_mechanism
+
+tasks:
+  # ---- SEPARATE + GREEDY shadow -> predict NULL at T=0 ----
+  - {<<: *e, defense: selfdefend, target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: selfdefend, target_model_config: {temperature: 0.0, max_concurrency: 64}}
+  # ---- SEPARATE + GREEDY classifier gate -> predict NULL at T=0 ----
+  - {<<: *e, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b},
+     target_model_config: {temperature: 1.0, max_concurrency: 64}}
+  - {<<: *e, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b},
+     target_model_config: {temperature: 0.0, max_concurrency: 64}}
