@@ -1,0 +1,56 @@
+# AS-7 · PROTOCOL GRANT — ORACLE vs DEPLOYABLE ACROSS DEFENSE FAMILIES.
+# Target: pixtral_12b. THE FULL DESIGN RATIONALE, per-family oracle table,
+# pre-registered read-outs, pairing verification, and cost math live in the
+# sibling preset protocol_grant_internvl3.yaml — identical design, other
+# dissociation-control target. Read that header before editing this file;
+# any design change must land in BOTH files.
+#
+# COST (this preset): judge gpt-5-mini 16×100 ≈ $1.5–2 + SS internals ≈ $0.6;
+# GPU free. ESTIMATE, not a quote.
+#
+# SUBMIT (AICR; verify the four source dirs exist there first):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch defense_read_access/protocol_grant_pixtral'
+
+num_main_job_threads: 4
+num_cluster_jobs: 3          # orchestrator + target + wildguard (1 replica each)
+
+# Canonical chains — same anchors as ecso_deployable_grid.yaml (AICR 312607).
+_code_text:  &code_text  outputs/image_presence_threshold/prompt_transform/harmbench/code_attack_ir_constant_20260805_213025_3168031/code_attack
+_code_decoy: &code_decoy outputs/image_presence_threshold/prompt_transform/harmbench/code_attack_ir_constant_20260805_213025_3168031/ir_constant
+_form_text:  &form_text  backup_files/arr_may_submission_files/outputs/prompt_transform/harmbench/formal_logic_ir_plain_20260525_010219_56487445/llm_formal_logic
+_form_decoy: &form_decoy outputs/image_presence_threshold/prompt_transform/harmbench/llm_formal_logic_ir_constant_20260803_064343_72332881/ir_constant
+
+_b: &b
+  mode: defense+evaluate
+  target_model: pixtral_12b
+  prompt_range: [0, 99]
+  benchmark: harmbench
+  judge_method: harmbench
+  judge_model: gpt-5-mini
+  campaign: as7_protocol_grant
+
+tasks:
+  # ---- shared denominators --------------------------------------------------
+  - {<<: *b, defense: no_defense, source_transform_subdir: *code_text}
+  - {<<: *b, defense: no_defense, source_transform_subdir: *form_text}
+  - {<<: *b, defense: no_defense, source_transform_subdir: *code_decoy}
+  - {<<: *b, defense: no_defense, source_transform_subdir: *form_decoy}
+
+  # ---- family: semantic_smooth (text arms; leak = vote-selection only) ------
+  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: original}, source_transform_subdir: *code_text}
+  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: encoded},  source_transform_subdir: *code_text}
+  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: original}, source_transform_subdir: *form_text}
+  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: encoded},  source_transform_subdir: *form_text}
+
+  # ---- family: guard gate, wildguard (text arms; oracle read is NEW) --------
+  - {<<: *b, defense: guard_baseline, defense_config: {guard_model: wildguard, query_source: original}, source_transform_subdir: *code_text}
+  - {<<: *b, defense: guard_baseline, defense_config: {guard_model: wildguard, query_source: encoded},  source_transform_subdir: *code_text}
+  - {<<: *b, defense: guard_baseline, defense_config: {guard_model: wildguard, query_source: original}, source_transform_subdir: *form_text}
+  - {<<: *b, defense: guard_baseline, defense_config: {guard_model: wildguard, query_source: encoded},  source_transform_subdir: *form_text}
+
+  # ---- family: ecso (decoy arms; text arm = the no_defense text cell) -------
+  - {<<: *b, defense: ecso, defense_config: {query_source: original}, source_transform_subdir: *code_decoy}
+  - {<<: *b, defense: ecso, defense_config: {query_source: encoded},  source_transform_subdir: *code_decoy}
+  - {<<: *b, defense: ecso, defense_config: {query_source: original}, source_transform_subdir: *form_decoy}
+  - {<<: *b, defense: ecso, defense_config: {query_source: encoded},  source_transform_subdir: *form_decoy}

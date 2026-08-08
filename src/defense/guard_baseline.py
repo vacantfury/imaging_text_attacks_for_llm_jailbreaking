@@ -18,6 +18,20 @@ Mechanism, per prompt:
      SAFE   -> query the TARGET with the ORIGINAL input (build_conversation_
        message), return its response.
 
+`query_source` (defense_config) — which text the GUARD classifies:
+  encoded  — the defender-visible input (threat-model-faithful). DEFAULT,
+    and the only behavior that existed before 2026-08-08: every recorded
+    guard_baseline campaign ran it, so the default preserves the meaning of
+    every archived cell (note this is the OPPOSITE default to ecso.yaml /
+    semantic_smooth.yaml, whose recorded campaigns all ran the oracle).
+  original — the dataset's UNENCODED harmful request, as pure text with NO
+    image (the unencoded request has no image channel). This is the ORACLE
+    arm for the AS-7 protocol-grant experiment: an evaluation that hands the
+    gate the plaintext the attacker had hidden. A deployed gate facing an
+    encoded attack does not possess this text.
+Either way the TARGET, on a SAFE verdict, receives the attacker's input
+unchanged — the arms differ only in what the defense reads.
+
 Same lazy-second-model pattern as SemanticSmooth (see semantic_smooth.py).
 """
 from pathlib import Path
@@ -69,10 +83,22 @@ class GuardBaseline(Defense):
         guard_service = self._get_guard_service()
         guard_is_text_only = self._guard_model in TEXT_ONLY_GUARDS
 
+        # Oracle vs deployable arm — see module docstring. Default "encoded"
+        # preserves every recorded campaign's behavior.
+        query_source = self._config.get("query_source", "encoded")
+        if query_source not in ("original", "encoded"):
+            raise ValueError(
+                f"unknown guard_baseline query_source {query_source!r} "
+                "(expected 'original' or 'encoded')")
+
         # ---------- Step 1: guard verdict on the RAW input ----------
         guard_items: list[tuple[str, str, object]] = []
         for p in prompts:
-            if guard_is_text_only:
+            if query_source == "original":
+                # Oracle: the guard reads the unencoded request (pure text,
+                # no image — the unencoded request has no image channel).
+                guard_items.append((p.id, p.original or p.encoded or "", None))
+            elif guard_is_text_only:
                 guard_items.append((p.id, p.encoded or "", None))
             else:
                 messages = build_conversation_message(p, is_multimodal, source_dir)
@@ -82,7 +108,7 @@ class GuardBaseline(Defense):
         logger.info(
             f"GuardBaseline: {len(guard_items)} raw-input verdicts via "
             f"{self._guard_model_name} (text_only={guard_is_text_only}, "
-            f"is_multimodal={is_multimodal})")
+            f"is_multimodal={is_multimodal}, query_source={query_source})")
         verdicts = query_guard(
             guard_service, self._guard_model, guard_items, is_test=True)
 
