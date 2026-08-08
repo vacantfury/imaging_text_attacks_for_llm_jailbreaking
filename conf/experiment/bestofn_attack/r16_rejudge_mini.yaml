@@ -19,10 +19,16 @@
 # block rates specifically must be gpt-5-mini numbers.
 #
 # ── THE CELLS: temperature is NOT recoverable from the directory name ───────
-# results.json still does not persist target_model_config (TODO item 12 — the bug that cost
-# two verifications on 2026-08-08 alone). Every mapping below was resolved from MLflow params
-# `target_model_config.temperature` ON XC, the cluster that ran R16, BEFORE the cells were
-# streamed here. Do not re-derive from directory order; save order is FINISH order.
+# ✅ CORRECTION 2026-08-08: an earlier version of this header (and of r14b/r15's) claimed
+# "results.json does not persist target_model_config". THAT IS FALSE for defense+evaluate —
+# every such results.json carries the full target_model_config including `temperature`. Read
+# it straight from the SOURCE cell; no MLflow, no directory-order guessing.
+# The real gap was narrow and is now FIXED: REJUDGE results.json did not inherit the field
+# (a rejudge never queries the target), so temperature was only reachable by resolving
+# upstream_ref. `RejudgeResult` now carries target_model_config + defense_config verbatim
+# from the source, so rejudge dirs written from here on are self-describing.
+# The mapping below is from the source cells' own results.json. Save order is FINISH order —
+# never infer temperature from directory order.
 #
 #   defense           T      dir suffix    wildguard asr%   wildguard ensemble
 #   no_defense        1.0    _19478330        63.10            94/100   <- control

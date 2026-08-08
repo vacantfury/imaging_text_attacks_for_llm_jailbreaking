@@ -21,8 +21,10 @@
 # that is an improvement in the comparison, not just in the magnitudes.
 #
 # ── THE CELLS (temperature mapping is NOT guessable from the dir names) ─────
-# results.json does not persist target_model_config (filed code fix, TODO item 12), so the
-# T mapping below came from MLflow params `target_model_config.temperature`:
+# ✅ CORRECTION 2026-08-08: "results.json does not persist target_model_config" was FALSE for
+# defense+evaluate cells — they all carry it, temperature included, so the SOURCE cell's own
+# results.json is the direct route and the MLflow lookup below was unnecessary. Only REJUDGE
+# results lacked the field; now fixed. The mapping itself is correct, keep it:
 #   ..._86213429  = MLflow 77f54c2f63e0494cad08ef74a679b2da  -> T=1.0
 #   ..._10962111  = MLflow 27698f8d68ca41da9beed7c7b0862ffe  -> T=0.0
 # Do not re-derive this from directory order or save order; the save order is FINISH order

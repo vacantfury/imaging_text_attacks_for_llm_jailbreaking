@@ -114,6 +114,12 @@ def _run_rejudge(task) -> dict[str, Any]:
         campaign=task.campaign or source.get("campaign"),
         target_model=target_model,
         defense=defense,
+        # Carry the source run's target/defense config so a rejudge dir is self-describing.
+        # Without these, temperature and guard_model are only recoverable by resolving
+        # upstream_ref and reading the source cell (or, worse, MLflow on whichever cluster
+        # happened to run it — the params are not replicated across clusters).
+        target_model_config=source.get("target_model_config"),
+        defense_config=source.get("defense_config") or {},
         is_multimodal=bool(source.get("is_multimodal", False)),
         benchmark=benchmark,
         encoding=encoding,

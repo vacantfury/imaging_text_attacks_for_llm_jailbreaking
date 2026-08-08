@@ -32,10 +32,11 @@
 # The extremes (sage, selfdefend) are NOT at risk from the ceiling and stand either way.
 #
 # ── THE CELLS: TEMPERATURE IS NOT RECOVERABLE FROM THE DIRECTORY NAME ───────
-# results.json still does not persist target_model_config (filed code fix, TODO item 12),
-# and save order is FINISH order, not task order. Every mapping below was resolved from
-# MLflow params `target_model_config.temperature` on the cluster that RAN the cell (R15a on
-# NURC, R15b on xc) BEFORE the cells were moved here. Do not re-derive it from dir order.
+# ✅ CORRECTION 2026-08-08: "results.json does not persist target_model_config" was FALSE for
+# defense+evaluate cells — every one carries it, temperature included. Read the SOURCE cell's
+# results.json directly; the MLflow route these mappings came from was never necessary. Only
+# REJUDGE results lacked the field, and that is now fixed (RejudgeResult inherits it).
+# Save order is FINISH order, not task order — never infer temperature from dir order.
 # wildguard ensemble (behaviours broken / 100) shown so the rejudge can be read as a delta:
 #
 #   defense           T      dir suffix   wildguard asr%   wildguard ensemble

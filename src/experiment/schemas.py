@@ -340,6 +340,13 @@ class RejudgeResult(BaseModel):
     # carried through from the source result so downstream tables/joins keep working
     target_model: Optional[str] = None
     defense: Optional[str] = None
+    # Inherited verbatim from the source cell. A rejudge never queries the target, so these
+    # describe the run that PRODUCED the responses, not this one. They are carried because a
+    # rejudge dir is otherwise unable to answer "at what temperature / against which guard?" —
+    # which made temperature unrecoverable without walking upstream_ref and reading MLflow
+    # (cost two separate verifications on 2026-08-08). Optional so old dirs still parse.
+    target_model_config: Optional[dict] = None
+    defense_config: dict = Field(default_factory=dict)
     is_multimodal: bool = False
     benchmark: Optional[str] = None
     encoding: Optional[str] = None
