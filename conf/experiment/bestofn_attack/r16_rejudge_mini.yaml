@@ -1,0 +1,100 @@
+# bestofn_attack AS-4 — R16 REJUDGE: put the gemma panel on the reportable judge.
+#
+# OWNER-APPROVED 2026-08-08 ("go") at ~$22.5.
+#
+# ── WHY THIS IS NOW LOAD-BEARING, NOT COSMETIC ──────────────────────────────
+# Under the reframe settled 2026-08-08 (determinism-not-accuracy; see experiment_results.md),
+# the paper's headline table is the per-draw-block-rate vs behaviours-lost inversion:
+#
+#   target   sage block/draw   sage lost   gate block/draw   gate lost
+#   llama         96.21%         76/100        95.01%          55/100     (gpt-5-mini)
+#   qwen          98.95%         17/100        97.54%           9/100     (gpt-5-mini)
+#   gemma         99.80%         14/100        94.49%          10/100     (WILDGUARD)  <- this
+#
+# gemma is the only row still on wildguard. A reviewer's first question about a three-row
+# table is whether the rows are comparable, and a code-bearing arm scored by an input-guard
+# is exactly the objection we cannot answer with "the shapes are robust". This rejudge closes
+# it. It is not expected to change the finding — R15 showed ensembles move <=5 points under
+# rejudge while per-draw moves ~15 — but per-draw IS the x-axis of the inversion, so gemma's
+# block rates specifically must be gpt-5-mini numbers.
+#
+# ── THE CELLS: temperature is NOT recoverable from the directory name ───────
+# results.json still does not persist target_model_config (TODO item 12 — the bug that cost
+# two verifications on 2026-08-08 alone). Every mapping below was resolved from MLflow params
+# `target_model_config.temperature` ON XC, the cluster that ran R16, BEFORE the cells were
+# streamed here. Do not re-derive from directory order; save order is FINISH order.
+#
+#   defense           T      dir suffix    wildguard asr%   wildguard ensemble
+#   no_defense        1.0    _19478330        63.10            94/100   <- control
+#   no_defense        0.0    _276903          59.94            67/100
+#   sage              1.0    _34186336         0.20            14/100
+#   sage              0.0    _72356370         0.00             0/100
+#   llm_self_defense  1.0    _82358473        13.85            59/100
+#   llm_self_defense  0.0    _12517608        15.34            26/100
+#   selfdefend        1.0    _20901179        14.75            20/100
+#   selfdefend        0.0    _52840960        14.06            19/100
+#   guard_baseline    1.0    _33607088         5.51            10/100
+#   guard_baseline    0.0    _79855148         5.30             7/100
+#
+# ⚠️ Note the control's signature, and check it survives the rejudge: per-draw asr is HIGHER
+# at T=0.0 (59.94 vs 63.10 is the exception here — gemma runs the other way from qwen) while
+# the ENSEMBLE is much lower (67 vs 94). The ensemble collapse is the quantity that matters.
+#
+# ── WHERE: AICR, `--partition=cpu` (zero GPU quota) ─────────────────────────
+# All 10 cells were streamed xc -> AICR and verified before submission (a rejudge reads
+# `responses_from` from LOCAL disk). xc cannot run this at all: its routing policy bars
+# non-Bedrock API models, and gpt-5-mini is OpenAI-only. NURC is still recovering from the
+# per-user quota exhaustion. AICR's orchestrator runs on the cpu partition, so this consumes
+# no GPU slot from the AS-3 grid or any sibling session.
+#
+#   ssh aicr; cd ~/projects/llm_guardrail_security
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r16_rejudge_mini
+#
+# ── FOOTPRINT ───────────────────────────────────────────────────────────────
+# 10 cells x 10,000 draws = 100,000 judge calls ≈ $22.50 at the measured realtime rate
+# ($4.50 / 20,000). May come in near half if llm_utils v5 auto-routes to the OpenAI Batch API
+# (each cell's ~$2.25 estimate clears the $1 threshold) — the R15 run of identical size
+# finished in 47 min, which is consistent with realtime, so budget the full figure.
+# ⚠️ `usage` is null in rejudge results.json, so actual spend is NOT recoverable from the run;
+# verify against the OpenAI dashboard. No target is re-queried.
+# ⚠️ Dead-rejudge trap: a failed cell keeps the PREVIOUS judge's verdicts in raw_results.jsonl
+# while results.json carries asr=null. Select on `asr is not None`, never on the path.
+num_cluster_jobs: 1
+num_main_job_threads: 10
+
+tasks:
+# ---- CONTROL ----
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_no_defense_code_attack_20260808_024716_19478330    # T=1.0
+  judge_model: gpt-5-mini
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_no_defense_code_attack_20260808_024717_276903      # T=0.0
+  judge_model: gpt-5-mini
+
+# ---- STOCHASTIC VERDICT (screens with the TARGET) ----
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_sage_code_attack_20260808_024717_34186336          # T=1.0
+  judge_model: gpt-5-mini
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_sage_code_attack_20260808_030628_72356370          # T=0.0
+  judge_model: gpt-5-mini
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_llm_self_defense_code_attack_20260808_061840_82358473  # T=1.0
+  judge_model: gpt-5-mini
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_llm_self_defense_code_attack_20260808_061840_12517608  # T=0.0
+  judge_model: gpt-5-mini
+
+# ---- SEPARATE + GREEDY screener ----
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_selfdefend_code_attack_20260808_101743_20901179    # T=1.0
+  judge_model: gpt-5-mini
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_selfdefend_code_attack_20260808_101744_52840960    # T=0.0
+  judge_model: gpt-5-mini
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_guard_baseline_code_attack_20260808_101744_33607088 # T=1.0
+  judge_model: gpt-5-mini
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_guard_baseline_code_attack_20260808_103618_79855148 # T=0.0
+  judge_model: gpt-5-mini
