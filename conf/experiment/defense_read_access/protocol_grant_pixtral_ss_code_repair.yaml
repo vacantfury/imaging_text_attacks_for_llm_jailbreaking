@@ -1,0 +1,43 @@
+# AS-7 · PROTOCOL GRANT — single-cell REPAIR (pixtral x SemanticSmooth x code, encoded arm)
+#
+# WHY. The 2026-08-08 protocol-grant round (job 322166) completed 15 of its 16
+# cells. The one failure was this cell: its gpt-5-mini judge job was large enough
+# to auto-route to the OpenAI Batch API (llm_utils v5 routes any job whose
+# worst-case cost clears $1), and the batch did not return inside the 3600s
+# client wait, so the task raised and the output dir was written EMPTY. There are
+# therefore no stored responses to rejudge — the cell must be re-collected, not
+# harvested. (Confirmed: the dir
+# pixtral_12b_semantic_smooth_code_attack_20260808_023630_62830139 holds no files.)
+#
+# WHAT IT COMPLETES. The SemanticSmooth oracle-vs-deployable pair on code_attack
+# for pixtral. Its sibling arm (query_source: original) already measured ASR 3,
+# and internvl3's complete code pair is 3 -> 2 (null). This cell is the last of
+# four SS pairs; the paper's SS null already holds on three.
+#
+# ⚠️ ONE cell on purpose. A single task keeps the judge job small enough to run
+# realtime instead of re-entering the batch queue that broke it the first time.
+#
+# COST: 1 cell x 100 prompts. pixtral self-served = FREE. SS internals
+# (flash-lite paraphrase + nano vote) + gpt-5-mini judge ~ $0.1-0.2. An ESTIMATE.
+#
+# SUBMIT (AICR, chain behind whatever holds rtx-devel — the 2-GPU cap is total):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch --dependency=afterany:<job> scripts/run_experiment_aicr.sbatch \
+#       defense_read_access/protocol_grant_pixtral_ss_code_repair'
+
+num_main_job_threads: 1
+num_cluster_jobs: 2          # orchestrator + pixtral target only (SS needs no guard server)
+
+_code_text: &code_text outputs/image_presence_threshold/prompt_transform/harmbench/code_attack_ir_constant_20260805_213025_3168031/code_attack
+
+tasks:
+  - mode: defense+evaluate
+    target_model: pixtral_12b
+    prompt_range: [0, 99]
+    benchmark: harmbench
+    judge_method: harmbench
+    judge_model: gpt-5-mini
+    campaign: as7_protocol_grant
+    defense: semantic_smooth
+    defense_config: {query_source: encoded}
+    source_transform_subdir: *code_text
