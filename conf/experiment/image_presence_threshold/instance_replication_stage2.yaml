@@ -1,0 +1,108 @@
+# Paper B (AS-2) · IMAGE-INSTANCE REPLICATION — STAGE 2 (query + judge)
+#
+# Consumes the twelve arms rendered by `instance_replication_stage1.yaml`
+# (AICR 322517, 12/12). Answers the most-requested experiment across both
+# cspaper rounds (R1 con 6, R2 con 2 + Q2): the paper's property claims rest on
+# ONE rendered file per level, so they have power for those files and not for
+# the property class.
+#
+# THE GRID: 4 sizes x 3 fills, on `qwen3-vl-8b` — the checkpoint that carries
+# the paper's size claim (256^2 vs 1536^2, p=0.0004; colour and JPEG inert).
+#   * DOWN a fill column -> does the size trend hold for white AND grey AND
+#     black? If yes the axis is size, not one particular file.
+#   * ACROSS a size row  -> is colour really inert, replicated at four sizes?
+# Four size levels (the paper had two) also turn "256 differs from 1536" into a
+# shape rather than a single contrast.
+#
+# ✅ STAGE-1 INTEGRITY VERIFIED BEFORE THIS FILE WAS WRITTEN (do not re-assume):
+# each of the twelve arms holds 100 images with exactly ONE distinct md5, and
+# all twelve arm hashes differ from each other. So every arm is byte-identical
+# within itself (the control that licenses "carries no per-prompt information")
+# and genuinely distinct between arms.
+#
+# ⚠️ ANCHORS BELOW WERE READ FROM THE STORED RENDERER CONFIG, NOT THE PATH.
+# All twelve dirs are `..._ir_blank_<ts>_<rand>/ir_blank` and differ ONLY by
+# timestamp+rand — reading the arm from the last path component is the substring
+# bug that has bitten this paper three times. Identity came from
+# `results_history[*].ir_blank.config` (width/bg_color). NOTE for future
+# sessions: `results_history` is a LIST of {step_name: {...}} entries, and
+# `campaign` is NOT persisted on prompt_transform results — both cost a wrong
+# turn here on 2026-08-08.
+#
+# ⚠️ WE DO NOT RANDOMIZE IMAGES ACROSS PROMPTS, though R2 Q2 asks for it.
+# Byte-identity within an arm is what licenses the paper's central claim that
+# the cue carries no per-prompt information. Randomizing across prompts would
+# trade that control away for a narrower answer. Instance varies BETWEEN arms
+# instead — same between-image variance, design virtue intact.
+#
+# READ-OUT, RECORDED BEFORE THE RUN:
+#   * size trend holds in all three fills
+#       -> the size axis is a property, not a file. Report as the replication
+#          and the reviewer's objection is answered on its own terms.
+#   * size trend holds in some fills and not others
+#       -> size INTERACTS with fill; the paper's "size is the carrying axis,
+#          colour inert" must be rewritten as an interaction, not two
+#          independent axes.
+#   * no size trend anywhere
+#       -> the original p=0.0004 was file-specific. The property claim comes
+#          OUT of the paper; presence-vs-absence is unaffected.
+#   * fills differ sharply at fixed size
+#       -> "colour is inert" fails and must be withdrawn; re-examine the
+#          property table as a whole.
+#
+# ⚠️ Judge is gpt-5-mini + jbb_refusal, pinned to match every other AS-2 benign
+# cell so the instrument is constant. Do NOT let it auto-infer.
+#
+# COST: 13 cells x 100 prompts. Target is self-served (free GPU); ~1300
+# gpt-5-mini judge calls, ~$0.3. Needs ONE vLLM server — AICR rtx-devel caps 2
+# GPUs/user and one slot was free at submission.
+#
+# SUBMIT:
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch image_presence_threshold/instance_replication_stage2'
+
+num_main_job_threads: 4
+num_cluster_jobs: 2          # orchestrator + 1 vLLM server (single target).
+
+_text: &text outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/non_llm_baseline
+
+# --- white fill ---
+_w256:  &w256  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_054132_8496209/ir_blank
+_w512:  &w512  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_054132_1369819/ir_blank
+_w1024: &w1024 outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_054132_12143363/ir_blank
+_w1536: &w1536 outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_054132_73552616/ir_blank
+# --- mid-grey fill ---
+_g256:  &g256  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_054133_46790440/ir_blank
+_g512:  &g512  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_054133_24149264/ir_blank
+_g1024: &g1024 outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_054133_32074023/ir_blank
+_g1536: &g1536 outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_054134_36242711/ir_blank
+# --- black fill ---
+_k256:  &k256  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_054134_65116366/ir_blank
+_k512:  &k512  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_054134_53254473/ir_blank
+_k1024: &k1024 outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_054135_47371269/ir_blank
+_k1536: &k1536 outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_054135_64150388/ir_blank
+
+_b: &b
+  mode: defense+evaluate
+  defense: no_defense
+  target_model: qwen3_vl_8b_instruct
+  prompt_range: [0, 99]
+  benchmark: jailbreakbench_benign
+  judge_method: jbb_refusal
+  judge_model: gpt-5-mini
+  campaign: paper_b_instance_replication
+
+tasks:
+  - {<<: *b, source_transform_subdir: *text}
+  - {<<: *b, source_transform_subdir: *w256}
+  - {<<: *b, source_transform_subdir: *w512}
+  - {<<: *b, source_transform_subdir: *w1024}
+  - {<<: *b, source_transform_subdir: *w1536}
+  - {<<: *b, source_transform_subdir: *g256}
+  - {<<: *b, source_transform_subdir: *g512}
+  - {<<: *b, source_transform_subdir: *g1024}
+  - {<<: *b, source_transform_subdir: *g1536}
+  - {<<: *b, source_transform_subdir: *k256}
+  - {<<: *b, source_transform_subdir: *k512}
+  - {<<: *b, source_transform_subdir: *k1024}
+  - {<<: *b, source_transform_subdir: *k1536}
