@@ -3,22 +3,32 @@
 # OWNER-ORDERED 2026-08-07 ("we just keep running bug-substitute experiments").
 # Companion to r15a (self-screening arms). Together they rebuild qwen's mechanism panel.
 #
-# ⚠️ SUBMIT ONLY AFTER r15a HAS FINISHED. NURC's gpu QOS is MaxJobsPU=4 / MaxTRESPU=gres/gpu=4
-# and r15a holds all four. Submitting alongside it leaves these servers PENDING while the
-# orchestrator blocks in acquire_endpoint() — the AICR deadlock, reproduced on NURC.
-# Check first:  ssh explorer 'squeue -u $USER -h -O tres-per-node:.20 | grep -c gpu'  -> 0
+# ── WHERE: xc, NOT NURC (rerouted 2026-08-07 20:05, checked not assumed) ───
+# xc: 0 jobs, all 8 A100s free, 24h wall. All four models verified cached under
+#     /home/thomas/huggingface_cache/hub (Qwen2.5-7B-Instruct, Meta-Llama-3-8B-Instruct,
+#     Llama-Guard-3-8B, wildguard). xc's Bedrock-only API policy is irrelevant here: every
+#     model in this round is cluster-served, including the judge.
+# NURC: r15a holds all 4 GPU slots AND the model_internals_safety sibling has two jobs
+#     (is_causal_sweep, is_decode_lens_real) QUEUED behind them. Running here would jump a
+#     waiting session's place on a 4-GPU cap. Don't.
+# AICR: 13 jobs / 11 pending against 838 cluster-wide pending. Worse than this morning.
+#
+# 💡 xc is also the BETTER fit, not just the free one: budget 6 with four models means
+# 3+1+1+1 = 6, which is NOT > available_slots 6, so no capping fires and qwen gets THREE
+# replicas. On NURC (cap 4) the same preset collapses to one replica each.
 #
 # ── WHY THESE TWO ARE SPLIT OUT FROM r15a, AND WHY THEY SHARE ONE PRESET ────
 # Each needs its own THIRD served model:
 #   selfdefend      -> shadow_model: llama3_8b_cluster   (SEPARATE, GREEDY screener)
 #   guard_baseline  -> guard_model:  llama_guard_3_8b    (SEPARATE, GREEDY classifier)
-# So this preset serves FOUR models: qwen + llama3_8b_cluster + llama_guard_3_8b + wildguard.
-# Requested 3+1+1+1 = 6 > available_slots 4, so the allocator's
-# `max(available_slots // n_models, 1)` = 4//4 = 1 caps every model to ONE replica -> 4
-# servers, exactly the cap. That capping is EXPECTED here and is not the R14a defect.
-# Keeping them together rather than as two 3-model presets is deliberate: a 3-model preset
-# ALSO caps to 1 replica (4//3 = 1), so splitting would buy no extra parallelism and would
-# cost a second full round of server startup. One run, same replica count.
+# So this preset serves FOUR models: qwen + llama3_8b_cluster + llama_guard_3_8b + wildguard,
+# requesting 3+1+1+1 = 6 servers. On xc (budget 6) that is NOT > available_slots, so no
+# capping fires and qwen keeps all three replicas. On NURC (cap 4) the same preset would hit
+# `max(available_slots // n_models, 1)` = 4//4 = 1 and collapse every model to one replica —
+# which is why this round was rerouted rather than queued behind r15a.
+# Keeping both defenses in ONE preset is deliberate: splitting them into two 3-model presets
+# would cost a second full server startup and, on a 4-slot cluster, still cap to 1 replica
+# each (4//3 = 1). One run, more replicas.
 #
 # ── THE PREDICTION THAT MAKES THIS PAIR WORTH RUNNING ───────────────────────
 # This is the CLASS-B half of R13's dissociation, on a second target. Both screeners are
@@ -37,18 +47,20 @@
 # ── SIZING (the check R14a skipped) ─────────────────────────────────────────
 # Both defenses cost 1 TARGET call/draw — the screening call goes to the other model — so
 # the target does 4 cells x 10,000 = 40,000 calls, with 40,000 screener calls in parallel on
-# a different GPU. At the post-R14b rate (~200/min for a single a100/h200 replica at conc
-# 64) that is ~3.5h against an 8h wall. Fits, with less margin than 15a: if this is
-# submitted late, re-check progress against `scontrol show job <id> | grep TimeLimit`.
+# other GPUs. r15a measured ~2,750/min for qwen on 3 replicas at conc 64, so this is well
+# under an hour of generation against xc's 24h wall — the widest margin of any round today.
+# Source transform verified PRESENT on xc (10,000 draws) before submission: a
+# defense+evaluate reads source_transform_subdir from LOCAL disk, so a preset that runs on
+# one cluster does not automatically run on another.
 #
-#   ssh explorer; cd ~/projects/llm_guardrail_security
-#   sbatch scripts/run_experiment.sbatch bestofn_attack/r15b_qwen_separate_screeners
+#   ssh xc; cd ~/projects/llm_guardrail_security
+#   sbatch scripts/run_experiment_xc.sbatch bestofn_attack/r15b_qwen_separate_screeners
 #
 # ── JUDGE ───────────────────────────────────────────────────────────────────
 # wildguard (FREE) collects responses; NOT reportable on this code-bearing arm. gpt-5-mini
 # rejudge is a separate cheap step (~$0.9 for these 4 cells) and its own ask.
 num_main_job_threads: 2
-num_cluster_jobs: 5          # 4 servers (qwen + shadow + guard + wildguard, 1 each) + orchestrator
+num_cluster_jobs: 7          # 6 servers on xc (qwen x3 + shadow + guard + wildguard) + orchestrator
 
 _e: &e
   mode: defense+evaluate
