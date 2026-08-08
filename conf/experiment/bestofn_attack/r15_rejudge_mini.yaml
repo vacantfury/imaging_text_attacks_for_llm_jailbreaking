@@ -1,0 +1,125 @@
+# bestofn_attack AS-4 — R15 REJUDGE: make the qwen-2.5-7B mechanism panel reportable.
+#
+# OWNER-APPROVED 2026-08-08 ("go") at the quoted ~$22.5.
+#
+# ── WHY THIS IS NOT JUST A MAGNITUDES PASS ──────────────────────────────────
+# R15a+R15b scored on the free on-cluster wildguard judge and came out a PARTIAL
+# replication of the R12/R13 mechanism result: the extremes held (sage collapsed 92%,
+# selfdefend moved 5% — less than the control) but the two MIDDLE terms came out SWAPPED
+# against prediction (guard_baseline 30% > llm_self_defense 21%).
+#
+# That swap may be an ARTEFACT OF THE JUDGE, and this rerun is the test. Under wildguard,
+# no_defense and llm_self_defense BOTH sit at 98/100 ensemble at T=1.0 — a metric pinned at
+# 98 cannot express a large collapse, so llm_self_defense's drop is floor-limited by
+# construction. wildguard over-flags code-bearing responses by 41-68% (memory: wildguard
+# invalid as ASR judge) and this is a code_attack arm, so saturation is the expected failure
+# mode here. llama was NOT saturated under the same judge (sage ran 61/100 with room to
+# fall), which is why R12/R13 could resolve the middle terms and R15 could not.
+#
+# ⚠️ EXPECTATIONS, RECORDED BEFORE THE RUN so they cannot be fitted afterwards:
+#   (a) Absolute ASRs FALL across the board (wildguard over-flags). Not a finding — a check.
+#   (b) If saturation was judge-induced: no_defense and llm_self_defense drop off ~98,
+#       the metric regains headroom, and llm_self_defense's net-of-control collapse should
+#       OVERTAKE guard_baseline's — restoring the predicted split
+#       (target-screened/stochastic COLLAPSE  vs  separate/greedy NULL).
+#       => taxonomy replicates on a second target; R12/R13 is target-general.
+#   (c) If the middle terms stay SWAPPED with headroom restored, the swap is REAL and the
+#       screener taxonomy does not survive intact. Report that; do not explain it away.
+#   (d) If no_defense stays near-ceiling even under gpt-5-mini, the ceiling is REAL, not a
+#       judge artefact — no judge can fix it. The qwen panel would then need a harder
+#       encoder or fewer draws per behaviour, and this rerun settles nothing about the
+#       middle terms. That is a legitimate outcome and must be reported as inconclusive.
+# The extremes (sage, selfdefend) are NOT at risk from the ceiling and stand either way.
+#
+# ── THE CELLS: TEMPERATURE IS NOT RECOVERABLE FROM THE DIRECTORY NAME ───────
+# results.json still does not persist target_model_config (filed code fix, TODO item 12),
+# and save order is FINISH order, not task order. Every mapping below was resolved from
+# MLflow params `target_model_config.temperature` on the cluster that RAN the cell (R15a on
+# NURC, R15b on xc) BEFORE the cells were moved here. Do not re-derive it from dir order.
+# wildguard ensemble (behaviours broken / 100) shown so the rejudge can be read as a delta:
+#
+#   defense           T      dir suffix   wildguard asr%   wildguard ensemble
+#   no_defense        1.0    _64302277        67.34            98/100   <- SATURATED
+#   no_defense        0.0    _47115076        79.35            86/100
+#   sage              1.0    _67229847         0.46            12/100
+#   sage              0.0    _43257628         0.13             1/100
+#   llm_self_defense  1.0    _98790197        48.98            98/100   <- SATURATED
+#   llm_self_defense  0.0    _88549717        54.88            77/100
+#   selfdefend        1.0    _67179049        14.95            21/100
+#   selfdefend        0.0    _11467111        18.16            20/100
+#   guard_baseline    1.0    _2195795          4.24            10/100
+#   guard_baseline    0.0    _95300918         5.95             7/100
+#
+# Note the control's SIGNATURE, which is itself the variance-channel claim in miniature:
+# per-draw asr is HIGHER at T=0.0 (79.35 vs 67.34) while the ENSEMBLE is LOWER (86 vs 98).
+# Greedy decoding gives a better average draw and a worse best-of-N. Check it survives.
+#
+# ── WHERE: AICR, AND WHY NOT THE OTHER TWO (checked, not assumed, 2026-08-08) ─
+# NURC: home quota EXHAUSTED — `mkdir` fails with "Disk quota exceeded" (filesystem itself
+#       has 112T free; this is a per-user cap). Another session is clearing it; do not
+#       touch NURC storage from here. Nothing can be written there, so nothing can run there.
+# xc:   routing policy bars non-Bedrock API models — gpt-5-mini cannot run there at all.
+# AICR: writable, and its orchestrator wrapper runs on `--partition=cpu` (24h wall), so this
+#       consumes ZERO GPU quota. That matters today: AICR is holding the AS-3 held-out grid
+#       (jobs 317813-317821, 8 still PENDING) plus a sibling session's two vLLM servers.
+#       A GPU-taking job here would jump their place. This one does not.
+# All ten cells were streamed here (NURC->AICR 6, xc->AICR 4) and verified: 10 dirs,
+# 10,000 raw rows each. A rejudge reads `responses_from` from LOCAL disk — moving the data
+# is the whole reason this preset can exist on a cluster that never ran the round.
+#
+#   ssh aicr; cd ~/projects/llm_guardrail_security
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r15_rejudge_mini
+#
+# ── FOOTPRINT, AND THE ONE SCHEDULING RISK ──────────────────────────────────
+# 10 cells x 10,000 draws = 100,000 judge calls. At the measured realtime rate
+# ($4.50 / 20,000 calls = $0.225/1000) that is ~$22.50 — the approved figure.
+# ⚠️ It may come in at HALF that, ~$11.25, and the reason is a scheduling risk, not a
+# windfall: llm_utils v5.0.0 auto-routes any job whose estimated worst-case cost is
+# >= $1 to the provider's native Batch API at 50% price. Each cell here is ~$2.25, so
+# every one of the ten routes to batch. Batch carries a 24h SLA and this partition's wall
+# is exactly 24h. Typical 10k-request batches return in well under an hour, and the ten
+# submit concurrently (num_main_job_threads: 10) so total latency is one batch's latency,
+# not ten — but if OpenAI queues deep, the job can die at the wall with the spend already
+# incurred. CHECK PROGRESS within a few hours; do not assume it is fine because it started.
+# No target is re-queried: a rejudge only re-scores stored responses.
+num_cluster_jobs: 1
+num_main_job_threads: 10
+
+tasks:
+# ---- CONTROL: no verdict at all. Isolates answer-sampling from verdict-sampling. ----
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_no_defense_code_attack_20260807_185309_64302277   # T=1.0
+  judge_model: gpt-5-mini
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_no_defense_code_attack_20260807_185309_47115076   # T=0.0
+  judge_model: gpt-5-mini
+
+# ---- STOCHASTIC VERDICT (screens with the TARGET) -> predicted COLLAPSE at T=0 ----
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_sage_code_attack_20260807_185309_67229847         # T=1.0
+  judge_model: gpt-5-mini
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_sage_code_attack_20260807_190148_43257628         # T=0.0
+  judge_model: gpt-5-mini
+# ^ the two cells below are THE decisive pair: llm_self_defense is the arm the wildguard
+#   ceiling floor-limited, so its net-of-control collapse is what this whole rerun is for.
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_llm_self_defense_code_attack_20260807_190507_98790197  # T=1.0
+  judge_model: gpt-5-mini
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_llm_self_defense_code_attack_20260807_192712_88549717  # T=0.0
+  judge_model: gpt-5-mini
+
+# ---- SEPARATE + GREEDY screener -> predicted NULL at T=0 ----
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_selfdefend_code_attack_20260808_000507_67179049    # T=1.0
+  judge_model: gpt-5-mini
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_selfdefend_code_attack_20260808_000507_11467111    # T=0.0
+  judge_model: gpt-5-mini
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_guard_baseline_code_attack_20260808_003645_2195795 # T=1.0
+  judge_model: gpt-5-mini
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/qwen2_5_7b_instruct_guard_baseline_code_attack_20260808_003945_95300918 # T=0.0
+  judge_model: gpt-5-mini
