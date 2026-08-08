@@ -48,8 +48,34 @@ def _ts(name: str) -> str:
     return (m.group(1) + m.group(2)) if m else "0"
 
 
-def find_no_defense(target: str, judge: str, exclude: list[str]) -> dict[str, str]:
-    """{encoding -> latest no_defense dir judged by `judge` on `target`}."""
+# The undefended reference must come from ONE behavior slice. This is a hard
+# requirement, not a preference: the headline is an OR-reduction ACROSS attacks,
+# so if two attacks are scored on different behaviors their union is not a
+# quantity at all. Latest-wins alone cannot enforce it -- on 2026-08-08 the
+# held-out run (behaviors 100-199) and the r2/r3 post-fix rerun both wrote
+# no_defense cells NEWER than the development ones, and this function silently
+# built a floor from nine held-out attacks plus two development attacks,
+# collapsing ens-11 from the published 89 to 75 with no error raised.
+DEV_PROMPT_RANGE = [0, 99]
+
+# ...and from ONE run. The published reference is r1 (the run behind Table 1).
+# Without this the floor mixes r2's nine attacks with r3-postfix's two, which is
+# the same category of error one level down: a union across runs is not a run.
+# `paper_c_fidelity_rerun` carries r1's corrected code_attack / ir_figstep cells.
+RUN1_CAMPAIGNS = {
+    "paper_c_guard_panel", "paper_c_guard_panel_benign", "paper_c_guard_panel_floor",
+    "paper_c_reguard_ablation", "paper_c_reguard_5guard", "paper_c_reguard_5guard_benign",
+    "paper_c_gen2_internvl3", "paper_c_fidelity_rerun", "paper_c_fidelity_rerun_mini",
+}
+
+
+def find_no_defense(target: str, judge: str, exclude: list[str],
+                    prompt_range: list | None = None) -> dict[str, str]:
+    """{encoding -> latest no_defense dir judged by `judge` on `target`}.
+
+    Restricted to a single behavior slice (default: the development split).
+    """
+    want = DEV_PROMPT_RANGE if prompt_range is None else prompt_range
     best: dict[str, tuple[str, str]] = {}
     for tree in TREES:
         for d in glob.glob(os.path.join(tree, "*")):
@@ -64,7 +90,14 @@ def find_no_defense(target: str, judge: str, exclude: list[str]) -> dict[str, st
                 continue
             if r.get("judge_model") != judge:
                 continue
-            if (r.get("campaign") or "") in exclude:
+            camp = r.get("campaign") or ""
+            if camp in exclude:
+                continue
+            if RUN1_CAMPAIGNS and camp not in RUN1_CAMPAIGNS:
+                continue
+            # Development-vs-held-out contamination guard (see note above).
+            pr = r.get("prompt_range") or (r.get("upstream_ref") or {}).get("prompt_range")
+            if want is not None and pr is not None and list(pr) != list(want):
                 continue
             enc = r.get("encoding")
             src = (r.get("upstream_ref") or {}).get("source_dir", "") or ""
@@ -72,6 +105,17 @@ def find_no_defense(target: str, judge: str, exclude: list[str]) -> dict[str, st
                 enc = next((c for c in TEXT_ATTACKS + IMAGE_ATTACKS if f"_{c}_" in src), enc)
             if not enc:
                 continue
+            # Axis guard, and it must be axis-AWARE: the two benign channels are
+            # needed for the over-refusal column, so this cannot simply demand
+            # HarmBench. What it must stop is an ORBench cell capturing an ATTACK
+            # slot -- it carries the same encoding name in its source path, but
+            # its rows hold `refusal`, not `asr`.
+            bench = (r.get("benchmark") or "").lower()
+            if bench:
+                wants_harmful = enc in TEXT_ATTACKS + IMAGE_ATTACKS
+                is_harmful = bench.startswith("harmbench") or bench.startswith("jailbreakbench")
+                if wants_harmful != is_harmful:
+                    continue
             t = _ts(os.path.basename(d))
             if enc not in best or t > best[enc][0]:
                 best[enc] = (t, d)

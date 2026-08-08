@@ -48,6 +48,14 @@ PANELS = {
     ('paper_c_reguard_5guard_benign', 'qwen2_5_vl_7b'),
     ('paper_c_gen2_internvl3', 'internvl3_8b'),
 }
+# Which campaign wins when more than one holds the same (cond, guard) cell.
+# Earlier entries win. See the note in report() -- this is what makes the
+# decomposed summary deterministic and reproducible from the table.
+CAMPAIGN_PRECEDENCE = [
+    'paper_c_reguard_5guard_benign',
+    'paper_c_guard_panel_benign',
+    'paper_c_gen2_internvl3',
+]
 CHANNELS = {'ir_plain': 'image', 'non_llm_baseline': 'text'}
 GUARD_SHORT = {'wildguard': 'WG', 'llama_guard_3_8b': 'LG3', 'qwen3guard_gen_8b': 'Q3G',
                'thinkguard': 'TG', 'guardreasoner_vl_7b': 'GR'}
@@ -195,19 +203,32 @@ def report() -> None:
             continue
         f_avg = sum(floor.values()) / len(floor)
         print('  undefended floor over-refusal = %.1f' % f_avg)
-        for key in sorted(keys, key=lambda k: (COND_ORDER.index(k[1]) if k[1] in COND_ORDER else 9, k[2])):
-            if key[1] == 'floor':
+        # Several whitelisted campaigns can hold the SAME (cond, guard) cell -- on
+        # Qwen, mc/LG3 and mc/TG exist in both `paper_c_guard_panel_benign`
+        # (rejudged) and `paper_c_reguard_5guard_benign` (judged inline). The
+        # summary used to print BOTH and leave a human to pick, so re-running this
+        # script did not deterministically reproduce tab:app-decomp. The choice is
+        # now pinned: the inline-judged reguard panel wins, which is the same
+        # campaign the reguard table takes those two guards' Qwen cells from.
+        chosen: dict[tuple, tuple] = {}
+        for key in keys:
+            if key[1] == 'floor' or not cells[key]:
                 continue
-            per = cells[key]
-            chans = [c for c in per.values()]
-            if not chans:
-                continue
+            slot = (key[1], key[2])
+            prev = chosen.get(slot)
+            if prev is None or CAMPAIGN_PRECEDENCE.index(key[3]) < CAMPAIGN_PRECEDENCE.index(prev[3]):
+                chosen[slot] = key
+        for slot in sorted(chosen, key=lambda s: (COND_ORDER.index(s[0]) if s[0] in COND_ORDER else 9, s[1])):
+            key = chosen[slot]
+            chans = list(cells[key].values())
             over = sum(c['over'] for c in chans) / len(chans)
             block = sum(c['block'] for c in chans) / len(chans)
             target = over - block
+            others = [k[3] for k in keys if (k[1], k[2]) == slot and k != key and cells[k]]
+            note = ('   [pinned %s over %s]' % (key[3], ', '.join(others))) if others else ''
             print('  %-6s %-4s over-ref %5.1f = guard %5.1f + target %5.1f   |  net %+6.1f'
-                  '  (guard %+6.1f, target %+6.1f vs floor)'
-                  % (key[1], key[2], over, block, target, over - f_avg, block, target - f_avg))
+                  '  (guard %+6.1f, target %+6.1f vs floor)%s'
+                  % (key[1], key[2], over, block, target, over - f_avg, block, target - f_avg, note))
 
 
 if __name__ == '__main__':
