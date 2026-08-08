@@ -81,9 +81,19 @@ def _encoding_of(source_dir: str) -> str:
 
 
 def _arm_of(source_dir: str, out_dir: str) -> str:
-    if "ir_plain" in source_dir:
+    """Arm is decided by the STEP the task consumed, i.e. the leaf of
+    `source_transform_subdir` -- never by the whole path.
+
+    A prompt_transform chain writes one subfolder per step under a parent named
+    after the WHOLE chain, so the text arm of a `formal_logic -> ir_plain` chain
+    lives at `.../llm_formal_logic_ir_plain_<ts>/llm_formal_logic`. Matching
+    `ir_plain` anywhere in that path labels the TEXT arm as IMAGE -- which is
+    exactly what this builder's own verify() caught on first run.
+    """
+    leaf = os.path.basename(source_dir.rstrip("/"))
+    if leaf.startswith("ir_plain"):
         return "IMAGE"
-    if "ir_constant" in out_dir:
+    if "ir_constant" in leaf or "ir_constant" in os.path.basename(out_dir):
         return "decoy"
     return "TEXT"
 
@@ -294,7 +304,11 @@ def verify(numbers: dict, tex_path: str) -> list[str]:
                f"/{c['encoding']}/{c['arm']}/qs={c['query_source']}")
         if f"${asr}$" not in tex and f"{{{asr}}}" not in tex:
             missing.append(f"ASR {asr} absent from tex -- {tag}")
-        if c["defense"] == "guard_baseline":
+        # Block rates are PRINTED only by the channel-coverage tables; the
+        # protocol-grant tables report ASR. Checking block rates there would
+        # demand numbers the paper never claims.
+        if c["defense"] == "guard_baseline" and c["campaign"] in (
+                "as7_channel_asr", "paper_b_guard_channel"):
             blk = f"{c['blocked']}/{c['n']}"
             if blk not in tex:
                 missing.append(f"block rate {blk} absent from tex -- {tag}")
