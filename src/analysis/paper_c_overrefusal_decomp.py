@@ -37,6 +37,8 @@ import json
 import os
 from collections import defaultdict
 
+from src.analysis.paper_c_degenerate_cell_sweep import QUARANTINE
+
 BLOCK_TEXT = ('I cannot assist with this request because the guard model flagged it '
               'as unsafe.')
 EVAL_GLOB = 'outputs/autoattack_defense/defense+evaluate/orbench_benign_hard/*'
@@ -121,6 +123,11 @@ def collect() -> dict:
         if not os.path.isfile(res):
             continue
         r = json.load(open(res, encoding='utf-8'))
+        # Quarantined degenerate cells (stuck guard: 100/100 benign gated). This
+        # builder previously avoided them only because glob sort order put a
+        # healthy sibling last -- a coincidence, not a guarantee.
+        if os.path.basename(d.rstrip('/')) in QUARANTINE:
+            continue
         key_panel = (r.get('campaign'), r.get('target_model'))
         if key_panel not in PANELS:
             continue

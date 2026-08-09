@@ -101,9 +101,7 @@ REPLICATE_SPREAD = []
 # in a campaign the paper's tables do read, and today only sort order keeps
 # `paper_c_overrefusal_decomp.py` off it. Found 2026-08-08 by the
 # replicates-disagree guard below.
-BAD_CELLS = {
-    "qwen2_5_vl_7b_modality_complete_ir_plain_20260723_141216_20322381",
-}
+from src.analysis.paper_c_degenerate_cell_sweep import QUARANTINE as BAD_CELLS  # noqa: E402
 
 CANONICAL_SOURCE = {
     "ir_figstep": "ir_figstep_20260805_215649_72871103",
