@@ -1,0 +1,113 @@
+# Paper B (AS-2) · CROSS-FAMILY JUDGE PANEL on the primary cells.
+#
+# WHAT THIS CLOSES. cspaper review 3 asks, in two places, for the headline numbers to
+# be re-scored by a judge that is not the one that produced them:
+#
+#   con 6:  "no multi-judge or human validation is reported for the headline cells ...
+#            A targeted manually annotated audit, plus at least one alternative refusal
+#            and harm judge, is needed."
+#   Q3:     "Can the authors validate the headline outcome labels with an independent
+#            judge and a human audit? Please report agreement and paired effect sizes
+#            for at least the major claims: [the] borderline-benign effect, [the]
+#            low-headroom Qwen harmful result, and the Pixtral ASR reversal."
+#
+# The human half is separate and owner-executed. THIS closes the machine half, and it
+# is worth doing first: if the effects survive an independent judge, the hand-labelling
+# has less to carry.
+#
+# WHY THE OBJECTION IS SHARP RATHER THAN PRO FORMA. The paper already reports a second
+# judge -- but it is `gpt-5-nano` against `gpt-5-mini`, and the paper itself concedes
+# (§res-judge) that "both judges are OpenAI models, so that check bounds differential
+# error WITHIN a family and cannot exclude a blind spot the two share." So the existing
+# robustness pass does not answer the question actually asked.
+#
+# JUDGE CHOICE: `gemini-2.5-pro`, and the reasoning matters because a naive reading of
+# our own panel study would reject it. From judge_model_issue/JUDGE_MODEL_REPORT.md §4,
+# over 17 API rubric-appliers scored against a human anchor:
+#
+#     gpt-5-mini      HarmBench criteria   50% harm   0% refusal   k=0.680  <- ours
+#     gpt-5-nano      HarmBench criteria   58% harm   1% refusal   k=0.620
+#     gemini-2.5-pro  HarmBench criteria   33% harm   1% refusal   k=0.438  <- this
+#     everything else (gemini x7, grok, deepseek, glm)  0-32% harm, k=0.37 -> 0.00
+#
+# gemini-2.5-pro is a STRICT OUTLIER and its k is well below ours. It is still the right
+# instrument here, for three reasons. (1) It is the ONLY different-family judge that
+# applies OUR HarmBench rubric at a usable refusal rate -- every cheaper alternative
+# collapses toward k=0, i.e. toward calling nothing harmful, which would floor the
+# denominator and manufacture a null (the headroom trap this repo has already been
+# bitten by). (2) The quantity under test is a PAIRED CONTRAST, and a judge's leniency
+# offset is exactly the component that cancels between two arms scored by the same
+# instrument -- absolute level is not what the reviewer is questioning. (3) A strict
+# judge is the CONSERVATIVE choice for our claim: it shrinks harmful-side numbers, so if
+# the effects survive strict scoring they are not artifacts of a lenient judge.
+#
+# ⚠️ ONE HONEST CAVEAT, to be written into the paper rather than discovered by a reader:
+# `gemini-2.5-flash-lite` is one of the TARGETS in the benign cells, so on those two
+# cells the judge shares a model family with the model it is scoring. That is a milder
+# concern than the shared-blind-spot one being fixed, and it does NOT apply to the
+# claude-sonnet-4-6 or gpt-4o-mini cells (no overlap at all) or to either harmful pair.
+# Report per-model rather than pooled so a reader can discount that one row if they wish.
+#
+# THE CELLS -- exactly the three the reviewer named, nothing padded:
+#   1. borderline-benign, category-stratified (the headline cost claim), 300 prompts/arm
+#        claude-sonnet-4-6      9.33 -> 61.67   (+52.3pp)
+#        gpt-4o-mini           19.00 -> 55.33   (+36.3pp)
+#        gemini-2.5-flash-lite 24.00 -> 58.67   (+34.7pp)
+#   2. qwen3-vl-8b harmful, the low-headroom result      2 -> 1
+#   3. pixtral-12b harmful, the sign inversion          48 -> 81
+#      (its blank arm is the cell recovered by job 328544 -- responses were always
+#       present, only the verdicts were missing.)
+#
+# READ-OUT, RECORDED BEFORE THE RUN:
+#   * benign effects survive at similar magnitude -> the headline is judge-robust across
+#     families; report both judges side by side and the objection is closed on the
+#     machine side.
+#   * benign effects survive but much smaller -> report the shrinkage honestly and let
+#     the smaller of the two stand as the claim.
+#   * benign effects vanish -> the paper's central number is judge-dependent and the
+#     paper must say so prominently. Report it; do NOT go looking for a third judge that
+#     restores it.
+#   * harmful contrasts move toward zero -> EXPECTED IN PART, because this judge flags
+#     ~1/3 as much harm as ours; check headroom before reading any null as a finding
+#     (a floored denominator cannot show a difference). The pixtral inversion is the one
+#     to watch: at 48->81 it has ample room and should survive strict scoring.
+#
+# COST: 2200 judge calls, no target queried, no GPU. Measured inputs (mean response
+# 2234 chars ~ 560 tok + ~700 tok rubric/behavior) -> ~1259 in / ~250 out per call at
+# $1.25/$10.00 per M => ~$9. Owner-authorized at the $5-10 estimate.
+#
+# SUBMIT (AICR -- API-only, requests no GPU, does not contend with the AS-7 GPU chain):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch image_presence_threshold/crossfamily_judge_panel'
+
+num_main_job_threads: 8
+num_cluster_jobs: 1          # orchestrator only -- rejudge never serves a model.
+
+_b: &b                       # benign arms: refusal rubric
+  mode: rejudge
+  judge_model: gemini-2.5-pro
+  judge_method: jbb_refusal  # pinned: unset falls back to the benchmark evaluator
+
+_h: &h                       # harmful arms: HarmBench rubric
+  mode: rejudge
+  judge_model: gemini-2.5-pro
+  judge_method: harmbench
+
+_D: &D outputs/image_presence_threshold/defense+evaluate
+
+tasks:
+  # --- 1. the headline benign cost, category-stratified (300 prompts/arm) -------
+  - {<<: *b, responses_from: outputs/image_presence_threshold/defense+evaluate/jailbreakbench_benign/claude-sonnet-4-6_no_defense_non_llm_baseline_20260809_031824_77586773}
+  - {<<: *b, responses_from: outputs/image_presence_threshold/defense+evaluate/jailbreakbench_benign/claude-sonnet-4-6_no_defense_non_llm_baseline_ir_blank_20260809_031824_391284}
+  - {<<: *b, responses_from: outputs/image_presence_threshold/defense+evaluate/jailbreakbench_benign/gpt-4o-mini_no_defense_non_llm_baseline_20260809_020119_9983901}
+  - {<<: *b, responses_from: outputs/image_presence_threshold/defense+evaluate/jailbreakbench_benign/gpt-4o-mini_no_defense_non_llm_baseline_ir_blank_20260809_020119_32651401}
+  - {<<: *b, responses_from: outputs/image_presence_threshold/defense+evaluate/jailbreakbench_benign/gemini-2.5-flash-lite_no_defense_non_llm_baseline_20260809_020119_96792166}
+  - {<<: *b, responses_from: outputs/image_presence_threshold/defense+evaluate/jailbreakbench_benign/gemini-2.5-flash-lite_no_defense_non_llm_baseline_ir_blank_20260809_020119_88087653}
+
+  # --- 2. qwen3-vl-8b harmful: the low-headroom result --------------------------
+  - {<<: *h, responses_from: outputs/image_presence_threshold/defense+evaluate/harmbench/qwen3_vl_8b_instruct_no_defense_non_llm_baseline_20260808_045119_46411874}
+  - {<<: *h, responses_from: outputs/image_presence_threshold/defense+evaluate/harmbench/qwen3_vl_8b_instruct_no_defense_non_llm_baseline_ir_blank_20260808_045243_11217079}
+
+  # --- 3. pixtral-12b harmful: the sign inversion -------------------------------
+  - {<<: *h, responses_from: outputs/image_presence_threshold/defense+evaluate/harmbench/pixtral_12b_no_defense_non_llm_baseline_20260807_043819_22513223}
+  - {<<: *h, responses_from: outputs/image_presence_threshold/defense+evaluate/harmbench/pixtral_12b_no_defense_non_llm_baseline_ir_blank_20260807_043819_60229939}
