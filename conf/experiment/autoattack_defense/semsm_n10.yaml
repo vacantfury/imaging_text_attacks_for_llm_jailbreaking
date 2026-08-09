@@ -1,0 +1,73 @@
+# ============================================================
+# Paper C (AS-3) - E2: SemanticSmooth at its PAPER-DEFAULT N=10
+# ============================================================
+# cspaper review 1, con 6 + Q3: we report SemanticSmooth at n_copies=5 while
+# noting the authors' default is 10, which weakens the baseline comparison.
+# This runs the default. Everything else is held fixed against the published
+# deployable arm: same 11 source transform dirs (read off the published cells,
+# so the two post-fidelity-fix encoders are the corrected ones), same target,
+# same prompt range, same gpt-5-mini ASR judge, query_source=encoded.
+#
+# The ONLY change is n_copies 5 -> 10. Cost approved by the owner 2026-08-08
+# (~$2: 11k gemini-2.5-flash-lite paraphrases + the internal gpt-5-nano vote +
+# 1.1k gpt-5-mini judgments; target calls are cluster-served and free).
+#
+# PREDICTION, WRITTEN BEFORE THE RUN: more paraphrases should make the majority
+# vote more reliable, so ensemble ASR should fall somewhat from the published
+# 81%. If it falls a LOT, the baseline was materially under-configured and the
+# 'near-disjoint residual' composition story needs re-checking against the
+# stronger arm. If it barely moves, N=5 was an adequate stand-in and the
+# reviewer's objection is answered by measurement rather than argument.
+# ============================================================
+
+num_main_job_threads: 6
+num_cluster_jobs: 2
+
+_rng: &rng [0, 99]
+_ss: &ss {query_source: encoded, n_copies: 10}
+
+tasks:
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: semantic_smooth, defense_config: *ss, campaign: paper_c_semsm_n10,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/classical_chinese_simplified_ir_constant_20260710_002424_56524373/llm_classical_language}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: semantic_smooth, defense_config: *ss, campaign: paper_c_semsm_n10,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260805_215649_22270770/code_attack}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: semantic_smooth, defense_config: *ss, campaign: paper_c_semsm_n10,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: semantic_smooth, defense_config: *ss, campaign: paper_c_semsm_n10,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: semantic_smooth, defense_config: *ss, campaign: paper_c_semsm_n10,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: semantic_smooth, defense_config: *ss, campaign: paper_c_semsm_n10,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260805_215649_72871103/ir_figstep}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: semantic_smooth, defense_config: *ss, campaign: paper_c_semsm_n10,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260718_183457_77423812/ir_low_contrast}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: semantic_smooth, defense_config: *ss, campaign: paper_c_semsm_n10,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260718_183500_58590499/ir_mm_typo}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: semantic_smooth, defense_config: *ss, campaign: paper_c_semsm_n10,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260718_183457_84223144/ir_occluded}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: semantic_smooth, defense_config: *ss, campaign: paper_c_semsm_n10,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/non_llm_cipher_20260718_183504_42666777/non_llm_cipher}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: *rng,
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: semantic_smooth, defense_config: *ss, campaign: paper_c_semsm_n10,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory}
