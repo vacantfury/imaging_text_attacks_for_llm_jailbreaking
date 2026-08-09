@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 from .guard_threshold import load_config, load_records, sweep_guard
 from .paper_c_guard_threshold import load_benign_floor_labels, load_floor_labels
 
-FIGS = "paper/autoattack_defense/latex/figs"
+FIGS = "paper/as-3/latex/figs"
 
 # Display names + a stable colour per guard, matching the other Paper-C figures.
 GUARDS = {

@@ -1,6 +1,6 @@
 # Paper C — AAAI-27 structure plan: length budget + main-vs-appendix allocation
 
-*Compiled 2026-07-21. Governs how the Paper-C draft (`paper/autoattack_defense/latex/paper.tex`) is
+*Compiled 2026-07-21. Governs how the Paper-C draft (`paper/as-3/latex/paper.tex`) is
 grown into a competitive AAAI-27 submission and what goes where. Source for AAAI facts:
 `text_docs/shared/aaai27_venue_info.md` + the AAAI-27 AuthorKit (`paper/aaai_2027/AuthorKit27/`).*
 

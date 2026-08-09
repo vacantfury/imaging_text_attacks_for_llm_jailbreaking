@@ -25,6 +25,8 @@ repo, public-grade discipline).
 
 ⚠️ **Pre-split outputs all live under `outputs/image_presence_threshold/`, for BOTH papers.** The output tree was renamed wholesale rather than split, because splitting it would have broken the `upstream_ref.source_dir` provenance chains that let a result reconstruct what produced it. AS-7's historical runs are identified by their **`campaign`** field (e.g. `paper_b_guard_channel`, `paper_b_channel_coverage`, `paper_b_deployable_*`), never by directory. New AS-7 runs write to `outputs/defense_read_access/`. All 229 chains were verified resolving after the rename.
 
+**Paper-source dirs are keyed by series ID, not namespace (renamed 2026-08-08, owner order).** Each live paper's LaTeX/source lives at `paper/as-2` · `paper/as-3` · `paper/as-4` · `paper/as-7` (formerly `paper/<namespace>`). The Namespace column above still governs `text_docs/` and `outputs/` only. Non-paper dirs under `paper/` (`literature`, and the historical `coverguard` / `bestofn_defense` / `aaai_2027` tombstone) keep their names.
+
 **Boundary with AS-6** (guard internals, repo `model_internals_safety`): AS-6 probes guard ACTIVATIONS to separate "never decoded" from "decoded but never blocked"; AS-7 is black-box throughout and claims no mechanism inside the guard. AS-7's channel result (a text guard never *receives* an image payload) sits upstream of both of AS-6's links and supplies it a hypothesis, which AS-6 re-measures in its own harness per its own scope note.
 
 **What is tracked.** Only `proposal.md`, `experiments_plan.md`, and structural planning docs are committed. Working

@@ -126,5 +126,5 @@ Two attacks targeting the caption-mediated re-check on `gpt-4o-mini` (n=50): bes
 * Presets: `conf/experiment/defense_read_access/`
 * Measured results + integrity notes: `text_docs/defense_read_access/experiment_results.md` *(gitignored)*
 * Pre-split working record (both papers): `text_docs/image_presence_threshold/experiment_matrix.md` *(gitignored)*
-* Paper source: `paper/defense_read_access/aaai_2027_ai_alignment/aaai_aia_latex/`
+* Paper source: `paper/as-7/aaai_2027_ai_alignment/aaai_aia_latex/`
 * Registry of record: science repo `portfolio.md` → the AS-7 card.

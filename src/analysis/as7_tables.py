@@ -18,7 +18,7 @@ other two commands consume anywhere:
     # anywhere, once as7_numbers.json is present:
     python3 src/analysis/as7_tables.py emit    --numbers text_docs/defense_read_access/as7_numbers.json
     python3 src/analysis/as7_tables.py verify  --numbers text_docs/defense_read_access/as7_numbers.json \\
-                                               --tex paper/defense_read_access/aaai_2027_ai_alignment/aaai_aia_latex/paper.tex
+                                               --tex paper/as-7/aaai_2027_ai_alignment/aaai_aia_latex/paper.tex
 
 `verify` RAISES on any measured value that is not present in the .tex. It is a
 one-way check by design: it catches a number that drifted or was mistyped, not

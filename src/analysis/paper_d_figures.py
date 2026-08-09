@@ -65,9 +65,9 @@ CAMPAIGNS = {
 REJUDGE_GLOB = "outputs/bestofn_attack/rejudge/**/*"
 # The AIA tree is the SOLE live edit target for Paper D (owner ruling 2026-08-02:
 # the AAAI-main copy is off the table, the arXiv copy is refreshed only at
-# camera-ready). The old "paper/bestofn_attack/latex/figs" default died in the
+# camera-ready). The old "paper/as-4/latex/figs" default died in the
 # 2026-08-01 paper-dir reorganization and pointed at a nonexistent directory.
-DEFAULT_OUTDIR = "paper/bestofn_attack/aaai_2027_ai_alignment/aaai_aia_latex/figs"
+DEFAULT_OUTDIR = "paper/as-4/aaai_2027_ai_alignment/aaai_aia_latex/figs"
 EXPECTED_DRAWS_PER_CELL = 10_000  # 100 behaviors x 100 draws
 
 # Registry model id -> target key. EXPLICIT, because classifying by name PREFIX is
