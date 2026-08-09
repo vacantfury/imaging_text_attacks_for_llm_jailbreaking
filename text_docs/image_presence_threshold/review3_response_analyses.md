@@ -440,3 +440,44 @@ support; intro asymmetry claim upgraded to lead with the control; contribution (
 restated; Limitations given the explicit headroom bound; reproducibility row dated
 08-08/09. Multiplicity: added to `NULL_FAMILIES` (bounds, not non-rejections, so no
 correction applies), `--audit` 0 mismatches. Build 18pp, 0 errors, 0 undefined.
+
+---
+
+## Lit round — the "missing references" objection (2026-08-09)
+
+**The ask.** Review 3 listed six references it said the related work should engage.
+
+**Phase 0 found the objection was partly already met.** Two of the six were already in the
+master bib. One is instructive: the review cited Chakraborty by its arXiv title
+*"Cross-Modal Safety Alignment: Is textual unlearning all you need?"*, but it is filed under
+the published EMNLP title *"Can Textual Unlearning Solve Cross-Modality Safety Alignment?"* —
+a title-string grep would have missed it and staged a duplicate. Matching on eprint id caught it.
+
+**Four were genuinely missing.** All venues verified against authoritative indexes rather than
+assumed, and **three are published papers, not preprints**:
+
+| ref | venue (verified) | note |
+|---|---|---|
+| `geng2025vscbench` VSCBench | Findings of ACL 2025 | ACL Anthology |
+| `zhang2025spavl` SPA-VL | **CVPR 2025**, pp. 19867–19878 | CVF open access; review's year right for the venue, arXiv is 2024 |
+| `weng2025adversaryawaredpo` ADPO | Findings of EMNLP 2025 | ACL Anthology |
+| `gulati2026narrowfinetuning` | **Lifelong Agent Workshop @ ICLR 2026** | workshop, non-archival — confirmed verbatim from the arXiv Comments field |
+
+The last one was staged conservatively as an unconfirmed preprint; reading the source revealed
+an ICLR template with `\iclrfinalcopy` active, and the arXiv Comments field resolved it to a
+**workshop** paper. That matters for weighting: it is context, not prior art.
+
+**The one that needed a scoop check: VSCBench.** It is the closest published framing to AS-2's
+two-sided accounting — it introduces *safety calibration*, scoring over- and undersafety as two
+directions of one axis over 3,600 image–text pairs across 11 VLMs. Checked its dataset
+construction directly: its image-centric subset pairs **visually similar images differing in
+content**, with an image present in every condition. AS-2 varies **presence** with content
+fixed. Orthogonal axes, no scoop — and the distinction is now stated explicitly in the paper,
+because it is the cleanest answer to "isn't this just oversafety benchmarking, already done?"
+
+**Integrated as:** review §6.1.1 (new — SPA-VL / ADPO / Gulati, the "where does the policy come
+from" cluster) and §6.7 (VSCBench, with the prior-art verdict); CANDIDATE markers dropped on all
+four; entries copied into the paper's self-contained `paper.bib` with working notes stripped;
+cited in the paper at the taxonomy categories (iii) and (iv), the relation-to-(iv) passage, and
+the generational-step discussion. Build 18pp, 0 errors, 0 undefined, all four resolve in the PDF.
+Science repo `b63fd1a`.
