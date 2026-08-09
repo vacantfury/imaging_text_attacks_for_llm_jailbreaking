@@ -1,0 +1,35 @@
+# AICR, forced onto rtx-batch — the documented escape route from rtx-devel.
+#
+# WHY THIS FILE EXISTS AT ALL, given aicr.yaml already sets `partition: rtx-batch`:
+# several models (pixtral_12b, internvl3_8b, wildguard, qwen2_5_vl_7b, the guards)
+# carry a `profiles.aicr.partition: rtx-devel` block that OVERRIDES the cluster
+# default. That routing was right on 2026-08-07 (rtx-batch had a 628-833 pending
+# wall), but rtx-devel enforces QOSMaxGRESPerUser=2 and a hard 4h cap, so two
+# concurrent rounds of ours cannot both hold their servers — the second starves in
+# endpoint-wait and writes EMPTY output dirs rather than failing loudly.
+#
+# The lookup is by PROFILE NAME: `profiles.aicr` does not match `aicr_batch`, so
+# every such model falls through to the inherited `partition: rtx-batch` while
+# keeping the rest of the AICR profile verbatim. That is the entire trick, and it
+# is why this is an empty extends rather than a copy — editing the model YAMLs
+# would change routing for any OTHER session's queued jobs sharing this checkout,
+# which is exactly what must not happen when two rounds overlap.
+#
+# WHEN TO USE IT (over `sbatch scripts/run_experiment_aicr.sbatch`):
+#   - another of our rounds already holds rtx-devel GPUs (check `squeue -u $USER`
+#     for vllm_* jobs on rtx-devel before submitting; the cap is 2 GPUs/user), or
+#   - the round's per-target wall would exceed rtx-devel's hard 4h cap.
+# Otherwise prefer plain `aicr`: rtx-devel usually starts in minutes.
+#
+# HOW: the AICR wrapper honours a pre-set CLUSTER_PROFILE, so pass it at submit:
+#   sbatch --export=ALL,CLUSTER_PROFILE=aicr_batch \
+#          scripts/run_experiment_aicr.sbatch <preset>
+# Note the per-model `cluster.time_limit` (4h on the VLM/guard configs) is NOT a
+# profile key and still applies here — rtx-batch's 24h ceiling does not raise it,
+# so a round whose per-target wall exceeds 4h still has to be split by preset.
+#
+# Seed: 2026-08-09, the AS-7 protocol replicate. Its three jobs were chained behind
+# an unrelated 24h BoN round purely to respect the rtx-devel 2-GPU cap, which put a
+# ~22-46h wall in front of the one experiment both cspaper reviews required.
+
+extends: aicr
