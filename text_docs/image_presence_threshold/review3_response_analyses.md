@@ -637,13 +637,13 @@ judge: 10/10 tasks `status=success`, **0 null rows**, fallback parses 0–1 per 
 | pixtral-12b, harmful (inversion) | 100 | 48 → 81 (**+33**) | 50 → 80 (**+30.0**) | 37/7 | 5.3e-06 |
 
 **The paired design does exactly what it is supposed to.** The cross-family judge sits at a
-different *absolute* level — it calls 5–7pp more refusal on every benign cell, in **both**
+different *absolute* level — it calls 2–12pp more refusal on every benign cell, in **both**
 arms — and the *contrast* lands within a few points everywhere. Absolute leniency cancels;
 that was always the quantity at issue.
 
 ### Agreement (the statistic the reviewer asked for)
 
-Pooled raw verdict agreement **94.3%** over all 2100 rows. Per cell:
+Pooled raw verdict agreement **94.4%** over all 2200 rows. *(Initially computed as 94.3% over 2100 — the pixtral blank arm had no comparable gpt-5-mini verdicts until the recovery rejudge was identified; recomputed complete.)* Per cell:
 
 | cell | raw | kappa |
 |---|---|---|
@@ -844,3 +844,45 @@ answered as it stands:** a cross-family judge (`gemini-2.5-pro`) on the exact ce
 both rubrics humanly anchored at n=100 each (Round R refusal κ=0.794, Round J harm κ=0.680
 including 32 `pixtral-12b` rows) — with the scope limit stated in the paper rather than
 papered over.
+
+---
+
+## Self-check of today's judge-section edits — two errors found and fixed (2026-08-09)
+
+A consistency pass over what THIS session wrote into §res-judge, run while the owner was
+at the cspaper gate. Two defects, both introduced today, both in text a reviewer reads:
+
+1. **🔴 WRONG RANGE.** The new paragraph claimed the cross-family judge "calls **5 to 7pp**
+   more refusal on every benign cell". Recomputed from the six cells, the true spread is
+   **+2.3 to +12.0pp** (claude text +7.3 / blank +12.0; gpt-4o-mini +5.7 / +3.3; flash-lite
+   +2.3 / +2.3). The rhetorical point survives untouched — the shift is positive on all six
+   cells, so the judge is uniformly more liberal about calling refusal while the paired
+   contrast still lands within a few points — but the number was invented from a glance at
+   two cells rather than computed. Fixed to `2 to 12`pp in the paper and this file.
+
+2. **Incomplete denominator.** Agreement was reported as "94.3% across all 2,100 rows".
+   2,200 rows were rescored; the pixtral blank arm was excluded because its comparator
+   `gpt-5-mini` verdicts had not yet been located (they were in the recovery rejudge, per the
+   `rejudge/`-tree correction above). Recomputed complete: **94.4% over 2,200**. Fixed.
+
+**Verified correct, no change needed:** every paired contrast (+57.0/+34.0/+34.7 with
+172/1, 108/6, 111/7; pixtral +30.0, CI [+17.9,+40.9], 37/7, p=5.3e-06; qwen 5→3, p=0.63) ·
+the kappa ranges (floored qwen 0.49/0.56; benign 0.65–0.94) · and the judge-selection
+figures, checked against `JUDGE_MODEL_REPORT.md` rather than recalled: gpt-5-mini HarmBench
+**50%** flagged at **κ=0.680**, gemini-2.5-pro **33%** at **κ=0.438**.
+
+**Also checked and deliberately NOT changed:** `tab:claims` says the benign effect spans
+"+23 to +57pp, hosted", and +57 is the caption-image arm of the property sweep, not a
+blank-canvas contrast (whose top is +52.3). That looked like an inflated range — but the
+phrasing is used identically at four sites and is consistent with the paper's own thesis
+that presence raises refusal *and* properties set the price. Not an error; recorded so it is
+not "fixed" by a later session.
+
+**Updated for today's evidence:** the `tab:claims` row "The judge does not manufacture the
+effect" cited only the refusal anchor; it now reads "survives a cross-family judge; both
+rubrics human-anchored, κ=0.79/0.68; differential +3.8pp". Build clean: 0 errors,
+0 undefined, 1 overfull box of 1.34pt, 20pp.
+
+**Lesson:** the cross-family panel's *computed* outputs were pasted into the paper correctly,
+but two summary statements written from memory around them were not. Summary sentences need
+the same recompute-and-check as the headline digits — they are what a reviewer actually reads.
