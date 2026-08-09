@@ -1,0 +1,67 @@
+# Paper B (AS-2) · TOPIC-STRATIFIED BENIGN COST — the CLAUDE cells only.
+#
+# WHY THIS PRESET EXISTS. `topic_stratified_stage2` ran as AICR job 327869 and
+# completed 4 of 6 cells. The two `claude-sonnet-4-6` cells died in ~3 seconds on
+#
+#     400 invalid_request_error -- "This organization has been disabled."
+#
+# which was the OWNER'S PERSONAL Anthropic account being disabled by a policy
+# action (not billing; an appeal was filed 2026-08-09 and review decisions are
+# final). `scripts/op_refs` now routes ANTHROPIC_API_KEY to the NeU account on
+# local + aicr + xc + explorer, verified live on all four boxes against
+# claude-sonnet-4-6 specifically before this preset was submitted.
+#
+# ⚠️ RERUNNING THE FULL STAGE-2 PRESET WOULD RE-BILL THE FOUR COMPLETED CELLS
+# (~$3 of already-spent judge and target calls) and would ALSO create duplicate
+# cells for gpt-4o-mini and gemini-2.5-flash-lite in the same campaign, which is
+# exactly the condition that makes latest-wins cell selection unsafe. So this
+# preset carries the two missing cells and nothing else.
+#
+# EVERYTHING ELSE IS BYTE-IDENTICAL to the parent preset: same stage-1 render dir
+# (so the same 300 prompts and the same single blank canvas,
+# md5 176f5542fbd3fd366cda24334ae15028), same prompt_range, same pinned benchmark
+# and rubric, same judge, same campaign. The claude row must be comparable to the
+# two rows already collected, and to the paper's published claude row.
+#
+# ⚠️ ONE THING IS *NOT* IDENTICAL, and it must be recorded rather than hidden:
+# these two cells are served through a DIFFERENT ANTHROPIC ACCOUNT than the four
+# already collected and than every earlier claude number in the paper. Same model
+# id, same provider, same endpoint -- an account is not a serving route -- so no
+# confound is expected. It is noted because the paper's own Table 10 is a study
+# of exactly this class of assumption, and an unrecorded infrastructure change
+# under a published number is how that kind of thing turns into a defect later.
+#
+# VALIDITY GATE before interpreting: the no-image arm should land near the other
+# stratified baselines (gpt-4o-mini 19.0%, flash-lite 24.0%) and ABOVE claude's
+# 12% on the original two-category slice, since the stratified set is broader.
+# A baseline far outside that band means the strata differ in base sensitivity
+# for claude specifically -- reportable, but then read the per-category deltas
+# rather than the aggregate.
+#
+# COST: 2 cells x 300 prompts = 600 claude-sonnet-4-6 calls + 600 gpt-5-mini
+# judge calls. ~$2, inside the $4-7 the owner approved for this round on
+# 2026-08-08 (~$3-4 of which the four completed cells already spent).
+#
+# SUBMIT (AICR):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch image_presence_threshold/topic_stratified_stage2_claude'
+
+num_main_job_threads: 2
+num_cluster_jobs: 1          # API target + API judge — no vLLM server needed.
+
+_text:  &text  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260809_014849_30839437/non_llm_baseline
+_blank: &blank outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260809_014849_30839437/ir_blank
+
+_b: &b
+  mode: defense+evaluate
+  defense: no_defense
+  target_model: claude-sonnet-4-6
+  prompt_range: [0, 299]
+  benchmark: jailbreakbench_benign   # pinned: hold the reporting path constant
+  judge_method: jbb_refusal          # pinned: hold the INSTRUMENT constant
+  judge_model: gpt-5-mini
+  campaign: paper_b_topic_stratified
+
+tasks:
+  - {<<: *b, source_transform_subdir: *text}
+  - {<<: *b, source_transform_subdir: *blank}
