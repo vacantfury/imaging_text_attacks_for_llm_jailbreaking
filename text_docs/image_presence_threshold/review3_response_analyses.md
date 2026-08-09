@@ -691,3 +691,103 @@ fixed in passing — `tab:families` (15.3pt) and `tab:modelids` (38.4pt), both a
 set to `\scriptsize`. Note for future layout work: **`aaai2027.sty` clamps `\footnotesize` to
 `\small`**, so `\small → \footnotesize` changes a table's width by exactly nothing;
 `\scriptsize` is the first step down that actually does anything.
+
+---
+
+## Con 6 / Q3 — HUMAN HALF: SHEETS BUILT AND VERIFIED, AWAITING THE OWNER'S LABELS (2026-08-09)
+
+The independent-judge half closed above. This is the *"targeted manually annotated audit"*
+half, over exactly the three claims Q3 names. **Everything is prepared to the last
+keystroke; only the labelling itself is owner-side.**
+
+**Tooling (committed, `ee5e529`):**
+- `src/analysis/paper_b_human_eval.py` — builds the blind sheets
+- `src/analysis/paper_b_human_eval_score.py` — scores the returned labels
+
+**Artifacts** (in gitignored `judge_model_issue/`, because they hold harmful text):
+`as2_roundA_{benign,harmful}_label_sheet_BLANK.csv`, the two `_key.csv` files, and
+`as2_roundA_INSTRUCTIONS.md`.
+
+### Design, and why each choice is the one it is
+
+**Blind by construction — stronger than Paper C could manage.** Our manipulation is whether
+a *blank canvas* is attached, so the request text is byte-identical between arms. The sheet
+carries only request + response; there is no channel through which the arm could leak.
+Paper C had to strip `defense` and `attack_family` columns; here there is nothing to strip.
+⚠️ The one residual leak is **stated, not hidden**: a contrast pair puts the same request in
+the sheet twice, so a repeat is noticeable. That reveals *pair membership*, never *arm
+assignment* — and arm assignment is the only thing that must be blind, since the label is
+per response. Rows are shuffled so pair members scatter.
+
+**Two sheets, not one**, because the benign cells take the refusal rubric and the harmful
+cells the HarmBench rubric; one file would ask the annotator to hold two decision rules at
+once. Both rubrics are reproduced verbatim from the evaluators, so human and judge measure
+the same thing.
+
+**Two strata, never pooled** (the scorer enforces the separation, since pooling them is the
+easy way to manufacture a flattering number):
+
+| stratum | benign | harmful | what it is for |
+|---|---|---|---|
+| **A — contrast** (judge-discordant pairs, round-robin across models) | 30 (15 pairs of 384) | 20 (10 pairs of 44) | is the judge's *discordance* real? Deliberately not representative; **never** used for prevalence |
+| **B — calibration** (uniform, **balanced across arms**) | 60 (30/30) | 40 (20/20) | agreement, prevalence, differential bias |
+
+The arm balance in B is load-bearing: the component that does **not** cancel in a paired
+contrast is (judge−human gap in the blank arm) − (the same gap in the text arm), and
+estimating it needs both arms equally.
+
+**Cells pinned by path** to the exact dirs the published numbers came from — never
+latest-wins. `pixtral-12b`'s blank arm is drawn from the recovery rejudge the paper cites,
+since its `defense+evaluate` cell has null verdicts.
+
+### Verified before handing over (not asserted)
+
+Sheets carry **zero** leak columns · 0 empty requests/responses · sample_id joins key 1:1 ·
+all 25 contrast pairs complete with both arms · **0** concordant pairs leaked into the
+contrast stratum · calibration exactly balanced 30/30 and 20/20. The scorer was smoke-tested
+end-to-end on synthetic labels at 12% disagreement and **the synthetic files were deleted**
+so they cannot be mistaken for real ones.
+
+### Load and the one honest caveat
+
+**150 responses** (90 refusal at ~2.1k chars mean, 60 harm at ~1.3k). Agreement and per-arm
+kappa use all 150, so the effective n per arm is 45 (benign) / 30 (harmful) — comparable to
+the paper's existing anchor at n≈50 per arm, but on **these** cells rather than a
+neighbouring manipulation, which is the reviewer's actual point.
+
+⚠️ **The differential-bias CI comes from stratum B alone (n=30/arm benign, 20/arm harmful)
+and will be WIDE** — the smoke test showed roughly ±25–30pp at the harmful n. That must be
+reported as a bound, not rounded into "the bias cancels" (the paper already declines to make
+that move for the existing anchor and must decline again here). If a tighter interval is
+wanted, `--calib-refusal 100 --calib-harm 60` raises it to n=50/arm at a cost of ~60 more
+responses.
+
+### What the scorer emits
+
+Cohen's kappa overall and **per arm** (a judge confused by attachment would agree *worse* in
+the blank arm) · prevalence per arm · differential bias with a 10k within-arm bootstrap CI ·
+the population shift on stratum B, flagged **unpaired** since B samples arms independently
+and is therefore *not* like-for-like with the paper's paired delta · and discordance
+validity: of the pairs the judge scored as changed, how often the human agrees there was a
+change and in the same direction — unbiased *conditional on judge discordance*, which is the
+conditional the objection actually doubts.
+
+---
+
+## AS-2 residue, current as of 2026-08-09 (supersedes the earlier "Residue" section)
+
+Everything in that earlier list is now closed — con 1, con 5, con 10 and the lit round each
+have their own section above. What remains:
+
+1. **Human labels** — the sheets above, owner's hands. The last open review-3 item.
+2. **Page trim** — untouched by policy: it is the last step and the owner's call.
+
+**⚠️ Stale TODO labels, NOT fixed here.** TODO items titled *"ORACLE-LEAK RERUN — Paper B
+(AS-2), the ONE paper materially affected"* and *"PAPER B MECHANISM-SWEEP EXTENSION"* both
+predate the **2026-08-08 AS-2/AS-7 split** and are AS-7's work, not AS-2's — "Oracle
+Inflation" is literally in AS-7's title. Verified against the current sources: **neither the
+AIA version nor the arXiv v2 mentions ECSO, SemanticSmooth or CIDER even once**, and both
+state "no defense in the loop" five times. Left unedited deliberately: `TODO.md` was modified
+five minutes earlier by a concurrent session — almost certainly the dedicated AS-7 session
+that owns those items — and racing another session's edits in a shared working tree is worse
+than a stale label. Flagged to the owner instead.
