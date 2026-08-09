@@ -58,6 +58,31 @@ plus the explicit statement of why no ratio is computed. The prevalence caveat
 and the no-summed-error-count rule were preserved verbatim from the old text.
 ⚠️ **Do not reintroduce the ratio without writing the code first.**
 
+**RESIDUE FOUND AND REMOVED 2026-08-08** (post-edit consistency audit). The drop
+pass rewrote the **Results** section but missed the **abstract** and the
+**conclusion**, both of which still quoted the ratio — the abstract including
+*"every lower bound at or above 1.8"*, which is one of the very bootstrap
+confidence bounds that had no producing code and caused the drop. So the paper
+simultaneously said four times in the body *"we deliberately do not compute a
+ratio"* and quoted one in its two most-read places, with an unreproducible
+statistic surviving in the abstract.
+
+Re-verified before fixing: `grep -rilE "exchange_rate|refusals_per|per_prevented"
+src/` returns nothing, and every bootstrapping file under `src/analysis/` belongs
+to Paper C or D. Five sites swept in one pass — abstract, intro *"What we do not
+claim"* (`the rate should be known` → `the cost should be known`), Discussion vs
+`zou2026understanding` (`at what rate` → `set against what it prevents`), and two
+in the Conclusion. All replaced with the raw two-sided comparison
+(+51/+34/+23pp against 18/5/6 points prevented), which now reads identically in
+abstract, intro, results and conclusion. Backup: `paper.tex.pre-ratio-residue`.
+
+🔁 **ROOT CAUSE, third instance this week:** an edit pass that targets *predicted
+phrasings* only touches what it predicted. The localization pass missed 2 of 9
+sites the same way, and two orphan floats slipped through for the same reason.
+**Standing rule for any claim-retraction pass: after editing, grep the CONCEPT
+(numbers, synonyms, implied nouns like "rate"/"per") and read every hit — never
+trust the edit list as the coverage check.**
+
 **Why the ratio cannot carry the paper:**
 
 * Only `claude-sonnet-4-6`'s rate is well determined (2.8, CI [1.9, 4.8]). The
