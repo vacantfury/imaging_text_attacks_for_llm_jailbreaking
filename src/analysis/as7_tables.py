@@ -443,6 +443,113 @@ def verify(numbers: dict, tex_path: str) -> list[str]:
 
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# multiplicity -- Holm-Bonferroni within declared families
+# ---------------------------------------------------------------------------
+#
+# Review 1, con 5: the paper reports a large family of exact McNemar tests with
+# no correction, so a reader cannot tell which claims survive multiplicity. This
+# computes that, and it is deliberately NOT a single global correction over every
+# test in the paper: correcting across questions that were never in competition
+# (does the protocol inflate? does the defense help? which stage carries it?)
+# would be over-conservative in a way that hides real effects. Instead each
+# FAMILY below answers ONE question, is fixed in advance by the design, and is
+# corrected within itself at alpha = 0.05.
+#
+# What this cannot fix, and the paper says so: Holm addresses prompt-level
+# multiplicity only. It does nothing about campaign-level variation from model
+# nondeterminism and API drift, which is con 4 and needs reruns, not statistics.
+
+FAMILIES = {
+    "F1 oracle inflation (oracle vs deployable, same defense/encoding/target)": "inflation",
+    "F2 defense benefit (no_defense vs defense, per protocol)": "benefit",
+    "F3 read position (single-stage grant vs deployable, ECSO)": "stage",
+    "F4 channel coverage on benign traffic (text arm vs image arm)": "benign",
+}
+
+
+def holm(tests: list[tuple[str, float]], alpha: float = 0.05) -> list[tuple]:
+    """Holm-Bonferroni step-down. Returns (label, p, threshold, survives)."""
+    m = len(tests)
+    order = sorted(range(m), key=lambda i: tests[i][1])
+    out = [None] * m
+    still = True
+    for rank, i in enumerate(order):
+        label, p = tests[i]
+        thr = alpha / (m - rank)
+        if still and p > thr:
+            still = False
+        out[i] = (label, p, thr, still)
+    return out
+
+
+def _gather(cells) -> dict:
+    fam = {k: [] for k in FAMILIES}
+    grant = [c for c in cells if c["campaign"] == "as7_protocol_grant"]
+    rp = [c for c in cells if c["campaign"] == "as7_read_position"]
+    ben = [c for c in cells if c["campaign"] in BENIGN_CAMPAIGNS]
+    f1 = [k for k in FAMILIES if k.startswith("F1")][0]
+    f2 = [k for k in FAMILIES if k.startswith("F2")][0]
+    f3 = [k for k in FAMILIES if k.startswith("F3")][0]
+    f4 = [k for k in FAMILIES if k.startswith("F4")][0]
+
+    for defense, guard, arm in LADDER_ROWS:
+        for enc in ("code", "formal"):
+            for target in ("internvl3_8b", "pixtral_12b"):
+                kw = dict(campaign="as7_protocol_grant", target=target,
+                          defense=defense, encoding=enc, arm=arm)
+                if guard:
+                    kw["guard"] = guard
+                o = _find(grant, query_source="original", **kw)
+                d = _find(grant, query_source="encoded", **kw)
+                st = contrast(o, d)
+                if st:
+                    fam[f1].append((f"{defense}/{target}/{enc}", st["p"]))
+                nd = _find(grant, defense="no_defense", campaign="as7_protocol_grant",
+                           target=target, encoding=enc, arm=arm)
+                for qs in ("original", "encoded"):
+                    stb = contrast(nd, _find(grant, query_source=qs, **kw))
+                    if stb:
+                        fam[f2].append((f"{defense}/{target}/{enc}/{qs}", stb["p"]))
+
+    for target in ("internvl3_8b", "pixtral_12b"):
+        for enc in ("code", "formal"):
+            dep = _find(grant, campaign="as7_protocol_grant", target=target,
+                        defense="ecso", encoding=enc, arm="decoy", query_source="encoded")
+            for stage in ("tell", "cap", "safe"):
+                cell = _find(rp, target=target, encoding=enc, query_source={stage: "original"})
+                st = contrast(dep, cell)
+                if st:
+                    fam[f3].append((f"{stage}/{target}/{enc}", st["p"]))
+
+    for bench in ("orbench_benign_hard", "orbench_benign_1k"):
+        for guard in ("wildguard", "llama_guard_3_8b", "guardreasoner_vl_7b"):
+            st = block_contrast(
+                _find(ben, benchmark=bench, defense="guard_baseline", guard=guard, arm="TEXT"),
+                _find(ben, benchmark=bench, defense="guard_baseline", guard=guard, arm="IMAGE"))
+            if st:
+                fam[f4].append((f"{guard}/{bench.split('_')[-1]}", st["p"]))
+    return fam
+
+
+def multiplicity(numbers: dict, alpha: float = 0.05) -> str:
+    out = [f"% Holm-Bonferroni within declared families, alpha={alpha}"]
+    tot = surv = 0
+    for name, tests in _gather(numbers["cells"]).items():
+        if not tests:
+            out.append(f"%\n% {name}: NO TESTS FOUND")
+            continue
+        res = holm(tests, alpha)
+        k = sum(1 for r in res if r[3])
+        tot += len(tests); surv += k
+        out.append(f"%\n% {name}")
+        out.append(f"%   m={len(tests)}, survive={k}")
+        for label, p, thr, ok in sorted(res, key=lambda r: r[1]):
+            out.append(f"%     {'KEEP' if ok else 'drop'}  {label:34} p={p:.3e}  thr={thr:.3e}")
+    out.append(f"%\n% TOTAL: {surv}/{tot} contrasts survive Holm within their family")
+    return "\n".join(out)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -458,6 +565,10 @@ def main() -> int:
     v = sub.add_parser("verify", help="check paper.tex against the numbers file")
     v.add_argument("--numbers", required=True)
     v.add_argument("--tex", required=True)
+
+    mp = sub.add_parser("multiplicity", help="Holm-Bonferroni within declared families")
+    mp.add_argument("--numbers", required=True)
+    mp.add_argument("--alpha", type=float, default=0.05)
 
     a = ap.parse_args()
 
@@ -484,6 +595,10 @@ def main() -> int:
 
     if a.cmd == "emit":
         print(emit(numbers))
+        return 0
+
+    if a.cmd == "multiplicity":
+        print(multiplicity(numbers, a.alpha))
         return 0
 
     missing = verify(numbers, a.tex)
