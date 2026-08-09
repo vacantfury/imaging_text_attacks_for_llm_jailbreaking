@@ -1,0 +1,47 @@
+# bestofn_attack AS-4 — ROUND 18b: Llama-3.3-70B, the FIXED-VERDICT half of the decisive pair.
+#
+# Second of the two chained R18 jobs. Read `r18a_llama70b_control_and_sage.yaml` for the full
+# rationale: why the 70B is being re-run rather than deleted, why only the decisive pair is in
+# scope, why the round is split, and the chain command.
+#
+# ── WHAT THIS CELL PAIR IS FOR ──────────────────────────────────────────────
+# selfdefend screens with a SEPARATE shadow model (`llama3_8b_cluster`) created through
+# LLMServiceFactory.create() with no config override, so it inherits conf/llm/default.yaml
+# temperature 0.0 — its verdict is FIXED no matter what the target's decoding does. That is the
+# whole point: it performs the same function as SAGE (ask a language model whether the request
+# is harmful) while holding the one variable that matters in the opposite state.
+# Measured on the other three targets: +1% (llama-8B), -5% (gemma), +8% (qwen) net of control —
+# i.e. indistinguishable from no effect. PREDICTION HERE: the same null.
+# ⚠️ A large positive here would NOT be a bonus result — it would break the decisive pair and
+# the paper's central claim with it. Report it if it happens.
+#
+# ── WHY IT IS ITS OWN JOB ───────────────────────────────────────────────────
+# It needs a THIRD served model (the 8B shadow), so servers go 70B x2 replicas (4 GPUs) +
+# shadow + wildguard = 4 server JOBS using 6 GPUs. That is inside xc's budget of 6 and still
+# leaves GPUs 6-7 for the box owner's non-SLURM work. Bundling it into 18a would have made a
+# 6-cell round = 3 waves on 2 replicas, which at the pessimistic end of the 70B rate estimate
+# runs ~17h against a 20h server wall — the exact gamble that lost R14a and R16.
+# Only 2 cells here, so 1 wave: ~1h optimistic, ~5.5h pessimistic. Wide margin either way.
+#
+# ── COMPARABILITY ───────────────────────────────────────────────────────────
+# Same transform dir, same 10,000 draws, same wildguard judge, same max_tokens as 18a and as
+# the llama-8B / gemma / qwen panels. ⚠️ Do not change one without the others — the
+# cross-target contrast is the result, and it is only legal if these are held fixed.
+# max_tokens is set explicitly for the same reason as in 18a: the 70B config's `model.max_tokens
+# : 512` is correct for its judge role and would truncate every target response here.
+num_main_job_threads: 2      # = 70B replica count
+num_cluster_jobs: 5          # 4 servers (70B x2 + llama3_8b shadow + wildguard) + orchestrator
+
+_e: &e
+  mode: defense+evaluate
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  target_model: llama_3_3_70b_instruct
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r18_llama70b_temperature
+
+tasks:
+  # ---- SEPARATE + GREEDY shadow => FIXED verdict => predict NULL at T=0 ----
+  - {<<: *e, defense: selfdefend, target_model_config: {temperature: 1.0, max_tokens: 16384, max_concurrency: 64}}
+  - {<<: *e, defense: selfdefend, target_model_config: {temperature: 0.0, max_tokens: 16384, max_concurrency: 64}}

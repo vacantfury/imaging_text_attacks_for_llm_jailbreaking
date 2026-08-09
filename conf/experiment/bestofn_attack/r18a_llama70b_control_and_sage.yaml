@@ -1,0 +1,83 @@
+# bestofn_attack AS-4 — ROUND 18a: A FOURTH TARGET FOR THE DECISIVE PAIR (Llama-3.3-70B).
+#
+# OWNER-APPROVED 2026-08-09 ("yes, go"). FREE — every model is cluster-served.
+#
+# ── WHY: THE 70B's EXISTING CELLS CANNOT BE USED, AND DELETING THEM IS THE WORSE FIX ────
+# The paper cites Llama-3.3-70B at 20+ sites ("all four targets", four tables, the wrapper
+# panel). Every one of those rests on FOUR cells from 2026-07-28 — `no_defense` and `sage`
+# only — which predate the 2026-08-05 method-fidelity fixes. They are not *wrong in direction*
+# (the audit established that pre-fix `code_attack` renders a WEAKER attack, so fixed numbers
+# rise and no claim reverses), but they are not comparable to post-fix cells sitting in the
+# same table, and the 70B has NO temperature panel at all — so under the 2026-08-09 reframe it
+# currently contributes nothing to the central claim.
+# Re-running is the only option that turns a provenance liability into a FOURTH TARGET for the
+# decisive comparison. Owner chose it over deleting or quarantining.
+#
+# ── SCOPE: THE DECISIVE PAIR PLUS ITS CONTROL, NOTHING ELSE ─────────────────
+# The claim this round joins is sage-vs-selfdefend: two defenses that do the SAME JOB (ask a
+# language model whether a request is harmful) and differ only in WHOM they ask —
+#   sage        -> asks the TARGET under the target's own decoding  => verdict is a SAMPLE
+#   selfdefend  -> asks a separate shadow model at temperature 0    => verdict is FIXED
+# measured +63/+76/+82 vs +1/-5/+8 net of control on llama-8B / gemma / qwen.
+# `llm_self_defense` and `guard_baseline` are deliberately NOT run here: they are the two rows
+# whose denominators are single-digit or ceiling-limited, they are reported as counts rather
+# than rates, and on a 70B each extra arm costs hours. A fourth target for the noisy rows would
+# not make them less noisy.
+#   18a = no_defense (CONTROL) + sage   <- THIS FILE, 4 cells
+#   18b = selfdefend                    <- 2 cells, needs the extra shadow model
+#
+# ── SIZING, AND WHY THIS IS SPLIT ───────────────────────────────────────────
+# 4 cells x 10,000 draws x 1 target call = 40,000 calls on a 70B.
+# The rate is genuinely uncertain: an 8B/7B sustains ~900 responses/min/replica on an A100 at
+# concurrency 64, gemma-2-9B managed only ~49/min (architecture, not size), and the 70B config
+# estimates "5-6x slower per token" than an 8B. That spread is 30-180/min, i.e. 1h to 5.5h per
+# cell. On 2 replicas this round is 2 waves => 2h at the optimistic end, ~11h at the pessimistic
+# one, against a 20h server wall.
+# ⚠️ A single 6-cell preset would be 3 waves => up to ~17h, which is inside the wall only if the
+# optimistic half of that range holds. Guessing wrong on exactly this arithmetic cost a whole
+# round on 2026-08-07 (R14a) and another on 2026-08-08 (R16, off by ~18x). So the round is
+# SPLIT and chained: no single job depends on the estimate being right.
+#
+# ── SERVERS: 70B IS THE ONE MODEL THAT IS NOT 1 GPU ────────────────────────
+# conf/llm/llama_3_3_70b_instruct.yaml `profiles.xc` sets num_gpus=2 (tensor-parallel) because
+# fp8 70B is ~70 GB and an 80 GB A100 at utilization 0.92 leaves only ~3 GB of KV cache — less
+# than one 20480-token sequence needs. Do NOT "optimise" that to 1 GPU.
+#   2 replicas x 2 GPUs + wildguard = 3 server JOBS using 5 GPUs, leaving GPUs 6-7 free for the
+#   box owner's non-SLURM work (SLURM cannot see it; the slack is what prevents an OOM).
+#
+#   ssh xc; cd ~/projects/llm_guardrail_security
+#   A=$(sbatch --parsable scripts/run_experiment_xc.sbatch bestofn_attack/r18a_llama70b_control_and_sage)
+#   sbatch --dependency=afterany:$A scripts/run_experiment_xc.sbatch bestofn_attack/r18b_llama70b_selfdefend
+#
+# ── max_tokens IS SET EXPLICITLY AND MUST STAY ──────────────────────────────
+# conf/llm/llama_3_3_70b_instruct.yaml carries `model.max_tokens: 512` — correct for its JUDGE
+# role and catastrophic for a TARGET role, where it would truncate every response and make this
+# panel incomparable to the 8B one (which ran 16384). The xc profile's max_model_len is 20480,
+# so 16384 fits. ⚠️ vLLM 400s every request if max_tokens > max_model_len, and the run still
+# reports "Successful" — that silently voided 40,000 requests on 2026-07-28 (job 227537).
+#
+# ── PRE-REGISTERED ──────────────────────────────────────────────────────────
+# sage should show a LARGE positive net-of-control collapse (the other three gave +63/+76/+82).
+# The control's own drop is the quantity to read FIRST — it was 18% on llama-8B, 24% on gemma,
+# 12% on qwen, and it must be subtracted before sage's number means anything.
+# If sage lands near zero net of control on a 70B, the claim is size-dependent and the paper
+# must say so rather than reporting three targets and omitting the fourth.
+num_main_job_threads: 2      # = 70B replica count
+num_cluster_jobs: 4          # 3 servers (70B x2 replicas + wildguard) + orchestrator
+
+_e: &e
+  mode: defense+evaluate
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  target_model: llama_3_3_70b_instruct
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  campaign: bestofn_attack_r18_llama70b_temperature
+
+tasks:
+  # ---- CONTROL: no verdict at all — read this before interpreting sage ----
+  - {<<: *e, defense: no_defense, target_model_config: {temperature: 1.0, max_tokens: 16384, max_concurrency: 64}}
+  - {<<: *e, defense: no_defense, target_model_config: {temperature: 0.0, max_tokens: 16384, max_concurrency: 64}}
+  # ---- ASKS THE TARGET => sampled verdict => predict LARGE net collapse ----
+  - {<<: *e, defense: sage, target_model_config: {temperature: 1.0, max_tokens: 16384, max_concurrency: 64}}
+  - {<<: *e, defense: sage, target_model_config: {temperature: 0.0, max_tokens: 16384, max_concurrency: 64}}
