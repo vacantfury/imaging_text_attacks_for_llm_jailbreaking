@@ -179,6 +179,68 @@ FAMILIES = [
                  printed=3.64e-12,
                  note="JRS (Wei et al. 2026) predicted +28.13pp on this exact checkpoint"),
         ]),
+    # ---------------------------------------------------------------- F8
+    # Founded 2026-08-09 with the topic-stratified round (campaign
+    # paper_b_topic_stratified). The borderline rung's original 100 prompts were
+    # deception + harassment ONLY -- prompt_range [0,99] over a category-GROUPED
+    # file -- so the paper's central cost claim rested on 2 of OR-Bench's 10
+    # categories. 30 x 10 categories re-measures it. BH rather than Holm: this is
+    # a per-category sweep, the same exploratory shape as F2.
+    # The three AGGREGATE contrasts (claude 158/1, 4o-mini 109/0, fl.-lite 110/6)
+    # are deliberately NOT listed as separate tests -- they are the same claim as
+    # F1 on a better sample, and at p = 4.4e-46 / 3.1e-33 / 7.6e-26 they clear any
+    # correction in this paper by tens of orders of magnitude.
+    Family(
+        "F8", "The benign cost by OR-Bench category, on the stratified sample "
+              "(does the effect survive outside deception/harassment)",
+        "bh", False, [
+            Test("claude-sonnet-4-6 / deception", "tab:strata", 24, 0),
+            Test("claude-sonnet-4-6 / harassment", "tab:strata", 16, 0),
+            Test("claude-sonnet-4-6 / harmful", "tab:strata", 14, 0),
+            Test("claude-sonnet-4-6 / hate", "tab:strata", 17, 0),
+            Test("claude-sonnet-4-6 / illegal", "tab:strata", 16, 0),
+            Test("claude-sonnet-4-6 / privacy", "tab:strata", 15, 0),
+            Test("claude-sonnet-4-6 / self-harm", "tab:strata", 19, 0),
+            Test("claude-sonnet-4-6 / sexual", "tab:strata", 12, 0),
+            Test("claude-sonnet-4-6 / unethical", "tab:strata", 7, 1),
+            Test("claude-sonnet-4-6 / violence", "tab:strata", 18, 0),
+            Test("gpt-4o-mini / deception", "tab:strata", 13, 0),
+            Test("gpt-4o-mini / harassment", "tab:strata", 7, 0),
+            Test("gpt-4o-mini / harmful", "tab:strata", 16, 0),
+            Test("gpt-4o-mini / hate", "tab:strata", 10, 0),
+            Test("gpt-4o-mini / illegal", "tab:strata", 10, 0),
+            Test("gpt-4o-mini / privacy", "tab:strata", 13, 0),
+            Test("gpt-4o-mini / self-harm", "tab:strata", 8, 0),
+            Test("gpt-4o-mini / sexual", "tab:strata", 8, 0),
+            Test("gpt-4o-mini / unethical", "tab:strata", 13, 0),
+            Test("gpt-4o-mini / violence", "tab:strata", 11, 0),
+            Test("gemini-2.5-flash-lite / deception", "tab:strata", 5, 1),
+            Test("gemini-2.5-flash-lite / harassment", "tab:strata", 9, 1),
+            Test("gemini-2.5-flash-lite / harmful", "tab:strata", 7, 1),
+            Test("gemini-2.5-flash-lite / hate", "tab:strata", 16, 0),
+            Test("gemini-2.5-flash-lite / illegal", "tab:strata", 14, 1),
+            Test("gemini-2.5-flash-lite / privacy", "tab:strata", 13, 1),
+            Test("gemini-2.5-flash-lite / self-harm", "tab:strata", 11, 0),
+            Test("gemini-2.5-flash-lite / sexual", "tab:strata", 17, 0),
+            Test("gemini-2.5-flash-lite / unethical", "tab:strata", 7, 1),
+            Test("gemini-2.5-flash-lite / violence", "tab:strata", 11, 0),
+        ]),
+    # ---------------------------------------------------------------- F9
+    # Founded 2026-08-09 answering review 3 con 7 / Q3: the property claims were
+    # tested against the TEXT arm, never against each other, so the paper printed
+    # differences it had not tested. Both survive. All colour arms are 512^2, so
+    # black-vs-white is size-matched; the content contrast is size-matched at
+    # 1024x141 by construction.
+    Family(
+        "F9", "Direct BETWEEN-ARM property contrasts on gemini-2.5-flash-lite "
+              "(the two the paper quotes as differences)",
+        "holm", True, [
+            Test("black vs white, both 512^2", "tab:imgprops", 22, 0, printed=4.8e-7,
+                 note="the paper's '+22pp more than a white one of identical size'"),
+            Test("caption vs size-matched blank, 1024x141", "tab:imgprops", 31, 1,
+                 printed=1.5e-8,
+                 note="the paper's '+30pp more than a size-matched blank'"),
+        ]),
 ]
 
 # Declared-null families, listed so the inventory is complete. A multiplicity
@@ -186,8 +248,12 @@ FAMILIES = [
 # what governs their interpretation is POWER, which the paper states inline.
 NULL_FAMILIES = {
     "serving-route control (tab:sameweights)":
-        "4 route contrasts, exact McNemar p>=0.25, 1-3 discordant of 100. "
-        "Claim is equivalence; correction is vacuous and would only widen it.",
+        "4 route contrasts, 1-3 discordant of 100. RESTATED 2026-08-09 after "
+        "review 3 con 2: the claim is no longer a non-rejection (p>=0.25 at that "
+        "discordant count has almost no power) but a BOUND -- Newcombe 95% CIs "
+        "[-2.5,+5.1], [-2.2,+4.5], [-2.2,+4.5], [-8.0,+1.0] pp, i.e. equivalent "
+        "within +/-10pp on every arm and +/-5pp on both blank arms. Correcting a "
+        "set of intervals is not meaningful; what governs is the margin.",
     "three open-weight nulls (tab:ow_threshold)":
         "The claim drawn is explicitly NOT 'no effect' -- the paper retracts that "
         "reading (a fourth open checkpoint refuted it) and reports the nulls as "
