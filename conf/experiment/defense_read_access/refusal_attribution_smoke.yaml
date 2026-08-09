@@ -1,0 +1,45 @@
+# AS-7 · target-refusal rejudge — WHO produced the refusal?
+#
+# Purpose (attribution frame, 2026-08-09): the paper's central claim is that a
+# guardrail evaluation reports one number that is the SUM of two systems' behaviour
+# -- the guard's blocks and the TARGET MODEL's own refusals -- and that the oracle
+# protocol sometimes credits the guard with a refusal it had no part in.
+#
+# A marker/prefix scan already showed the shape (ECSO: 0 target refusals under the
+# deployable protocol -> ~25 under the oracle; concentrated entirely in the SAFE
+# stage). That scan is NOT admissible as the paper's mechanism: this repo has
+# already put a wrong number in a draft table via a prefix heuristic (4/100 where
+# the truth was 0/100). This round replaces the heuristic with a JUDGE.
+#
+# NO target queries -- rejudge re-scores stored responses only. Judge gpt-5-mini,
+# judge_method `refusal` (binary refusal classification of the response), which
+# REPLACES the benchmark's canonical HarmBench judge for this read-out. ASR is
+# unchanged and still comes from the original HarmBench scoring; this run adds the
+# orthogonal refusal column, it does not restate ASR.
+#
+# PRE-REGISTERED READ-OUT (written before the run):
+#   CONFIRMS  judged refusals track the marker scan: ~0 under deployable / TELL /
+#             CAP, substantially higher under oracle and SAFE-only, and ~0 in every
+#             guard_baseline cell => attribution frame stands; ECSO's oracle
+#             "benefit" is the target's own refusal, the gate's is guard detection.
+#   WEAKENS   judged refusals materially lower than the marker counts, or present
+#             under the deployable protocol too => the marker scan overcounted;
+#             report the gate/ECSO split WITHOUT the "target's own refusal" claim
+#             and keep the existing read-position framing.
+#   REFUTES   no oracle-vs-deployable refusal difference => the mechanism claim is
+#             wrong; §8.1's stage isolation stands on ASR alone and the frame stays
+#             as the two-contribution version.
+# The WEAKENS/REFUTES branches are REPORTED, never rerun away.
+# SMOKE: 2 cells only -- verify the refusal judge is alive and sane
+# before committing the full 28-cell round.
+num_cluster_jobs: 0
+num_main_job_threads: 2
+tasks:
+- mode: rejudge
+  responses_from: outputs/defense_read_access/defense+evaluate/harmbench/internvl3_8b_ecso_code_attack_ir_constant_20260808_044434_45536669
+  judge_model: gpt-5-mini
+  judge_method: refusal
+- mode: rejudge
+  responses_from: outputs/defense_read_access/defense+evaluate/harmbench/internvl3_8b_ecso_llm_formal_logic_ir_constant_20260808_045104_79855832
+  judge_model: gpt-5-mini
+  judge_method: refusal
