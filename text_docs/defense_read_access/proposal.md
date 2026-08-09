@@ -1,6 +1,8 @@
 # AS-7 · Read Access — proposal
 
-**Title (working):** *What the Defense Can Read: Channel Scope and Evaluation Protocol in Black-Box Multimodal Guardrails*
+**Title (SETTLED 2026-08-09, owner-approved):** *Whose Refusal Is It? The Unmeasured Contribution of Black-Box Multimodal Guardrails*
+
+*(Previous working titles, retired: "What the Defense Can Read: Channel Scope and Evaluation Protocol…"; "Read Access: Channel Coverage and Oracle Inflation…". **The word "oracle" is retired from the paper** — `jailbreak oracle` (Lin et al., MLSys 2026) already names an unrelated object in this subfield. The protocol is now **granted** vs **deployable**, with one footnote recording the rename.)*
 
 **ID:** AS-7 · **Codename:** Read Access · **Namespace:** `defense_read_access` · **Venue target:** AAAI-27 AI Alignment track · **Registered:** 2026-08-08 (owner order), split out of AS-2.
 
@@ -22,9 +24,16 @@ That dissociation does three things at once, and every one of them matters for t
 
 ## 2. The claim
 
-> **What a black-box input defense can read determines what it catches; what the evaluation lets it read determines how safe it looks.**
+> **A guardrail's reported benefit is not a property of the guardrail.** A defended pipeline holds two components that can refuse — the guard and the target model's own alignment — and every headline metric is a sum over both. Two variables no evaluation records (which channel carries the payload; what text fills the defense's internal read) move the guard's own share of that safety from **0% → 41–45% → 99%**, with the pipeline described identically throughout.
 
-One idea with a deployment side and a measurement side. Everything below is an instance of it — this is deliberately *not* a list of four unrelated failure modes (an earlier framing called this a "decomposition"; that was wrong, because the components are not additive on a given cell — see §7).
+**Owner-approved 2026-08-09.** The old claim — *"what a defense can read determines what it catches; what the evaluation lets it read determines how safe it looks"* — is now the **mechanism**, not the thesis. It explains *why* the share moves; the thesis is that the share is never measured and swings across essentially its whole range.
+
+Three supporting pillars, all measured:
+1. **The split is recoverable at zero cost.** A guard block substitutes a fixed string for the model's response, so guard blocks (exact match, judge-free) and model refusals (judged) are disjoint. Any collected campaign can be decomposed retrospectively.
+2. **The read matters only where it reaches generation.** ECSO stage isolation: harm-verdict −7%, captioning +4%, answer-regeneration +38%. Explains the SemanticSmooth null exactly (a selection-only read conditions no candidate's text).
+3. **The inflated setting is what released code produces.** ECSO's reference implementation builds TELL/CAP/SAFE from a single `line['prompt']` field with no attacker-sent vs benchmark-behaviour distinction. Under a request-transforming attack a faithful port silently evaluates on a prompt the attacker never sent. Nobody chooses it.
+
+⚠️ **Two joints are deliberately NOT load-bearing yet** (stated in the paper as such): the decomposition covers the gate family on 8 cells and was specified *after* collection (not pre-registered); and we have verified the porting hazard in ECSO's code but have **not** shown a published evaluation that fell into it. Auditing 2–3 published encoded-attack evaluations for the same one-slot pattern would upgrade a hazard to a documented field-wide error.
 
 ---
 
