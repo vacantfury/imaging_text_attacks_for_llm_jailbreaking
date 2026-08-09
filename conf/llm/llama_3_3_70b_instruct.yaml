@@ -80,20 +80,25 @@ cluster:
       # Tensor-parallel across 2 cards puts ~35 GB of weights on each and leaves
       # ample KV. Do NOT "optimise" this back to 1 without re-checking card size.
       num_gpus: 2
-      # 🔴 num_instances MUST BE 1 ON XC — measured 2026-08-09, jobs 270/271 died.
-      # With num_instances=2 the two 2-GPU replicas were allocated OVERLAPPING cards
-      # and the second refused to start:
+      # 🔴 XC IS A SHARED SINGLE NODE AND THE BOX OWNER IS INVISIBLE TO SLURM.
+      # 2026-08-09, jobs 270/271: both 70B servers died on startup with
       #   ValueError: Free memory on device cuda:0 (35.15/79.25 GiB) on startup is
       #   less than desired GPU memory utilization (0.92, 72.91 GiB)
-      # 79.25 - 35.15 = 44 GiB — exactly one fp8 70B shard plus overhead, i.e. the
-      # OTHER replica's weights. All 8 GPUs read 0 MiB immediately before submit, so
-      # this was not the box owner and not a stale process: it is self-collision.
-      # SINGLE-GPU replicas isolate correctly here (gemma ran x3 on distinct cards the
-      # same day) — it is the MULTI-GPU (num_gpus: 2) request that xc's single-node
-      # SLURM does not place disjointly. Same family as the port-collision trap.
-      # Consequence: one replica, so a round is SEQUENTIAL — size presets accordingly
-      # (num_main_job_threads: 1) and prefer several small chained jobs, because with
-      # sequential cells a wall death loses only the in-flight cell, not the round.
+      # ROOT CAUSE (corrected — an earlier note in this file blamed self-collision
+      # between two 2-GPU replicas; that was WRONG): user `ubuntu` was running two
+      # non-SLURM 4-GPU `torchrun` GRPO jobs holding 58-79 GB on ALL EIGHT cards.
+      # `squeue` was empty the whole time. The 44 GiB "already resident" was the box
+      # owner's training run, not our own replica.
+      # ⚠️ THE CHECK THAT MATTERS: `nvidia-smi` + `nvidia-smi --query-compute-apps`
+      # IMMEDIATELY BEFORE SUBMIT — and understand it is a snapshot, not a lease. The
+      # owner's run started between an all-clear reading and our submit.
+      # num_instances stays 1 as CONTENTION RESILIENCE on a shared box: a 70B here
+      # already wants 2 cards, and asking for 4 makes a marginal box unusable. This
+      # is a policy choice, not a placement bug. Consequence: cells run SEQUENTIALLY
+      # (set num_main_job_threads: 1), which is the graceful failure mode — a wall
+      # death loses only the in-flight cell, not the round.
+      # 👉 When the owner is on the box, the 70B belongs on AICR (profiles.aicr:
+      # 1 GPU/replica on 96 GB cards, 3 replicas, 24h wall), not here.
       num_instances: 1
       # conf/clusters/xc.yaml defaults the server wall to 08:00:00, too short for
       # a 3-cell 70B round; a server dying mid-round strands every queued cell.
