@@ -1,0 +1,39 @@
+# ============================================================
+# Paper C (AS-3) — BENIGN CATEGORY COVERAGE, stage 1: render the stratified set
+# cspaper review 3 con 9 (2026-08-09)
+# ============================================================
+# WHY THIS EXISTS. Every over-refusal number in the paper is measured on
+# OR-Bench-Hard behaviors 0-99 taken in FILE ORDER. The released file is sorted by
+# category, so that slice contains only TWO of the ten categories -- deception (72)
+# and harassment (28). Measured consequence (src/analysis/paper_c_benign_category.py):
+# deception is over-refused MORE than harassment in all 30 guard x target x condition
+# cells, median gap 10.5 points, max 22.8. So the reported utility LEVELS are partly a
+# property of a category mix nobody chose. The contrasts survive (direction agrees in
+# 19/20), but the levels need a category-balanced measurement.
+#
+# `data/orbench_benign_hard_stratified_300.jsonl` is exactly 30 x 10 categories, and
+# carries the ORIGINAL OR-Bench ids, so per-category joins work downstream.
+#
+# THIS STAGE IS FREE: both transforms are non-LLM (text passthrough + plain image
+# render). No model calls, no API spend, no GPU needed. It exists as its own preset
+# only because stage 2 must reference stage 1's timestamped output subdir.
+#
+# Stage 2 chunks live in benign_stratified_s2_<guard>.yaml, chunked BY GUARD so each
+# round needs at most 2 concurrent servers -- the scheduling convention established by
+# the held-out round (heldout_s2_*.yaml).
+# ============================================================
+
+num_main_job_threads: 2
+num_cluster_jobs: 0
+
+_ob: &ob data/orbench_benign_hard_stratified_300.jsonl
+_rng: &rng [0, 299]
+
+tasks:
+  # text channel — the plain benign prompt, no encoding
+  - {mode: prompt_transform, source_file: *ob, prompt_range: *rng, benchmark: orbench_benign_hard,
+     transformation_list: [{type: non_llm_baseline}]}
+
+  # image channel — the benign prompt rendered as plain text in an image
+  - {mode: prompt_transform, source_file: *ob, prompt_range: *rng, benchmark: orbench_benign_hard,
+     transformation_list: [{type: ir_plain}]}
