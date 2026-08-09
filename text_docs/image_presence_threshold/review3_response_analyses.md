@@ -262,10 +262,76 @@ Readings:
 
 ---
 
+---
+
+## 4. INTEGRATED INTO THE PAPER (2026-08-09) — 17pp, 0 errors, 0 undefined refs
+
+Applied in three passes, each with unique-match assertions and a concept-level residue
+sweep (never a phrasing sweep — that is what caused three prior misses).
+
+**Pass A, corrections (12 edits).**
+- Domain over-claim removed at **six** sites, not the five first counted — the
+  Discussion also carried an illustrative "a benign user asking a medical question".
+  All now name measured OR-Bench categories.
+- Equivalence over-claim rewritten at four sites (abstract, Results, §serving-route,
+  table caption): "contributes nothing measurable" → a bounded interval with a
+  declared margin, plus the honest note that the ±10pp bound is *not* comfortably
+  below gemma's own +7–9pp effect, and that what it does exclude is a route artifact
+  behind the hosted models' +23 to +57pp.
+- The two quoted property differences now carry direct paired tests.
+- Seed contradiction resolved: the harness sets `seed=42` where accepted, but no
+  hosted provider honours one, so the field is inert and no bit-for-bit claim is made.
+
+**Pass B, the stratified round.** New `tab:strata` + a paragraph that states the
+sampling defect in the paper's own voice rather than quietly reporting the better
+number — the same posture the draft already takes on the withdrawn
+`gemini-2.5-flash` universal claim, which review 3 named as a credibility pro. The
+failed validity gate (claude baseline 9.3%) is written into the caption.
+
+**Pass C, multiplicity.** New families in `paper_b_multiplicity.py`:
+- **F8** — 30 stratified per-category tests, BH. The three aggregates are deliberately
+  *not* separate entries: they are F1's claim on a better sample, and at p = 4.4e-46 /
+  3.1e-33 / 7.6e-26 they clear any correction here by tens of orders of magnitude.
+- **F9** — the two direct between-arm property contrasts, Holm, both confirmatory.
+- The serving-route entry in `NULL_FAMILIES` restated from "non-rejection" to
+  "bounded interval", since correcting a set of intervals is not meaningful.
+
+Totals moved **37 → 69 corrected tests, 7 → 9 families**; global Bonferroni threshold
+α/69 = 7.3e-04, **36 of 69 survive**, primary claims survive, `--audit` 0 mismatches.
+Appendix counts updated to match.
+
+---
+
+## Two corrections to this file's own earlier entries
+
+1. **§3's "black vs white" was mislabelled.** The first pass compared `bBlack` against
+   `bGrey` and against `b512` while describing the latter as "colour, size differs",
+   and concluded the paper's colour claim needed narrowing. Wrong: `tab:imgprops`
+   shows **all three colour arms are 512²**, so the paper's comparison was
+   size-matched all along. The correct direct test is **black vs white +22.0pp, 22/0,
+   p=4.8e-07** — which confirms the printed "+22pp" exactly. The claim does not need
+   narrowing.
+2. **The "cost is visual structure, not OCR" finding is WITHDRAWN.** It rested on
+   line-drawing (64%) vs caption (68%), −4pp n.s. But the line drawing is 1189×1418
+   and the caption is 1024×141 — an 11× pixel difference — so that contrast does not
+   isolate OCR-ability from size and cannot support the conclusion. Nothing was
+   written into the paper on its strength. (The paper already handles this correctly
+   at §res-threshold for `qwen3-vl-8b`, where the matched-size content contrast is
+   reported as an underpowered lead, p=0.15.) Isolating OCR from visual structure
+   would need an arm we do not have: a 1024×141 non-text drawing.
+
+---
+
 ## Residue
 
-- The ten-category round must land before §1 is written into the paper.
-- Item 4 above (OCR vs visual structure) needs a prose audit of the paper's
-  content-axis language — **concept sweep, not a phrasing sweep**.
-- Human validation on the primary cells (con 8 / Q2) is deliberately untouched: the
-  standing order puts human eval last.
+- **Con 1 / Q1 (carrier scope)** — the localization claim is now bounded rather than
+  absolute, but the reviewer's preferred fix (dual-route on a large-effect checkpoint)
+  stays infrastructure-blocked. Limitations should say why it was not attempted.
+- **Con 3 (framing)** — "form, not content" vs real-world attachment–risk correlation
+  is untouched. It is a framing argument, not a measurement, and it is the one blocker
+  in the rating paragraph that no experiment resolves.
+- **Con 5 (decoupling as across-model description)** — untouched.
+- **Six missing references** — via `lit-review-loop`, Phase 0 coverage check by eprint
+  id first.
+- **Human validation on the primary cells (con 8 / Q2)** — deliberately last, per the
+  standing review-handling order.
