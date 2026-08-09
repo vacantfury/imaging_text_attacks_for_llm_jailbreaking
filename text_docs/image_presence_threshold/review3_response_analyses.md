@@ -834,3 +834,13 @@ sheets stay on disk unlabelled, costing nothing.
 straight to *building* the artifact without first asking whether the repo already satisfied
 it. The coverage check belonged before the build — the same Phase-0 discipline the
 `lit-review-loop` skill enforces for literature applies to our own prior rounds.
+
+**DROPPED BY OWNER DECISION 2026-08-09 ("yes, drop").** The 150-row round will not be run.
+The unlabelled sheets, keys and instructions were deleted from `judge_model_issue/` so no
+later session mistakes them for pending work; the builder is seeded (`--seed 20260809`,
+deterministic) and regenerates them byte-identically if a top-up is ever wanted. Tooling
+(`paper_b_human_eval.py`, `paper_b_human_eval_score.py`) stays committed. **Con 6 / Q3 is
+answered as it stands:** a cross-family judge (`gemini-2.5-pro`) on the exact cells, plus
+both rubrics humanly anchored at n=100 each (Round R refusal κ=0.794, Round J harm κ=0.680
+including 32 `pixtral-12b` rows) — with the scope limit stated in the paper rather than
+papered over.
