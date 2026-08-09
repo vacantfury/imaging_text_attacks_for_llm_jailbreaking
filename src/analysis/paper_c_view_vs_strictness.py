@@ -23,6 +23,7 @@ from __future__ import annotations
 import glob
 import json
 import os
+import sys
 
 REPO = ("/Users/haoyu/Files/US study life and job/research_and_projects/"
         "AI safety/llm_guardrail_security")
@@ -101,6 +102,7 @@ REPLICATE_SPREAD = []
 # in a campaign the paper's tables do read, and today only sort order keeps
 # `paper_c_overrefusal_decomp.py` off it. Found 2026-08-08 by the
 # replicates-disagree guard below.
+sys.path.insert(0, REPO)   # this script is run by path, not as a module
 from src.analysis.paper_c_degenerate_cell_sweep import QUARANTINE as BAD_CELLS  # noqa: E402
 
 CANONICAL_SOURCE = {
