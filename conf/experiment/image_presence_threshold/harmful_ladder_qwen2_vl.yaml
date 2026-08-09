@@ -1,0 +1,94 @@
+# Paper B (AS-2) · WITHIN-FAMILY HARMFUL LADDER — the missing oldest rung.
+#
+# WHAT THIS CLOSES. cspaper review 3, con 5: "The conclusion that 'as models
+# improve, the harmful side collapses while the benign cost does not track it
+# down' is primarily an across-model descriptive pattern, not a controlled trend
+# analysis. Model family, alignment procedure, benchmark response style, base
+# refusal rate, and judge behavior all vary simultaneously. A stronger version
+# would evaluate multiple checkpoints within one family and alignment
+# trajectory."
+#
+# We already have that family on the BENIGN side -- the generational ladder
+# (tab:generational) runs qwen2-vl -> qwen2.5-vl -> qwen3-vl. On the HARMFUL side
+# two of the three rungs exist and the oldest is missing:
+#
+#     rung                  benign shift      harmful ASR (text -> blank)
+#     qwen2-vl-7b           +8pp n.s.*        ** THIS PRESET **
+#     qwen2.5-vl-7b         +1pp              4 -> 7
+#     qwen3-vl-8b-instruct  +28pp             2 -> 1
+#     * measured against a 72% no-image benign baseline, i.e. partly saturated
+#
+# Filling one cell-pair converts the decoupling claim from "five heterogeneous
+# models narrated as a direction" into a within-family series where family,
+# size class, serving stack and judge are all held fixed and only post-training
+# recency moves. That is exactly the control con 5 asks for, and it costs one
+# job.
+#
+# READ-OUT, RECORDED BEFORE THE RUN:
+#   * harmful ASR falls across the ladder while the benign shift rises
+#       -> the decoupling is a within-family fact, not an artifact of comparing
+#          unlike models. The strongest available form of the claim.
+#   * harmful ASR flat across the ladder
+#       -> the "harmful side collapses as models improve" reading is NOT
+#          supported within a family, and the paper must restate it as an
+#          across-model observation only. Report it; do not go looking for a
+#          family that cooperates.
+#   * harmful ASR rises on the older rung
+#       -> same as above, and the older rung's own headroom becomes the story.
+#
+# ⚠️ RUNS ON xc, DELIBERATELY, AGAINST THE USUAL AICR-FIRST ORDER. Two reasons,
+# both about validity rather than convenience:
+#   1. conf/llm/qwen2_vl_7b.yaml states that the serving profile is matched to
+#      the other two rungs and must not be tuned in isolation, because the
+#      ladder's whole value is that the rungs differ in the checkpoint and
+#      NOTHING else. Both existing harmful cells (qwen2.5-vl, qwen3-vl) were
+#      collected on xc; putting this rung on different hardware would introduce
+#      exactly the per-rung serving difference that file warns against.
+#   2. AICR is currently carrying another session's work (llama-3.3-70b x3 +
+#      internvl3 on rtx-batch, wildguard on rtx-devel, which caps 2 GPUs/user),
+#      and a contended orchestrator starves in endpoint-wait with EMPTY OUTPUT
+#      rather than an error. xc is idle (8xA100, 0 MiB used, no queue).
+#
+# NO NEW STAGE 1 -- the source dirs are the exact renders every other harmful
+# presence arm consumed (identity encoder + blank canvas, no model call),
+# verified present on xc. Byte-identical inputs remove render drift as an
+# explanation for any difference between rungs.
+#
+# JUDGE PINNED TO MATCH THE SIBLING RUNGS EXACTLY: gpt-5-mini with the
+# `harmbench` rubric. `judge_method` is set explicitly because an unset method
+# falls back to the BENCHMARK's evaluator (src/experiment/task.py:574) -- which
+# would report a refusal rate here, the wrong quantity entirely. A free cluster
+# judge would make these numbers incomparable with the two cells they exist to
+# sit beside, which would waste the run.
+#
+# COST: target calls are FREE (local vLLM on cluster GPU). Judge is 2 cells x 100
+# = 200 gpt-5-mini calls on short responses, ~$0.25 -- below the standing $1 bar,
+# so this runs without a separate approval.
+#
+# SUBMIT (xc):
+#   ssh xc 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_xc.sbatch image_presence_threshold/harmful_ladder_qwen2_vl'
+
+num_main_job_threads: 2
+num_cluster_jobs: 2          # orchestrator + 1 vLLM server (single target model,
+                             # so the floor-division replica allocator cannot
+                             # collapse it).
+
+# OR-Bench harmful split, the constructed counterpart of the borderline benign
+# rung -- same renders as every other harmful presence arm in this paper.
+_text:  &text  outputs/image_presence_threshold/prompt_transform/harmbench/non_llm_baseline_ir_blank_20260806_151849_37565903/non_llm_baseline
+_blank: &blank outputs/image_presence_threshold/prompt_transform/harmbench/non_llm_baseline_ir_blank_20260806_151849_37565903/ir_blank
+
+_h: &h
+  mode: defense+evaluate
+  defense: no_defense
+  target_model: qwen2_vl_7b
+  prompt_range: [0, 99]
+  benchmark: harmbench
+  judge_method: harmbench      # pinned: ASR, not refusal rate
+  judge_model: gpt-5-mini      # pinned: matches the two sibling rungs
+  campaign: paper_b_harmful_ladder
+
+tasks:
+  - {<<: *h, source_transform_subdir: *text}
+  - {<<: *h, source_transform_subdir: *blank}
