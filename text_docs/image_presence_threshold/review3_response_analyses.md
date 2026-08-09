@@ -481,3 +481,33 @@ four; entries copied into the paper's self-contained `paper.bib` with working no
 cited in the paper at the taxonomy categories (iii) and (iv), the relation-to-(iv) passage, and
 the generational-step discussion. Build 18pp, 0 errors, 0 undefined, all four resolve in the PDF.
 Science repo `b63fd1a`.
+
+---
+
+## Con 1 and con 10 — the two writing items (2026-08-09)
+
+**Con 1 — why the serving-route control sits on a small-effect checkpoint.** The reviewer
+is right that the ±10pp route bound is not comfortably below `gemma-3-12b-it`'s own +7–9pp
+presence effect. The obvious stronger design — route-test a LARGE-effect checkpoint such as
+`qwen3-vl-8b` (+28pp) — was not run, and the reason is a real availability constraint, now
+verified rather than asserted: the test needs a checkpoint that is simultaneously (a)
+vision-capable, (b) offered by a managed commercial host, and (c) small enough to self-serve
+on our GPUs. Per the account's live model sweep (devices repo
+`knowledge/clusters/xc_bedrock_model_status.md`, 2026-08-07), the vision-capable open-weight
+families on the host are gemma-3, llama-4, pixtral-large and qwen3-vl — and only gemma-3
+satisfies (c). **`qwen3-vl` is offered only at 235B**, which we cannot self-serve. The
+checkpoint we would most want to route-test is unavailable in the one configuration that
+would test it. Written into Limitations as a named gap with that reason.
+
+**Con 10 — the claim table.** Added `tab:claims`, immediately before Limitations: every
+claim sorted into *measured* (direct paired contrast with intervals), *control-supported*
+(rests on a control with a stated bound), and *hypothesis* (consistent with the data, not
+established by it). Tier 3 is deliberately non-empty and carries the three readings a reader
+might otherwise take from the prose — post-training as the specific cause (releases change
+vision encoder and corpus too), the denominator shrinking with recency (across-model only;
+our family is floored throughout), and attachment carrying no risk information in real
+traffic (explicitly not claimed). Made non-floating so it cannot drift away from Limitations
+under later edits, and referenced from the opening of that section.
+
+**Build after both:** 19pp, 0 errors, 0 undefined refs, 0 overfull boxes. All seven review-3
+items verified present in the compiled PDF (con 1, 2, 4, 5, 9, 10 + the lit round).
