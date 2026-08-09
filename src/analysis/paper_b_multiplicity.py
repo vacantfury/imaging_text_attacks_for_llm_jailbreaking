@@ -101,6 +101,13 @@ FAMILIES = [
             Test("internvl3-8b", "tab:tierscan", 13, 6, printed=0.167),
             Test("qwen2.5-vl-7b", "tab:tierscan", 7, 7, printed=1.000),
             Test("pixtral-12b", "tab:tierscan", 3, 4, printed=1.000),
+            # added 2026-08-08 with the sign-inversion round. LLaVA is measured on
+            # the SAME borderline rung with the same renders, so it belongs in F1
+            # by the family's own definition -- including it is not optional, and
+            # note the effect is NEGATIVE here (refusal falls), which the family
+            # tests two-sided exactly as it does every other model.
+            Test("llava-1.5-7b", "tab:signinv", 1, 9, printed=0.0215,
+                 note="benign refusal FALLS 10->2%; direction opposite to the hosted models"),
         ]),
     # ---------------------------------------------------------------- F2
     Family(
@@ -156,6 +163,21 @@ FAMILIES = [
             Test("white fill, 256 vs 1536", "tab:instance", p_bound=0.0024),
             Test("grey fill, 256 vs 1536", "tab:instance", p_bound=6.6e-5),
             Test("black fill, 256 vs 1536", "tab:instance", p_bound=0.0075),
+        ]),
+    # ---------------------------------------------------------------- F7
+    # Founded 2026-08-08 with the LLaVA round. Before it, pixtral's ASR
+    # inversion sat in NO family at all -- an omission this audit surfaced: the
+    # paper's `steerable` half was uncorrected because it was a single test with
+    # nowhere to live. It now has two members and is corrected like everything
+    # else.
+    Family(
+        "F7", "The sign inverts: image presence RAISES attack success "
+              "(the paper's `steerable` failure mode)",
+        "holm", False, [
+            Test("pixtral-12b, harmful ASR 48->83%", "tab:ow_threshold", p_bound=3.1e-8),
+            Test("llava-1.5-7b, harmful ASR 37->76%", "tab:signinv", 39, 0,
+                 printed=3.64e-12,
+                 note="JRS (Wei et al. 2026) predicted +28.13pp on this exact checkpoint"),
         ]),
 ]
 
