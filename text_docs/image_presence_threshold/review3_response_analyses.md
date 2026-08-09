@@ -791,3 +791,46 @@ state "no defense in the loop" five times. Left unedited deliberately: `TODO.md`
 five minutes earlier by a concurrent session — almost certainly the dedicated AS-7 session
 that owns those items — and racing another session's edits in a shared working tree is worse
 than a stale label. Flagged to the owner instead.
+
+---
+
+## ⚠️ CORRECTION — we ALREADY have human labels on BOTH rubrics (owner challenge, 2026-08-09)
+
+The section above built a 150-response human round and called it "the last open review-3
+item". **The owner pushed back — "previously we have human labels!" — and he is right.**
+Two completed blind rounds already exist, both owner-labelled, and the second was never
+cited in AS-2:
+
+| round | task | n | agreement | channel split | targets |
+|---|---|---|---|---|---|
+| **Round R** (2026-07-28) | refusal | 100 | **κ=0.794** binary (0.847 dedup, 3-class 0.438) | stratified text × image | qwen2.5-vl-7b, internvl3-8b |
+| **Round J** | harm (HarmBench) | 100 | **κ=0.680** | 56 text / 44 image | internvl3-8b 32, qwen2.5-vl-7b 32, **pixtral-12b 32**, gemini-2.5-flash 4 |
+
+Records: Round R in `text_docs/autoattack_defense/experiment_results.md` §"Refusal-judge
+human calibration (Round R)"; labels in `judge_model_issue/round_j_human_labels_final.csv`.
+
+**The free win, applied.** AS-2 cited Round R and **not** Round J — verified by grep, the
+paper contained no harm-side human anchor at all. So the harm axis looked unvalidated by
+humans when it is validated at n=100, *including 32 rows on `pixtral-12b`* — the very model
+carrying the sign inversion §res-judge is asked to defend. A paragraph now states it, and
+the Limitations line reads "the two human anchors, one per rubric, 100 blind labels each".
+Build clean, 20pp (was 19; float reflow).
+
+**What the genuine remaining gap actually is** — much narrower than the section above
+implied. Both rounds come from the defense-pipeline studies: self-served targets, defenses
+in the loop, and an image channel carrying a *payload* rather than a blank canvas. So they
+calibrate both rubrics, and they cover the text-vs-image contrast, but not on AS-2's three
+API targets and not with a blank canvas. That is a scope note the paper already makes
+honestly for the refusal anchor.
+
+**Recommendation recorded: do NOT run the 150-row round.** Cost is ~3–4 hours of the
+owner's labelling — the scarcest resource in the ordering — to narrow a gap the paper
+already discloses, on top of two n=100 anchors plus a cross-family judge panel on the exact
+cells. If any top-up is wanted later, ~40 rows weighted to the blank-canvas harmful cells
+buys most of what 150 would; the builder takes `--contrast-harm/--calib-harm` flags. The
+sheets stay on disk unlabelled, costing nothing.
+
+**Process lesson (the real one):** the review item said "human validation", and I went
+straight to *building* the artifact without first asking whether the repo already satisfied
+it. The coverage check belonged before the build — the same Phase-0 discipline the
+`lit-review-loop` skill enforces for literature applies to our own prior rounds.
