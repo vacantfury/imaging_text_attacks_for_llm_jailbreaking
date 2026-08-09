@@ -35,11 +35,37 @@
 # pixtral. Short wall so SLURM can backfill it, and rtx-devel on AICR for the
 # same reason pixtral uses it (see that file for the 2026-08-07 stall).
 
+# ⚠️ CONTEXT CEILING IS 4096 AND IT BINDS BOTH KNOBS (AICR job 327325 died on this,
+# 2026-08-08). LLaVA-1.5's `max_position_embeddings` is 4096, so the cluster
+# default `max_model_len: 20480` (conf/clusters/_defaults.yaml) is REJECTED at
+# startup with a pydantic ValidationError and every cell fails at server
+# discovery. Do not "fix" it with VLLM_ALLOW_LONG_MAX_MODEL_LEN — this model uses
+# absolute position encoding, so exceeding the derived length is a CUDA
+# out-of-bounds, not a soft degradation.
+#
+# `max_tokens` MUST be capped alongside it, for the reason recorded in
+# conf/llm/gemma2_9b_it.yaml: vLLM 400s any request whose max_tokens exceeds the
+# window, and the judge then scores the ERROR STRING as "not harmful" -> a
+# silent, fully fake ASR 0.00 (that is what happened to six Gemma cells over
+# 2026-07-21..24). conf/llm/default.yaml ships max_tokens=16384 for the
+# 20480-window targets, so without this override every LLaVA call would 400.
+#
+# BUDGET MEASURED WITH LLAVA'S OWN TOKENIZER, not estimated (2026-08-08, over all
+# four source dirs this arm consumes, 100 prompts each):
+#   longest prompt      42 tok   (benign p95 35, harmful p95 29, median ~22)
+#   LLaVA-1.5 image    576 tok   (fixed: 24x24 patches)
+#   ceiling            4096 tok  => max_tokens headroom 3478
+# 3072 leaves ~400 tokens of slack for chat-template overhead. These prompts are
+# one-liners and the responses are short, so this does not truncate answers; it
+# is nonetheless a REAL difference from the 4096-token budget the other targets
+# get, forced by the architecture. Note it if a response-length artifact is ever
+# suspected.
 model:
   model: llava-hf/llava-1.5-7b-hf
-  max_tokens: 4096
+  max_tokens: 3072
 
 cluster:
+  max_model_len: 4096
   gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4"]
   time_limit: "04:00:00"
 
