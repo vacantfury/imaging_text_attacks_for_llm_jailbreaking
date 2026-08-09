@@ -322,15 +322,67 @@ Appendix counts updated to match.
 
 ---
 
+---
+
+## 5. THE REFRAME: uninformativeness → incoherence (owner-approved 2026-08-09)
+
+Con 3 was the one blocker no experiment could resolve, because the paper was trying to
+prove a negative it had no access to. The old spine claimed the models key on a feature
+"carrying no information about what is being asked". A black-box study of shipped
+models cannot establish that — users plausibly *do* attach images more often in
+sensitive settings, so conditioning on attachment could be rational inference. The
+constant canvas proves only that it carries no **per-prompt** information within an
+arm, which is true by construction and therefore proves less than the title claimed.
+
+**The new spine asks an answerable question instead:** not *is attachment
+informative?* but *does the response to attachment behave like a risk policy?* Four
+measurements already in the paper say no:
+
+| leg | evidence | measured on |
+|---|---|---|
+| conditions on non-risk variables | black vs white, same size: **+22.0pp**, 22/0, p=4.8e-07; size axis p=0.0004 | **frontier hosted** + open |
+| direction not shared | +35pp / +39pp ASR on pixtral, llava, while tightening on four hosted | **open weak** |
+| does not update on evidence | "placeholder, disregard it" removes only 6–12pp of 23–54pp | hosted |
+| does not require an image | asserted attachment alone: +33pp, modality word −1pp n.s. | hosted |
+
+The tier split is load-bearing: legs 1/3/4 are measured on the frontier hosted models
+and leg 2 on open weak ones, so the escape "the well-aligned models have the rational
+prior and the broken ones are just broken" is closed **from both ends**.
+
+The claim becomes strictly weaker and the evidence strictly stronger — the trade a
+reviewer who twice named over-claiming as the blocker is asking for. Four findings
+that read as scattered ablations become one argument with four legs.
+
+**Edits applied (10, two passes).** Title's vulnerable clause replaced —
+*"…Key Refusal on Request Form, Not Content"* → *"…Vision–Language Model Refusal
+Responds to Image Presence in Ways Risk Cannot Explain"* (the main title
+"The Uncontrolled Variable" survives; it already meant "not a designed policy").
+Intro spine rewritten; the concession written into *What we do not claim* where a
+reviewer looks for it; contributions (iii) and (iv) re-headed; abstract opening and
+close; Discussion; §5 synthesis; Conclusion close.
+
+**Concept sweep, not a phrasing sweep.** Six further sites carried the retired spine.
+Four were fixed; **two were correctly qualified already** and deliberately left alone —
+`\paragraph{The attached image carries no per-prompt information.}` and the
+design-justification at §res-threshold both say *per-prompt*, which is exactly the
+defensible form. The verbatim system-message prompts in the appendix are untouched:
+they are the strings actually sent, and editing them would falsify the record.
+
+Rebuilt: **18pp, 0 errors, 0 undefined refs.**
+
+---
+
 ## Residue
 
 - **Con 1 / Q1 (carrier scope)** — the localization claim is now bounded rather than
   absolute, but the reviewer's preferred fix (dual-route on a large-effect checkpoint)
   stays infrastructure-blocked. Limitations should say why it was not attempted.
-- **Con 3 (framing)** — "form, not content" vs real-world attachment–risk correlation
-  is untouched. It is a framing argument, not a measurement, and it is the one blocker
-  in the rating paragraph that no experiment resolves.
-- **Con 5 (decoupling as across-model description)** — untouched.
+- **Con 5 (decoupling as across-model description)** — untouched. The reframe does not
+  address it: the "as models improve, the harmful side collapses" trend is still five
+  heterogeneous points narrated as a direction, not a controlled analysis.
+- **Con 10 (forceful prose / claim table)** — the reviewer asked for an explicit table
+  separating what is directly measured, what is supported by controls, and what remains
+  hypothesis. The reframe makes that easier to write, and it is not written yet.
 - **Six missing references** — via `lit-review-loop`, Phase 0 coverage check by eprint
   id first.
 - **Human validation on the primary cells (con 8 / Q2)** — deliberately last, per the
