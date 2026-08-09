@@ -174,7 +174,7 @@ FAMILIES = [
         "F7", "The sign inverts: image presence RAISES attack success "
               "(the paper's `steerable` failure mode)",
         "holm", False, [
-            Test("pixtral-12b, harmful ASR 48->83%", "tab:ow_threshold", p_bound=3.1e-8),
+            Test("pixtral-12b, harmful ASR 48->81%", "tab:ow_threshold", 37, 4, printed=1.0e-7),
             Test("llava-1.5-7b, harmful ASR 37->76%", "tab:signinv", 39, 0,
                  printed=3.64e-12,
                  note="JRS (Wei et al. 2026) predicted +28.13pp on this exact checkpoint"),

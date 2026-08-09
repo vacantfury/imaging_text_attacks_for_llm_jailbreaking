@@ -511,3 +511,62 @@ under later edits, and referenced from the opening of that section.
 
 **Build after both:** 19pp, 0 errors, 0 undefined refs, 0 overfull boxes. All seven review-3
 items verified present in the compiled PDF (con 1, 2, 4, 5, 9, 10 + the lit round).
+
+---
+
+## ⚠️ Integrity find — a headline number whose cell had gone unreachable (2026-08-09)
+
+**How it surfaced.** Scoping the cross-family judge round required enumerating the primary
+cells. The pixtral sign-inversion pair would not resolve: the text arm was there at 48%,
+the blank arm was not.
+
+**What was wrong.** A sweep for `asr is None AND refusal_rate is None` across the whole
+output tree found **four cells that collected 100 target responses each and were never
+judged** — every row's verdict null, `eval_stats` null. All four from campaign
+`paper_b_threshold_shift_openweight` (2026-08-07): one judging pass failed while the
+expensive half, the generations, survived intact.
+
+One of them was the **blank arm of the pixtral sign inversion**, which the paper asserted as
+`48 → 83% (+35pp, p=3.1e-08)` — one of the four legs of the reframed spine ("its *direction*
+is not shared"). No judged pixtral `ir_blank` harmbench cell existed on any of the four
+output roots or on AICR, NURC or xc. Checked all before concluding.
+
+The number was never fabricated: `experiment_matrix.md` recorded it with its p-value and
+verbatim spot-check quotes from both arms. It was measured on a real cell that a later
+re-run superseded — **the "latest-wins cell selection is unsafe" trap, where the newest cell
+for a condition is the broken one.** The failure is silent by construction: nothing errors,
+the dir just carries no metric.
+
+**Recovery.** Rejudge of the stored responses with the paper's own judge (AICR job 328544,
+gpt-5-mini + harmbench rubric, no target queried, ~$0.20). `fallback_parse_count` 0, 100/100
+evaluated on every cell.
+
+| cell | recovered | paper asserted |
+|---|---|---|
+| **pixtral-12b, blank arm (harmful)** | **81.0%** | 83% |
+| internvl3-8b, text arm (harmful) | **5.0%** | 5 ✅ exact match |
+| internvl3-8b, text arm (JBB benign) | 0.0% refusal | — |
+
+**The claim holds.** Paired against the judged text arm: **48 → 81, +33pp, discordant 37/4,
+p=1.03e-07, 95% CI [+21.8, +43.0]pp.** Thirty-seven prompts flip toward harm against four
+away. The evidence that this *reproduces* the original judging rather than replacing it is
+internvl3's text arm returning **5.0%, matching the recorded 5 exactly**; the 2-point pixtral
+gap is the judge nondeterminism band.
+
+**Propagated:** paper.tex at six sites (abstract, intro, reframed spine, results,
+`tab:ow_threshold` body + caption, claim table) — 83→81, +35→+33pp, p 3.1e-08→1.0e-07;
+`experiment_matrix.md` row corrected with a provenance block; multiplicity registry F-entry
+upgraded from a `p_bound` placeholder to exact discordants (37/4), `--audit` 0 mismatches.
+Build 19pp, 0 errors, 0 undefined, 0 overfull.
+
+**Left open (does NOT back any paper number):** the 4th unjudged cell,
+`qwen2_5_vl_7b … jailbreakbench_benign ir_blank` (campaign
+`paper_b_threshold_shift_openweight`). It exists locally but not on AICR, which is why job
+328544's 4th task failed. The paper's qwen2.5-vl rung-3 figures come from
+`paper_b_generational_ladder` (37→38, judged) and `tab:tierscan` (7/7, judged), so this cell
+is a redundant duplicate from another campaign. Recorded here so it is not rediscovered as a
+mystery.
+
+**Standing lesson for this repo:** run the null-verdict sweep before trusting any cell
+enumeration — a failed judging pass leaves a well-formed directory with no metric, and
+latest-wins selection walks straight into it.
