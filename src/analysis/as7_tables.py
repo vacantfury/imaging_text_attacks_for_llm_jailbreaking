@@ -106,7 +106,15 @@ def _arm_of(source_dir: str, out_dir: str) -> str:
     return "TEXT"
 
 
-def collect(root: str = ".") -> dict:
+def collect(root: str = ".", campaigns: tuple = CAMPAIGNS) -> dict:
+    """Scan stored cells. `campaigns` defaults to the PAPER campaigns.
+
+    The parameter exists so integrity tooling (src/analysis/as7_integrity.py)
+    can scan a replicate campaign through this same collector -- and therefore
+    through the same exact-match GUARD_REFUSAL_TEXT block test -- WITHOUT the
+    replicate being added to CAMPAIGNS, which would silently mix it into the
+    paper's own tables. Callers that want the paper's numbers pass nothing.
+    """
     cells = []
     seen = set()
     for pattern in OUTPUT_GLOBS:
@@ -117,7 +125,7 @@ def collect(root: str = ".") -> dict:
             with open(rj) as fh:
                 d = json.load(fh)
             campaign = d.get("campaign")
-            if campaign not in CAMPAIGNS:
+            if campaign not in campaigns:
                 continue
             out_dir = os.path.dirname(rj)
             source = d.get("source_transform_subdir", "") or ""
