@@ -1,0 +1,50 @@
+# bestofn_attack AS-4 — R18 RESCUE: re-score the ONE 70B control cell whose judge died.
+#
+# FREE — wildguard is cluster-served. No API spend, no gate.
+#
+# ── WHAT HAPPENED ───────────────────────────────────────────────────────────
+# R18a (AICR job 327787) COMPLETED after 4h18 of 70B generation, but one of its four cells
+# carries `asr: null` and `status: partial_judge`:
+#   llama_3_3_70b_instruct_no_defense_code_attack_20260809_013101_83687448   (T=1.0)
+# Cause, from the orchestrator log — NOT a target failure:
+#   Health check failed for http://a0019:8044/v1 (allenai/wildguard): Connection refused
+#   ... (3/3 consecutive failures) -> EVICTION ... remaining_pool=0
+#   WildGuardEvaluator: failed (All 1 server job(s) for allenai/wildguard failed during
+#   discovery)
+# The wildguard judge server died late in the round; the last cell to finish had no judge left.
+# ✅ ALL 10,000 RESPONSES ARE ON DISK in that cell's raw_results.jsonl. The expensive part —
+# 70B generation — is intact. A rejudge re-scores stored responses and never re-queries the
+# target, so this recovers the cell for the price of one small GPU job.
+#
+# ── WHY THIS CELL SPECIFICALLY MATTERS ──────────────────────────────────────
+# It is the CONTROL at T=1.0. Every collapse figure in this round is read NET OF the control,
+# so without it the round's sage result (ensemble 26/100 -> 9/100, a raw 65% drop) cannot be
+# converted into a comparable number at all. The control's own drop was 14% on llama-8B, 24%
+# on gemma and 12% on qwen — far too wide a spread to borrow one across targets.
+#
+# ── JUDGE CHOICE: WILDGUARD, DELIBERATELY ───────────────────────────────────
+# The other three R18a cells were scored by wildguard, so wildguard here keeps this round
+# internally consistent and gives an immediate SHAPE read at zero cost.
+# ⚠️ NOT reportable: this is a code-bearing arm and wildguard over-flags code by 41-68%. The
+# whole 70B panel (6 cells once 18b lands) still needs a gpt-5-mini pass (~$13.5) before any
+# number from it enters the paper — that is a separate ask. Precedent from R15/R16: ensembles
+# move <=5 points under rejudge while per-draw moves ~15, so the shape read here will hold
+# even though the magnitudes will not.
+#
+# ── SEQUENCING ──────────────────────────────────────────────────────────────
+# Submit AFTER 18b (327788) finishes, or it will contend for the same wildguard server it is
+# currently holding. One GPU job (wildguard) + orchestrator.
+#
+#   ssh aicr; cd ~/projects/llm_guardrail_security
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r18_rescue_dead_control
+#
+# ⚠️ Verify on landing that `asr is not None` — a rejudge that fails again leaves the PREVIOUS
+# (absent) verdicts in place and the cell stays dead.
+num_cluster_jobs: 2          # 1 server (wildguard) + orchestrator
+num_main_job_threads: 1
+
+tasks:
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/llama_3_3_70b_instruct_no_defense_code_attack_20260809_013101_83687448
+  judge_model: wildguard
+  judge_method: wildguard
