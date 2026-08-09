@@ -1,0 +1,189 @@
+# AS-7 · PROTOCOL GRANT — INDEPENDENT REPLICATE (campaign 2 of 2). Target: internvl3.
+#
+# WHY THIS EXISTS. BOTH cspaper reviews independently required it: review 1
+# con 4 and review 2 con 9 + Q3 ("run pre-registered independent repetitions of
+# the main deployable-versus-oracle comparisons and report between-campaign
+# uncertainty"). The paper reports McNemar tests that are PROMPT-paired WITHIN a
+# campaign, while its own drift analysis measures 0-10pp of BETWEEN-campaign
+# movement on hosted/nondeterministic targets. Within-campaign stars therefore
+# cannot by themselves establish that an effect survives recollection. This is
+# the missing measurement, not a robustness nicety.
+#
+# WHAT IS HELD FIXED — everything except the collection itself. Same source
+# transform dirs (renders are fixed artifacts on disk), same targets, same
+# defenses and defense_configs, same judge (gpt-5-mini), same prompt_range,
+# same arms and denominators. ONLY `campaign` changes, to
+# `as7_protocol_grant_rep2`, so the analysis can pair cell-for-cell against
+# campaign 1 and report a between-campaign delta per cell.
+# ⚠️ The judge MUST stay gpt-5-mini. Changing it would confound judge with
+# campaign and destroy the only quantity this run exists to produce.
+#
+# PRE-REGISTERED READ-OUTS — fixed BEFORE the run, all three reportable:
+#   1. CONFIRMS: per-cell |campaign2 - campaign1| on the oracle-vs-deployable
+#      GAP stays within the measured 0-10pp operational drift band, and every
+#      gap the paper calls large (gate 24-47pp, ECSO 12-36pp) stays large and
+#      same-signed. -> the claims survive recollection; report the band as
+#      between-campaign uncertainty on the headline table.
+#   2. NARROWS: the large gaps replicate but the small/near-null ones move
+#      inside the band. -> expected, and already the paper's position; report
+#      the small contrasts as indistinguishable from drift rather than as nulls.
+#   3. REFUTES: a gap the paper calls large changes sign, or collapses below
+#      the drift band, on either target. -> the ordering claim does not survive
+#      recollection and §res-readladder must be rewritten to a single-campaign
+#      observation. THIS BRANCH IS REPORTED, NOT RERUN AWAY.
+#   ⚠️ SemanticSmooth's ~0 is a SPECIFIED null (its paraphrase step always
+#      reads the encoded prompt; the oracle read reaches only candidate
+#      SELECTION - App. slot table), so a non-zero SS gap in this campaign is a
+#      rig fault to diagnose, not a finding.
+#   ⚠️ Stuck-guard check first, as in campaign 1: a gate cell blocking NOTHING
+#      on the oracle arm is a serving fault (chat template / 400s), not data.
+#
+# COST: identical to campaign 1 (~$2-3 this preset; target + wildguard are
+# self-served GPU and free). ESTIMATE, not a quote.
+#
+# AS-7 · PROTOCOL GRANT — ORACLE vs DEPLOYABLE ACROSS DEFENSE FAMILIES.
+# Target: internvl3_8b. Sibling preset (identical design, other target):
+# protocol_grant_pixtral.yaml. Split per target deliberately — one served
+# target + wildguard per orchestrator keeps every model at a full replica
+# (the allocator is floor-division) and halves wall-clock by running the
+# two targets as parallel jobs.
+#
+# WHY THIS EXISTS — THE PAPER'S ONE OPEN GAP (proposal.md §4). The oracle-
+# inflation artifact (evaluation hands the defense the UNENCODED request; the
+# measured benefit inflates 18–60pp on 6 of 7 cells and the line's largest
+# published effect does not survive) is demonstrated on ONE defense family:
+# ECSO. One family = "we mis-measured ECSO". Three = "this is how black-box
+# input defenses get mis-measured". This preset supplies the other families.
+#
+# WHAT AN "ORACLE" IS, PER FAMILY — each defense has an internal READ that is
+# separate from what the target receives, and `query_source` selects what
+# fills it. The target's input is IDENTICAL across arms; only the defense's
+# read varies. That isolation is the experiment.
+#
+#   family            internal read                 oracle default in repo?
+#   ecso              TELL/CAP/SAFE {query} slot     yes (every recorded cell)
+#   semantic_smooth   majority-vote judge {query}    yes (every recorded cell)
+#   guard gate        the classifier's input         no  (gate always read
+#                                                    p.encoded; the `original`
+#                                                    arm is NEW, added for this
+#                                                    experiment 2026-08-08)
+#
+#   SAGE is DELIBERATELY ABSENT, not overlooked: a wrapper defense has no
+#   internal read separate from the target's input — "granting it the oracle"
+#   would deliver the unencoded request to the TARGET, changing the attack
+#   itself rather than the defense's read. That structural fact goes in the
+#   paper as the boundary of the failure mode (wrapper defenses cannot be
+#   oracle-granted; inspection defenses can, and recorded practice shows they
+#   are — both our own campaigns and our SemanticSmooth port defaulted to it).
+#
+# SEMANTIC_SMOOTH SCOPE NOTE (from conf/defense/semantic_smooth.yaml): its
+# paraphrase step ALWAYS reads p.encoded; the leak reaches only the vote that
+# SELECTS which candidate response is returned. Expected smaller than ECSO's
+# inflation — that a family's inflation can be small is itself reportable
+# (the grant's size depends on where the read sits in the defense).
+#
+# TARGETS internvl3_8b + pixtral_12b, deliberately: (a) undefended text ASR is
+# high on both encodings (internvl3 60/40, pixtral 54/48 on code/formal — room
+# for defense benefit; the ASR floor trap does not bind), (b) they are the two
+# DISSOCIATION-CONTROL models — full ECSO amplification with NO model-level
+# presence-threshold shift (+7pp n.s. / −2pp n.s.) — so any oracle-vs-
+# deployable gap measured here cannot be attributed to AS-2's model-level
+# mechanism. The control is built into the target choice. (c) Open-weight,
+# unmoderated serving: no vendor filter explanation either.
+#
+# ARMS. Text arms (SS + gate families): the encoded payload in the text
+# channel, no image. Decoy arms (ECSO family — inert by construction on text
+# input, so its cells need the image): same encoding + mountain decoy. The
+# no_defense cells are the shared denominators; oracle and deployable arms of
+# a given family share the SAME no_defense baseline because the target input
+# is identical — the arms differ only inside the defense.
+# NO ECSO-TEXT CELLS: ECSO short-circuits on text input (returns INITIAL
+# unchanged), so the no_defense text cell IS the ECSO text cell.
+#
+# PRE-REGISTERED READ-OUTS:
+#   * gate, oracle arm — wildguard flags the raw payload ~100% (job 245:
+#     100/100), so ASR should fall to ~0: the gate looks like a near-perfect
+#     defense under the oracle.
+#   * gate, deployable arm — whatever wildguard's recall on the ENCODED text
+#     is. Low recall → ASR ≈ no_defense → the oracle inflated the gate's
+#     measured benefit by nearly its full size. High recall on an encoding →
+#     small inflation THERE: report the conditioning (cf. ECSO's formal_logic
+#     nulls), never average it away.
+#   * semantic_smooth — oracle ≤ deployable ASR expected; magnitude unknown
+#     and possibly near-zero (selection-only leak). Either outcome reportable.
+#   * ecso — API-target grid showed 18–60pp inflation on 6/7 cells; these
+#     cells test whether the family's grant survives on unmoderated open
+#     weights. (tab:openweight's ECSO cells were ORACLE-arm — this preset
+#     also supplies their deployable counterparts.)
+#   * ⚠️ suspect-the-rig branch: a gate cell that blocks NOTHING on the
+#     oracle arm is the stuck-guard failure (wrong chat template, 400s),
+#     not a finding — check raw rows for the canned refusal string before
+#     interpreting. wildguard is serve-proven in this repo (job 245).
+#
+# METRIC NOTE: unlike the channel-coverage experiment (qwen3-vl, undefended
+# ASR 3–6%, floor-bound), these targets sit at 40–60% undefended, so the ASR
+# delta IS the right read-out here. Still record gate block rates at analysis
+# time as the mechanism check.
+#
+# PAIRING: the four source anchors are the SAME canonical chains the ECSO
+# deployable grid (AICR 312607) consumed — pairing protocol verified there
+# (formal decoy's upstream_ref IS the May text encoding; code text+decoy are
+# sibling steps of the post-fix 2026-08-05 chain; May code_attack mountain
+# chains remain QUARANTINED under the appendleft bug). Renders are model-
+# independent, so both open-weight targets see byte-identical inputs to the
+# API arm — render drift is excluded by construction.
+#
+# COST (this preset): target + wildguard self-served = FREE GPU. Paid parts:
+#   judge   gpt-5-mini, 16 cells × 100        ≈ 1600 calls  ≈ $1.5–2
+#   SS internals: paraphrase gemini-2.5-flash-lite ~2000 calls ≈ $0.3;
+#                 vote judge gpt-5-nano ~2000 calls ≈ $0.3
+#   ≈ $2–3 this preset; ≈ $4–6 both presets. ESTIMATES, not quotes.
+# Wall: ~4200 target calls on 1 vLLM replica (RTX PRO 6000) ≈ 2–4 h; the
+# 24 h rtx-batch wall does not bind.
+#
+# SUBMIT (AICR; verify the four source dirs exist there first):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch defense_read_access/protocol_grant_internvl3'
+
+num_main_job_threads: 4
+num_cluster_jobs: 3          # orchestrator + target + wildguard (1 replica each)
+
+# Canonical chains — same anchors as ecso_deployable_grid.yaml (AICR 312607).
+_code_text:  &code_text  outputs/image_presence_threshold/prompt_transform/harmbench/code_attack_ir_constant_20260805_213025_3168031/code_attack
+_code_decoy: &code_decoy outputs/image_presence_threshold/prompt_transform/harmbench/code_attack_ir_constant_20260805_213025_3168031/ir_constant
+_form_text:  &form_text  backup_files/arr_may_submission_files/outputs/prompt_transform/harmbench/formal_logic_ir_plain_20260525_010219_56487445/llm_formal_logic
+_form_decoy: &form_decoy outputs/image_presence_threshold/prompt_transform/harmbench/llm_formal_logic_ir_constant_20260803_064343_72332881/ir_constant
+
+_b: &b
+  mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range: [0, 99]
+  benchmark: harmbench
+  judge_method: harmbench
+  judge_model: gpt-5-mini
+  campaign: as7_protocol_grant_rep2
+
+tasks:
+  # ---- shared denominators --------------------------------------------------
+  - {<<: *b, defense: no_defense, source_transform_subdir: *code_text}
+  - {<<: *b, defense: no_defense, source_transform_subdir: *form_text}
+  - {<<: *b, defense: no_defense, source_transform_subdir: *code_decoy}
+  - {<<: *b, defense: no_defense, source_transform_subdir: *form_decoy}
+
+  # ---- family: semantic_smooth (text arms; leak = vote-selection only) ------
+  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: original}, source_transform_subdir: *code_text}
+  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: encoded},  source_transform_subdir: *code_text}
+  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: original}, source_transform_subdir: *form_text}
+  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: encoded},  source_transform_subdir: *form_text}
+
+  # ---- family: guard gate, wildguard (text arms; oracle read is NEW) --------
+  - {<<: *b, defense: guard_baseline, defense_config: {guard_model: wildguard, query_source: original}, source_transform_subdir: *code_text}
+  - {<<: *b, defense: guard_baseline, defense_config: {guard_model: wildguard, query_source: encoded},  source_transform_subdir: *code_text}
+  - {<<: *b, defense: guard_baseline, defense_config: {guard_model: wildguard, query_source: original}, source_transform_subdir: *form_text}
+  - {<<: *b, defense: guard_baseline, defense_config: {guard_model: wildguard, query_source: encoded},  source_transform_subdir: *form_text}
+
+  # ---- family: ecso (decoy arms; text arm = the no_defense text cell) -------
+  - {<<: *b, defense: ecso, defense_config: {query_source: original}, source_transform_subdir: *code_decoy}
+  - {<<: *b, defense: ecso, defense_config: {query_source: encoded},  source_transform_subdir: *code_decoy}
+  - {<<: *b, defense: ecso, defense_config: {query_source: original}, source_transform_subdir: *form_decoy}
+  - {<<: *b, defense: ecso, defense_config: {query_source: encoded},  source_transform_subdir: *form_decoy}
