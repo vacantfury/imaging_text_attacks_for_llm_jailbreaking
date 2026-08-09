@@ -80,9 +80,39 @@ def load():
     return out
 
 
+# Latest-wins is UNSAFE and this script was bitten by it on first run. The
+# method-fidelity rerun left TWO post-fix `ir_figstep` cells in
+# `paper_c_fidelity_rerun`, from two different transform dirs of the same minute
+# (`..._72871103` and `..._9632753`), reading 80% and 74%. The canonical one is
+# `72871103`: it is the source both replicate campaigns (r2/r3 postfix) consume
+# and the one `scripts/build_replicate_postfix_presets.py` remaps onto. Taking
+# the newest directory basename silently picked the stray and moved the headline
+# exchange rate. So: duplicates are an ERROR unless explicitly pinned here.
+CANONICAL_SOURCE = {
+    "ir_figstep": "ir_figstep_20260805_215649_72871103",
+}
+
+# Several whitelisted campaigns can hold the same benign cell, and they disagree
+# by a point or two (re-runs, not errors). Earlier entries win. This is the SAME
+# precedence `paper_c_overrefusal_decomp.py` pins, so the two scripts cannot
+# quote different benign numbers for the same condition.
+CAMPAIGN_PRECEDENCE = [
+    "paper_c_reguard_5guard_benign",
+    "paper_c_guard_panel_benign",
+    "paper_c_reguard_5guard",
+    "paper_c_guard_panel",
+    "paper_c_fidelity_rerun",
+]
+
+
 def pick(cells, defense, encs, *, campaigns=RUN1, variant=None, reguard=False):
-    """{enc -> block rate}, wildguard / Qwen / one run, latest within that pin."""
-    best = {}
+    """{enc -> block rate}, wildguard / Qwen / one run, with duplicates pinned.
+
+    Raises if a (defense, encoding) slot holds more than one cell and no pin in
+    CANONICAL_SOURCE resolves it -- a silent pick is how a wrong number reaches
+    the paper.
+    """
+    cands: dict[str, list] = {}
     for d, r in cells:
         if r.get("target_model") != "qwen2_5_vl_7b" or r.get("defense") != defense:
             continue
@@ -101,13 +131,52 @@ def pick(cells, defense, encs, *, campaigns=RUN1, variant=None, reguard=False):
         e = enc_of(r)
         if e not in encs:
             continue
+        # Axis guard. An ORBench cell carries the same encoding name in its
+        # source path, so without this a BENIGN cell captures a harmful attack
+        # slot (measured: code_attack read 0% from an orbench dir against its
+        # true 28%). The two benign CHANNELS are the mirror case and must come
+        # from a benign benchmark.
+        bench = (r.get("benchmark") or "").lower()
+        if bench:
+            wants_benign = e in ("ir_plain", "non_llm_baseline")
+            is_benign = bench.startswith("orbench")
+            if wants_benign != is_benign:
+                continue
         rate, n = block_rate(d)
         if rate is None:
             continue
-        k = os.path.basename(d)
-        if e not in best or k > best[e][1]:
-            best[e] = (rate, k)
-    return {e: v[0] for e, v in best.items()}
+        src = (r.get("upstream_ref") or {}).get("source_dir", "") or ""
+        cands.setdefault(e, []).append((rate, os.path.basename(d), src, camp))
+
+    out = {}
+    for e, lst in cands.items():
+        # Duplicates that AGREE carry no ambiguity in the number -- several
+        # re-runs of the same cell are common and harmless. Only a disagreement
+        # is a selection decision, and those must be pinned, never guessed.
+        if len({round(c[0], 6) for c in lst}) == 1:
+            out[e] = lst[0][0]
+            continue
+        pin = CANONICAL_SOURCE.get(e)
+        kept = [c for c in lst if pin and pin in c[2]]
+        if len(kept) != 1:
+            ranked = sorted(
+                lst, key=lambda c: CAMPAIGN_PRECEDENCE.index(c[3])
+                if c[3] in CAMPAIGN_PRECEDENCE else len(CAMPAIGN_PRECEDENCE))
+            top = [c for c in ranked
+                   if (c[3] in CAMPAIGN_PRECEDENCE
+                       and CAMPAIGN_PRECEDENCE.index(c[3])
+                       == CAMPAIGN_PRECEDENCE.index(ranked[0][3]))]
+            kept = top if len(top) == 1 else []
+        if len(kept) != 1:
+            raise SystemExit(
+                f"\nAMBIGUOUS CELL for {defense}/{e} "
+                f"(variant={variant}, reguard={reguard}): {len(lst)} candidates\n"
+                + "".join(f"   {r:5.1f}%  [{c}]  {b}\n      src={s}\n"
+                          for r, b, s, c in lst)
+                + "Pin it in CANONICAL_SOURCE or CAMPAIGN_PRECEDENCE -- do not "
+                  "let the newest directory win.\n")
+        out[e] = kept[0][0]
+    return out
 
 
 def mean(d, keys):
