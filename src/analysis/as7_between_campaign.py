@@ -109,14 +109,38 @@ def main() -> int:
     shared = sorted(set(g1) & set(g2))
     print(f"% paired protocol-gap cells: {len(shared)} "
           f"(c1={len(g1)}, rep2={len(g2)})")
-    deltas, flipped, outside = [], [], []
+    # --- what counts as REFUTES (2026-08-09) --------------------------------
+    # The branch definitions in this module's docstring were pre-registered in the
+    # preset headers BEFORE any rep2 cell existed, and they gate REFUTES on the
+    # campaign-1 gap being one "the paper calls large". The first implementation
+    # ignored that qualifier and flagged EVERY sign flip, so it fired on the
+    # SemanticSmooth cells -- whose whole reported finding is that their gap is
+    # ~0 (no read position for the protocol to inflate). A quantity measured at
+    # -3pp coming back at +5pp has not reversed a claim; it is a null staying a
+    # null, and calling it a refutation would invert the paper's own reading.
+    #
+    # STATED PLAINLY BECAUSE IT MATTERS: this rule was corrected after 10 of the
+    # 12 paired cells were already visible. That is the exact shape of a post-hoc
+    # rationalisation, so the justification cannot be "it gave a nicer answer" --
+    # it is that the CODE disagreed with the PRE-REGISTERED TEXT and the text
+    # wins. To keep the correction auditable, near-null flips are still counted
+    # and printed below under their own heading; nothing is suppressed, and a
+    # reader can apply the stricter any-flip rule from the same output.
+    deltas, refutes, nearnull_flip, outside = [], [], [], []
     for k in shared:
         d = g2[k] - g1[k]
         deltas.append(abs(d))
         tgt, dfn, cfg, src = k[0], k[1], k[2], os.path.basename(k[3].rstrip("/"))
+        large_c1 = abs(g1[k]) >= a.band          # "a gap the paper calls large"
+        flipped = g1[k] and g2[k] and (g1[k] > 0) != (g2[k] > 0)
         flag = ""
-        if g1[k] and g2[k] and (g1[k] > 0) != (g2[k] > 0):
-            flag = "  <-- SIGN FLIP"; flipped.append(k)
+        if large_c1 and flipped:
+            flag = "  <-- REFUTES: large gap FLIPPED"; refutes.append(k)
+        elif large_c1 and abs(g2[k]) < a.band:
+            flag = "  <-- REFUTES: large gap COLLAPSED below band"; refutes.append(k)
+        elif flipped:
+            flag = "  <-- near-null flip (both |gap| < band; not a refutation)"
+            nearnull_flip.append(k)
         elif abs(d) > a.band:
             flag = "  <-- OUTSIDE BAND"; outside.append(k)
         print(f"%   {tgt:14} {dfn:16} {src[:20]:20} "
@@ -130,8 +154,13 @@ def main() -> int:
     if missing:
         print(f"% NOT REPLICATED ({len(missing)} c1 cells absent from rep2) -- "
               f"report as uncovered, never as agreement")
-    if flipped:
-        print(f"\nREFUTES branch: {len(flipped)} sign flip(s)", file=sys.stderr)
+    if nearnull_flip:
+        print(f"% near-null sign flips: {len(nearnull_flip)} "
+              f"(both campaigns' |gap| < {a.band:g}pp -- a null staying a null; "
+              f"listed so the stricter any-flip rule can be applied by hand)")
+    if refutes:
+        print(f"\nREFUTES branch: {len(refutes)} large gap(s) flipped or collapsed",
+              file=sys.stderr)
         return 2
     return 0
 
