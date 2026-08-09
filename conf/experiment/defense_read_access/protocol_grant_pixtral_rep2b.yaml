@@ -72,27 +72,29 @@ _b: &b
   judge_method: harmbench
   judge_model: gpt-5-mini
   campaign: as7_protocol_grant_rep2
+#
+# ⚠️ SPLIT INTO HALVES (a/b) — NOT a design change, a WALL-CLOCK SAFETY SPLIT.
+# `pixtral_12b` and `wildguard` are both pinned to AICR's `rtx-devel`, which
+# enforces a HARD 4h cap, and campaign 1's pixtral round MEASURED 4.54h end to
+# end for these same 16 cells. A round that outruns its server wall dies
+# mid-flight with partial data and no error, so each half runs ~8 cells
+# (~2.3h projected) well inside the cap. Both halves carry the SAME campaign
+# tag `as7_protocol_grant_rep2` and the same source dirs, so the analysis pairs
+# them cell-for-cell against campaign 1 exactly as if they were one run.
+# The no_defense denominators live in half (a); half (b)'s gate and ECSO arms
+# pair against them across dirs, which is what campaign 1 already did (oracle
+# and deployable arms of a family share one baseline — the target input is
+# identical and only the defense's read varies).
+# Submit chained: b AFTER a (rtx-devel caps 2 GPUs/user, and each half needs
+# exactly target+wildguard = 2).
+#
+# THIS HALF: guard gate (4) + ECSO (4)
 
 tasks:
-  # ---- shared denominators --------------------------------------------------
-  - {<<: *b, defense: no_defense, source_transform_subdir: *code_text}
-  - {<<: *b, defense: no_defense, source_transform_subdir: *form_text}
-  - {<<: *b, defense: no_defense, source_transform_subdir: *code_decoy}
-  - {<<: *b, defense: no_defense, source_transform_subdir: *form_decoy}
-
-  # ---- family: semantic_smooth (text arms; leak = vote-selection only) ------
-  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: original}, source_transform_subdir: *code_text}
-  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: encoded},  source_transform_subdir: *code_text}
-  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: original}, source_transform_subdir: *form_text}
-  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: encoded},  source_transform_subdir: *form_text}
-
-  # ---- family: guard gate, wildguard (text arms; oracle read is NEW) --------
   - {<<: *b, defense: guard_baseline, defense_config: {guard_model: wildguard, query_source: original}, source_transform_subdir: *code_text}
   - {<<: *b, defense: guard_baseline, defense_config: {guard_model: wildguard, query_source: encoded},  source_transform_subdir: *code_text}
   - {<<: *b, defense: guard_baseline, defense_config: {guard_model: wildguard, query_source: original}, source_transform_subdir: *form_text}
   - {<<: *b, defense: guard_baseline, defense_config: {guard_model: wildguard, query_source: encoded},  source_transform_subdir: *form_text}
-
-  # ---- family: ecso (decoy arms; text arm = the no_defense text cell) -------
   - {<<: *b, defense: ecso, defense_config: {query_source: original}, source_transform_subdir: *code_decoy}
   - {<<: *b, defense: ecso, defense_config: {query_source: encoded},  source_transform_subdir: *code_decoy}
   - {<<: *b, defense: ecso, defense_config: {query_source: original}, source_transform_subdir: *form_decoy}

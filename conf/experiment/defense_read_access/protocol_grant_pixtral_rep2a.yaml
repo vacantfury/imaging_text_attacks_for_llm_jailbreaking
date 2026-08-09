@@ -1,0 +1,101 @@
+# AS-7 · PROTOCOL GRANT — INDEPENDENT REPLICATE (campaign 2 of 2). Target: pixtral.
+#
+# WHY THIS EXISTS. BOTH cspaper reviews independently required it: review 1
+# con 4 and review 2 con 9 + Q3 ("run pre-registered independent repetitions of
+# the main deployable-versus-oracle comparisons and report between-campaign
+# uncertainty"). The paper reports McNemar tests that are PROMPT-paired WITHIN a
+# campaign, while its own drift analysis measures 0-10pp of BETWEEN-campaign
+# movement on hosted/nondeterministic targets. Within-campaign stars therefore
+# cannot by themselves establish that an effect survives recollection. This is
+# the missing measurement, not a robustness nicety.
+#
+# WHAT IS HELD FIXED — everything except the collection itself. Same source
+# transform dirs (renders are fixed artifacts on disk), same targets, same
+# defenses and defense_configs, same judge (gpt-5-mini), same prompt_range,
+# same arms and denominators. ONLY `campaign` changes, to
+# `as7_protocol_grant_rep2`, so the analysis can pair cell-for-cell against
+# campaign 1 and report a between-campaign delta per cell.
+# ⚠️ The judge MUST stay gpt-5-mini. Changing it would confound judge with
+# campaign and destroy the only quantity this run exists to produce.
+#
+# PRE-REGISTERED READ-OUTS — fixed BEFORE the run, all three reportable:
+#   1. CONFIRMS: per-cell |campaign2 - campaign1| on the oracle-vs-deployable
+#      GAP stays within the measured 0-10pp operational drift band, and every
+#      gap the paper calls large (gate 24-47pp, ECSO 12-36pp) stays large and
+#      same-signed. -> the claims survive recollection; report the band as
+#      between-campaign uncertainty on the headline table.
+#   2. NARROWS: the large gaps replicate but the small/near-null ones move
+#      inside the band. -> expected, and already the paper's position; report
+#      the small contrasts as indistinguishable from drift rather than as nulls.
+#   3. REFUTES: a gap the paper calls large changes sign, or collapses below
+#      the drift band, on either target. -> the ordering claim does not survive
+#      recollection and §res-readladder must be rewritten to a single-campaign
+#      observation. THIS BRANCH IS REPORTED, NOT RERUN AWAY.
+#   ⚠️ SemanticSmooth's ~0 is a SPECIFIED null (its paraphrase step always
+#      reads the encoded prompt; the oracle read reaches only candidate
+#      SELECTION - App. slot table), so a non-zero SS gap in this campaign is a
+#      rig fault to diagnose, not a finding.
+#   ⚠️ Stuck-guard check first, as in campaign 1: a gate cell blocking NOTHING
+#      on the oracle arm is a serving fault (chat template / 400s), not data.
+#
+# COST: identical to campaign 1 (~$2-3 this preset; target + wildguard are
+# self-served GPU and free). ESTIMATE, not a quote.
+#
+# AS-7 · PROTOCOL GRANT — ORACLE vs DEPLOYABLE ACROSS DEFENSE FAMILIES.
+# Target: pixtral_12b. THE FULL DESIGN RATIONALE, per-family oracle table,
+# pre-registered read-outs, pairing verification, and cost math live in the
+# sibling preset protocol_grant_internvl3.yaml — identical design, other
+# dissociation-control target. Read that header before editing this file;
+# any design change must land in BOTH files.
+#
+# COST (this preset): judge gpt-5-mini 16×100 ≈ $1.5–2 + SS internals ≈ $0.6;
+# GPU free. ESTIMATE, not a quote.
+#
+# SUBMIT (AICR; verify the four source dirs exist there first):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch defense_read_access/protocol_grant_pixtral'
+
+num_main_job_threads: 4
+num_cluster_jobs: 3          # orchestrator + target + wildguard (1 replica each)
+
+# Canonical chains — same anchors as ecso_deployable_grid.yaml (AICR 312607).
+_code_text:  &code_text  outputs/image_presence_threshold/prompt_transform/harmbench/code_attack_ir_constant_20260805_213025_3168031/code_attack
+_code_decoy: &code_decoy outputs/image_presence_threshold/prompt_transform/harmbench/code_attack_ir_constant_20260805_213025_3168031/ir_constant
+_form_text:  &form_text  backup_files/arr_may_submission_files/outputs/prompt_transform/harmbench/formal_logic_ir_plain_20260525_010219_56487445/llm_formal_logic
+_form_decoy: &form_decoy outputs/image_presence_threshold/prompt_transform/harmbench/llm_formal_logic_ir_constant_20260803_064343_72332881/ir_constant
+
+_b: &b
+  mode: defense+evaluate
+  target_model: pixtral_12b
+  prompt_range: [0, 99]
+  benchmark: harmbench
+  judge_method: harmbench
+  judge_model: gpt-5-mini
+  campaign: as7_protocol_grant_rep2
+#
+# ⚠️ SPLIT INTO HALVES (a/b) — NOT a design change, a WALL-CLOCK SAFETY SPLIT.
+# `pixtral_12b` and `wildguard` are both pinned to AICR's `rtx-devel`, which
+# enforces a HARD 4h cap, and campaign 1's pixtral round MEASURED 4.54h end to
+# end for these same 16 cells. A round that outruns its server wall dies
+# mid-flight with partial data and no error, so each half runs ~8 cells
+# (~2.3h projected) well inside the cap. Both halves carry the SAME campaign
+# tag `as7_protocol_grant_rep2` and the same source dirs, so the analysis pairs
+# them cell-for-cell against campaign 1 exactly as if they were one run.
+# The no_defense denominators live in half (a); half (b)'s gate and ECSO arms
+# pair against them across dirs, which is what campaign 1 already did (oracle
+# and deployable arms of a family share one baseline — the target input is
+# identical and only the defense's read varies).
+# Submit chained: b AFTER a (rtx-devel caps 2 GPUs/user, and each half needs
+# exactly target+wildguard = 2).
+#
+# THIS HALF: denominators (4 no_defense) + semantic_smooth (4)
+
+tasks:
+  - {<<: *b, defense: no_defense, source_transform_subdir: *code_text}
+  - {<<: *b, defense: no_defense, source_transform_subdir: *form_text}
+  - {<<: *b, defense: no_defense, source_transform_subdir: *code_decoy}
+  - {<<: *b, defense: no_defense, source_transform_subdir: *form_decoy}
+  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: original}, source_transform_subdir: *code_text}
+  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: encoded},  source_transform_subdir: *code_text}
+  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: original}, source_transform_subdir: *form_text}
+  - {<<: *b, defense: semantic_smooth, defense_config: {query_source: encoded},  source_transform_subdir: *form_text}
