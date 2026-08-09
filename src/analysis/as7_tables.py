@@ -261,7 +261,20 @@ def integrity(cells) -> list[str]:
         if c["n"] != 100:
             problems.append(f"n={c['n']}")
         if (c["fallback"] or 0) > 0:
-            problems.append(f"fallback={c['fallback']}")
+            # A fallback on EVERY row is a dead judge, not a noisy one. Say so
+            # precisely: on the benign cells the judge is a secondary read-out
+            # and its death does not touch the reported quantity, because the
+            # block rate is an exact string match on the stored target response
+            # and never passes through a judge. Blurring the two would either
+            # scare a future session off good block rates or let it quote a
+            # constant refusal_rate as a measurement.
+            if c["n"] and c["fallback"] == c["n"]:
+                problems.append(
+                    f"JUDGE DEAD (fallback={c['fallback']}/{c['n']}, "
+                    f"refusal_rate={c['refusal_rate']}) -- refusal read-out "
+                    f"UNUSABLE; block rate unaffected (judge-independent)")
+            else:
+                problems.append(f"fallback={c['fallback']}")
         if c["warnings"]:
             problems.append(f"warnings={c['warnings']}")
         benign = c["campaign"] in BENIGN_CAMPAIGNS
