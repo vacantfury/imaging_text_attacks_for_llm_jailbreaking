@@ -50,12 +50,18 @@
 num_main_job_threads: 6
 num_cluster_jobs: 1          # API targets + API judge — no vLLM server needed.
 
-# ⚠️ PASTE THE STAGE-1 DIRS HERE. Verify before submitting: both arms must carry
-# 300 rows, IDENTICAL text per prompt id, the text arm image_encoded=None, and
-# the blank arm exactly ONE distinct image md5 across all 300 (that single md5 is
-# what makes "zero per-prompt information" literally true).
-_text:  &text  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/PASTE_ME/non_llm_baseline
-_blank: &blank outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/PASTE_ME/ir_blank
+# Stage 1 = AICR job 327863 (COMPLETED 00:00:22, exit 0:0). All four validity
+# gates VERIFIED on the cluster 2026-08-09 before this stage was submitted:
+#   * 300 rows in both arms, id sets identical -> pairing is exact
+#   * 300/300 IDENTICAL text between arms -> keep_text held; the arms differ
+#     ONLY in image presence
+#   * text arm carries 0 images
+#   * blank arm: 300 images, exactly 1 DISTINCT md5
+#     (176f5542fbd3fd366cda24334ae15028) -> every prompt gets the byte-identical
+#     canvas, i.e. literally zero per-prompt information in the image channel.
+#     This single md5 is what makes the paper's central isolation claim true.
+_text:  &text  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260809_014849_30839437/non_llm_baseline
+_blank: &blank outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260809_014849_30839437/ir_blank
 
 _b: &b
   mode: defense+evaluate
