@@ -88,6 +88,23 @@ def load():
 # and the one `scripts/build_replicate_postfix_presets.py` remaps onto. Taking
 # the newest directory basename silently picked the stray and moved the headline
 # exchange rate. So: duplicates are an ERROR unless explicitly pinned here.
+REPLICATE_SPREAD = []
+
+# DEGENERATE CELLS -- excluded by name, never silently.
+# `paper_c_reguard_5guard_benign` holds a LlamaGuard-3 / Qwen benign-image cell
+# that blocked 100/100 benign prompts while its three campaign siblings blocked
+# 0, 4 and 5. A guard that gates every benign input is stuck, not strict, and no
+# parse check catches it: the rows are well-formed and the ASR field is absent
+# on a benign cell, so it reads as valid data. It is excluded here and recorded
+# in experiment_results.md. The paper's own 28% LlamaGuard-3 benign figure does
+# NOT come from it (100% block would force 100% over-refusal), but the cell sits
+# in a campaign the paper's tables do read, and today only sort order keeps
+# `paper_c_overrefusal_decomp.py` off it. Found 2026-08-08 by the
+# replicates-disagree guard below.
+BAD_CELLS = {
+    "qwen2_5_vl_7b_modality_complete_ir_plain_20260723_141216_20322381",
+}
+
 CANONICAL_SOURCE = {
     "ir_figstep": "ir_figstep_20260805_215649_72871103",
 }
@@ -105,7 +122,8 @@ CAMPAIGN_PRECEDENCE = [
 ]
 
 
-def pick(cells, defense, encs, *, campaigns=RUN1, variant=None, reguard=False):
+def pick(cells, defense, encs, *, campaigns=RUN1, variant=None, reguard=False,
+         guard="wildguard", target="qwen2_5_vl_7b"):
     """{enc -> block rate}, wildguard / Qwen / one run, with duplicates pinned.
 
     Raises if a (defense, encoding) slot holds more than one cell and no pin in
@@ -114,13 +132,13 @@ def pick(cells, defense, encs, *, campaigns=RUN1, variant=None, reguard=False):
     """
     cands: dict[str, list] = {}
     for d, r in cells:
-        if r.get("target_model") != "qwen2_5_vl_7b" or r.get("defense") != defense:
+        if r.get("target_model") != target or r.get("defense") != defense:
             continue
         camp = r.get("campaign") or ""
         if campaigns is not None and camp not in campaigns:
             continue
         dc = r.get("defense_config") or {}
-        if dc.get("guard_model") != "wildguard":
+        if dc.get("guard_model") != guard:
             continue
         if bool(dc.get("reguard_original")) != reguard:
             continue
@@ -142,6 +160,8 @@ def pick(cells, defense, encs, *, campaigns=RUN1, variant=None, reguard=False):
             is_benign = bench.startswith("orbench")
             if wants_benign != is_benign:
                 continue
+        if os.path.basename(d) in BAD_CELLS:
+            continue
         rate, n = block_rate(d)
         if rate is None:
             continue
@@ -166,7 +186,28 @@ def pick(cells, defense, encs, *, campaigns=RUN1, variant=None, reguard=False):
                    if (c[3] in CAMPAIGN_PRECEDENCE
                        and CAMPAIGN_PRECEDENCE.index(c[3])
                        == CAMPAIGN_PRECEDENCE.index(ranked[0][3]))]
-            kept = top if len(top) == 1 else []
+            # Keep ALL of the winning campaign's cells: if it holds more than
+            # one they are replicate runs, which the next block averages. (An
+            # earlier version emptied `kept` here, which made the replicate
+            # branch unreachable and every replicated cell a hard error.)
+            kept = top
+        # Three kinds of multiplicity, resolved by three different rules:
+        #   different SOURCE  -> a real selection choice; must be pinned.
+        #   different CAMPAIGN-> precedence, matching the paper's own tables.
+        #   same campaign+src -> REPLICATE RUNS of one cell. Averaging them is
+        #     the correct treatment, not picking; the spread is the benign
+        #     run-to-run drift the paper already reports (median ~1.5 points).
+        if len(kept) > 1 and len({c[2] for c in kept}) == 1 \
+                and len({c[3] for c in kept}) == 1:
+            vals = [c[0] for c in kept]
+            spread = max(vals) - min(vals)
+            if spread > 5.0:
+                raise SystemExit(
+                    f"\nREPLICATES DISAGREE for {defense}/{e} by {spread:.1f} "
+                    f"points -- too wide to average: {sorted(vals)}\n")
+            out[e] = sum(vals) / len(vals)
+            REPLICATE_SPREAD.append((defense, e, len(vals), spread))
+            continue
         if len(kept) != 1:
             raise SystemExit(
                 f"\nAMBIGUOUS CELL for {defense}/{e} "
@@ -243,3 +284,65 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ---------------------------------------------------------------------------
+# Five-guard extension (added after cspaper review 1, Q2: "a compact table for
+# EVERY guard-target pair"). The single-guard exchange rate was the new frame's
+# biggest exposure -- a retitled paper resting on one guard on one target.
+#
+# It also supplies the account's sharpest CONTROL. Four of the five guards are
+# text-only, so an image render is a channel they cannot read: adding a view
+# should buy them a lot. GuardReasoner-VL is vision-language and ALREADY reads
+# the image, so the account predicts recovery buys it little or nothing. If that
+# dissociation appears, "adding a view" is doing the work rather than "the
+# amplifier makes guards stricter" -- a stricter-classifier story predicts a
+# uniform gain across all five.
+GUARDS = ["wildguard", "llama_guard_3_8b", "qwen3guard_gen_8b",
+          "thinkguard", "guardreasoner_vl_7b"]
+GUARD_SHORT = {"wildguard": "WildGuard", "llama_guard_3_8b": "LlamaGuard-3",
+               "qwen3guard_gen_8b": "Qwen3Guard", "thinkguard": "ThinkGuard",
+               "guardreasoner_vl_7b": "GuardReasoner-VL (sees image)"}
+TARGET_CAMPAIGNS = {
+    "qwen2_5_vl_7b": RUN1,
+    "internvl3_8b": {"paper_c_gen2_internvl3"},
+}
+
+
+def five_guard_table():
+    cells = load()
+    encs = set(IMAGE_ATTACKS) | {"ir_plain"}   # only what this table consumes
+    print("\n" + "=" * 86)
+    print("MECHANISM A ACROSS ALL FIVE GUARDS  --- does 'adding a view' generalise?")
+    print("=" * 86)
+    for target, camps in TARGET_CAMPAIGNS.items():
+        print(f"\n### target = {target}")
+        print(f"{'guard':30s}{'img gb':>8s}{'img mc':>8s}{'gain':>7s}"
+              f"{'ben gb':>8s}{'ben mc':>8s}{'paid':>7s}{'rate':>8s}")
+        for g in GUARDS:
+            try:
+                gb = pick(cells, "guard_baseline", encs, campaigns=camps,
+                          guard=g, target=target)
+                mc = pick(cells, "modality_complete", encs, campaigns=camps,
+                          guard=g, target=target)
+            except SystemExit as e:
+                print(f"{GUARD_SHORT[g]:30s}  AMBIGUOUS -- {str(e).splitlines()[1][:40]}")
+                continue
+            img = [a for a in IMAGE_ATTACKS if a in gb and a in mc]
+            if len(img) < 4 or "ir_plain" not in gb or "ir_plain" not in mc:
+                print(f"{GUARD_SHORT[g]:30s}  incomplete "
+                      f"({len(img)} image attacks, benign "
+                      f"{'ok' if 'ir_plain' in mc else 'missing'})")
+                continue
+            a0, a1 = mean(gb, img), mean(mc, img)
+            b0, b1 = gb["ir_plain"], mc["ir_plain"]
+            gain, paid = a1 - a0, b1 - b0
+            rate = f"{paid / gain:>7.2f}" if gain > 0.5 else "   n/a "
+            print(f"{GUARD_SHORT[g]:30s}{a0:>7.1f}%{a1:>7.1f}%{gain:>+7.1f}"
+                  f"{b0:>7.1f}%{b1:>7.1f}%{paid:>+7.1f}{rate}")
+        print(f"   (image attacks matched per guard; 'rate' = benign points paid "
+              f"per attack point gained)")
+
+
+if __name__ == "__main__":
+    five_guard_table()
