@@ -570,3 +570,124 @@ mystery.
 **Standing lesson for this repo:** run the null-verdict sweep before trusting any cell
 enumeration — a failed judging pass leaves a well-formed directory with no metric, and
 latest-wins selection walks straight into it.
+
+---
+
+## ⚠️ CORRECTION to the section above — the number was never unbacked (2026-08-09)
+
+**The integrity find above overstated its case, and the record must say so.** The claim was
+that AS-2's published `pixtral-12b 48 → 83%` had *no reachable backing cell on any root or
+cluster*. That is **false**. A live cell held it all along:
+
+```
+outputs/image_presence_threshold/rejudge/harmbench/
+    pixtral_12b_no_defense_gpt-5-mini_20260807_065442_3288533
+    status=success · asr=83.0 · 0 null rows
+    upstream_ref -> pixtral_12b_no_defense_non_llm_baseline_ir_blank_20260807_043819_60229939
+```
+
+Paired against the same text arm it reproduces the published digits **exactly**:
+`+35.0pp, discordant 39/4, p=3.108e-08` — the paper's original numbers to three significant
+figures. It is present **locally and on AICR**.
+
+**Why the sweep missed it.** The sweep enumerated `defense+evaluate/` roots. But a cell whose
+*first* judging failed can only ever have a `rejudge/` home — that is precisely where its
+number must live. Worse, rejudge output dirs **drop the transform chain from their name**
+(`pixtral_12b_no_defense_gpt-5-mini_<ts>`, no `ir_blank`), so a path-keyed search for the
+blank arm cannot match them. The correct search is a glob over
+`outputs/*/rejudge/*/*/results.json` matching on **`upstream_ref.source_dir`**, never on the
+output dir's own name.
+
+**What this means for the paper.** Both values are valid `gpt-5-mini` passes over *identical*
+stored responses; they differ on **2 of 100 rows**, a ±2pp judge-nondeterminism band:
+
+| pass | ASR | delta | discordant | p |
+|---|---|---|---|---|
+| 08-07 rejudge | 83.0 | +35.0pp | 39/4 | 3.108e-08 |
+| 08-09 recovery rejudge | 81.0 | +33.0pp | 37/4 | 1.026e-07 |
+
+**The paper KEEPS 81 / +33pp / 1.03e-07** — the conservative value, already propagated
+consistently across six sites and the multiplicity registry (`--audit` 0 mismatches).
+Reverting would re-propagate everything to land on a *larger* effect, which is strictly worse
+practice. The spread is now reported in §Judge robustness as the instrument's own noise floor,
+which is more useful than either number alone.
+
+**The real standing lesson** (replaces the last line of the section above): before reporting a
+published number as unbacked — a claim that costs trust in the whole table — re-run the search
+**keyed on upstream provenance across every mode**, not just the mode that "should" hold it.
+The null-verdict sweep itself remains correct and worth running.
+
+---
+
+## Con 6 / Q3 — CROSS-FAMILY JUDGE PANEL, COMPLETE (AICR job 328581, 2026-08-09)
+
+Closes the machine half of "no multi-judge validation is reported for the headline cells".
+`gemini-2.5-pro` re-scored the three results the reviewer named, over stored responses
+(2200 rows, no target queried, no GPU). Wall 2:50 — that is 8-way concurrency, not a dead
+judge: 10/10 tasks `status=success`, **0 null rows**, fallback parses 0–1 per 300.
+
+### Result: every effect survives a different-family, stricter judge
+
+| cell | n/arm | gpt-5-mini | gemini-2.5-pro | discordant | p (pro) |
+|---|---|---|---|---|---|
+| claude-sonnet-4-6, benign stratified | 300 | 9.3 → 61.7 (**+52.3**) | 16.7 → 73.7 (**+57.0**) | 172/1 | 2.9e-50 |
+| gpt-4o-mini, benign stratified | 300 | 19.0 → 55.3 (**+36.3**) | 24.7 → 58.7 (**+34.0**) | 108/6 | 2.7e-25 |
+| gemini-2.5-flash-lite, benign stratified | 300 | 24.0 → 58.7 (**+34.7**) | 26.3 → 61.0 (**+34.7**) | 111/7 | 3.4e-25 |
+| qwen3-vl-8b, harmful | 100 | 2 → 1 (null) | 5 → 3 (**−2.0**) | 1/3 | 0.625 |
+| pixtral-12b, harmful (inversion) | 100 | 48 → 81 (**+33**) | 50 → 80 (**+30.0**) | 37/7 | 5.3e-06 |
+
+**The paired design does exactly what it is supposed to.** The cross-family judge sits at a
+different *absolute* level — it calls 5–7pp more refusal on every benign cell, in **both**
+arms — and the *contrast* lands within a few points everywhere. Absolute leniency cancels;
+that was always the quantity at issue.
+
+### Agreement (the statistic the reviewer asked for)
+
+Pooled raw verdict agreement **94.3%** over all 2100 rows. Per cell:
+
+| cell | raw | kappa |
+|---|---|---|
+| benign, six cells | 86.7–97.7% | 0.65–0.94 |
+| pixtral text arm | 94.0% | 0.880 |
+| qwen3-vl-8b, both arms | 97.0 / 98.0% | 0.559 / 0.492 |
+
+The low kappas are the **floored** qwen cells — the familiar instability of kappa at a 1–5%
+base rate, where 97–98% raw agreement coexists with a weak chance-corrected score. Not a
+disagreement signal.
+
+### Read-out, against what was pre-registered in the preset
+
+The pre-registered branch that fired is the **best** one: *"benign effects survive at similar
+magnitude → the headline is judge-robust across families; report both judges side by side and
+the objection is closed on the machine side."* Recorded honestly: the claude cell came back
+**larger** (+57.0 vs +52.3), not smaller, so this is not a case of an effect surviving in
+weakened form.
+
+The qwen3-vl-8b null also behaved as the preset warned: the stricter judge moved it to 5% —
+still **floored**, so it remains uninformative rather than becoming evidence. The pre-registered
+instruction "check headroom before reading any null as a finding" applies and was applied.
+
+### Two caveats, both written into the paper rather than left to a reader
+
+1. **Family overlap on one row.** `gemini-2.5-flash-lite` is one of the *targets* being scored
+   by `gemini-2.5-pro`. Reported per-model, never pooled, so it can be discounted. Empirically
+   moot: it is the one contrast that does not move at all (+34.7pp under both judges).
+2. **Same-judge noise floor.** `gpt-5-mini` re-run over identical stored pixtral responses
+   flips 2/100 verdicts (±2pp). Reported; the lower value is carried throughout.
+
+### Written into the paper
+
+§Judge robustness gains two paragraphs (the panel + the two caveats) and hands off to the human
+anchor with "a different-family judge still cannot exclude a blind spot shared by all
+rubric-following language models". The Limitations line that read *"we have not run a
+multi-judge panel on these cells"* is now stale and was rewritten to state three judges and
+name what genuinely remains untested. **No multiplicity-registry change**: a robustness
+re-scoring is the same hypothesis on a different instrument, not a new test — consistent with
+how the existing `gpt-5-nano` pass is treated.
+
+Build after integration: **19pp, 0 errors, 0 undefined refs, 1 overfull box of 1.34pt**
+(0.5mm, invisible; `tab:factorial`). Two genuinely-visible pre-existing overflows found and
+fixed in passing — `tab:families` (15.3pt) and `tab:modelids` (38.4pt), both appendix tables,
+set to `\scriptsize`. Note for future layout work: **`aaai2027.sty` clamps `\footnotesize` to
+`\small`**, so `\small → \footnotesize` changes a table's width by exactly nothing;
+`\scriptsize` is the first step down that actually does anything.
