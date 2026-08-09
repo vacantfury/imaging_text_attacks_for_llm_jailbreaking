@@ -56,9 +56,9 @@
 # constraint below.
 #   On xc, if it is ever free: 1 replica x 2 GPUs + wildguard = 2 server JOBS using 3 GPUs.
 #
-#   ssh xc; cd ~/projects/llm_guardrail_security
-#   A=$(sbatch --parsable scripts/run_experiment_xc.sbatch bestofn_attack/r18a_llama70b_control_and_sage)
-#   sbatch --dependency=afterany:$A scripts/run_experiment_xc.sbatch bestofn_attack/r18b_llama70b_selfdefend
+#   ssh aicr; cd ~/projects/llm_guardrail_security      # NOT xc — box owner holds all 8 GPUs
+#   A=$(sbatch --parsable scripts/run_experiment_aicr.sbatch bestofn_attack/r18a_llama70b_control_and_sage)
+#   sbatch --dependency=afterany:$A scripts/run_experiment_aicr.sbatch bestofn_attack/r18b_llama70b_selfdefend
 #
 # ── max_tokens IS SET EXPLICITLY AND MUST STAY ──────────────────────────────
 # conf/llm/llama_3_3_70b_instruct.yaml carries `model.max_tokens: 512` — correct for its JUDGE
@@ -73,8 +73,8 @@
 # 12% on qwen, and it must be subtracted before sage's number means anything.
 # If sage lands near zero net of control on a 70B, the claim is size-dependent and the paper
 # must say so rather than reporting three targets and omitting the fourth.
-num_main_job_threads: 1      # ONE 70B replica on xc -> cells run SEQUENTIALLY (see conf/llm/llama_3_3_70b_instruct.yaml)
-num_cluster_jobs: 3          # 1 server (70B, ONE replica x 2 GPUs) + wildguard = 2 servers + orchestrator
+num_main_job_threads: 3      # AICR: 3 replicas @ 1 GPU each (profiles.aicr), so cells run 3-up
+num_cluster_jobs: 5          # 4 servers (70B x3 replicas @1 GPU on AICR + wildguard) + orchestrator
 
 _e: &e
   mode: defense+evaluate

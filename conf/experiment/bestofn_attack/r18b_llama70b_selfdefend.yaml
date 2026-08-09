@@ -29,8 +29,8 @@
 # cross-target contrast is the result, and it is only legal if these are held fixed.
 # max_tokens is set explicitly for the same reason as in 18a: the 70B config's `model.max_tokens
 # : 512` is correct for its judge role and would truncate every target response here.
-num_main_job_threads: 1      # ONE 70B replica on xc -> cells run SEQUENTIALLY (see conf/llm/llama_3_3_70b_instruct.yaml)
-num_cluster_jobs: 4          # 70B (ONE replica x 2 GPUs) + llama3_8b shadow + wildguard = 3 servers + orchestrator
+num_main_job_threads: 3      # AICR: 3 replicas @ 1 GPU each (profiles.aicr), so cells run 3-up
+num_cluster_jobs: 6          # 5 servers (70B x3 + llama3_8b shadow + wildguard) + orchestrator
 
 _e: &e
   mode: defense+evaluate
