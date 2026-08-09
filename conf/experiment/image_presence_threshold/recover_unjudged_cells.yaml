@@ -1,0 +1,85 @@
+# Paper B (AS-2) · RECOVER FOUR SILENTLY-UNJUDGED CELLS.
+#
+# WHY THIS EXISTS. A sweep for `asr is None AND refusal_rate is None` across the
+# paper's output tree found FOUR defense+evaluate cells that collected 100 target
+# responses each and then never got a judge verdict: every row's `asr`/`refusal`
+# is null, `eval_stats` is null, and `results.json` carries no metric. All four are
+# from the same campaign (`paper_b_threshold_shift_openweight`, 2026-08-07), so one
+# judging pass failed across the campaign while the expensive half -- the target
+# generations -- survived intact (mean response length ~900 chars, zero empties).
+#
+# ⚠️ WHY IT MATTERS BEYOND HOUSEKEEPING. One of the four is the BLANK arm of the
+# pixtral sign inversion, which the paper reports as
+#
+#     pixtral-12b   harmful ASR   48 -> 83%   (+35pp, p=3.1e-08)
+#
+# and which is one of the four legs of the paper's central argument ("the response
+# to attachment does not behave like a risk policy: its DIRECTION is not shared").
+# The 48 (text arm, same campaign, same timestamp) is judged and present. The 83
+# (blank arm) is NOT: no cell anywhere -- local, AICR, NURC or xc -- holds a judged
+# pixtral ir_blank harmbench result. The number is recorded in
+# `text_docs/image_presence_threshold/experiment_matrix.md` with a p-value and with
+# spot-checked verbatim quotes from both arms, so it WAS measured on a real cell;
+# that cell has since been superseded by this failed re-run. This is the
+# "latest-wins cell selection is unsafe" failure mode exactly: the newest cell for
+# this condition is the broken one.
+#
+# So the paper currently asserts a headline number whose backing cell is not
+# reachable. That is not acceptable at submission, and it is ~$0.20 to resolve.
+#
+# WHAT THIS DOES. Rejudge mode re-scores the STORED responses -- no target model is
+# queried, no GPU is needed, no vLLM server is started. The responses are exactly
+# the ones already collected; only the missing judging step runs.
+#
+# READ-OUT, RECORDED BEFORE THE RUN (pixtral blank arm is the one that matters):
+#   * comes back at/near 83% -> the paper's number is reproduced on recoverable
+#     data and the claim is sound; record the new cell as its provenance and move on.
+#   * comes back materially different -> the paper's +35pp is WRONG or was computed
+#     on a collection that no longer exists. Either way the number must be replaced
+#     with this one and the sign-inversion leg re-argued on what the data actually
+#     says. Do NOT go looking for a run that reproduces 83.
+#   * comes back unjudgeable (parse failures) -> report that, do not paper over it.
+#
+# Note the llava leg of the same claim (37 -> 76%, +39pp, campaign
+# `paper_b_sign_inversion`) IS fully backed by two judged cells and is unaffected.
+#
+# JUDGE PINNED to the paper's headline judge and the rubric matching each cell's
+# benchmark. `judge_method` is set explicitly on every task because an unset method
+# falls back to the BENCHMARK's evaluator (src/experiment/task.py:574) -- which for
+# the harmbench cells would still be right but for the benign cells would silently
+# pick a different quantity. Pin it rather than rely on the fallback.
+#
+# COST: 400 judge calls on gpt-5-mini over short responses, ~$0.20. No target calls.
+# Below the standing $1 bar.
+#
+# SUBMIT (AICR -- API-only, requests no GPU, so it does not contend with the AS-7
+# GPU chain currently running there):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch image_presence_threshold/recover_unjudged_cells'
+
+num_main_job_threads: 4
+num_cluster_jobs: 1          # orchestrator only -- rejudge never serves a model.
+
+_j: &j
+  mode: rejudge
+  judge_model: gpt-5-mini    # pinned: the paper's headline judge
+
+tasks:
+  # --- THE ONE THAT CARRIES A PAPER CLAIM -------------------------------------
+  # pixtral-12b, blank arm: the missing half of the 48 -> 83% sign inversion.
+  - <<: *j
+    responses_from: outputs/image_presence_threshold/defense+evaluate/harmbench/pixtral_12b_no_defense_non_llm_baseline_ir_blank_20260807_043819_60229939
+    judge_method: harmbench
+
+  # --- the other three from the same failed judging pass -----------------------
+  - <<: *j
+    responses_from: outputs/image_presence_threshold/defense+evaluate/harmbench/internvl3_8b_no_defense_non_llm_baseline_20260807_043819_77802907
+    judge_method: harmbench
+
+  - <<: *j
+    responses_from: outputs/image_presence_threshold/defense+evaluate/jailbreakbench_benign/internvl3_8b_no_defense_non_llm_baseline_20260807_043819_87100406
+    judge_method: jbb_refusal
+
+  - <<: *j
+    responses_from: outputs/image_presence_threshold/defense+evaluate/jailbreakbench_benign/qwen2_5_vl_7b_no_defense_non_llm_baseline_ir_blank_20260807_084227_74119019
+    judge_method: jbb_refusal
