@@ -1,0 +1,75 @@
+# Paper B (AS-2) · TOPIC-STRATIFIED BENIGN COST — STAGE 1: render the channels.
+#
+# WHAT THIS FIXES — a sampling defect in the paper's own headline, found
+# 2026-08-08, NOT a reviewer preference.
+#
+# The borderline-rung result (+51/+34/+23pp) is collected with
+# `prompt_range: [0, 99]` over `data/orbench_benign_hard_prompts.jsonl`. That
+# file is GROUPED BY CATEGORY, so those 100 rows are deception (72) and
+# harassment (28) -- two of OR-Bench's ten categories. The paper meanwhile states
+# at FIVE sites (abstract, intro, setup, conclusion, ethics) that the cost falls
+# on "medical, legal, security, harm-reduction" traffic. None of those four is in
+# the measured slice. The claim about WHO PAYS is the paper's deployment argument
+# and it is currently unsupported by its own sample.
+#
+# cspaper review 3 probed exactly this (con 4: "a single 100-prompt slice does
+# not adequately characterize the real prevalence or heterogeneity"; Q4: "report
+# topic-level results ... identify which prompt types drive the aggregate
+# changes"). The reviewer did not know the slice was two categories.
+#
+# THE SET. `data/orbench_benign_hard_stratified_300.jsonl` -- 30 prompts x 10
+# categories, seed 20260808, built by `scripts/build_stratified_benign.py`
+# (that builder carries the full design rationale; scripts/ is the gitignored ops
+# layer, the DATASET is committed, and this header is its provenance record --
+# same pattern as `data/alpaca_neutral_100_prompts.jsonl`, whose provenance lives
+# in `sensitivity_ladder_stage1.yaml`). 30 is set by the smallest category
+# (harassment, 41 available): the largest N that keeps every stratum balanced.
+# Original ids are preserved verbatim and stay globally unique, so per-prompt
+# McNemar pairing is unaffected and every row traces to its source line.
+#
+# 51 of the 300 overlap the original [0,99] slice. Left uncorrected on purpose:
+# arms are always collected inside ONE job, so nothing is compared across
+# collection windows and the overlap is a within-category read rather than a
+# confound.
+#
+# READ-OUT, RECORDED BEFORE THE RUN so it cannot be fitted afterwards:
+#   * the effect holds at similar size across most categories
+#       -> the aggregate is a real threshold shift on sensitivity-adjacent
+#          traffic. The paper keeps its deployment claim but must name the
+#          categories OR-Bench actually covers, not "medical, legal".
+#   * the effect concentrates in a few categories
+#       -> the more interesting result, and the honest one: the cost is
+#          TOPIC-STRUCTURED, and the paper reports which topics pay. This
+#          strictly strengthens the "who pays" argument by making it specific.
+#   * the effect is much weaker outside deception/harassment
+#       -> the headline is inflated by an unrepresentative slice and MUST be
+#          restated to the stratified number. Report it; the +51 becomes a
+#          category-specific figure, not the borderline-rung figure.
+# In all three cases the five domain-naming sites get corrected to measured
+# categories. There is no outcome in which the current prose stands.
+#
+# ONE CHAIN, BOTH ARMS. `[non_llm_baseline, ir_blank]` emits both step subdirs
+# from a single task, so the text channel is byte-identical across arms and the
+# pairing is exact. Collecting them as two tasks would not guarantee this.
+#
+# COST: ZERO. `non_llm_baseline` is the identity encoder and `ir_blank` is a
+# non-LLM blank-canvas renderer -- no model call is made in this stage.
+#
+# SUBMIT (AICR):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch image_presence_threshold/topic_stratified_stage1'
+# Then paste the timestamped dir into topic_stratified_stage2.yaml.
+
+num_main_job_threads: 2
+
+tasks:
+  - mode: prompt_transform
+    source_file: data/orbench_benign_hard_stratified_300.jsonl
+    prompt_range: [0, 299]
+    benchmark: jailbreakbench_benign   # pinned: hold the reporting path constant
+    campaign: paper_b_topic_stratified
+    # keep_text defaults True on the image wrapper => text preserved, blank image
+    # attached. Decoy condition, NOT image-only delivery.
+    transformation_list:
+      - {type: non_llm_baseline}
+      - {type: ir_blank}
