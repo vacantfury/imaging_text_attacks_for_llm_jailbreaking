@@ -1,0 +1,33 @@
+# ============================================================
+# Paper C (AS-3) — BENIGN CATEGORY COVERAGE, stage 2: qwen2_5_vl_7b / thinkguard x {gb, mc, +rg}
+# cspaper review 3 con 9 (2026-08-09)
+# ============================================================
+# The paper's utility axis is measured on OR-Bench-Hard behaviors 0-99 in FILE ORDER,
+# which the released file sorts by category — so only deception (72) and harassment
+# (28) of the ten categories appear. This round re-measures the benign axis on the
+# category-BALANCED set (30 x 10 categories, n=300), so the reported over-refusal
+# LEVELS stop being a property of an unchosen category mix.
+#
+# NOTHING IS RETUNED. Guard, decode style, reguard policy and judge are copied from
+# the development configuration unchanged; only the benign prompt set differs.
+#
+# CHUNKED BY GUARD: at most 2 concurrent servers (1 target + 1 guard), the scheduling
+# convention from the held-out round (heldout_s2_*.yaml).
+#
+# Judge is gpt-5-mini inline, matching every other benign number in the paper.
+# ============================================================
+
+num_main_job_threads: 6
+num_cluster_jobs: 3
+
+tasks:
+
+  # == thinkguard / non_llm_baseline ==
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,299], campaign: paper_c_benign_stratified, defense: guard_baseline, judge_model: gpt-5-mini, defense_config: {guard_model: thinkguard}, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260809_053612_745534/non_llm_baseline}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,299], campaign: paper_c_benign_stratified, defense: modality_complete, judge_model: gpt-5-mini, defense_config: {guard_model: thinkguard, decode_text: true, decode_style: recover}, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260809_053612_745534/non_llm_baseline}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,299], campaign: paper_c_benign_stratified, defense: modality_complete, judge_model: gpt-5-mini, defense_config: {guard_model: thinkguard, decode_text: true, decode_style: recover, reguard_original: true}, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260809_053612_745534/non_llm_baseline}
+
+  # == thinkguard / ir_plain ==
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,299], campaign: paper_c_benign_stratified, defense: guard_baseline, judge_model: gpt-5-mini, defense_config: {guard_model: thinkguard}, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260809_053612_30243114/ir_plain}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,299], campaign: paper_c_benign_stratified, defense: modality_complete, judge_model: gpt-5-mini, defense_config: {guard_model: thinkguard, decode_text: true, decode_style: recover}, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260809_053612_30243114/ir_plain}
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0,299], campaign: paper_c_benign_stratified, defense: modality_complete, judge_model: gpt-5-mini, defense_config: {guard_model: thinkguard, decode_text: true, decode_style: recover, reguard_original: true}, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260809_053612_30243114/ir_plain}
