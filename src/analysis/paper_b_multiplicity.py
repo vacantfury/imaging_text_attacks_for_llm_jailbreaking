@@ -261,6 +261,17 @@ NULL_FAMILIES = {
     "placebo C-P1, the image-word test (tab:placebo)":
         "Reported as a bounded null (12/13 discordant, p=1.0; excludes an effect "
         "above ~11pp), not as evidence of exact zero.",
+    "within-family harmful ladder (tab:generational, harmful columns)":
+        "ADDED 2026-08-09 for review 3 con 5 (xc job 283 filled the missing "
+        "qwen2-vl-7b rung). 3 harmful contrasts on the generational ladder: "
+        "1/1, 5/2 and 1/2 discordant of 100 -> Newcombe 95% CIs [-4.5,+4.5], "
+        "[-2.7,+9.3], [-6.1,+3.7] pp. Stated as BOUNDS, not non-rejections, so "
+        "no correction applies -- the margin governs (all three equivalent "
+        "within +/-10pp, the oldest within +/-5pp). NOTE the headroom caveat "
+        "the paper now makes explicit: text-arm ASR is 2/4/2%, i.e. floored at "
+        "the OLDEST rung, so this family bounds the per-rung decoupling but "
+        "cannot test the across-model 'harmful side collapses with recency' "
+        "trend in either direction.",
 }
 
 

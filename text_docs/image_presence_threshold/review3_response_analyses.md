@@ -387,3 +387,56 @@ Rebuilt: **18pp, 0 errors, 0 undefined refs.**
   id first.
 - **Human validation on the primary cells (con 8 / Q2)** — deliberately last, per the
   standing review-handling order.
+
+---
+
+## Con 5 — the within-family harmful ladder (xc job 283, 2026-08-09)
+
+**The ask.** Review 3: the collapse/decoupling claim "is primarily an across-model
+descriptive pattern, not a controlled trend analysis. Model family, alignment
+procedure, benchmark response style, base refusal rate, and judge behavior all vary
+simultaneously. A stronger version would evaluate multiple checkpoints within one
+family and alignment trajectory."
+
+**What we ran.** One preset, two cells, filling the single missing rung so the
+generational ladder has BOTH sides on all three checkpoints. Family, size class,
+serving stack (xc, matching the two sibling rungs deliberately), judge
+(`gpt-5-mini` + `harmbench` rubric, both pinned) and the upstream renders
+(byte-identical, no new stage 1) all held fixed; only the checkpoint moves.
+
+| rung | benign text→blank | Δ | harmful text→blank | Δ | 95% CI |
+|---|---|---|---|---|---|
+| qwen2-vl-7b (oldest) | 72 → 80 | +8.0 (p=0.057) | 2 → 2 | +0.0 | [−4.5, +4.5] |
+| qwen2.5-vl-7b | 37 → 38 | +1.0 (p=1.0) | 4 → 7 | +3.0 | [−2.7, +9.3] |
+| qwen3-vl-8b (newest) | 54 → 82 | **+28.0** (p=2.5e−07) | 2 → 1 | −1.0 | [−6.1, +3.7] |
+
+Integrity: `fallback_parse_count: 0` and `total_evaluated: 100` on both new cells;
+100/100 ids pair in every rung; campaigns pinned explicitly (a `paper_b_guard_channel`
+no-defense text cell at 3.0% exists for qwen3-vl and would have been picked by
+latest-wins — it is a different campaign and was excluded).
+
+**Finding 1 — the decoupling survives the control.** At every rung the harmful effect
+is a bounded null (all three equivalent to zero within ±10pp, the oldest within ±5pp)
+while the benign cost runs +8, +1, +28pp. At the newest rung: +28pp benign against a
+harmful effect confined to [−6.1, +3.7]pp. This is the controlled form of the paper's
+central claim and it is now what the paper rests on.
+
+**Finding 2 — a CORRECTION to the pre-registered read-out.** The preset recorded, in
+advance, that a flat harmful line would mean the "harmful side collapses as models
+improve" reading "is NOT supported within a family". **That inference would have been
+wrong**, for the reason the repo's own standing rule names: a floored denominator fakes
+a null. Plain-text ASR is 2, 4, 2% — the harmful side is already at the floor at the
+*oldest* rung, so there is no headroom for a downward trend to be visible. The ladder
+is uninformative about the collapse trend in *either* direction; it does not refute it.
+Writing up the pre-registered branch verbatim would have manufactured a retraction out
+of a power limit.
+
+It does establish a smaller real thing: qwen3-vl's 2% is not a recency effect within
+its own family — its two-generation-older sibling is also at 2%.
+
+**Integrated as:** `tab:generational` widened to both sides + caption rewritten; a new
+two-paragraph passage in §res-threshold stating what the ladder does and does not
+support; intro asymmetry claim upgraded to lead with the control; contribution (i)
+restated; Limitations given the explicit headroom bound; reproducibility row dated
+08-08/09. Multiplicity: added to `NULL_FAMILIES` (bounds, not non-rejections, so no
+correction applies), `--audit` 0 mismatches. Build 18pp, 0 errors, 0 undefined.
