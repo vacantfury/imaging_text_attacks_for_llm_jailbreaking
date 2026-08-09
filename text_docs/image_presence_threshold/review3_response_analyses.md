@@ -1,4 +1,31 @@
-# AS-2 · cspaper review 3 — re-analyses (no new data collection)
+# AS-2 · cspaper review 3 — re-analyses
+
+## 🔴 BLOCKER: the Anthropic API organization is DISABLED (found 2026-08-09)
+
+Both `claude-sonnet-4-6` cells of AICR job 327869 failed in ~3 seconds with
+
+    400 invalid_request_error — "This organization has been disabled."
+    request_id req_011CdrfZgR1cyVNjPNMzBCS6 / req_011Cdrfa8GGswfegZqJuDBJm
+
+**Verified directly, not inferred from the job log:** the key was fetched through the
+job's exact injection path (`source ~/.secrets` → `op run --env-file=scripts/op_refs`)
+on AICR, is present and well-formed (`sk-ant-api03...`), and a minimal
+`/v1/messages` call to `claude-sonnet-4-5` returns the same 400. So this is **not** a
+missing key, a preset error, a model-id error, or a cluster problem — it is the
+Anthropic account itself.
+
+**Consequence:** every Claude target and Claude judge in this repo is down until the
+account is re-enabled in the Anthropic Console. That includes AS-2's largest-effect
+target (`claude-sonnet-4-6`, +51pp) and any Claude arm in the sibling papers.
+
+**Fix requires the owner** (billing/account state behind an auth wall). Bedrock is not
+a substitute here: it serves Claude Sonnet 5 / Opus 4.8 / Haiku 4.5, not
+`claude-sonnet-4-6`, so a Bedrock arm would be a different checkpoint and would not
+replicate the published row.
+
+---
+
+## The rest (no new data collection)
 
 Round 3 rated **4 (reject)**, as did rounds 1 and 2. The rating paragraph names four
 blockers: serving-stack localization, the "form not content" framing, narrow benchmark
@@ -84,10 +111,55 @@ affected models, and the null model is null in both. Worth noting: flash-lite
 **reverses the topic ordering** (harassment > deception) relative to the other two, so
 which topic pays most is model-specific.
 
-**Status:** the ten-category round (`topic_stratified_stage1/2`, campaign
-`paper_b_topic_stratified`, AICR jobs 327863 + 327869) is in flight to replace this
-two-category read. Regardless of its outcome, **the five domain-naming sites must be
-corrected to measured categories** — there is no result that rescues the current prose.
+### The ten-category round — LANDED, 4 of 6 cells (2026-08-09)
+
+`topic_stratified_stage1/2`, campaign `paper_b_topic_stratified`, AICR jobs 327863
+(renders, exit 0) + 327869 (eval, exit 1 — **both claude cells failed on an API
+blocker, see below**; the four non-claude cells are complete and clean).
+
+30 prompts × 10 categories, one collection window, arms paired per prompt id.
+
+| category | gpt-4o-mini | | gemini-2.5-flash-lite | |
+|---|---|---|---|---|
+| | text → blank | delta | text → blank | delta |
+| deception | 20.0 → 63.3 | **+43.3** | 20.0 → 33.3 | +13.3 (n.s.) |
+| harassment | 10.0 → 33.3 | **+23.3** | 20.0 → 46.7 | **+26.7** |
+| harmful | 23.3 → 76.7 | **+53.3** | 33.3 → 53.3 | +20.0 (n.s.) |
+| hate | 0.0 → 33.3 | **+33.3** | 10.0 → 63.3 | **+53.3** |
+| illegal | 40.0 → 73.3 | **+33.3** | 23.3 → 66.7 | **+43.3** |
+| privacy | 20.0 → 63.3 | **+43.3** | 10.0 → 50.0 | **+40.0** |
+| self-harm | 13.3 → 40.0 | **+26.7** | 33.3 → 70.0 | **+36.7** |
+| sexual | 0.0 → 26.7 | **+26.7** | 20.0 → 76.7 | **+56.7** |
+| unethical | 16.7 → 60.0 | **+43.3** | 20.0 → 40.0 | +20.0 (n.s.) |
+| violence | 46.7 → 83.3 | **+36.7** | 50.0 → 86.7 | **+36.7** |
+| **ALL** | **19.0 → 55.3** | **+36.3** | **24.0 → 58.7** | **+34.7** |
+
+Aggregates: gpt-4o-mini 109/0 discordant, p=3.1e-33; flash-lite 110/6, p=7.6e-26.
+**Benjamini–Hochberg across all 20 per-category tests: 17 survive** — all ten
+gpt-4o-mini categories, seven of ten flash-lite (deception, harmful, unethical do not).
+
+Three things follow.
+
+1. **The effect is broad, not a two-topic artifact.** Every one of the twenty
+   contrasts is POSITIVE, and 17 of 20 survive correction. Whatever the models are
+   keying on, it is not specific to deception and harassment.
+2. **The published slice UNDERSTATED it, for one model badly.** flash-lite's
+   borderline-rung number is +23pp on the original slice and **+34.7pp** stratified;
+   gpt-4o-mini +34 → +36.3. The unrepresentative slice was conservative, not
+   inflated — so the correction strengthens the paper's cost claim rather than
+   deflating it.
+3. **Which topic pays most is model-specific.** gpt-4o-mini is worst on `harmful`
+   (+53) and `deception`/`privacy`/`unethical` (+43); flash-lite is worst on `sexual`
+   (+57) and `hate` (+53). Consistent with the topic-ordering reversal already seen
+   in the two-category read.
+
+**The prose fix is still required and is unchanged by the good news:** the paper must
+name the categories it actually measured. "medical, legal, security, harm-reduction"
+are not OR-Bench categories and were never in any sample.
+
+**claude-sonnet-4-6 is missing from this table** — collect it and rerun the BH family
+once the API blocker below is cleared. The claude row is the paper's largest effect
+(+51pp), so the stratified table is incomplete without it.
 
 ---
 
