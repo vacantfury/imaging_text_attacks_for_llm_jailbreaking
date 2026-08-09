@@ -146,12 +146,28 @@ class SemanticSmooth(Defense):
             return target_service
         if self._perturbation_service is None:
             self._perturbation_service = LLMServiceFactory.create(
-                self._perturbation_model)
+                self._perturbation_model, use_batch_api=False)
         return self._perturbation_service
 
     def _get_judge_service(self) -> BaseLLMService:
+        # `use_batch_api=False` on BOTH defence-internal services (2026-08-09).
+        # `conf/evaluation/default.yaml` already says "NEVER route judging through
+        # a provider's native batch", but that setting reaches only the ASR judge;
+        # services a DEFENSE constructs for itself inherited llm_utils v5's cost
+        # auto-routing instead, which sends any job whose worst-case estimate tops
+        # $1 to the provider's Batch API.
+        #
+        # That is how the N=10 run died. The internal vote judge fires once per
+        # PARAPHRASE, so doubling n_copies 5 -> 10 doubled it to 1,000 gpt-5-nano
+        # calls for a single cell; on `ir_distraction_grid`, whose grid prompts are
+        # the longest in the suite, the estimate crossed the threshold, the job
+        # silently became a batch submission, and the client gave up after 3600s
+        # (NURC job 9031640, task _3, 10/11 cells written). Nothing warns you: the
+        # switch is invisible until the timeout, and it scales with a knob a
+        # reviewer asked us to turn.
         if self._judge_service is None:
-            self._judge_service = LLMServiceFactory.create(self._judge_model)
+            self._judge_service = LLMServiceFactory.create(
+                self._judge_model, use_batch_api=False)
         return self._judge_service
 
     def query(

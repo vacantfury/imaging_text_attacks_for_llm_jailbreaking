@@ -1,0 +1,24 @@
+# ============================================================
+# Paper C (AS-3) - E2 GAPFILL: the one cell NURC job 9031640 lost
+# ============================================================
+# 10 of 11 tasks in `semsm_n10.yaml` succeeded. Task _3
+# (`ir_distraction_grid`) died on an OpenAI Batch API timeout after 3600s --
+# the SemanticSmooth internal vote judge was silently auto-routed to the batch
+# API because at n_copies=10 it fires 1,000 times for one cell. Fixed at source
+# (`semantic_smooth.py::_get_judge_service`, use_batch_api=False on both
+# defence-internal services), so this rerun exercises the fix.
+#
+# Same source dir, same everything as the parent preset. Cost is well under the
+# $1 auto-run gate (~1k gemini paraphrases + 1k gpt-5-nano votes + 100
+# gpt-5-mini judgments; target calls are cluster-served).
+# ============================================================
+
+num_main_job_threads: 2
+num_cluster_jobs: 2
+
+tasks:
+  - {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0, 99],
+     benchmark: harmbench, judge_model: gpt-5-mini, judge_method: harmbench,
+     defense: semantic_smooth, defense_config: {query_source: encoded, n_copies: 10},
+     campaign: paper_c_semsm_n10,
+     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid}
