@@ -80,10 +80,21 @@ cluster:
       # Tensor-parallel across 2 cards puts ~35 GB of weights on each and leaves
       # ample KV. Do NOT "optimise" this back to 1 without re-checking card size.
       num_gpus: 2
-      # 2 replicas x 2 GPUs + wildguard = 5 GPU jobs, inside xc's budget of 6 and
-      # clear of GPUs 6-7, where the box owner's non-SLURM work lives (SLURM
-      # cannot see it, so leaving slack is what prevents an OOM).
-      num_instances: 2
+      # 🔴 num_instances MUST BE 1 ON XC — measured 2026-08-09, jobs 270/271 died.
+      # With num_instances=2 the two 2-GPU replicas were allocated OVERLAPPING cards
+      # and the second refused to start:
+      #   ValueError: Free memory on device cuda:0 (35.15/79.25 GiB) on startup is
+      #   less than desired GPU memory utilization (0.92, 72.91 GiB)
+      # 79.25 - 35.15 = 44 GiB — exactly one fp8 70B shard plus overhead, i.e. the
+      # OTHER replica's weights. All 8 GPUs read 0 MiB immediately before submit, so
+      # this was not the box owner and not a stale process: it is self-collision.
+      # SINGLE-GPU replicas isolate correctly here (gemma ran x3 on distinct cards the
+      # same day) — it is the MULTI-GPU (num_gpus: 2) request that xc's single-node
+      # SLURM does not place disjointly. Same family as the port-collision trap.
+      # Consequence: one replica, so a round is SEQUENTIAL — size presets accordingly
+      # (num_main_job_threads: 1) and prefer several small chained jobs, because with
+      # sequential cells a wall death loses only the in-flight cell, not the round.
+      num_instances: 1
       # conf/clusters/xc.yaml defaults the server wall to 08:00:00, too short for
       # a 3-cell 70B round; a server dying mid-round strands every queued cell.
       # xc's own cap is 24:00:00.

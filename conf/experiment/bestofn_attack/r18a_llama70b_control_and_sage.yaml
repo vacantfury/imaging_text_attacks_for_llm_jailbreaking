@@ -26,24 +26,31 @@
 #   18a = no_defense (CONTROL) + sage   <- THIS FILE, 4 cells
 #   18b = selfdefend                    <- 2 cells, needs the extra shadow model
 #
-# ── SIZING, AND WHY THIS IS SPLIT ───────────────────────────────────────────
-# 4 cells x 10,000 draws x 1 target call = 40,000 calls on a 70B.
+# ── SIZING: ONE REPLICA, SEQUENTIAL CELLS (revised after jobs 270/271 died) ─
+# 4 cells x 10,000 draws x 1 target call = 40,000 calls on a 70B, run ONE CELL AT A TIME.
 # The rate is genuinely uncertain: an 8B/7B sustains ~900 responses/min/replica on an A100 at
 # concurrency 64, gemma-2-9B managed only ~49/min (architecture, not size), and the 70B config
-# estimates "5-6x slower per token" than an 8B. That spread is 30-180/min, i.e. 1h to 5.5h per
-# cell. On 2 replicas this round is 2 waves => 2h at the optimistic end, ~11h at the pessimistic
-# one, against a 20h server wall.
-# ⚠️ A single 6-cell preset would be 3 waves => up to ~17h, which is inside the wall only if the
-# optimistic half of that range holds. Guessing wrong on exactly this arithmetic cost a whole
-# round on 2026-08-07 (R14a) and another on 2026-08-08 (R16, off by ~18x). So the round is
-# SPLIT and chained: no single job depends on the estimate being right.
+# estimates "5-6x slower per token" than an 8B. That spread is 30-180/min => 1h to 5.5h PER
+# CELL, so this 4-cell job is ~4h optimistic and ~22h pessimistic against a 20h server wall.
+# ✅ That pessimistic overrun is TOLERABLE HERE, and deliberately so: with one replica and
+# num_main_job_threads=1 the cells are SEQUENTIAL and each writes its results.json on
+# completion, so a wall death loses only the IN-FLIGHT cell — not the round. This is the exact
+# opposite of R14a (2026-08-07), where every cell was in flight simultaneously and the wall
+# took all of them. Check the measured rate from the vLLM log ~15 min in and re-split if the
+# projection is bad; do not wait 20h to find out.
 #
-# ── SERVERS: 70B IS THE ONE MODEL THAT IS NOT 1 GPU ────────────────────────
+# ── SERVERS: ONE REPLICA — num_instances=2 SELF-COLLIDES ON XC ─────────────
 # conf/llm/llama_3_3_70b_instruct.yaml `profiles.xc` sets num_gpus=2 (tensor-parallel) because
 # fp8 70B is ~70 GB and an 80 GB A100 at utilization 0.92 leaves only ~3 GB of KV cache — less
 # than one 20480-token sequence needs. Do NOT "optimise" that to 1 GPU.
-#   2 replicas x 2 GPUs + wildguard = 3 server JOBS using 5 GPUs, leaving GPUs 6-7 free for the
-#   box owner's non-SLURM work (SLURM cannot see it; the slack is what prevents an OOM).
+# 🔴 But num_instances MUST be 1 here. With 2, xc's single-node SLURM allocated the two 2-GPU
+# replicas OVERLAPPING cards and the second died on startup:
+#   "Free memory on device cuda:0 (35.15/79.25 GiB) ... less than desired (0.92, 72.91 GiB)"
+# — 44 GiB already resident, i.e. the other replica's shard. All 8 GPUs read 0 MiB immediately
+# before submit, so this was self-collision, not the box owner. SINGLE-GPU replicas isolate
+# fine on xc (gemma ran x3 the same day); it is the MULTI-GPU request that does not place
+# disjointly.
+#   1 replica x 2 GPUs + wildguard = 2 server JOBS using 3 GPUs.
 #
 #   ssh xc; cd ~/projects/llm_guardrail_security
 #   A=$(sbatch --parsable scripts/run_experiment_xc.sbatch bestofn_attack/r18a_llama70b_control_and_sage)
@@ -62,8 +69,8 @@
 # 12% on qwen, and it must be subtracted before sage's number means anything.
 # If sage lands near zero net of control on a 70B, the claim is size-dependent and the paper
 # must say so rather than reporting three targets and omitting the fourth.
-num_main_job_threads: 2      # = 70B replica count
-num_cluster_jobs: 4          # 3 servers (70B x2 replicas + wildguard) + orchestrator
+num_main_job_threads: 1      # ONE 70B replica on xc -> cells run SEQUENTIALLY (see conf/llm/llama_3_3_70b_instruct.yaml)
+num_cluster_jobs: 3          # 1 server (70B, ONE replica x 2 GPUs) + wildguard = 2 servers + orchestrator
 
 _e: &e
   mode: defense+evaluate
