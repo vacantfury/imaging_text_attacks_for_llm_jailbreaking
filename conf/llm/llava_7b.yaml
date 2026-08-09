@@ -1,0 +1,48 @@
+# LLaVA-1.5-7B (llava-hf/llava-1.5-7b-hf) — Paper B (AS-2) sign-inversion arm.
+#
+# WHY THIS MODEL, SPECIFICALLY. AS-2's `steerable` half — the direction in which
+# image presence makes a model LESS safe — currently rests on `pixtral-12b`
+# alone (ASR 48 -> 83%). The retitled, thesis-forward intro promises that
+# "shortcuts fail two ways ... and this paper measures both", so an n=1 half is
+# the paper's most exposed claim.
+#
+# LLaVA-1.5-7B is the sharpest available second test because it is NOT a fresh
+# guess: Wei et al. 2026 (JRS, in our lit review at reviews/
+# multimodal_llm_safety_review.md §6.7) report that **a blank image alone raises
+# ASR by 28.13pp on this exact checkpoint** (LLaVA-1.5-7B / HADES). So the
+# prediction is pre-committed by published work we already cite, and either
+# outcome is informative:
+#   * it inverts  -> the sign inversion goes n=1 -> n=2 WITH independent
+#                    published corroboration; the steerable half stops being a
+#                    single-model curiosity.
+#   * it does not -> our manipulation (content-free canvas, OR-Bench harmful)
+#                    differs from JRS's (HADES), and the paper must scope the
+#                    steerable claim to pixtral explicitly rather than leave the
+#                    intro's promise standing. Report it; do not retry.
+#
+# ⚠️ WHY NOT THE STRONG-TIER MODEL INSTEAD. The obvious companion arm would be
+# `llama3_2_11b_vision`, the ONLY `alignment_tier: strong` cluster-served VLM in
+# the registry and the missing arm of `alignment_tier_scan.yaml`. It CANNOT be
+# served: vLLM removed mllama upstream, re-verified on AICR 2026-08-08 --
+# `ModelRegistry.get_supported_archs()` returns False for
+# MllamaForConditionalGeneration and True for LlavaForConditionalGeneration on
+# the serving venv (vLLM 0.25.0). See conf/llm/llama3_2_11b_vision.yaml. Do not
+# re-attempt it without a separately pinned old vLLM env.
+#
+# SERVING. LlavaForConditionalGeneration is supported on the installed vLLM
+# (verified as above). ~7B + a CLIP vision tower ≈ 14GB on disk; comfortably
+# within a 24GB card, but small GPUs are excluded on the same grounds as
+# pixtral. Short wall so SLURM can backfill it, and rtx-devel on AICR for the
+# same reason pixtral uses it (see that file for the 2026-08-07 stall).
+
+model:
+  model: llava-hf/llava-1.5-7b-hf
+  max_tokens: 4096
+
+cluster:
+  gpu_types_excluded: ["v100-pcie", "v100-sxm2", "t4"]
+  time_limit: "04:00:00"
+
+  profiles:
+    aicr:
+      partition: rtx-devel

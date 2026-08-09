@@ -1,0 +1,106 @@
+# Paper B (AS-2) · SIGN-INVERSION REPLICATION on LLaVA-1.5-7B.
+#
+# WHAT THIS CLOSES. The retitle + thesis-forward pass (2026-08-08) made the
+# intro promise that "shortcuts fail two ways — steerable, and mis-generalising
+# — and this paper measures both". The mis-generalising half has ten models
+# behind it. The STEERABLE half — image presence making a model LESS safe — is
+# `pixtral-12b` alone (ASR 48 -> 83%, p=3.1e-8). Sharpening the frame raised the
+# bar on the paper's one n=1 claim, so this round tests whether pixtral is alone.
+#
+# WHY LLAVA-1.5-7B AND NOT A GUESS. Wei et al. 2026 (JRS), already cited in our
+# lit review (§6.7), report that **a blank image alone raises ASR by 28.13pp on
+# this exact checkpoint** (LLaVA-1.5-7B / HADES). The prediction is therefore
+# pre-committed by published work rather than chosen after the fact.
+#
+# READ-OUT, RECORDED BEFORE THE RUN:
+#   * harmful ASR rises on the blank-canvas arm
+#       -> the sign inversion replicates, n=1 -> n=2, with independent published
+#          corroboration. The intro's "steerable" promise is earned, and the
+#          Discussion gains a real generalisation ("weakly-aligned checkpoints
+#          invert") instead of "the sign is not fixed".
+#   * ASR flat or lower
+#       -> pixtral stays the only inverter. Our manipulation (content-free canvas
+#          on OR-Bench harmful) differs from JRS's (HADES), which is itself worth
+#          one sentence. The intro must then SCOPE the steerable claim to pixtral
+#          explicitly rather than leave the two-failure-mode promise standing.
+#          Report it; do NOT retry with a different image to chase the sign.
+#   * benign side moves too
+#       -> a bonus row for the tier scan (LLaVA carries no alignment_tier label,
+#          so it does not test the tier ordering — do not present it as if it
+#          does).
+#
+# ⚠️ THE STRONG-TIER ARM IS NOT IN THIS PRESET AND CANNOT BE. The natural
+# companion is `llama3_2_11b_vision` — the only `alignment_tier: strong`
+# cluster-served VLM in the registry, and the missing arm of
+# `alignment_tier_scan.yaml`. vLLM REMOVED mllama upstream; re-verified on AICR
+# 2026-08-08 (`MllamaForConditionalGeneration` -> False,
+# `LlavaForConditionalGeneration` -> True, vLLM 0.25.0). The paper's tier scan
+# therefore spans mid and weak only, and Limitations should SAY SO rather than
+# leave a reader wondering why no strong-tier model appears.
+#
+# NO NEW STAGE 1 — deliberately. The source dirs are the EXACT renders every
+# other open-weight arm consumed (`prompt_transform` is model-independent:
+# identity encoder + blank canvas, no model call), verified present on AICR
+# 2026-08-08. Byte-identical inputs remove render drift as an explanation for any
+# difference between this model and pixtral.
+#
+# JUDGE PINNED TO MATCH THE EXISTING OPEN-WEIGHT ARM EXACTLY — `gpt-5-mini`,
+# `harmbench` on the harmful set and `jbb_refusal` on the benign rung. A free
+# cluster judge here would make these numbers incomparable with the numbers they
+# exist to sit beside, which would waste the run. The judge is the only paid
+# component.
+#
+# COST: target calls are FREE (local vLLM on cluster GPU). Judge is 4 cells x 100
+# = 400 gpt-5-mini calls on short responses. Costed from the pixtral preset's own
+# figure (1800 calls ~ $2-3) => ~$0.5-0.7. An ESTIMATE, not a quote.
+#
+# SUBMIT (AICR — both source dirs and the weights verified present 2026-08-08):
+#   ssh aicr 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_aicr.sbatch image_presence_threshold/sign_inversion_llava'
+
+num_main_job_threads: 4
+num_cluster_jobs: 2          # orchestrator + 1 vLLM server (single target model,
+                             # so the floor-division replica allocator cannot
+                             # collapse it — see the replica-allocator note in
+                             # conf/experiment/.../threshold_shift_ow_*.yaml.
+
+# ---- borderline-benign (OR-Bench hard) — same renders as every other OW arm ----
+_r2_text:  &r2_text  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/non_llm_baseline
+_r2_blank: &r2_blank outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/ir_blank
+# ---- harmful counterpart (OR-Bench harmful — constructed sibling of rung 2) ----
+_h_text:   &h_text   outputs/image_presence_threshold/prompt_transform/harmbench/non_llm_baseline_ir_blank_20260806_151849_37565903/non_llm_baseline
+_h_blank:  &h_blank  outputs/image_presence_threshold/prompt_transform/harmbench/non_llm_baseline_ir_blank_20260806_151849_37565903/ir_blank
+
+# Benign base: refusal-rate reporting path, JBB-refusal rubric.
+_ben: &ben
+  mode: defense+evaluate
+  defense: no_defense
+  target_model: llava_7b
+  prompt_range: [0, 99]
+  benchmark: jailbreakbench_benign
+  judge_method: jbb_refusal
+  judge_model: gpt-5-mini
+  campaign: paper_b_sign_inversion
+
+# Harmful base: ASR reporting path, HarmBench rubric. `judge_method` is pinned
+# explicitly because an unset method falls back to the BENCHMARK's evaluator
+# (src/experiment/task.py:574) — which would silently report a refusal rate here,
+# the wrong quantity entirely.
+_harm: &harm
+  mode: defense+evaluate
+  defense: no_defense
+  target_model: llava_7b
+  prompt_range: [0, 99]
+  benchmark: harmbench
+  judge_method: harmbench
+  judge_model: gpt-5-mini
+  campaign: paper_b_sign_inversion
+
+tasks:
+  # ---- the headline pair: does a blank canvas raise ASR, as JRS predicts? ----
+  - {<<: *harm, source_transform_subdir: *h_text}
+  - {<<: *harm, source_transform_subdir: *h_blank}
+
+  # ---- benign borderline, for the row to sit beside the other OW models -----
+  - {<<: *ben,  source_transform_subdir: *r2_text}
+  - {<<: *ben,  source_transform_subdir: *r2_blank}
