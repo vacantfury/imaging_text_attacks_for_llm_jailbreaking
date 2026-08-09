@@ -52,8 +52,16 @@ def plot_model(GBv, MCv, MCRGv, ORgbv, ORv, ORrgv, m_mc, m_rg, ls, ax, errors=Tr
     The guard-alone leg was added 2026-08-07 on a reviewer's ask: Table 1 shows the
     gb->mc transition is often qualitatively different from mc->+rg (it can move the
     wrong way), and a figure that starts at mc invites the reader to credit the whole
-    displacement to the amplifier. It is drawn as a faint triangle with a dotted leg so
-    the mc->+rg arrow -- the contrast that survives correction -- stays dominant.
+    displacement to the amplifier.
+
+    2026-08-08: its WEIGHT is now equal to the reguard leg. It was originally drawn
+    faint because under the paper's earlier framing mc->+rg was the contrast that
+    mattered -- the one surviving correction. Under the view account the gb->mc leg IS
+    mechanism A (adding a view the guard could not read), so a faint dotted leg put the
+    paper's central mechanism in the visual background. The two legs stay distinguishable
+    by LINESTYLE (dotted = adding a view, solid = closing the residual) rather than by
+    prominence, which is the honest encoding: they are different mechanisms, not a main
+    effect and a footnote.
 
     `errors=True` draws Wilson 95% whiskers on both axes of every point (review 18's
     presentation ask: "plotting points without uncertainty visually overstates how
@@ -65,10 +73,10 @@ def plot_model(GBv, MCv, MCRGv, ORgbv, ORv, ORrgv, m_mc, m_rg, ls, ax, errors=Tr
     """
     for i in range(len(MCv)):
         ax.annotate('', xy=(ORv[i], MCv[i]), xytext=(ORgbv[i], GBv[i]),
-                    arrowprops=dict(arrowstyle='->', color=OI[i], lw=0.9, alpha=0.42,
+                    arrowprops=dict(arrowstyle='->', color=OI[i], lw=1.2, alpha=0.85,
                                     linestyle=':'))
         ax.scatter(ORgbv[i], GBv[i], facecolors='none', edgecolors=OI[i], marker='^',
-                   s=26, zorder=2, lw=0.9, alpha=0.75)
+                   s=34, zorder=3, lw=1.3)
         if errors:
             for xv, yv in ((ORv[i], MCv[i]), (ORrgv[i], MCRGv[i])):
                 ax.errorbar(xv, yv,
