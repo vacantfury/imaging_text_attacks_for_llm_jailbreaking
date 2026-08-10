@@ -33,7 +33,15 @@ Three supporting pillars, all measured:
 2. **The read matters only where it reaches generation.** ECSO stage isolation: harm-verdict −7%, captioning +4%, answer-regeneration +38%. Explains the SemanticSmooth null exactly (a selection-only read conditions no candidate's text).
 3. **The inflated setting is what released code produces.** ECSO's reference implementation builds TELL/CAP/SAFE from a single `line['prompt']` field with no attacker-sent vs benchmark-behaviour distinction. Under a request-transforming attack a faithful port silently evaluates on a prompt the attacker never sent. Nobody chooses it.
 
-⚠️ **Joint (a) is still NOT load-bearing** (stated in the paper as such): the decomposition covers the gate family on 8 cells and was specified *after* collection, not pre-registered.
+✅ **Joint (a) CLOSED 2026-08-10 — pre-registered and confirmed out of sample. Full record `experiment_results.md` §15.** The decomposition was specified after collection on 8 cells of one campaign and one guard family; its predictions were then written into the git-tracked preset `refusal_attribution_confirm.yaml` (commit `96a7b4e`) and **pushed before the run**, and tested on **20 cells it had never seen** (AICR job 333243, rejudge only, no target queries, no GPU; 20/20 success, n=100, fallback 0).
+
+* **P1 — independent replicate** of the protocol grid (8 cells): deployable 28–30 blocks vs **33–45** target-own; granted 98 vs **1**. Original was 28–30 / 34–44 and 98 / ~1. Pre-registered bar (own > blocks on all 4 deployable; blocks ≥ 90 & own ≤ 10 on all 4 granted) met **8/8**.
+* **P2 — guard-family generality** (12 cells, three guard families): on the IMAGE arm both text-only guards block **0/100** while the target produces **34–91** refusals; the multimodal guard blocks **98–99**. Pre-registered bar met on all 6 IMAGE cells.
+* ✅ **The sharpest form of the thesis, on a design unrelated to the protocol grid:** internvl3/IMAGE, two pipelines reporting **100/100** and **91/100** judged refusals, owing **99%** vs **0%** of them to the guard.
+
+⚠️ **Caveat reported, not smoothed:** the harm judge and the refusal judge both fire on **39/2000** held-out responses (1.9%), so ASR + refusal + neither is **not a partition**. The decomposition is unaffected — it subtracts blocks from refusals and never reads ASR. Stated in the paper's *Evidentiary status* paragraph.
+
+ℹ️ **The 4/100 image-arm block counts in §3.1 above were the retracted prefix-heuristic number and are corrected to 0/100 here.** The paper always printed 0/100; only this file carried the stale value.
 
 ✅ **Joint (b) CLOSED 2026-08-09 — released-code audit run, full record `experiment_results.md` §14 ($0, no API, no clones).** Four further harnesses + the benchmark itself, read for two things: how many text slots one record carries, and which slot the defense's internal call reads. Result: **MM-SafetyBench** ships the plaintext (`Question` / `Changed Question`) and the attacker-sent carrier (`Rephrased Question`) as *adjacent unmarked keys of the same record* — the grant is one dictionary key away wherever that benchmark is used; **ETA** (ICLR 2025) writes a plaintext `text_only_question` into every FigStep record and reads it **nowhere in the repository** — deployable-correct by one unwired line; **MLLM-Protector** (EMNLP 2024) is structurally immune because its detector reads the target's *output*, not a prompt — which is our own read-position result holding in code we did not write; **CIDER** (EMNLP 2024 Findings) carries model-input and benchmark-behaviour as distinct documented fields — the fix, already implemented.
 
@@ -54,8 +62,8 @@ One harmful payload, two channels, no encoding on either arm:
 
 | defense | TEXT: blocked | IMAGE: blocked |
 |---|---|---|
-| wildguard (text-only) | **100/100** | **4/100** |
-| llama-guard-3-8b (text-only) | 81/100 | **4/100** |
+| wildguard (text-only) | **100/100** | **0/100** |
+| llama-guard-3-8b (text-only) | 81/100 | **0/100** |
 | guardreasoner-vl-7b (multimodal) | 99/100 | **99/100** |
 
 Text-only classifiers collapse from 100% / 81% to 4% when the payload merely changes channel. A multimodal guard closes the gap completely.
