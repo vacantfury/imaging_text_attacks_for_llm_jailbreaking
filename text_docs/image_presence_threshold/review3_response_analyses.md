@@ -886,3 +886,105 @@ rubrics human-anchored, κ=0.79/0.68; differential +3.8pp". Build clean: 0 error
 **Lesson:** the cross-family panel's *computed* outputs were pasted into the paper correctly,
 but two summary statements written from memory around them were not. Summary sentences need
 the same recompute-and-check as the headline digits — they are what a reviewer actually reads.
+
+---
+
+# cspaper review 4 — handling (2026-08-10)
+
+Review 4 (`paper/as-2/aaai_2027_main/reviews.md`, gitignored) rated 4/reject. Its **first
+and heaviest con**, and the one it says drove the rating, was that the attachment x mention
+table is internally inconsistent: that `12/2` discordant pairs cannot give `+30`pp or
+`p=6.9e-8`, and `20/8` cannot give `+20`pp or `p=1.9e-6`.
+
+## The charge is false, and the paper's arithmetic is exact
+
+The table reports `32/2` and `20/0`, not `12/2` and `20/8`. Recomputed:
+
+| contrast | b/c | (b-c)/100 | paper's Delta | exact McNemar | paper's p |
+|---|---|---|---|---|---|
+| mention, no image | 12/4 | +8pp | +8 | 0.07681 | 0.077 |
+| attachment, no mention | 32/2 | +30pp | +30 | 6.938e-08 | 6.9e-8 |
+| attachment, mention held | 20/0 | +20pp | +20 | 1.907e-06 | 1.9e-6 |
+
+Every digit matches. Nothing was changed to make it match.
+
+## Why the reviewer misread it — this is our defect, not theirs
+
+`pdftotext -layout` on the submitted PDF shows the two-column layout placing the
+generations table beside the factorial table, so a linearized read interleaves them:
+
+```
+qwen2.5-vl-7b  37  38  +1  1.000 ...   ∆ (mention)             +8 (12/4, p = 0.077)
+qwen3-vl-8b    54  82  +28 <10−4 ...   attachment, no mention  +30 (32/2, p = 6.9×10−8)
+```
+
+`12/2` is `12` from the row above joined to `2` from the right-hand row; the `8` in `20/8`
+comes from the neighbouring `+8` or the `10−8` exponent. The counts were also crammed into
+an `\emph{(b/c, p=...)}` parenthetical with one digit bolded inside an italic run. Given how
+reviewers now read PDFs, a table whose numbers cannot survive linearization is a defect
+regardless of who is holding it.
+
+**Fixes applied:** the contrast block now has real headed columns
+(`contrast | Delta | gained | lost | p`) as a separate tabular; each row is atomic under
+linearization, and the caption states that Delta is `(b-c)/100` and p an exact McNemar on
+those two columns, so both are recomputable from the table. Re-extraction confirms the rows
+now come out self-contained.
+
+## `src/analysis/tex_stat_audit.py` — mechanised, not asserted
+
+"We checked and it's fine" is worth nothing asserted. The auditor recomputes every paired
+result straight from the .tex: Delta vs (b-c)/n, Delta vs the rate pair, and p vs an exact
+two-sided McNemar on (b,c) alone. AS-2 AIA: **28 results parsed, all consistent.** Swept
+across every paper build in the repo (AS-2/3/4/7) — no real inconsistency anywhere.
+
+Coverage is printed loudly (`checked p: 27/28, UNCHECKED lines [...]`) because a silent skip
+reads as a pass — see `project_empty_check_output_is_not_a_passing_check`. The two residual
+unchecked items at the pixtral/llava paragraph were verified by hand: `39/0` -> +39pp and
+3.638e-12 vs a stated 3.6e-12; `1/9` -> -8pp, no p stated there and fully checked where it
+recurs.
+
+Four tool bugs were found and fixed while building it, each of which had produced a *false*
+finding: a non-brace-aware macro stripper that silently skipped `\mathbf{<10^{-4}}` p-cells;
+p-value columns read as rates; Python's round-half-to-even calling a correct `0.125 -> 0.13`
+a mismatch; and `68 / 29` rate pairs read as discordant counts (these papers write counts
+tight, `32/0`, and rate pairs spaced — that spacing is the only separator).
+
+## Other review-4 items fixed this round
+
+1. **A real defect the review did not catch** (found while checking its claim). The claims
+   table asserted "Attachment alone moves refusal with no image attached (+33pp)" citing
+   `tab:factorial`. Self-contradictory wording, a number from a different experiment (+33pp
+   is the gemini-2.5-flash canvas+instruction cell), and the wrong table. The intended claim
+   is the placebo ladder's: an *asserted* attachment moves refusal with no image attached,
+   +16pp over a matched system message (`tab:placebo`). Fixed. Plausibly primed the
+   reviewer's distrust of `tab:factorial` — a claims row pointing there for a +33 that does
+   not appear in it.
+2. **Terminology (con 8).** "content-free" -> "request-independent" (11 sites). The old term
+   was self-contradictory where the paper wrote "the only content-free image we test that
+   carries readable text". The figure's own panel labels said "rabbit — natural image" and
+   "text-pseudo-image" while the caption said "clip-art line drawing"; `figs/make_decoys.py`
+   labels corrected and the figure regenerated. That script's repo-root path was also broken
+   by the paper/as-N/ re-keying and now walks up instead of counting parents.
+3. **Carrier claim softened (all four reviews name this — the strongest signal in the file).**
+   Five sites: abstract, intro, contribution (ii), results, conclusion, claims table. Now
+   "the shortcut needs no serving layer to appear; what hosted stacks add stays open" —
+   we show a stack is not *necessary*, never that the hosted stacks contribute nothing.
+4. **Pre-registration status (con 6 / Q4).** New paragraph in the multiplicity appendix
+   stating plainly that nothing was pre-registered, that `qwen3-vl-8b` was *selected* out of
+   a five-model scan so all its follow-ups are follow-up on a selected model, and that what
+   protects them is re-collection (+32/+28/+29pp across three independent jobs) rather than
+   the scan.
+
+Build after all edits: **0 errors, 0 undefined refs, 0 overfull boxes, 20pp** (the restructure
+removed the last overfull box), from captured pdflatex stdout.
+
+## Open, needing the owner's decision — not started
+
+- **Human labels on the actual manipulation (review 3 con 8 AND review 4 con 7, both Q3).**
+  Both reviewers independently name the same gap: the two human anchors (Round R refusal
+  k=0.79, Round J harm k=0.68) come from a *neighbouring* study where the image carried a
+  payload, not from the blank-canvas cells. This is the round built and then dropped on
+  2026-08-09. The builder is retained and regenerates byte-identically (seed 20260809).
+- **Multiple image instances per property level (all four reviews).** The only remaining
+  objection that needs new collection.
+- **Broader harmful evaluation** beyond OR-Bench's harmful split (con 5).
