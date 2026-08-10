@@ -1,0 +1,45 @@
+# ============================================================
+# E3 — CIDER, PILOT. Prove the path runs before spending the grid.
+# cspaper review 2 con 4/Q2 + review 3 con 6 (competitive black-box baselines)
+# ============================================================
+# WHAT THIS IS FOR. CIDER loads TWO extra models in the orchestrator process
+# (llava-1.5-7b-hf as the encoder, plus the 2.2GB guided-diffusion UNet) on the same
+# node as a vLLM target server. That is a memory arrangement nothing in this repo has
+# ever run, so it gets a 10-prompt smoke pass first. A grid that dies at 30% leaves
+# EMPTY output dirs and no error worth reading — this repo has paid that bill before.
+#
+# THRESHOLD IS null ON PURPOSE — this is also the head of the CALIBRATION pass.
+# tau is a percentile of the delta distribution on CLEAN images, i.e. a benign
+# false-positive budget (conf/defense/cider.yaml; their defender.py). With null,
+# CIDER scores every image, blocks NOTHING, and writes the deltas to trace_dir.
+# So this run cannot report a detection number and is not meant to: it proves the
+# plumbing and produces the deltas that src/analysis/paper_c_cider_threshold.py
+# turns into tau. Never hand-pick that number.
+#
+# Judge is gpt-5-mini for continuity with every other number in the paper; at 10
+# prompts the judge cost is a rounding error (~$0.001 at the measured $0.104/1k).
+# ============================================================
+
+num_main_job_threads: 1
+num_cluster_jobs: 1
+
+_src: &src outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260718_183457_84223144/ir_occluded
+
+tasks:
+  # One image chain, 10 behaviors, primary target. The image channel is the only
+  # one where CIDER has anything to do at all — it is a cross-modal detector, so a
+  # text-only chain would exercise none of the denoise path this pilot is testing.
+  - mode: defense+evaluate
+    target_model: qwen2_5_vl_7b
+    prompt_range: [0, 9]
+    campaign: e3_cider_pilot
+    defense: cider
+    judge_model: gpt-5-mini
+    source_transform_subdir: *src
+    defense_config:
+      threshold: null
+      denoiser: diffusion
+      diffusion_checkpoint: ~/models/cider_256x256_diffusion_uncond.pt
+      dncnn_checkpoint: ~/models/cider_dncnn_checkpoint.pth.tar
+      encoder_model: llava-hf/llava-1.5-7b-hf
+      batch_size: 4
