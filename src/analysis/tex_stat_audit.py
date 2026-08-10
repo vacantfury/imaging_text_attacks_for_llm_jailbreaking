@@ -152,7 +152,33 @@ def _rows_from_tex(text: str, default_n: int) -> list[Row]:
         if seg.strip():
             chunks.append((start, seg))
 
+    # Discordant counts appear in two shapes: packed ("32/2") and as separate
+    # headed columns ("gained"/"lost"). The second is the clearer way to print
+    # them, so the audit must follow the paper there rather than lose coverage
+    # on any table that adopts it.
+    gain_lost: tuple[int, int] | None = None
     for seg_start, chunk in chunks:
+        cells_hdr = [x.strip().lower() for x in chunk.split("&")]
+        if r"\begin{tabular}" in chunk or r"\end{tabular}" in chunk:
+            gain_lost = None
+        # A header row is short cells across several columns. Without the length
+        # and column-count guards a CAPTION explaining the words "gained" and
+        # "lost" is taken for a header, and every later result silently drops out.
+        hdr = [i for i, x in enumerate(cells_hdr) if len(x) <= 12]
+        g = [i for i in hdr if "gained" in cells_hdr[i]]
+        l = [i for i in hdr if "lost" in cells_hdr[i]]
+        if len(cells_hdr) >= 3 and g and l:
+            gain_lost = (g[0], l[0])
+            continue
+        if gain_lost and len(cells_hdr) > max(gain_lost):
+            cells = [x.strip() for x in chunk.split("&")]
+            b, c = _num(cells[gain_lost[0]]), _num(cells[gain_lost[1]])
+            if b is not None and c is not None:
+                m = re.search(re.escape(cells[gain_lost[0]].strip()), chunk)
+                _emit_row(rows, line_at[seg_start + (m.start() if m else 0)],
+                          chunk, m or re.match(r"", chunk), int(b), int(c),
+                          skip_cols=gain_lost)
+                continue
         if _NOT_COUNTS.search(chunk):
             continue
         # "a/b" is only a discordant pair if it CAN be one: a+b cannot exceed the
@@ -181,7 +207,8 @@ def _rows_from_tex(text: str, default_n: int) -> list[Row]:
 
 
 def _emit_row(rows: list[Row], line_no: int, chunk: str,
-              m: re.Match, b: int, c: int) -> None:
+              m: re.Match, b: int, c: int,
+              skip_cols: tuple[int, ...] = ()) -> None:
     """Build one Row, reading delta/p from a WINDOW around THIS result only.
 
     Scanning the whole chunk pairs one result's counts with a neighbouring
@@ -194,7 +221,9 @@ def _emit_row(rows: list[Row], line_no: int, chunk: str,
     cells = [x.strip() for x in chunk.split("&")]
 
     if len(cells) > 1:  # tabular row: columns are unambiguous, read positionally
-        nums = [(_num(x), x) for x in cells]
+        # A count column is not a rate column: leaving gained/lost in the scan
+        # makes "32" and "2" look like a 32%->2% rate pair.
+        nums = [(_num(x), x) for i, x in enumerate(cells) if i not in skip_cols]
         # A rate is an INTEGER percentage cell. Requiring integrality keeps a
         # p-value column (0.052) from being read as a 5.2% rate.
         rates = [v for v, cell in nums
