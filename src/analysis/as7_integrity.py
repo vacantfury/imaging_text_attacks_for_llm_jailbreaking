@@ -122,10 +122,15 @@ def main() -> int:
                 f"{c['arm']}/{c['query_source']} n={c['n']} vs c1 n={t['n']}")
 
     # --- STUCK GUARD -----------------------------------------------------
-    print("\nblock/refusal decomposition (guard-blocked and target-refused are "
-          "SEPARATE quantities):")
+    # `blk` is the real thing: an EXACT match on the guard's canned string.
+    # `mdiag` is NOT. It is the marker prefix scan, a diagnostic that undercounts
+    # refusals badly under encoded attacks (0/100 where the judge found 49-62).
+    # The paper's guard-vs-target decomposition is JUDGED and lives in the
+    # rejudge cells -- it is not, and never was, this column.
+    print("\nguard blocks (exact match) + marker diagnostic -- NOT the paper's "
+          "judged decomposition:")
     hdr = f"{'target':14} {'defense':16} {'enc':18} {'arm':7} {'qsrc':9} " \
-          f"{'n':>4} {'blk':>4} {'tref':>5} {'asr':>6}"
+          f"{'n':>4} {'blk':>4} {'mdiag':>5} {'asr':>6}"
     print("  " + hdr)
     for c in sorted(r2, key=_key):
         gated = c["guard"] not in (None, "None", "")
@@ -148,7 +153,7 @@ def main() -> int:
         print(f"  {str(c['target'])[:14]:14} {str(c['defense'])[:16]:16} "
               f"{str(c['encoding'])[:18]:18} {str(c['arm'])[:7]:7} "
               f"{str(c['query_source'])[:9]:9} {n:>4} {blk:>4} "
-              f"{c['target_refused']:>5} {str(c['asr']):>6}{mark}")
+              f"{c['marker_refusal_diagnostic']:>5} {str(c['asr']):>6}{mark}")
 
     # --- COVERAGE --------------------------------------------------------
     missing = [k for k in twin if k not in {_key(c) for c in r2}]
