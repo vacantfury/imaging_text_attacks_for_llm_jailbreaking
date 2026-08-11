@@ -56,6 +56,7 @@ pioneer work it cites), wrapping the text channel with the instruction and
 passing the image through unchanged. Only the [FINAL RESPONSE] section is
 returned, so the judge never sees the analysis block.
 """
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -66,6 +67,10 @@ from .base import Defense, build_conversation_message
 from .defender_factory import register_defense
 
 logger = get_logger(__name__)
+
+# See cider.py's _LOAD_LOCK for the failure this prevents. Separate lock object
+# because the two defenses load different models and never run in one process.
+_LOAD_LOCK = threading.Lock()
 
 
 _FINAL_MARKER = "[FINAL RESPONSE]"
@@ -282,6 +287,18 @@ class _VisRagMasker:
     def _load(self):
         if self._model is not None:
             return
+        # Serialized for the reason documented at cider.py's _LOAD_LOCK (concurrent
+        # threads can observe a half-built lazy `transformers` module), and for a
+        # second reason specific to this path: `_shim_transformers_for_visrag`
+        # MUTATES the shared transformers module. A peer thread importing from it
+        # mid-mutation sees an inconsistent module, which would surface as an
+        # unrelated-looking import or attribute error far from the real cause.
+        with _LOAD_LOCK:
+            if self._model is not None:   # a peer may have finished while we waited
+                return
+            self._load_locked()
+
+    def _load_locked(self):
         import torch
 
         # MUST precede the transformers import chain below: the shim has to be in

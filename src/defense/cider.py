@@ -80,6 +80,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -91,6 +92,19 @@ from .defender_factory import register_defense
 from .guard_utils import GUARD_REFUSAL_TEXT
 
 logger = get_logger(__name__)
+
+# Serializes the lazy heavy-model import in `_CiderScorer._load` across the
+# orchestrator's task threads. `transformers` is a lazy module: the first import
+# populates its namespace incrementally, so a SECOND thread importing it at the
+# same moment can observe a half-built module and die with
+#     cannot import name 'AutoProcessor' from 'transformers'
+# even though the package is installed and correct. Each task builds its own
+# CIDER instance, so with num_main_job_threads > 1 two threads call `_load()`
+# simultaneously on the first two tasks and exactly one of them loses.
+# Cost a task on 2026-08-10 (job 336854, task 2/7): tasks 1 and 3 succeeded, and
+# only the task that started in the SAME SECOND as task 1 failed — which is the
+# signature to recognise this by, since nothing about the venv is wrong.
+_LOAD_LOCK = threading.Lock()
 
 
 # --------------------------------------------------------------------------
@@ -345,6 +359,18 @@ class Cider(Defense):
     def _load(self):
         if self._vlm is not None:
             return
+        # Held across the WHOLE load, not just the import. Two reasons: the import
+        # race documented at _LOAD_LOCK, and GPU memory — each task owns its own
+        # CIDER instance, so concurrent loads would allocate two 7B fp16 encoders
+        # plus two diffusion UNets on the single orchestrator GPU at once. The
+        # cost is startup latency on the second task, which is nothing next to a
+        # dead task or an OOM.
+        with _LOAD_LOCK:
+            if self._vlm is not None:   # a peer may have finished while we waited
+                return
+            self._load_locked()
+
+    def _load_locked(self):
         import torch
         from transformers import AutoProcessor, LlavaForConditionalGeneration
 
