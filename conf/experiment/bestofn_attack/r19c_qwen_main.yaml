@@ -52,7 +52,6 @@ tasks:
 # --- P2 main matrix, all three defenses (none were re-run post-fix) ---
 - {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *code, defense: no_defense, campaign: bestofn_attack_r19_p2_main}
 - {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *code, defense: sage, campaign: bestofn_attack_r19_p2_main}
-- {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *code, defense: semantic_smooth, defense_config: {n_copies: 5, perturbation_model: null, judge_model: wildguard}, campaign: bestofn_attack_r19_p2_main}
 # --- P7 gates extended to this target ---
 - {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *code, defense: canonicalize_guard, defense_config: {guard_model: wildguard}, campaign: bestofn_attack_r19_p7_gates}
 - {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *code, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}, campaign: bestofn_attack_r19_p7_gates}

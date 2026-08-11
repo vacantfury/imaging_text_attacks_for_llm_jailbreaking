@@ -49,8 +49,6 @@ _E: &e
 _CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
 
 tasks:
-# --- P2 main matrix: the one llama defense R11 did not re-run ---
-- {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *code, defense: semantic_smooth, defense_config: {n_copies: 5, perturbation_model: null, judge_model: wildguard}, campaign: bestofn_attack_r19_p2_main}
 # --- P2 probe-count continuum ---
 - {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *code, defense: canonicalize_guard, defense_config: {guard_model: wildguard}, campaign: bestofn_attack_r19_p2_probe}
 - {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *code, defense: canonicalize, campaign: bestofn_attack_r19_p2_probe}
