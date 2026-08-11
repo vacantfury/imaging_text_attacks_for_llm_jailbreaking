@@ -1,0 +1,35 @@
+# ============================================================
+# E3 — CIDER CALIBRATION, gap-fill: the one chain lost to the import race
+# ============================================================
+# `336854` ran 7 tasks and lost exactly one: task 2/7, `ir_fc_flowchart`, with
+#     cannot import name 'AutoProcessor' from 'transformers'
+# That is NOT a broken venv. `transformers` is a lazy module, and tasks 1 and 2 both
+# entered CIDER's `_load()` in the SAME SECOND (23:59:22); task 1 won the import and
+# task 2 observed the half-built module. Tasks 3-7, which started later against a fully
+# imported module, all succeeded. Fixed for good in `f200f7b` (a load lock in cider.py
+# and amia_ia.py) — this preset re-runs only the lost chain.
+#
+# num_main_job_threads: 1 anyway. There is one task, so threading buys nothing, and a
+# single loader is the configuration the race cannot occur in even if the lock regressed.
+# ============================================================
+
+num_main_job_threads: 1
+# 2 for the pre-flight arithmetic, as in the other E3 presets: available_slots =
+# num_cluster_jobs MINUS my running GPU jobs, and the orchestrator itself holds one.
+num_cluster_jobs: 2
+
+tasks:
+  - mode: defense+evaluate
+    target_model: qwen2_5_vl_7b
+    prompt_range: [0, 99]
+    campaign: e3_cider_calib
+    defense: cider
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart
+    defense_config:
+      threshold: null                     # calibration pass: score everything, block nothing
+      denoiser: diffusion
+      diffusion_checkpoint: ~/models/cider_256x256_diffusion_uncond.pt
+      dncnn_checkpoint: ~/models/cider_dncnn_checkpoint.pth.tar
+      encoder_model: llava-hf/llava-1.5-7b-hf
+      batch_size: 8
