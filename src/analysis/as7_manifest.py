@@ -25,14 +25,45 @@ import re
 # Kept explicit rather than inferred: "which table does this campaign feed" is a
 # fact about the paper, not about the data, and a wrong guess here would be a
 # silently misleading manifest.
+# campaign -> (surface, is_replication, short campaign, short surface)
+#
+# The SHORT forms are here rather than applied by hand to the emitted rows. They
+# used to be hand-trimmed in the .tex to fit the column, which quietly made the
+# appendix's "generated, not maintained by hand" claim false. Width pressure is a
+# formatting fact, so it belongs in the formatter.
 CAMPAIGNS = {
-    "as7_channel_asr":         ("Channel coverage (harmful)",      False),
-    "as7_benign_channel":      ("Channel coverage (benign)",       False),
-    "paper_b_guard_channel":   ("Channel coverage (third target)", False),
-    "as7_protocol_grant":      ("Protocol grid",                   False),
-    "as7_protocol_grant_rep2": ("Protocol grid",                   True),
-    "as7_read_position":       ("Within-defense read isolation",   False),
+    "as7_channel_asr":         ("Channel coverage (harmful)",      False,
+                                "channel_asr",         "Channel (harmful)"),
+    "as7_benign_channel":      ("Channel coverage (benign)",       False,
+                                "benign_channel",      "Channel (benign)"),
+    "paper_b_guard_channel":   ("Channel coverage (third target)", False,
+                                "guard_channel",       "Channel (3rd tgt.)"),
+    "as7_protocol_grant":      ("Protocol grid",                   False,
+                                "protocol_grant",      "Protocol grid"),
+    "as7_protocol_grant_rep2": ("Protocol grid",                   True,
+                                "protocol_grant_rep2", "Protocol grid (repl.)"),
+    "as7_read_position":       ("Within-defense read isolation",   False,
+                                "read_position",       "Read isolation"),
+    # Added 2026-08-10. This campaign backs tab:deployable AND the deployable
+    # column of tab:pareto, so leaving it out made the manifest silently
+    # incomplete on the very tables the protocol argument turns on.
+    "paper_b_ecso_deployable_grid": ("Deployable cross-model arm", False,
+                                "ecso_deployable_grid", "Deployable arm"),
 }
+
+# NOT IN THE TABLE, and the appendix says so rather than letting the omission
+# pass as coverage: the 2026-05 cross-model amplification grid (tab:main,
+# tab:refusal, and the granted column of tab:pareto) predates campaign tagging,
+# so those cells carry `campaign: None` and cannot be aggregated by this key.
+# They keep full PER-CELL provenance; only the group-by is unavailable.
+UNTAGGED_NOTE = "2026-05 cross-model grid: cells predate campaign tagging"
+
+# NOT IN THE TABLE, and the appendix says so rather than letting the omission
+# pass as coverage: the 2026-05 cross-model amplification grid (tab:main,
+# tab:refusal, and the granted column of tab:pareto) predates campaign tagging,
+# so those cells carry `campaign: None` and cannot be aggregated by this key.
+# They keep full PER-CELL provenance; only the group-by is unavailable.
+UNTAGGED_NOTE = "2026-05 cross-model grid: cells predate campaign tagging"
 
 OUTPUT_GLOBS = (
     "outputs/**/defense+evaluate/**/results.json",
@@ -98,6 +129,18 @@ def _span(dates):
     return ds[0] if len(ds) == 1 else f"{ds[0]}/{ds[-1]}"
 
 
+def _short_span(dates):
+    """MM-DD, collapsing the month on a same-month span. The year is stated once
+    in the caption instead of six times in the column."""
+    ds = sorted(dates)
+    if not ds:
+        return "--"
+    lo, hi = ds[0][5:], ds[-1][5:]          # YYYY-MM-DD -> MM-DD
+    if lo == hi:
+        return lo
+    return f"{lo}/{hi[3:]}" if lo[:2] == hi[:2] else f"{lo}/{hi}"
+
+
 def _decoding_line(agg):
     """One shared decoding config across every campaign is worth stating once."""
     all_dec = {d for a in agg.values() for d in a["decoding"] if d and d != "{}"}
@@ -114,7 +157,7 @@ def main():
 
     if not args.latex:
         for camp, a in sorted(agg.items()):
-            surface, rep = CAMPAIGNS[camp]
+            surface, rep = CAMPAIGNS[camp][:2]
             print(f"\n{camp}   [{surface}{', REPLICATION' if rep else ''}]")
             print(f"  cells       {a['cells']}   n/cell {sorted(a['n'])}")
             print(f"  collected   {_span(a['dates'])}")
@@ -127,16 +170,32 @@ def main():
         print(f"\nshared decoding across all campaigns: {shared or 'NOT UNIFORM'}")
         return
 
-    for camp, a in sorted(agg.items(), key=lambda kv: CAMPAIGNS[kv[0]][0]):
-        surface, rep = CAMPAIGNS[camp]
-        camp_tex = camp.replace("_", r"\_")
-        judges = ", ".join(sorted(j for j in a["judges"] if j != "None"))
+    # Table body, exactly as the appendix uses it -- no hand-editing downstream.
+    rows = sorted(agg.items(), key=lambda kv: CAMPAIGNS[kv[0]][2])
+    for camp, a in rows:
+        _, _, short, surface = CAMPAIGNS[camp]
+        # An external harm judge is a gpt-5 model; the benign arms are scored for
+        # direct-answer rate by the target itself, which is a different instrument
+        # and gets a footnote rather than being silently listed as "judge".
+        external = any(j.startswith("gpt-") for j in a["judges"])
         ns = sorted(a["n"])
         n_tex = str(ns[0]) if len(ns) == 1 else f"{ns[0]}--{ns[-1]}"
-        print(f"\\texttt{{{camp_tex}}} & {surface}"
-              f"{' (rep.)' if rep else ''} & {a['cells']} & {n_tex} & "
-              f"{_span(a['dates'])} & \\texttt{{{judges.replace('_', chr(92)+'_')}}} & "
-              f"{len(a['sha'])} \\\\")
+        print(f"\\texttt{{{short.replace('_', chr(92)+'_')}}}"
+              f"{'' if external else '$^\\dagger$'} & {surface} & "
+              f"{a['cells']} & {n_tex} & {_short_span(a['dates'])} \\\\")
+
+    # Caption-bearing facts, so the caption asserts nothing the data does not.
+    print("\n% --- caption facts (do not hand-copy anything not printed here) ---")
+    decs = {d for a in agg.values() for d in a["decoding"] if d and d != "{}"}
+    print(f"% decoding uniform: {len(decs) == 1}")
+    for d in sorted(decs):
+        who = sorted(CAMPAIGNS[c][2] for c, a in agg.items() if d in a["decoding"])
+        print(f"%   {d}  <- {', '.join(who)}")
+    alln = sorted({x for a in agg.values() for x in a["n"]})
+    print(f"% n values across all rows: {alln}")
+    off = sorted(CAMPAIGNS[c][2] for c, a in agg.items() if a["n"] - {100})
+    print(f"% campaigns with any cell n!=100: {off or 'none'}")
+    print(f"% NOT AGGREGATED HERE -- {UNTAGGED_NOTE}")
 
 
 if __name__ == "__main__":
