@@ -19,7 +19,27 @@
 # type_name stays `amia_ia` for continuity with existing presets; BOTH of AMIA's
 # components are implemented as of 2026-08-05.
 
-# ⛔ MASKING IS CURRENTLY BLOCKED ON THE CLUSTERS (measured 2026-08-05, AICR).
+# ✅ RESOLVED 2026-08-10 — THE FULL METHOD IS RUNNABLE. Read this before the
+# blocked-status history below it, which is kept because the diagnosis is still
+# the reason the solution takes the shape it does.
+#
+# Masking now runs AHEAD of the experiment, in an isolated venv, via
+# `src/defense/amia_precompute_mask.py` (commit `1d26193`). It writes a masked
+# prompt_transform-shaped sibling directory `<parent>/<step>__amiamask` per image
+# channel; all 7 channels are precomputed (6 attack x100 + benign ir_plain x300).
+#
+# ⚠️ HOW TO GET THE FULL METHOD — the single easiest thing to get wrong here:
+#   FULL AMIA      = source_transform_subdir: <...>/<step>__amiamask  +  masking: false
+#   IA-only ABLATION = an UNMASKED image upstream                     +  masking: false
+# The two differ ONLY in which upstream is named, and `masking: false` appears in
+# both. Reading the defense_config alone cannot tell them apart. Never label a row
+# without checking the upstream path.
+#
+# ⚠️ TEXT-ONLY CHAINS ARE NEITHER. Masking is defined only on an image, so on a
+# text chain `masking: false` is the full method by construction, not the ablation.
+# Do not tag text rows "AMIA (IA-only)".
+#
+# ---- history: why masking cannot run IN-PROCESS (measured 2026-08-05, AICR) ----
 # `masking: true` below is the CORRECT setting and the code is complete, but it
 # cannot run against the installed transformers. VisRAG-Ret is a trust_remote_code
 # model whose vendored MiniCPM sources are frozen at their 2024 revision, and this
@@ -42,14 +62,20 @@
 # We cannot pin transformers back: CIDER's encoder path targets the >=4.52 LLaVA
 # layout, so the two defenses would need incompatible pins in one environment.
 #
-# THE ROUTE OUT (filed in TODO.md, not built): masking depends ONLY on (image, text)
-# — exactly like CIDER's deltas — so it can be PRECOMPUTED in an isolated venv
-# holding transformers ~4.44, writing masked images once per channel for AMIA to
-# consume. That keeps the published method intact instead of patching it.
+# THE ROUTE OUT — BUILT 2026-08-10, see the resolved note at the top of this file.
+# Masking depends ONLY on (image, text) — exactly like CIDER's deltas — so it is
+# PRECOMPUTED in an isolated venv holding transformers 4.44.2, writing masked images
+# once per channel for AMIA to consume. That keeps the published method intact
+# instead of patching a third-party baseline.
+#   uv venv --python 3.12 ~/venvs/visrag
+#   uv pip install "transformers==4.44.2" torch pillow sentencepiece accelerate timm
+# The precompute copies the algorithm verbatim from `_VisRagMasker` (same tiling with
+# exact edges on the last row/column, same weighted-mean pooling, L2 normalize, black
+# the K lowest-similarity tiles), so the masked images are the ones the in-process
+# path would have produced had it been able to run.
 #
-# UNTIL THEN, if AMIA must appear in a table, it runs with `masking: false` and the
-# label is "AMIA (IA-only)" in EVERY row, figure and sentence — see the note below;
-# the IA path needs no VisRAG and works today.
+# If AMIA is ever run on an UNMASKED image upstream, that is the ablation and the
+# label is "AMIA (IA-only)" in EVERY row, figure and sentence — see the note below.
 #
 # ---- Automatic masking (paper §3.1) ----
 # true  = the FULL published method. Uses the verbatim Figure-3 prompt, which

@@ -1,0 +1,172 @@
+# ============================================================
+# E3 — AMIA GRID, target internvl3_8b
+# cspaper review 2 con 4/Q2 + review 3 con 6 (competitive black-box baselines)
+# ============================================================
+# THIS IS THE FULL PUBLISHED METHOD (Zhang et al., Findings of EMNLP 2025), NOT the
+# IA-only ablation. The distinction is invisible in defense_config and lives ENTIRELY
+# in which upstream each task names:
+#
+#   image chains -> `<step>__amiamask`  = automatic masking ALREADY APPLIED upstream,
+#                                         then intention analysis here => FULL AMIA
+#   text chains  -> the ordinary root   = masking is undefined without an image, so
+#                                         this is the full method by construction
+#
+# `masking: false` appears on EVERY task below and does NOT mean the ablation. It means
+# "do not mask again in-process" -- the masking already happened in the precompute
+# (`src/defense/amia_precompute_mask.py`, isolated transformers 4.44.2 venv), because
+# VisRAG-Ret cannot load under the transformers 5.x this repo resolves for CIDER's
+# encoder path. Same algorithm, moved earlier in the pipeline; see conf/defense/amia_ia.yaml.
+#
+# ⚠️ NEVER label these rows "AMIA (IA-only)". That label belongs ONLY to a run whose
+# image upstream is UNMASKED. Reading defense_config alone cannot distinguish them, so
+# any table built from these cells must be checked against `upstream_ref.source_dir`.
+#
+# VALIDATION TARGET, pre-registered: AMIA's Table 1 reports DSR 98.8-100.0 on FigStep,
+# which is in our suite. Our FigStep cell should land near that. A large shortfall
+# indicts THIS reimplementation (the authors ship no code -- their repo is an empty
+# placeholder), not AMIA, and must be reported as such rather than as AMIA failing.
+#
+# ONE TARGET PER PRESET: AICR rtx-devel caps 2 GPUs/user and the orchestrator holds one.
+# ============================================================
+
+num_main_job_threads: 2
+num_cluster_jobs: 2
+
+_amia: &amia
+  masking: false          # see the header -- masking is UPSTREAM, this is the full method
+  n_patches: 16           # paper's published default, not a free knob
+  k_mask: 3               # paper's published default, not a free knob
+
+tasks:
+
+  # == llm_set_theory  (text: no image to mask) ==
+  - mode: defense+evaluate
+    target_model: internvl3_8b
+    prompt_range: [0, 99]
+    campaign: e3_amia_grid
+    defense: amia_ia
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory
+    defense_config: *amia
+
+  # == llm_formal_logic  (text: no image to mask) ==
+  - mode: defense+evaluate
+    target_model: internvl3_8b
+    prompt_range: [0, 99]
+    campaign: e3_amia_grid
+    defense: amia_ia
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
+    defense_config: *amia
+
+  # == llm_classical_language  (text: no image to mask) ==
+  - mode: defense+evaluate
+    target_model: internvl3_8b
+    prompt_range: [0, 99]
+    campaign: e3_amia_grid
+    defense: amia_ia
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/classical_chinese_simplified_ir_constant_20260710_002424_56524373/llm_classical_language
+    defense_config: *amia
+
+  # == non_llm_cipher  (text: no image to mask) ==
+  - mode: defense+evaluate
+    target_model: internvl3_8b
+    prompt_range: [0, 99]
+    campaign: e3_amia_grid
+    defense: amia_ia
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/non_llm_cipher_20260718_183504_42666777/non_llm_cipher
+    defense_config: *amia
+
+  # == code_attack  (text: no image to mask) ==
+  - mode: defense+evaluate
+    target_model: internvl3_8b
+    prompt_range: [0, 99]
+    campaign: e3_amia_grid
+    defense: amia_ia
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260805_215649_22270770/code_attack
+    defense_config: *amia
+
+  # == ir_figstep  (MASKED upstream -> FULL AMIA) ==
+  - mode: defense+evaluate
+    target_model: internvl3_8b
+    prompt_range: [0, 99]
+    campaign: e3_amia_grid
+    defense: amia_ia
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260805_215649_72871103/ir_figstep__amiamask
+    defense_config: *amia
+
+  # == ir_fc_flowchart  (MASKED upstream -> FULL AMIA) ==
+  - mode: defense+evaluate
+    target_model: internvl3_8b
+    prompt_range: [0, 99]
+    campaign: e3_amia_grid
+    defense: amia_ia
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart__amiamask
+    defense_config: *amia
+
+  # == ir_low_contrast  (MASKED upstream -> FULL AMIA) ==
+  - mode: defense+evaluate
+    target_model: internvl3_8b
+    prompt_range: [0, 99]
+    campaign: e3_amia_grid
+    defense: amia_ia
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260718_183457_77423812/ir_low_contrast__amiamask
+    defense_config: *amia
+
+  # == ir_occluded  (MASKED upstream -> FULL AMIA) ==
+  - mode: defense+evaluate
+    target_model: internvl3_8b
+    prompt_range: [0, 99]
+    campaign: e3_amia_grid
+    defense: amia_ia
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260718_183457_84223144/ir_occluded__amiamask
+    defense_config: *amia
+
+  # == ir_mm_typo  (MASKED upstream -> FULL AMIA) ==
+  - mode: defense+evaluate
+    target_model: internvl3_8b
+    prompt_range: [0, 99]
+    campaign: e3_amia_grid
+    defense: amia_ia
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260718_183500_58590499/ir_mm_typo__amiamask
+    defense_config: *amia
+
+  # == ir_distraction_grid  (MASKED upstream -> FULL AMIA) ==
+  - mode: defense+evaluate
+    target_model: internvl3_8b
+    prompt_range: [0, 99]
+    campaign: e3_amia_grid
+    defense: amia_ia
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid__amiamask
+    defense_config: *amia
+
+  # == benign image (MASKED upstream) ==
+  - mode: defense+evaluate
+    target_model: internvl3_8b
+    prompt_range: [0, 299]
+    campaign: e3_amia_grid
+    defense: amia_ia
+    judge_model: gpt-5-mini
+    benchmark: orbench_benign_hard
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260809_053612_30243114/ir_plain__amiamask
+    defense_config: *amia
+
+  # == benign text (no image to mask) ==
+  - mode: defense+evaluate
+    target_model: internvl3_8b
+    prompt_range: [0, 299]
+    campaign: e3_amia_grid
+    defense: amia_ia
+    judge_model: gpt-5-mini
+    benchmark: orbench_benign_hard
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260809_053612_745534/non_llm_baseline
+    defense_config: *amia
