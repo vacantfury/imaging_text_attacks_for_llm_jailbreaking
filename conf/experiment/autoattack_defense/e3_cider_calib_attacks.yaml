@@ -96,3 +96,20 @@ tasks:
     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid
     defense_config: *cider
 
+  # == benign TEXT channel — carried over from part 1 ==
+  # Part 1's image task succeeded and produced tau's denominator; this text task died on
+  # a missing upstream (the benign renders were made on NURC and only ir_plain had been
+  # pushed to AICR). It rides here rather than in its own job because a second submission
+  # would spin up a whole target server for one text-only task. It contributes NOTHING to
+  # tau — no image, no delta — and exists only for the comparison table's over-refusal
+  # column and to confirm the no-image path passes rather than crashing.
+  - mode: defense+evaluate
+    target_model: qwen2_5_vl_7b
+    prompt_range: [0, 299]
+    campaign: e3_cider_calib
+    defense: cider
+    judge_model: gpt-5-mini
+    benchmark: orbench_benign_hard
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260809_053612_745534/non_llm_baseline
+    defense_config: *cider
+
