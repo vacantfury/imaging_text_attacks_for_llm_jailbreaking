@@ -1,0 +1,98 @@
+# ============================================================
+# E3 — CIDER CALIBRATION, part 2 of 2: the ATTACK side of the sweep
+# ============================================================
+# Part 1 gives tau's clean-image denominator. This gives the attack deltas the sweep is
+# read against: at each candidate tau, what fraction of OUR attacks would CIDER flag?
+#
+# PRE-REGISTERED PREDICTION (conf/defense/cider.yaml, recorded before any run): CIDER's
+# signal is the similarity shift caused by DENOISING, which exists because optimization-
+# based attacks write adversarial NOISE into the image. Our six image attacks are clean
+# synthetic renders — typography, flowcharts, low-contrast text, occlusion, distraction
+# grids — carrying no perturbation at all. So we predict their delta distribution is
+# indistinguishable from the benign one, and CIDER flags few or none of them at any tau
+# we would accept: the low-cost / low-coverage corner ECSO already occupies.
+# FALSIFIED IF CIDER flags these renders at a rate that moves ensemble ASR at an
+# acceptable benign FPR — which would be a genuine off-frontier point, and the paper's
+# scope claim would need rewriting rather than defending. Either way it is publishable;
+# that is what makes it worth the GPU.
+#
+# ONE TARGET, for the reason given in part 1: deltas come from CIDER's own encoder over
+# (text, image) and never touch the target.
+#
+# The six chains are the EXACT prompt_transform roots the paper's own cells consume,
+# resolved through src/analysis/paper_c_select (post-fidelity-fix ir_figstep included),
+# NOT the newest dir on disk — latest-wins selection is unsafe on this output tree.
+# ============================================================
+
+num_main_job_threads: 2
+num_cluster_jobs: 2
+
+_cider: &cider
+  threshold: null
+  denoiser: diffusion
+  diffusion_checkpoint: ~/models/cider_256x256_diffusion_uncond.pt
+  dncnn_checkpoint: ~/models/cider_dncnn_checkpoint.pth.tar
+  encoder_model: llava-hf/llava-1.5-7b-hf
+  batch_size: 8
+
+tasks:
+  # == ir_figstep ==
+  - mode: defense+evaluate
+    target_model: qwen2_5_vl_7b
+    prompt_range: [0, 99]
+    campaign: e3_cider_calib
+    defense: cider
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260805_215649_72871103/ir_figstep
+    defense_config: *cider
+
+  # == ir_fc_flowchart ==
+  - mode: defense+evaluate
+    target_model: qwen2_5_vl_7b
+    prompt_range: [0, 99]
+    campaign: e3_cider_calib
+    defense: cider
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart
+    defense_config: *cider
+
+  # == ir_low_contrast ==
+  - mode: defense+evaluate
+    target_model: qwen2_5_vl_7b
+    prompt_range: [0, 99]
+    campaign: e3_cider_calib
+    defense: cider
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260718_183457_77423812/ir_low_contrast
+    defense_config: *cider
+
+  # == ir_occluded ==
+  - mode: defense+evaluate
+    target_model: qwen2_5_vl_7b
+    prompt_range: [0, 99]
+    campaign: e3_cider_calib
+    defense: cider
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260718_183457_84223144/ir_occluded
+    defense_config: *cider
+
+  # == ir_mm_typo ==
+  - mode: defense+evaluate
+    target_model: qwen2_5_vl_7b
+    prompt_range: [0, 99]
+    campaign: e3_cider_calib
+    defense: cider
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260718_183500_58590499/ir_mm_typo
+    defense_config: *cider
+
+  # == ir_distraction_grid ==
+  - mode: defense+evaluate
+    target_model: qwen2_5_vl_7b
+    prompt_range: [0, 99]
+    campaign: e3_cider_calib
+    defense: cider
+    judge_model: gpt-5-mini
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid
+    defense_config: *cider
+

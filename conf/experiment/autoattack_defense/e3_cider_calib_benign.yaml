@@ -1,0 +1,63 @@
+# ============================================================
+# E3 — CIDER CALIBRATION, part 1 of 2: the CLEAN-image set (tau's denominator)
+# cspaper review 2 con 4/Q2 + review 3 con 6
+# ============================================================
+# tau is NOT a free knob. CIDER's own defender.py sets it as a percentile of the delta
+# distribution measured on CLEAN images:
+#     tau = numpy.percentile(clean_deltas, (1 - fpr_ratio) * 100)
+# i.e. tau is a benign false-positive BUDGET. This preset produces that clean-image
+# distribution; part 2 produces the attack side; src/analysis/paper_c_cider_threshold.py
+# turns the pair into tau per fpr_ratio. Never hand-pick the number.
+#
+# ONE TARGET IS ENOUGH, AND THAT IS NOT A SHORTCUT. A delta is
+#     cos(text, denoised_img) - cos(text, img)
+# computed by CIDER's OWN encoder (llava-1.5-7b) over the (text, image) pair. The target
+# VLM under attack never enters it, so the distribution is target-independent and running
+# it twice would only buy two copies. The target still appears because `defense+evaluate`
+# always queries one; with `threshold: null` nothing is ever blocked, so its answers are
+# just the undefended responses and are not used for tau.
+#
+# The benign set is the CATEGORY-BALANCED draw (n=300, 30 x 10 OR-Bench categories), the
+# same one the paper's utility axis now uses — not the old two-category slice, whose
+# benign images sat at a ~1% guard-block floor and would give tau a distribution no
+# deployment would see.
+# ============================================================
+
+num_main_job_threads: 2
+# 2, not 1 — the AICR pre-flight computes available_slots = num_cluster_jobs MINUS my
+# already-running GPU jobs; a budget of 1 aborts behind any other job of mine (2026-08-10).
+num_cluster_jobs: 2
+
+_cider: &cider
+  threshold: null                       # CALIBRATION PASS: score everything, block nothing
+  denoiser: diffusion                   # the authors' headline path, 7 checkpoints
+  diffusion_checkpoint: ~/models/cider_256x256_diffusion_uncond.pt
+  dncnn_checkpoint: ~/models/cider_dncnn_checkpoint.pth.tar
+  encoder_model: llava-hf/llava-1.5-7b-hf
+  batch_size: 8
+
+tasks:
+  # Clean benign images — THE calibration set.
+  - mode: defense+evaluate
+    target_model: qwen2_5_vl_7b
+    prompt_range: [0, 299]
+    campaign: e3_cider_calib
+    defense: cider
+    judge_model: gpt-5-mini
+    benchmark: orbench_benign_hard
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260809_053612_30243114/ir_plain
+    defense_config: *cider
+
+  # Benign TEXT channel. CIDER is a cross-modal detector, so with no image there is no
+  # delta to compute and this contributes nothing to tau. It runs because CIDER's
+  # over-refusal on the text channel is still a number the comparison table needs, and
+  # at threshold null it also confirms the no-image path passes rather than crashing.
+  - mode: defense+evaluate
+    target_model: qwen2_5_vl_7b
+    prompt_range: [0, 299]
+    campaign: e3_cider_calib
+    defense: cider
+    judge_model: gpt-5-mini
+    benchmark: orbench_benign_hard
+    source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260809_053612_745534/non_llm_baseline
+    defense_config: *cider
