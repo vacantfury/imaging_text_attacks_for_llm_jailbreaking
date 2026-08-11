@@ -65,6 +65,10 @@ from . import amia_ia  # noqa: E402,F401
 # Round-3: guard-as-deployed baseline + amplifier-generalized modality_complete
 # both live behind guard_utils.py's shared parsers/formatters.
 from . import guard_baseline  # noqa: E402,F401
+# AS-7 / review 3 con 5: the channel-routed panel the paper recommends but had
+# never built. Routes each prompt to a text or multimodal guard by image
+# presence; adds no capability, only chooses which measured guard decides.
+from . import guard_router  # noqa: E402,F401
 # Paper D: canonicalization defense (effective-N reduction vs Best-of-N).
 from . import canonicalize  # noqa: E402,F401
 # Paper D / R4: canonicalize -> guard-screen (the guarded architecture the
