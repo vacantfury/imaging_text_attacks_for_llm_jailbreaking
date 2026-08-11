@@ -1,4 +1,13 @@
-# AS-7 · THE CHANNEL-ROUTED GUARD PANEL --- the paper's own recommendation, built
+# AS-7 · THE CHANNEL-ROUTED GUARD PANEL --- pixtral_12b chunk
+#
+# 🔧 SPLIT PER TARGET 2026-08-10, BEFORE THE FIRST RUN. The single combined
+# preset spanned FOUR distinct cluster-served models (2 targets + 2 guards)
+# while budgeting `num_cluster_jobs: 4` = orchestrator + 3 servers. That does
+# not fail loudly: the replica allocator is floor division, so a model short of
+# a server slot silently collapses and the round starves in endpoint-wait,
+# writing EMPTY output dirs. One target per preset = orchestrator + target + 2
+# guards = 4 jobs, which is also the chunking convention channel_asr_*.yaml
+# already uses. Chain the two with --dependency=afterany so they never contend.
 #
 # WHY THIS ROUND EXISTS. Review 3, con 5: "the channel-routed panel proposed
 # after Table 4 is explicitly not built or evaluated end to end ... not a minor
@@ -68,7 +77,7 @@
 # An ESTIMATE, not a measurement.
 
 num_main_job_threads: 2
-num_cluster_jobs: 4          # orchestrator + target + 2 guard servers
+num_cluster_jobs: 4          # orchestrator + 1 target + 2 guards (ONE target per preset)
 
 # Harmful arms -- identical anchors to channel_asr_*.yaml
 _text:  &text  outputs/image_presence_threshold/prompt_transform/harmbench/non_llm_baseline_ir_blank_20260806_151849_37565903/non_llm_baseline
@@ -100,13 +109,9 @@ _ben: &ben
 
 tasks:
   # ---- harmful, both channels, both targets (P1 + P2) ----------------------
-  - {<<: *h, target_model: internvl3_8b, defense_config: {<<: *panel}, source_transform_subdir: *text}
-  - {<<: *h, target_model: internvl3_8b, defense_config: {<<: *panel}, source_transform_subdir: *image}
   - {<<: *h, target_model: pixtral_12b,  defense_config: {<<: *panel}, source_transform_subdir: *text}
   - {<<: *h, target_model: pixtral_12b,  defense_config: {<<: *panel}, source_transform_subdir: *image}
 
   # ---- benign, both channels, both targets (P3) ----------------------------
-  - {<<: *ben, target_model: internvl3_8b, defense_config: {<<: *panel}, source_transform_subdir: *hard_t}
-  - {<<: *ben, target_model: internvl3_8b, defense_config: {<<: *panel}, source_transform_subdir: *hard_i}
   - {<<: *ben, target_model: pixtral_12b,  defense_config: {<<: *panel}, source_transform_subdir: *hard_t}
   - {<<: *ben, target_model: pixtral_12b,  defense_config: {<<: *panel}, source_transform_subdir: *hard_i}
