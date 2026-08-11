@@ -138,6 +138,50 @@ def _collect_model_strings(obj) -> list:
     return found
 
 
+# Config keys under which a defense has historically named a second model.
+# Scanned for EVERY defense, so nothing that worked before can stop working.
+_LEGACY_DEFENSE_MODEL_KEYS = (
+    "guard_model",          # guard_baseline / modality_complete
+    "perturbation_model",   # semantic_smooth
+    "amplifier_model",      # modality_complete
+    "recover_model", "gate_model", "decode_model",   # per-step overrides
+    # P6 self-check defenses (2026-07-30): selfdefend's separate shadow
+    # screener, and llm_self_defense's optional separate filter (None = screen
+    # with the target, needing no server).
+    "shadow_model", "filter_model",
+)
+
+
+def _defense_model_keys(defense_name: str) -> tuple:
+    """Config keys to scan for a defense's own second model(s).
+
+    The legacy tuple UNION whatever the defense class declares in
+    `MODEL_CONFIG_KEYS`. The union is what makes a new defense's server
+    discovery its OWN business: previously this list lived only here, so a new
+    key was discoverable only if someone remembered to edit a module far from
+    the defense they were writing -- and twice nobody did (selfdefend's
+    `shadow_model` 2026-07-30, guard_router's `text_guard`/`image_guard`
+    2026-08-10, both dying at runtime with "No vLLM server was ever started").
+
+    Still deliberately NOT a pattern scan over every `*_model`-ish key:
+    defense_config is free-form, and guessing risks serving a model nothing
+    queries, which silently eats the num_cluster_jobs budget. Declared keys
+    only. An unknown defense name resolves to the legacy tuple alone.
+    """
+    keys = list(_LEGACY_DEFENSE_MODEL_KEYS)
+    try:
+        from src.defense.defender_factory import DEFENSES
+        cls = DEFENSES.get(defense_name)
+        for k in getattr(cls, "MODEL_CONFIG_KEYS", ()) or ():
+            if k not in keys:
+                keys.append(k)
+    except Exception:
+        # Discovery must never be the thing that breaks a run: on any import or
+        # registry problem, fall back to the legacy behavior.
+        pass
+    return tuple(keys)
+
+
 def _required_cluster_models_for_task(info: "TaskInfo") -> set:
     """Cluster-hosted (vLLM / Provider.SLURM_CLUSTER) models a task needs.
 
@@ -169,15 +213,14 @@ def _referenced_models_for_task(info: "TaskInfo", providers=None) -> set:
     Without path (2), removing `judge_method` from task YAMLs would silently
     bypass cluster judge discovery — tasks would hang on acquire_endpoint().
 
-    Defense-config scan is DELIBERATELY narrow: only the known second-model
-    keys (`guard_model`, `perturbation_model`, modality_complete's
-    `amplifier_model` / `recover_model` / `gate_model` / `decode_model`, and
-    the P6 self-check defenses' `shadow_model` / `filter_model`) are looked
-    up — defense_config is a free-form dict and we don't want to guess at
-    arbitrary keys. EXTEND THIS TUPLE whenever a new defense adds another
-    second-model config key; forgetting to is a silent-until-runtime failure
-    (the task dies with "No vLLM server was ever started for <model>", as the
-    P6 pilot did for selfdefend's shadow_model on 2026-07-30).
+    Defense-config scan is DELIBERATELY narrow — declared keys only, never a
+    pattern guess over a free-form dict. The key set comes from
+    `_defense_model_keys()`: the legacy tuple UNION the defense class's own
+    `MODEL_CONFIG_KEYS`. So a NEW defense declares its model keys on itself
+    (see `Defense.MODEL_CONFIG_KEYS`) rather than requiring an edit here —
+    which is what failed twice, both times dying at runtime with "No vLLM
+    server was ever started for <model>" (selfdefend's `shadow_model`
+    2026-07-30; guard_router's `text_guard`/`image_guard` 2026-08-10).
 
     Budget note: a defense+evaluate task with a cluster target AND a cluster
     guard AND a cluster judge needs orchestrator + 3 vLLM servers = 4 SLURM
@@ -223,8 +266,7 @@ def _referenced_models_for_task(info: "TaskInfo", providers=None) -> set:
                               task_overrides=task.defense_config or None)
         except Exception:
             dcfg = dict(task.defense_config or {})
-        for key in ("guard_model", "amplifier_model", "recover_model",
-                    "gate_model", "decode_model"):
+        for key in _defense_model_keys(task.defense):
             m = _resolve_model(dcfg[key]) if dcfg.get(key) else None
             if _keep(m):
                 required.add(m)
@@ -301,12 +343,7 @@ def _referenced_models_for_task(info: "TaskInfo", providers=None) -> set:
         except Exception:
             defense_cfg = dict(task.defense_config or {})
 
-        for key in ("guard_model", "perturbation_model", "amplifier_model",
-                    "recover_model", "gate_model", "decode_model",
-                    # P6 self-check defenses (2026-07-30): selfdefend's separate
-                    # shadow screener, and llm_self_defense's optional separate
-                    # filter (None = screen with the target, needing no server).
-                    "shadow_model", "filter_model"):
+        for key in _defense_model_keys(task.defense):
             model_str = defense_cfg.get(key)
             if model_str:
                 m = _resolve_model(model_str)

@@ -37,6 +37,22 @@ class Defense(ABC):
     # Canonical factory key.
     type_name: str = ""
 
+    # Config keys under which THIS defense names a second model it will query.
+    #
+    # Read by src/experiment/model_discovery.py so the orchestrator submits a
+    # vLLM server for each one. A defense that names a model the orchestrator
+    # never discovers dies at runtime with "No vLLM server was ever started
+    # for <model>" -- cheap (seconds, $0) but a wasted submission.
+    #
+    # Discovery ALSO scans a hardcoded tuple of historical keys, so leaving
+    # this empty preserves existing behavior exactly. Declare it here whenever
+    # a new defense invents a key outside that tuple: it is the difference
+    # between the defense carrying its own contract and a distant module
+    # having to remember it. Twice already the tuple was the thing forgotten
+    # (selfdefend's shadow_model 2026-07-30; guard_router's text_guard /
+    # image_guard 2026-08-10).
+    MODEL_CONFIG_KEYS: tuple[str, ...] = ()
+
     def __init__(self, **kwargs):
         # Stored verbatim for results.json provenance.
         self._config: dict = dict(kwargs)

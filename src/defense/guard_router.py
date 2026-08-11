@@ -55,6 +55,13 @@ class GuardRouter(Defense):
 
     type_name = "guard_router"
 
+    # Both guards are cluster-served and neither sits under the historical
+    # `guard_model` key discovery scans, so without this declaration the
+    # orchestrator starts no server for either and every task dies with
+    # "No vLLM server was ever started for meta-llama/Llama-Guard-3-8B"
+    # (observed, job 9066378, 2026-08-10).
+    MODEL_CONFIG_KEYS = ("text_guard", "image_guard")
+
     def __init__(self, text_guard: str, image_guard: str, **kwargs):
         """
         Args:
