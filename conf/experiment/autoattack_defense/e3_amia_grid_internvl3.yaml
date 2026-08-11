@@ -11,8 +11,9 @@
 #   text chains  -> the ordinary root   = masking is undefined without an image, so
 #                                         this is the full method by construction
 #
-# `masking: false` appears on EVERY task below and does NOT mean the ablation. It means
-# "do not mask again in-process" -- the masking already happened in the precompute
+# Image tasks carry `masking_precomputed: true`, which means "masking ALREADY HAPPENED
+# upstream": do not run VisRAG again, but DO use the verbatim Figure-3 prompt asserting
+# the image is masked, and DO label the row full AMIA. The masking happened in the precompute
 # (`src/defense/amia_precompute_mask.py`, isolated transformers 4.44.2 venv), because
 # VisRAG-Ret cannot load under the transformers 5.x this repo resolves for CIDER's
 # encoder path. Same algorithm, moved earlier in the pipeline; see conf/defense/amia_ia.yaml.
@@ -32,10 +33,25 @@
 num_main_job_threads: 2
 num_cluster_jobs: 2
 
-_amia: &amia
-  masking: false          # see the header -- masking is UPSTREAM, this is the full method
+# IMAGE chains: the upstream `<step>__amiamask` already carries masked images, so
+# VisRAG must NOT run again here -- but this IS the full published method, and the
+# target must receive the verbatim Figure-3 prompt that ASSERTS the image is masked.
+# `masking_precomputed` says exactly that. Using bare `masking: false` here would
+# pair a masked image with the template that does not assert masking, producing a
+# third condition that is neither the published method nor its documented ablation.
+_amia_masked: &amia_masked
+  masking: false
+  masking_precomputed: true
   n_patches: 16           # paper's published default, not a free knob
   k_mask: 3               # paper's published default, not a free knob
+
+# TEXT chains: there is no image, so masking is undefined and the defense selects its
+# text template regardless. Both flags false is the honest record of that.
+_amia_text: &amia_text
+  masking: false
+  masking_precomputed: false
+  n_patches: 16
+  k_mask: 3
 
 tasks:
 
@@ -47,7 +63,7 @@ tasks:
     defense: amia_ia
     judge_model: gpt-5-mini
     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/set_theory_20260531_055707_10045511/llm_set_theory
-    defense_config: *amia
+    defense_config: *amia_text
 
   # == llm_formal_logic  (text: no image to mask) ==
   - mode: defense+evaluate
@@ -57,7 +73,7 @@ tasks:
     defense: amia_ia
     judge_model: gpt-5-mini
     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/formal_logic_20260531_055707_75502107/llm_formal_logic
-    defense_config: *amia
+    defense_config: *amia_text
 
   # == llm_classical_language  (text: no image to mask) ==
   - mode: defense+evaluate
@@ -67,7 +83,7 @@ tasks:
     defense: amia_ia
     judge_model: gpt-5-mini
     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/classical_chinese_simplified_ir_constant_20260710_002424_56524373/llm_classical_language
-    defense_config: *amia
+    defense_config: *amia_text
 
   # == non_llm_cipher  (text: no image to mask) ==
   - mode: defense+evaluate
@@ -77,7 +93,7 @@ tasks:
     defense: amia_ia
     judge_model: gpt-5-mini
     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/non_llm_cipher_20260718_183504_42666777/non_llm_cipher
-    defense_config: *amia
+    defense_config: *amia_text
 
   # == code_attack  (text: no image to mask) ==
   - mode: defense+evaluate
@@ -87,7 +103,7 @@ tasks:
     defense: amia_ia
     judge_model: gpt-5-mini
     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/code_attack_20260805_215649_22270770/code_attack
-    defense_config: *amia
+    defense_config: *amia_text
 
   # == ir_figstep  (MASKED upstream -> FULL AMIA) ==
   - mode: defense+evaluate
@@ -97,7 +113,7 @@ tasks:
     defense: amia_ia
     judge_model: gpt-5-mini
     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260805_215649_72871103/ir_figstep__amiamask
-    defense_config: *amia
+    defense_config: *amia_masked
 
   # == ir_fc_flowchart  (MASKED upstream -> FULL AMIA) ==
   - mode: defense+evaluate
@@ -107,7 +123,7 @@ tasks:
     defense: amia_ia
     judge_model: gpt-5-mini
     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart__amiamask
-    defense_config: *amia
+    defense_config: *amia_masked
 
   # == ir_low_contrast  (MASKED upstream -> FULL AMIA) ==
   - mode: defense+evaluate
@@ -117,7 +133,7 @@ tasks:
     defense: amia_ia
     judge_model: gpt-5-mini
     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260718_183457_77423812/ir_low_contrast__amiamask
-    defense_config: *amia
+    defense_config: *amia_masked
 
   # == ir_occluded  (MASKED upstream -> FULL AMIA) ==
   - mode: defense+evaluate
@@ -127,7 +143,7 @@ tasks:
     defense: amia_ia
     judge_model: gpt-5-mini
     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260718_183457_84223144/ir_occluded__amiamask
-    defense_config: *amia
+    defense_config: *amia_masked
 
   # == ir_mm_typo  (MASKED upstream -> FULL AMIA) ==
   - mode: defense+evaluate
@@ -137,7 +153,7 @@ tasks:
     defense: amia_ia
     judge_model: gpt-5-mini
     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260718_183500_58590499/ir_mm_typo__amiamask
-    defense_config: *amia
+    defense_config: *amia_masked
 
   # == ir_distraction_grid  (MASKED upstream -> FULL AMIA) ==
   - mode: defense+evaluate
@@ -147,7 +163,7 @@ tasks:
     defense: amia_ia
     judge_model: gpt-5-mini
     source_transform_subdir: outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid__amiamask
-    defense_config: *amia
+    defense_config: *amia_masked
 
   # == benign image (MASKED upstream) ==
   - mode: defense+evaluate
@@ -158,7 +174,7 @@ tasks:
     judge_model: gpt-5-mini
     benchmark: orbench_benign_hard
     source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260809_053612_30243114/ir_plain__amiamask
-    defense_config: *amia
+    defense_config: *amia_masked
 
   # == benign text (no image to mask) ==
   - mode: defense+evaluate
@@ -169,4 +185,4 @@ tasks:
     judge_model: gpt-5-mini
     benchmark: orbench_benign_hard
     source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/non_llm_baseline_20260809_053612_745534/non_llm_baseline
-    defense_config: *amia
+    defense_config: *amia_text

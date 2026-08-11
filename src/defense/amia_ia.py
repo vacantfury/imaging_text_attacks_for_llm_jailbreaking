@@ -418,19 +418,43 @@ class AMIA_IA(Defense):
 
     def __init__(self,
                  masking: bool = True,
+                 masking_precomputed: bool = False,
                  mask_encoder: str = "openbmb/VisRAG-Ret",
                  n_patches: int = 16,
                  k_mask: int = 3,
                  device: str = "cuda",
                  **kwargs):
-        super().__init__(masking=masking, mask_encoder=mask_encoder,
+        super().__init__(masking=masking,
+                         masking_precomputed=masking_precomputed,
+                         mask_encoder=mask_encoder,
                          n_patches=n_patches, k_mask=k_mask, device=device,
                          **kwargs)
+        if masking and masking_precomputed:
+            raise ValueError(
+                "AMIA: `masking` and `masking_precomputed` are mutually exclusive — "
+                "the first masks in-process, the second declares it already happened "
+                "upstream. Setting both would mask twice.")
         self._masking = masking
+        # Set when the upstream is a `<step>__amiamask` directory produced by
+        # src/defense/amia_precompute_mask.py: the images ARRIVING are already
+        # masked, so no VisRAG load happens here, but this is still the FULL
+        # published method and must use the masked template and the full label.
+        #
+        # This flag exists because the two are otherwise indistinguishable in
+        # config, and getting it wrong is silent: `masking: false` on a masked
+        # upstream would pair a masked image with the template that does NOT
+        # assert masking, producing a third condition that is neither the
+        # published method nor its documented ablation.
+        self._masking_precomputed = masking_precomputed
         self._masker = (
             _VisRagMasker(mask_encoder, device, n_patches, k_mask)
             if masking else None
         )
+
+    @property
+    def _is_full_method(self) -> bool:
+        """True when the image the target sees is masked, whoever masked it."""
+        return self._masking or self._masking_precomputed
 
     def _mask_side(self, image_side, text: str):
         """Mask the image channel; a paginated prompt has each page masked."""
@@ -449,12 +473,13 @@ class AMIA_IA(Defense):
         system_message: Optional[str] = None,
     ) -> list[tuple[str, str]]:
         # The verbatim prompt tells the model its image "has been partially
-        # masked". That sentence is only true when masking actually ran, so the
-        # template follows the masking switch — never assert a masking that did
-        # not happen.
+        # masked". That sentence is only true when masking actually ran — in
+        # THIS process or in the upstream precompute — so the template follows
+        # `_is_full_method`, never asserting a masking that did not happen and
+        # never denying one that did.
         if not is_multimodal:
             template = AMIA_IA_TEMPLATE_TEXT
-        elif self._masking:
+        elif self._is_full_method:
             template = AMIA_IA_TEMPLATE_MASKED
         else:
             template = AMIA_IA_TEMPLATE_MM
@@ -470,9 +495,14 @@ class AMIA_IA(Defense):
             wrapped_text = template.format(content=text_side or "")
             conversations.append((p.id, [(wrapped_text, image_side)]))
 
-        mode = ("FULL AMIA (masking + intention analysis)"
-                if self._masking and is_multimodal else
-                "AMIA (IA-only) — masking OFF, label it as such")
+        if not is_multimodal:
+            mode = "AMIA text channel (no image to mask; full method by construction)"
+        elif self._masking:
+            mode = "FULL AMIA (in-process masking + intention analysis)"
+        elif self._masking_precomputed:
+            mode = "FULL AMIA (masking PRECOMPUTED upstream + intention analysis)"
+        else:
+            mode = "AMIA (IA-only) — masking OFF, label it as such"
         logger.info(
             f"AMIA [{mode}]: forwarding {len(conversations)} "
             f"intention-analysis-wrapped prompts to target "
