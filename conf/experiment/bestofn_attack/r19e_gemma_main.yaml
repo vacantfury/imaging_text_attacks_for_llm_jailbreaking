@@ -1,0 +1,58 @@
+# bestofn_attack AS-4 — ROUND 19: THE POST-FIX RESTATEMENT (gemma, P2 main + P7 gates).
+#
+# OWNER-APPROVED 2026-08-10 ("now I agree, go to rerun them"), after the era census found that
+# 34 of the paper's code-arm cells still ran the PRE-fix `code_attack` encoding. Split decision
+# postponed by the owner until this round lands.
+#
+# ── WHY ─────────────────────────────────────────────────────────────────────
+# The fidelity fix is commit b266892 (2026-08-05 18:23). Every panel below was measured with
+# `code_attack_20260718_213010_40825967` — pre-fix — while tab:temperature and tab:refusal were
+# measured post-fix. That split two eras across adjacent tables. R11 re-ran llama's
+# {no_defense, sage, guard_baseline} x {fixed, varied} and stopped; this round finishes the job.
+# Science-organ ruling that this round discharges: handbook/experiment_execution.md,
+# "After a method-fidelity fix, CLOSE the re-run branch before starting new measurement".
+#
+# ── JUDGE: WILDGUARD HERE, DELIBERATELY. gpt-5-mini COMES AFTER. ────────────
+# ⚠️ RECORD NO NUMBER FROM THIS ROUND. wildguard over-flags code-bearing arms by 41-68%; it runs
+# here only as a FREE integrity check (10,000 rows/cell, non-degenerate responses, no dead
+# target, no stuck guard). The reportable pass is a separate gpt-5-mini rejudge — ~34 cells x
+# $9.00 = ~$306 at the measured $0.0009/call. Judging directly with gpt-5-mini would risk
+# spending that on a round with a dead cell in it.
+#
+# ── CAMPAIGNS ARE PER-PANEL, ON PURPOSE ────────────────────────────────────
+# Each restated panel gets its OWN campaign so a post-fix cell can never be silently paired with
+# its pre-fix predecessor, and so `latest-wins` selection cannot mix them. Do NOT collapse these
+# into one campaign name.
+#
+# ── SOURCE TRANSFORM — DO NOT REPOINT ──────────────────────────────────────
+# outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+# Verified present on AICR with 10,000 rows (2026-08-10). Built from data/harmbench_bon_100.jsonl
+# [0,9999] = 100 behaviors x 100 identical copies, so the 100 draws are TARGET RE-SAMPLING; this
+# is the code x FIXED arm. The code x VARIED arm is a different transform and is already post-fix
+# via r11.
+#
+#   ssh aicr; cd ~/projects/llm_guardrail_security
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r19e_gemma_main
+#
+# ⚠️ Wall risk: gemma-2-9B sustains only ~49 responses/min/replica (architecture, not size), and
+# sage / llm_self_defense roughly double the calls per draw. Check the measured rate in the vLLM
+# log ~15 min in rather than discovering a wall death at 30% with no data.
+num_main_job_threads: 5
+num_cluster_jobs: 7
+
+_E: &e
+  mode: defense+evaluate
+  target_model: gemma2_9b_it
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+_CODE: &code outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+
+tasks:
+# --- P2 main matrix, all three defenses (none were re-run post-fix) ---
+- {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *code, defense: no_defense, campaign: bestofn_attack_r19_p2_main}
+- {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *code, defense: sage, campaign: bestofn_attack_r19_p2_main}
+- {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *code, defense: semantic_smooth, defense_config: {n_copies: 5, perturbation_model: null, judge_model: wildguard}, campaign: bestofn_attack_r19_p2_main}
+# --- P7 gates extended to this target ---
+- {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *code, defense: canonicalize_guard, defense_config: {guard_model: wildguard}, campaign: bestofn_attack_r19_p7_gates}
+- {<<: *e, target_model_config: {temperature: 1.0}, source_transform_subdir: *code, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}, campaign: bestofn_attack_r19_p7_gates}
