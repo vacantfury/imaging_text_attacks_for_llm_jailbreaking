@@ -1,0 +1,51 @@
+# bestofn_attack AS-4 — R19 RESCUE: re-score the three gemma P6 cells whose judge died.
+#
+# FREE — wildguard is cluster-served. No API spend, no gate.
+#
+# ── WHAT HAPPENED ───────────────────────────────────────────────────────────
+# R19f (AICR 337169) COMPLETED at the SLURM level, but its three gemma P6 cells carry
+# `asr: null` / `status: partial_judge`:
+#   gemma2_9b_it_llm_self_defense_code_attack_20260812_105048_91196014
+#   gemma2_9b_it_no_defense_code_attack_20260812_105048_51879109
+#   gemma2_9b_it_selfdefend_code_attack_20260812_105048_45902917
+# Same cause as the R18a dead control and as R19's three SemanticSmooth losses — the
+# wildguard vLLM server died mid-round:
+#   Health check failed ... (allenai/wildguard): Connection refused
+#   ... (3/3 consecutive failures) -> EVICTION ... remaining_pool=0
+# ✅ ALL 10,000 RESPONSES ARE ON DISK in each cell's raw_results.jsonl (verified 2026-08-18,
+# `wc -l` = 10000 on all three). A rejudge re-scores stored responses and never re-queries the
+# target, so this recovers three cells for the price of one small GPU job.
+#
+# ── JUDGE CHOICE: WILDGUARD, DELIBERATELY ───────────────────────────────────
+# The rest of R19 is wildguard-scored, so wildguard here keeps the round internally consistent
+# and restores the integrity read at zero cost.
+# ⚠️ NOT reportable: code-bearing arm, where wildguard over-flags 41-68%. Every R19 number
+# still needs the gpt-5-mini pass before entering the paper — that is a separate, later ask,
+# and it should run ONCE over a complete round, not piecemeal.
+#
+# ── SEQUENCING ──────────────────────────────────────────────────────────────
+# Serialized (num_main_job_threads: 1) on purpose: one wildguard server, three 10k-call cells
+# one at a time. The recurring failure in this round is exactly wildguard dying under load, so
+# this trades ~35 min of wall clock for not re-triggering it.
+#
+#   ssh aicr; cd ~/projects/llm_guardrail_security
+#   sbatch scripts/run_experiment_aicr.sbatch bestofn_attack/r19_rescue_gemma_p6
+#
+# ⚠️ Verify on landing that `asr is not None` for all three — a rejudge that fails again leaves
+# the PREVIOUS (absent) verdicts in place and the cells stay dead.
+num_cluster_jobs: 2          # 1 server (wildguard) + orchestrator
+num_main_job_threads: 1      # serialize: wildguard death under load is this round's failure mode
+
+tasks:
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_no_defense_code_attack_20260812_105048_51879109
+  judge_model: wildguard
+  judge_method: wildguard
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_selfdefend_code_attack_20260812_105048_45902917
+  judge_model: wildguard
+  judge_method: wildguard
+- mode: rejudge
+  responses_from: outputs/bestofn_attack/defense+evaluate/harmbench/gemma2_9b_it_llm_self_defense_code_attack_20260812_105048_91196014
+  judge_model: wildguard
+  judge_method: wildguard
