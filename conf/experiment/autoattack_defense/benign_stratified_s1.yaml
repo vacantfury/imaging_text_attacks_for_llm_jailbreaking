@@ -34,6 +34,21 @@ tasks:
   - {mode: prompt_transform, source_file: *ob, prompt_range: *rng, benchmark: orbench_benign_hard,
      transformation_list: [{type: non_llm_baseline}]}
 
-  # image channel — the benign prompt rendered as plain text in an image
+  # image channel — the benign prompt rendered as plain text in an image.
+  #
+  # !!! keep_text: false IS LOAD-BEARING — DO NOT DROP IT AGAIN !!!
+  # It defaults to TRUE, which leaves the request in the text field beside the image.
+  # The 2026-08-09 run of this preset omitted it. Consequence, found 2026-08-21: the
+  # text-only guards could READ the benign request instead of being blind to it, so the
+  # image channel blocked 74% where the paper's other benign renders (all of which pass
+  # the flag: render_n100 / heldout_stage1_render / ensemble_benign_render / orbench_render)
+  # block 0%. That is not a category effect — it is a different prompt. Every image-channel
+  # and pooled number from the 2026-08-09 draw prices RE-RENDERING, not restoring a view,
+  # and is quarantined by the instrument gate in src/analysis/paper_c_benign_stratified.py.
+  # The text channel of that draw is unaffected.
+  #
+  # Re-running this stage writes a NEW timestamped dir; the benign_stratified_s2_*.yaml
+  # chunks must be repointed at it (their source_transform_subdir for ir_plain) before
+  # stage 2 runs.
   - {mode: prompt_transform, source_file: *ob, prompt_range: *rng, benchmark: orbench_benign_hard,
-     transformation_list: [{type: ir_plain}]}
+     transformation_list: [{type: ir_plain, params: {keep_text: false}}]}

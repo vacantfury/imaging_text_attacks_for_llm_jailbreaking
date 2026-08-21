@@ -5,15 +5,44 @@ WHY THIS MODULE EXISTS (founded 2026-08-10)
 Every over-refusal number the paper shipped before this round was measured on OR-Bench-Hard
 behaviors 0-99 taken in FILE ORDER. The released file is sorted by category, so that slice is
 72 deception + 28 harassment and NOTHING from the other eight categories
-(`src/analysis/paper_c_benign_category.py` established this). Category is not a nuisance
-dimension here: on the old slice guards blocked ~1% of benign IMAGES, on the balanced draw
-they block 64-79%. A benign cost measured near a floor can only ever look free.
+(`src/analysis/paper_c_benign_category.py` established this). This module re-measures the
+benign axis on a 30 x 10 category-balanced draw.
 
-Table `tab:viewprice` prices restoring a view. Its benign column is the gb->mc change in the
-guard's BLOCK rate on the image channel -- the same instrument and the same channel as its
-attack columns, so the two sides of the price are commensurable. On the old slice that column
-read +53.0 for WildGuard; on the balanced draw it reads -8.0. Every guard flips sign. That
-reversal is the reason this analysis is a committed builder and not a scratch script.
+!!! INSTRUMENT DEFECT IN THE DRAW THIS MODULE READS -- FOUND 2026-08-21, NOT YET REPAIRED !!!
+---------------------------------------------------------------------------------------------
+The header above USED TO SAY: "on the old slice guards blocked ~1% of benign IMAGES, on the
+balanced draw they block 64-79%", and attributed that to category coverage. THAT ATTRIBUTION
+IS WRONG, and the error is not subtle -- it is a different prompt construction.
+
+`ir_plain` takes `keep_text`, deciding whether the request ALSO stays in the text field beside
+the rendered image. IT DEFAULTS TO TRUE. Every other benign render in this paper passes
+`keep_text: false` explicitly (`render_n100.yaml`, `heldout_stage1_render.yaml`,
+`ensemble_benign_render.yaml`, `orbench_render.yaml`) precisely so the payload leaves the text
+channel -- the same delivery as the harmful image renders. `benign_stratified_s1.yaml` OMITTED
+the flag. So on the balanced draw a text-only guard READS THE REQUEST IN THE TEXT FIELD.
+
+  two-category benign image channel (keep_text=false):  guard blocks   0.0%  <- blind
+  balanced benign image channel     (keep_text=TRUE):   guard blocks  74.0%  <- sighted
+
+A blind guard cannot be made sighted by changing which categories it is blind to, so none of
+that 74 points is a category effect. On the TEXT channel, where the instrument is identical
+across the two draws, balancing moves guard-alone blocking by about 4 points (78 -> 73.7 for
+WildGuard) -- i.e. the category worry is real but small, and it is NOT what produced the sign
+flip the 2026-08-09 reframe was built on.
+
+Consequence for `tab:viewprice`: its attack columns price RESTORING A VIEW (guard saw nothing,
+now sees a transcription). Its benign column, read off this draw, prices RE-RENDERING (guard
+already saw the text, now also sees a restatement). They are not the same transition, so the
++53.0 -> -8.0 "flip" compares two different measurements. Until the image channel is re-run
+with `keep_text: false` (preset `benign_stratified_s1.yaml`, now corrected), the
+instrument-matched benign column is the two-category one:
+
+    Qwen2.5-VL   WildGuard +53.0   LlamaGuard-3 +3.0   Qwen3Guard +47.5
+                 ThinkGuard +26.5  GuardReasoner-VL -2.0
+    InternVL3    WildGuard +79.0   LlamaGuard-3 +7.0   Qwen3Guard +70.0
+                 ThinkGuard +35.0  GuardReasoner-VL +22.0
+
+The TEXT-channel half of this draw is clean and may be used as-is.
 
 WHAT IS MEASURED
 ----------------
@@ -29,10 +58,18 @@ a defect that cost this paper a wrong number once already. Exact match only.
 
 VALIDATION GATE
 ---------------
-`--check` re-derives the five Qwen numbers already printed in `tab:viewprice` and fails loudly
-on any mismatch. An ad-hoc scan that disagrees with a shipped number is wrong until proven
-otherwise, so the InternVL3 rows this script adds are only trustworthy while it still
-reproduces the Qwen rows it did not compute.
+`--check` runs two gates.
+
+(1) INSTRUMENT gate (added 2026-08-21). For every image-channel cell it opens the upstream
+    transform's results.json and asserts `keep_text is False`. This is the check whose absence
+    let the defect above live for eleven days: the gate that WAS here compared this module's
+    output against constants this module had itself produced, so it could only ever pass.
+    A gate that cannot fail is not a gate.
+
+(2) REPRODUCTION gate. Re-derives the five Qwen numbers printed in `tab:viewprice` and fails
+    loudly on mismatch, so the InternVL3 rows this script adds are only trustworthy while it
+    still reproduces rows it did not compute. Note this gate is only meaningful once (1)
+    passes -- reproducing a number measured with the wrong instrument proves nothing.
 
     python -m src.analysis.paper_c_benign_stratified            # full table
     python -m src.analysis.paper_c_benign_stratified --check    # validation gate only
@@ -121,6 +158,57 @@ def scan() -> dict:
     return sel
 
 
+def keep_text_of(cell_dir: str):
+    """Read the `keep_text` the upstream render actually used. None if unrecoverable.
+
+    This is the instrument, not a parameter: keep_text=False takes the request OUT of the
+    text field so a text-only guard is blind to an image-borne payload -- the condition the
+    whole view-restoration measurement depends on. It DEFAULTS TO TRUE, so omitting it in a
+    preset silently produces a guard that can read everything.
+    """
+    r = _lj(os.path.join(cell_dir, 'results.json')) or {}
+    src = (r.get('upstream_ref') or {}).get('source_dir', '')
+    while src:
+        u = _lj(os.path.join(src, 'results.json'))
+        if not u:
+            return None
+        for step in (u.get('results_history') or []):
+            for _name, info in (step or {}).items():
+                cfg = (info or {}).get('config') or {}
+                if 'keep_text' in cfg:
+                    return cfg['keep_text']
+        src = (u.get('upstream_ref') or {}).get('source_dir', '')
+    return None
+
+
+def instrument_gate(sel: dict) -> bool:
+    """Assert every IMAGE-channel cell was rendered with keep_text=False. See the module
+    header: the gate this replaces compared the module's output to its own constants."""
+    bad, unknown, n_img = [], [], 0
+    for (target, guard, cond, ch), d in sorted(sel.items(), key=lambda kv: str(kv[0])):
+        if ch != 'image':
+            continue
+        n_img += 1
+        kt = keep_text_of(d)
+        if kt is None:
+            unknown.append((target, guard, cond))
+        elif kt is not False:
+            bad.append((target, guard, cond, kt))
+    print('INSTRUMENT GATE — benign image channel must be rendered keep_text=False')
+    if unknown:
+        print(f'  {len(unknown)} cell(s) with unrecoverable keep_text: {unknown[:4]}')
+    if bad:
+        print(f'  ✗ {len(bad)} of {n_img} image cells carry keep_text={bad[0][3]} — the '
+              f'guard can READ the request in the text field, so these cells do NOT '
+              f'measure restoring a view.')
+        print('    Re-run stage 1 with `params: {keep_text: false}` '
+              '(conf/experiment/autoattack_defense/benign_stratified_s1.yaml, corrected '
+              '2026-08-21), then re-run the stage-2 chunks against the new transform dir.')
+        return False
+    print('  ✓ all image cells keep_text=False.')
+    return True
+
+
 def block_flags(d: str) -> dict:
     """prompt id -> was this prompt BLOCKED by the guard (exact-match on the canned string)."""
     out = {}
@@ -158,6 +246,12 @@ def main() -> None:
     check_only = '--check' in sys.argv
     sel = scan()
     print(f'campaign pinned: {CAMPAIGN}   judge {JUDGE}   cells indexed: {len(sel)}\n')
+    instrument_ok = instrument_gate(sel)
+    print()
+    if not instrument_ok:
+        print('!! Every IMAGE-channel and pooled number below prices RE-RENDERING, not '
+              'restoring a view.\n   The TEXT-channel rows are unaffected and may be '
+              'used.\n')
 
     deltas: dict[tuple[str, str], float] = {}
     pvals: dict[tuple[str, str], float] = {}
@@ -202,7 +296,12 @@ def main() -> None:
             print()
 
     # ---- validation gate: reproduce the shipped Qwen column -------------------------
-    print('VALIDATION — tab:viewprice benign column, Qwen2.5-VL (shipped vs recomputed)')
+    print('REPRODUCTION GATE — tab:viewprice benign column, Qwen2.5-VL '
+          '(shipped vs recomputed)')
+    if not instrument_ok:
+        print('  (circular while the instrument gate fails: SHIPPED_QWEN holds values this '
+              'module\n   itself produced from these same cells, so agreement proves only '
+              'that the code is\n   deterministic — not that the number is right.)')
     ok = True
     for g in GUARDS:
         want = SHIPPED_QWEN[g]
@@ -228,8 +327,10 @@ def main() -> None:
         print(f'  {LABEL[g]:18} {"---" if d is None else f"{d:+.1f}"}{tag}'
               f'{"" if p is None else f"   p={p:.2g}"}')
     neg = [k for k, v in deltas.items() if v < 0]
+    what = ('restoring the view' if instrument_ok else
+            'RE-RENDERING (instrument gate failed — not view restoration)')
     print(f'\nsign check: {len(neg)}/{len(deltas)} guard-target pairs NEGATIVE '
-          f'(restoring the view LOWERS benign blocking)')
+          f'({what} LOWERS benign blocking)')
     for k, v in sorted(deltas.items()):
         if v >= 0:
             print(f'  exception: {k[0]} / {LABEL[k[1]]}  {v:+.1f}  p={pvals[k]:.2g}')

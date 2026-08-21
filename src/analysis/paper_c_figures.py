@@ -16,15 +16,34 @@ ASR constants are transcribed from `tab:reguard` in the AIA paper and machine-ch
 The note that used to stand here said the over-refusal constants were transcribed and
 "NOT machine-checked". They then stayed on the two-category benign slice (OR-Bench-Hard
 0-99 in file order = 72 deception + 28 harassment) for weeks after the category-balanced
-n=300 draw became the paper's better estimate, so this figure plotted a utility axis the
-paper's own appendix calls unrepresentative. cspaper review 5 con 5 found it. The fix is
-not a fresh transcription: over-refusal is now DERIVED at plot time from
-`paper_c_benign_stratified.balanced_overrefusal()`, so the utility axis has no second
-home to drift from. The retired two-category arrays are kept under `*_2CAT` names for the
-appendix diagnostic; nothing reads them by default.
-Note the over-refusal axis is n=600 (300 prompts x text+image), not the old n=200.
+n=300 draw was taken to be the paper's better estimate. cspaper review 5 con 5 found it.
+The fix was to DERIVE over-refusal at plot time rather than transcribe it a second time.
 
-Regenerate with `.venv/bin/python -m src.analysis.paper_c_figures` (runs verify() first).
+⚠️ INSTRUMENT DEFECT IN THE BALANCED DRAW, FOUND SAME DAY (2026-08-21) — READ BEFORE
+CHOOSING AN AXIS. The category-balanced benign draw is NOT interchangeable with the
+two-category one, because its IMAGE channel was rendered with a different flag.
+`ir_plain` takes `keep_text`, which decides whether the request also stays in the TEXT
+field beside the image. It DEFAULTS TO TRUE. Every benign render in this paper passes
+`keep_text: false` explicitly (`render_n100.yaml`, `heldout_stage1_render.yaml`,
+`ensemble_benign_render.yaml`, `orbench_render.yaml`) so that the payload leaves the text
+channel entirely — the same delivery as the harmful image renders, which is what makes the
+attack and benign sides of `tab:viewprice` commensurable. `benign_stratified_s1.yaml`
+OMITTED the flag, so the balanced benign image channel kept the request in the text field
+and the text-only guards could read it. Measured consequence: on the two-category draw a
+text-only guard blocks EXACTLY 0.0% of benign images (blind, as intended); on the balanced
+draw the same guard blocks 74%. That is not a category effect and cannot be — a blind guard
+cannot be made sighted by changing which categories it is blind to. On the one channel where
+the instrument IS identical (text), balancing moves guard-alone blocking by ~4 points.
+
+So the balanced draw currently measures RE-RENDERING (guard already saw the text) where the
+two-category draw measures RESTORING A VIEW (guard saw nothing). The sign flip that the
+2026-08-09 reframe attributed to category coverage is the flag, not the categories. Until
+the image channel is re-run with `keep_text: false`, the instrument-matched axis is the
+two-category one and it is the DEFAULT here. `--axis balanced` is available for the
+diagnostic, and prints the caveat every time.
+
+Regenerate with `.venv/bin/python -m src.analysis.paper_c_figures [--axis 2cat|balanced]`
+(runs verify() first).
 Uses the scientific-visualization skill's publication style."""
 import sys, os
 SKILL = "/Users/haoyu/.claude/skills/scientific-visualization"
@@ -89,7 +108,7 @@ def plot_model(GBv, MCv, MCRGv, ORgbv, ORv, ORrgv, m_mc, m_rg, ls, ax, errors=Tr
         if errors:
             for xv, yv in ((ORv[i], MCv[i]), (ORrgv[i], MCRGv[i])):
                 ax.errorbar(xv, yv,
-                            yerr=wilson_err([yv], n=100), xerr=wilson_err([xv], n=600),
+                            yerr=wilson_err([yv], n=100), xerr=wilson_err([xv], n=OR_N),
                             fmt='none', ecolor=OI[i], elinewidth=0.6, alpha=0.32,
                             capsize=0, zorder=1)
         ax.annotate('', xy=(ORrgv[i],MCRGv[i]), xytext=(ORv[i],MCv[i]),
@@ -149,8 +168,13 @@ def _floor(target):
 
 def load_balanced():
     """Fill the six live over-refusal series + both floors from the balanced draw."""
-    global GB_OR, MC_OR, MCRG_OR, GB_OR2, MC_OR2, MCRG_OR2, FLOOR_OR, FLOOR_OR2
+    global GB_OR, MC_OR, MCRG_OR, GB_OR2, MC_OR2, MCRG_OR2, FLOOR_OR, FLOOR_OR2, OR_N
+    from src.analysis.paper_c_benign_stratified import scan, instrument_gate
+    if not instrument_gate(scan()):
+        raise SystemExit('load_balanced(): image channel contaminated (keep_text=True) — '
+                         'run without --axis balanced, or re-run stage 1 with the flag.')
     q, i = 'qwen2_5_vl_7b', 'internvl3_8b'
+    OR_N = 600
     GB_OR    = [_over(q, g, 'gb') for g in GUARDS]
     MC_OR    = [_over(q, g, 'mc') for g in GUARDS]
     MCRG_OR  = [_over(q, g, 'rg') for g in GUARDS]
@@ -159,9 +183,28 @@ def load_balanced():
     MCRG_OR2 = [_over(i, g, 'rg') for g in GUARDS]
     FLOOR_OR, FLOOR_OR2 = _floor(q), _floor(i)
     print(f'balanced axis loaded: Qwen floor {FLOOR_OR}, InternVL3 floor {FLOOR_OR2}')
+    print('  ⚠ BALANCED AXIS: its image channel was rendered with keep_text=True, so the '
+          'guard reads\n    the request in the text field and no view is being restored. '
+          'Not commensurable with\n    the attack axis or with tab:viewprice. Diagnostic '
+          'only until the keep_text=false re-run.')
+
+
+def load_2cat():
+    """The INSTRUMENT-MATCHED axis: two-category slice, benign images rendered with
+    keep_text=false so the text-only guards are blind to them exactly as they are to the
+    harmful renders. Category-unrepresentative (72 deception / 28 harassment) — that is the
+    known and declared limitation — but it prices the same transition the attack axis does."""
+    global GB_OR, MC_OR, MCRG_OR, GB_OR2, MC_OR2, MCRG_OR2, FLOOR_OR, FLOOR_OR2, OR_N
+    GB_OR, MC_OR, MCRG_OR = GB_OR_2CAT, MC_OR_2CAT, MCRG_OR_2CAT
+    GB_OR2, MC_OR2, MCRG_OR2 = GB_OR2_2CAT, MC_OR2_2CAT, MCRG_OR2_2CAT
+    FLOOR_OR, FLOOR_OR2 = FLOOR_OR_2CAT, FLOOR_OR2_2CAT
+    OR_N = 200
+    print(f'two-category (instrument-matched) axis loaded: Qwen floor {FLOOR_OR}, '
+          f'InternVL3 floor {FLOOR_OR2}, n={OR_N}')
 
 GB_OR = MC_OR = MCRG_OR = GB_OR2 = MC_OR2 = MCRG_OR2 = None
 FLOOR_OR = FLOOR_OR2 = None
+OR_N = 200          # paired benign prompts behind the utility axis; 600 on the balanced draw
 
 
 def verify() -> None:
@@ -195,7 +238,8 @@ def main() -> None:
         print("style preset fallback:", e)
         plt.rcParams.update({'font.size':8,'axes.labelsize':9,'font.family':'sans-serif'})
     verify()
-    load_balanced()
+    axis = 'balanced' if '--axis' in sys.argv and 'balanced' in sys.argv else '2cat'
+    (load_balanced if axis == 'balanced' else load_2cat)()
     os.makedirs(FIGS, exist_ok=True)
 
     # ---- Fig 1: ensemble ASR grouped bars (5 guards + Wilson 95% CI error bars) ----
@@ -244,8 +288,16 @@ def main() -> None:
     # overlap, which is data and not a plotting artifact, so the labels separate
     # vertically rather than the markers being nudged apart to fake resolution. The
     # caption says so.
-    OFF = {'WildGuard':(11,3), 'Qwen3Guard':(-4,-14), 'GuardReasoner':(-54,4),
-           'LlamaGuard-3':(-16,10), 'ThinkGuard':(-12,9)}
+    # Placement follows the AXIS, because the two axes put the markers in different
+    # places. 2cat is the default (instrument-matched); the balanced offsets are the ones
+    # tuned on 2026-08-21 before the instrument defect was found.
+    # LlamaGuard-3 (28,79) and ThinkGuard (45,77) are close enough in y on the 2cat axis
+    # that a right-extending LlamaGuard label collides with ThinkGuard's; LlamaGuard goes
+    # left there.
+    OFF = ({'WildGuard':(11,3), 'Qwen3Guard':(-4,-14), 'GuardReasoner':(-54,4),
+            'LlamaGuard-3':(-16,10), 'ThinkGuard':(-12,9)} if OR_N == 600 else
+           {'WildGuard':(9,-1), 'Qwen3Guard':(-7,-12), 'GuardReasoner':(-38,5),
+            'LlamaGuard-3':(-14,10), 'ThinkGuard':(2,7)})
     for i, g in enumerate(GUARDS):
         ax.annotate(g, xy=(MC_OR[i], MC[i]), xytext=OFF[g], textcoords='offset points',
                     fontsize=6.8, color=dark(OI[i]), fontweight='bold', zorder=5)

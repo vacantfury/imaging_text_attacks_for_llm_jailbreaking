@@ -145,8 +145,25 @@ def points_balanced() -> tuple:
     axis. They sit at 81-95% ensemble ASR, far above any configuration that could contend
     for the low-ASR corner, so their absence cannot change the corner verdict; it does mean
     the balanced Pareto set is over guard configurations and the undefended floor only.
+
+    !!! NOT THE PAPER'S AXIS AS OF 2026-08-21 -- INSTRUMENT DEFECT !!!
+    The balanced draw's IMAGE channel was rendered with `keep_text=True` (the default) while
+    every other benign render in this paper passes `keep_text: false`, so its text-only
+    guards could read the request instead of being blind to it: 74% blocked against 0% on
+    the two-category draw. Half of every pooled number here therefore prices RE-RENDERING,
+    not restoring a view. Full account: the header of
+    `src/analysis/paper_c_benign_stratified.py`. The paper reverted to `POINTS_2CAT` --
+    category-unrepresentative but instrument-matched to the attack axis -- and this function
+    is kept for the diagnostic and for the re-run, which needs only stage 1 repeated with the
+    flag set. It raises unless the caller opts in.
     """
-    from src.analysis.paper_c_benign_stratified import balanced_overrefusal
+    from src.analysis.paper_c_benign_stratified import balanced_overrefusal, scan, \
+        instrument_gate
+    if not instrument_gate(scan()):
+        raise SystemExit(
+            'points_balanced(): the balanced benign image channel is contaminated '
+            '(keep_text=True).\nRe-run benign_stratified_s1.yaml (corrected) + the s2 '
+            'chunks, or use POINTS_2CAT.')
     B = balanced_overrefusal()
     out, excluded = {}, []
     for target, pts in POINTS_2CAT.items():
