@@ -988,3 +988,44 @@ removed the last overfull box), from captured pdflatex stdout.
 - **Multiple image instances per property level (all four reviews).** The only remaining
   objection that needs new collection.
 - **Broader harmful evaluation** beyond OR-Bench's harmful split (con 5).
+
+---
+
+## ⚠️ The carrier-claim softening was INCOMPLETE — five residue sites found and fixed (2026-08-21)
+
+The review-4 round softened the carrier claim at five sites (abstract localisation
+paragraph, intro, contribution (ii), the same-weights results caveat, conclusion,
+claims table, limitations) and recorded it as done. **A verification sweep for the
+strong phrasings found five more sites the pass had missed**, and their placement is
+the worst possible: the paper now asserted the softened claim in the places a careful
+reader checks and the strong claim in the places everyone reads.
+
+| site | what it still said |
+|---|---|
+| abstract, **last sentence** | "an uncontrolled variable inherited with the weights" — flat, no hedge |
+| conclusion, **last sentence** | same phrase, one paragraph after the caveat that contradicts it |
+| §results "Taken together" | "it is **not** the hosting layer ... but the aligned checkpoint itself" |
+| §discussion, third observation | "the serving-time layer is **not what carries** the effect" |
+| §related work, `zou2026understanding` | the sign split "separated by the serving stack" |
+
+The last one was not merely unsoftened, it was **contradicted by our own data**:
+`pixtral-12b` (loosens) and `qwen3-vl-8b` (tightens) are both open checkpoints served
+by us under one arrangement, so the sign split cannot run along the hosted/open line.
+
+**What replaced them.** The licensed claim is narrower and is now stated uniformly: the
+hosting layer is inert *on the one checkpoint we can test both ways*; among the **seven**
+checkpoints we serve ourselves the serving arrangement is fixed by construction, and the
+behaviour still ranges from $+32$pp to a sign reversal — so the checkpoint alone is
+sufficient to produce it. What the hosted stacks contribute to their own $+23$–$57$pp
+shifts is **not identified by this design**, and every site now says so.
+
+**Lesson for any future claim-softening pass.** Softening is a *sweep*, not a set of
+edits: grep the strong phrasings themselves (`hosting layer`, `serving layer`,
+`checkpoint itself`, `inherited with the weights`, `carried by the checkpoint`) and
+confirm zero survivors, rather than editing the sites the reviewer happened to cite.
+The four reviews all named this claim; a fifth round would have re-raised it from the
+abstract alone.
+
+**Build after the fix:** 0 errors, 0 undefined refs, 0 overfull boxes, 20pp, from
+captured pdflatex stdout. `tex_stat_audit.py` re-run: CONSISTENT, 27/28 p-values and
+26/28 deltas checked (line 482 is the known CI-prose row).
