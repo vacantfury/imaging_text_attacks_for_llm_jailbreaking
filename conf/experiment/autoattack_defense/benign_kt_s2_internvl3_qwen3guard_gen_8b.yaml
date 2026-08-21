@@ -1,0 +1,35 @@
+# ============================================================
+# Paper C (AS-3) — BENIGN CATEGORY COVERAGE, stage 2 REDO: internvl3_8b / qwen3guard_gen_8b
+# IMAGE CHANNEL ONLY, keep_text=false.  cspaper review 5 con 5 + the instrument
+# defect found 2026-08-21.
+# ============================================================
+# WHY A REDO. The 2026-08-09 balanced round rendered its benign IMAGE channel with
+# `keep_text` left at its default TRUE, so the request stayed in the text field and the
+# text-only guards could READ it: they blocked 74% of benign images where the paper's
+# own renders (keep_text=false, payload in the image only) put them at exactly 0%. That
+# is a different input, not a different sample, so every image-channel and pooled number
+# from that round prices RE-RENDERING rather than restoring a view. Guarded now by
+# `instrument_gate()` in src/analysis/paper_c_benign_stratified.py.
+#
+# THIS ROUND repeats ONLY the image channel against the corrected stage-1 render
+# (verified: keep_text=False, all 300 prompts carry the single placeholder text). The
+# TEXT channel of the 2026-08-09 round is unaffected by the flag and is NOT re-run.
+#
+# NEW CAMPAIGN NAME `paper_c_benign_stratified_kt` so the corrected cells can never be pooled with the
+# contaminated ones by a selector that matches on campaign.
+#
+# NOTHING IS RETUNED: guard, decode style, reguard policy and judge are copied from the
+# 2026-08-09 chunks verbatim; only the upstream render differs.
+#
+# Judge gpt-5-mini inline, matching every other benign number in the paper.
+# ============================================================
+
+num_main_job_threads: 3
+num_cluster_jobs: 2
+
+tasks:
+
+  # == qwen3guard_gen_8b / ir_plain (keep_text=false) : gb, mc, +rg ==
+  - {mode: defense+evaluate, target_model: internvl3_8b, prompt_range: [0,299], campaign: paper_c_benign_stratified_kt, defense: guard_baseline, judge_model: gpt-5-mini, defense_config: {guard_model: qwen3guard_gen_8b}, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260821_053159_70002875/ir_plain}
+  - {mode: defense+evaluate, target_model: internvl3_8b, prompt_range: [0,299], campaign: paper_c_benign_stratified_kt, defense: modality_complete, judge_model: gpt-5-mini, defense_config: {guard_model: qwen3guard_gen_8b, decode_text: true, decode_style: recover}, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260821_053159_70002875/ir_plain}
+  - {mode: defense+evaluate, target_model: internvl3_8b, prompt_range: [0,299], campaign: paper_c_benign_stratified_kt, defense: modality_complete, judge_model: gpt-5-mini, defense_config: {guard_model: qwen3guard_gen_8b, decode_text: true, decode_style: recover, reguard_original: true}, source_transform_subdir: outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260821_053159_70002875/ir_plain}
