@@ -10,10 +10,19 @@ entered ASR from the data through the shared selector and RAISES on drift. Same 
 and same remedy as `paper_c_pareto.py`.
 
 ASR constants are transcribed from `tab:reguard` in the AIA paper and machine-checked by
-`verify()`. Over-refusal constants are transcribed from the same table (integers, as the
-table rounds — keeping figure and table byte-identical is deliberate) and are NOT
-machine-checked: they come from the benign `orbench_benign_hard` panel, which the encoder
-fidelity fix does not touch.
+`verify()`.
+
+⚠️ SECOND STALENESS DEFECT, 2026-08-21 — the unchecked half is the half that rotted.
+The note that used to stand here said the over-refusal constants were transcribed and
+"NOT machine-checked". They then stayed on the two-category benign slice (OR-Bench-Hard
+0-99 in file order = 72 deception + 28 harassment) for weeks after the category-balanced
+n=300 draw became the paper's better estimate, so this figure plotted a utility axis the
+paper's own appendix calls unrepresentative. cspaper review 5 con 5 found it. The fix is
+not a fresh transcription: over-refusal is now DERIVED at plot time from
+`paper_c_benign_stratified.balanced_overrefusal()`, so the utility axis has no second
+home to drift from. The retired two-category arrays are kept under `*_2CAT` names for the
+appendix diagnostic; nothing reads them by default.
+Note the over-refusal axis is n=600 (300 prompts x text+image), not the old n=200.
 
 Regenerate with `.venv/bin/python -m src.analysis.paper_c_figures` (runs verify() first).
 Uses the scientific-visualization skill's publication style."""
@@ -80,7 +89,7 @@ def plot_model(GBv, MCv, MCRGv, ORgbv, ORv, ORrgv, m_mc, m_rg, ls, ax, errors=Tr
         if errors:
             for xv, yv in ((ORv[i], MCv[i]), (ORrgv[i], MCRGv[i])):
                 ax.errorbar(xv, yv,
-                            yerr=wilson_err([yv], n=100), xerr=wilson_err([xv], n=200),
+                            yerr=wilson_err([yv], n=100), xerr=wilson_err([xv], n=600),
                             fmt='none', ecolor=OI[i], elinewidth=0.6, alpha=0.32,
                             capsize=0, zorder=1)
         ax.annotate('', xy=(ORrgv[i],MCRGv[i]), xytext=(ORv[i],MCv[i]),
@@ -94,25 +103,65 @@ GUARD_KEY = {'WildGuard':'wildguard', 'Qwen3Guard':'qwen3guard_gen_8b',
              'GuardReasoner':'guardreasoner_vl_7b', 'LlamaGuard-3':'llama_guard_3_8b',
              'ThinkGuard':'thinkguard'}
 FLOOR = 89                          # no_defense ensemble (guard-independent)
-FLOOR_OR = 26                       # undefended benign over-refusal
+FLOOR_OR_2CAT = 26                  # RETIRED (2-category slice)
 GB   = [77,75,84,66,79]             # guard alone
 MC   = [68,68,71,78,81]             # + recover+decode amplifier
 MCRG = [43,50,63,49,58]             # + reguard layer
-GB_OR   = [49,47,67,28,47]          # benign over-refusal %, avg(text,image), gb
-MC_OR   = [64,59,60,28,45]          #                                         mc
-MCRG_OR = [84,81,87,33,66]          #                                         mc+reguard
+GB_OR_2CAT   = [49,47,67,28,47]     # RETIRED axis (2-category slice), kept for the appendix
+MC_OR_2CAT   = [64,59,60,28,45]     #   diagnostic only — see points_balanced() rationale
+MCRG_OR_2CAT = [84,81,87,33,66]
 
 # ---- DATA (InternVL3-8B, gpt-5-mini, n=100) — all FIVE guards, POST-FIX ----
 # Not plotted (Fig 2 is deliberately Qwen-only, see below) but kept correct: a stale
 # spare data block is how the Qwen block went stale in the first place.
 FLOOR2 = 94
-FLOOR_OR2 = 53
+FLOOR_OR2_2CAT = 53
 GB2   = [86,83,88,82,83]
 MC2   = [70,76,76,81,81]
 MCRG2 = [49,55,69,61,62]
-GB_OR2   = [70,69,81,54,67]
-MC_OR2   = [84,80,82,55,72]
-MCRG_OR2 = [90,86,92,57,79]
+GB_OR2_2CAT   = [70,69,81,54,67]
+MC_OR2_2CAT   = [84,80,82,55,72]
+MCRG_OR2_2CAT = [90,86,92,57,79]
+
+
+# ---- LIVE over-refusal axis: CATEGORY-BALANCED (n=300 x 2 channels = 600 paired) ----
+# Swapped 2026-08-21 (cspaper review 5 con 5 / Q1). The two-category slice above is
+# OR-Bench-Hard 0-99 in file order, which the released file sorts by category: 72
+# deception + 28 harassment, nothing else. The paper's own appendix calls it
+# unrepresentative, so plotting the frontier on it while the balanced measurement sat in
+# the appendix was indefensible. DERIVED, not transcribed -- the ASR half of this module
+# needed a verify() because it was entered by hand; the utility half now has no second
+# home to drift from, which is the defect class that produced this swap.
+_B = None
+def _over(target, guard, cond):
+    global _B
+    if _B is None:
+        from src.analysis.paper_c_benign_stratified import balanced_overrefusal
+        _B = balanced_overrefusal()
+    return round(_B[(target, GUARD_KEY[guard], cond)], 1)
+
+def _floor(target):
+    global _B
+    if _B is None:
+        from src.analysis.paper_c_benign_stratified import balanced_overrefusal
+        _B = balanced_overrefusal()
+    return round(_B[(target, 'FLOOR', 'floor')], 1)
+
+def load_balanced():
+    """Fill the six live over-refusal series + both floors from the balanced draw."""
+    global GB_OR, MC_OR, MCRG_OR, GB_OR2, MC_OR2, MCRG_OR2, FLOOR_OR, FLOOR_OR2
+    q, i = 'qwen2_5_vl_7b', 'internvl3_8b'
+    GB_OR    = [_over(q, g, 'gb') for g in GUARDS]
+    MC_OR    = [_over(q, g, 'mc') for g in GUARDS]
+    MCRG_OR  = [_over(q, g, 'rg') for g in GUARDS]
+    GB_OR2   = [_over(i, g, 'gb') for g in GUARDS]
+    MC_OR2   = [_over(i, g, 'mc') for g in GUARDS]
+    MCRG_OR2 = [_over(i, g, 'rg') for g in GUARDS]
+    FLOOR_OR, FLOOR_OR2 = _floor(q), _floor(i)
+    print(f'balanced axis loaded: Qwen floor {FLOOR_OR}, InternVL3 floor {FLOOR_OR2}')
+
+GB_OR = MC_OR = MCRG_OR = GB_OR2 = MC_OR2 = MCRG_OR2 = None
+FLOOR_OR = FLOOR_OR2 = None
 
 
 def verify() -> None:
@@ -146,6 +195,7 @@ def main() -> None:
         print("style preset fallback:", e)
         plt.rcParams.update({'font.size':8,'axes.labelsize':9,'font.family':'sans-serif'})
     verify()
+    load_balanced()
     os.makedirs(FIGS, exist_ok=True)
 
     # ---- Fig 1: ensemble ASR grouped bars (5 guards + Wilson 95% CI error bars) ----
@@ -188,14 +238,14 @@ def main() -> None:
         r,g,b = (int(hexc[i:i+2],16) for i in (1,3,5))
         return '#%02x%02x%02x' % (int(r*f), int(g*f), int(b*f))
 
-    # Per-guard label offsets (points), hand-placed. The Qwen amplifier markers for
-    # GuardReasoner (59.5,71) and WildGuard (64,72) are ~4.5 units apart at the same
-    # height, so their labels are pushed to opposite sides; Qwen3Guard drops below.
-    # LlamaGuard-3 (28,79) and ThinkGuard (45,77) are close enough in y that a
-    # right-extending LlamaGuard label collides with ThinkGuard's; LlamaGuard goes
-    # ABOVE its marker, ThinkGuard shifts right.
-    OFF = {'WildGuard':(9,-1), 'Qwen3Guard':(-7,-12), 'GuardReasoner':(-38,5),
-           'LlamaGuard-3':(-14,10), 'ThinkGuard':(2,7)}
+    # Per-guard label offsets (points), hand-placed; re-placed 2026-08-21 for the
+    # balanced axis, which moves every amplifier marker left. On this axis WildGuard
+    # (69.8,68) and Qwen3Guard (70.0,68) land 0.2 points apart -- their markers genuinely
+    # overlap, which is data and not a plotting artifact, so the labels separate
+    # vertically rather than the markers being nudged apart to fake resolution. The
+    # caption says so.
+    OFF = {'WildGuard':(11,3), 'Qwen3Guard':(-4,-14), 'GuardReasoner':(-54,4),
+           'LlamaGuard-3':(-16,10), 'ThinkGuard':(-12,9)}
     for i, g in enumerate(GUARDS):
         ax.annotate(g, xy=(MC_OR[i], MC[i]), xytext=OFF[g], textcoords='offset points',
                     fontsize=6.8, color=dark(OI[i]), fontweight='bold', zorder=5)

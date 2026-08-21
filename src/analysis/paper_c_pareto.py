@@ -42,7 +42,7 @@ N = 100  # every cell is n=100 behaviors
 #   gb over-refusal is NOT in Table 1; it is measured from the same benign panel by
 #   paper_c_overrefusal_decomp.py (avg of text+image, gpt-5-mini rejudged, each cell
 #   reconciled against its stored rate) and is labelled as such.
-POINTS = {
+POINTS_2CAT = {
     'qwen2_5_vl_7b': [
         ('undefended',        89, 26, 'T1 header'),
         ('ECSO',              86, 27, 'T1 header, deployable arm'),
@@ -123,6 +123,50 @@ def pareto(points: list) -> list:
     return sorted(out, key=lambda x: x[2])
 
 
+GUARD_LABELS = ['WildGuard', 'Qwen3Guard', 'GuardReasoner', 'LlamaGuard-3', 'ThinkGuard']
+CONDS = [('gb', 'gb'), ('mc', 'mc'), ('+rg', 'rg')]
+
+
+def points_balanced() -> tuple:
+    """The frontier on the CATEGORY-BALANCED benign axis (n=300 x 2 channels = 600 paired).
+
+    Founded 2026-08-21 answering cspaper review 5 con 5 / Q1. The two-category slice
+    (`POINTS_2CAT`) is behaviors 0-99 of OR-Bench-Hard in file order, which the released
+    file sorts by category, so it is 72 deception + 28 harassment and nothing else -- the
+    paper's own appendix calls it unrepresentative. Reporting the frontier on it while the
+    balanced measurement sat in the appendix was the review's sharpest correct hit.
+
+    ASR is unchanged: the safety axis does not depend on which benign prompts we draw.
+    Over-refusal is DERIVED here rather than entered, so unlike the ASR half it has no
+    second home that can go stale.
+
+    Returns (points_by_target, excluded) -- `excluded` is loud on purpose: ECSO and
+    SemanticSmooth were never re-run on the balanced draw, so they cannot appear on this
+    axis. They sit at 81-95% ensemble ASR, far above any configuration that could contend
+    for the low-ASR corner, so their absence cannot change the corner verdict; it does mean
+    the balanced Pareto set is over guard configurations and the undefended floor only.
+    """
+    from src.analysis.paper_c_benign_stratified import balanced_overrefusal
+    B = balanced_overrefusal()
+    out, excluded = {}, []
+    for target, pts in POINTS_2CAT.items():
+        rows, asr = [], {lab: a for lab, a, _o, _s in pts}
+        floor = B.get((target, 'FLOOR', 'floor'))
+        if floor is not None and 'undefended' in asr:
+            rows.append(('undefended', asr['undefended'], round(floor, 1), 'balanced floor'))
+        for gl in GUARD_LABELS:
+            for lab, cond in CONDS:
+                key = f'{gl} {lab}'
+                over = B.get((target, GUARD_KEY[gl], cond))
+                if key in asr and over is not None:
+                    rows.append((key, asr[key], round(over, 1), 'T1 ASR + balanced benign'))
+        for lab, a, _o, _s in pts:
+            if lab not in {r[0] for r in rows}:
+                excluded.append(f'{target}/{lab} (ASR {a}) — not run on the balanced draw')
+        out[target] = rows
+    return out, excluded
+
+
 def verify() -> None:
     """Rebuild every entered ASR from the data and RAISE on mismatch.
 
@@ -138,7 +182,7 @@ def verify() -> None:
     fsel = F.scan()
     base = {'undefended': 'no_defense', 'ECSO': 'ecso', 'SemanticSmooth': 'semantic_smooth'}
 
-    for target, pts in POINTS.items():
+    for target, pts in POINTS_2CAT.items():
         rebuilt = {}
         for guard_lab, guard in GUARD_KEY.items():
             for lab, cond in COND_KEY.items():
@@ -174,7 +218,7 @@ def verify() -> None:
 
 def report() -> None:
     verify()
-    for target, pts in POINTS.items():
+    for target, pts in POINTS_2CAT.items():
         print('\n' + '=' * 78)
         print('%s   --- %d measured configurations' % (target, len(pts)))
         print('=' * 78)

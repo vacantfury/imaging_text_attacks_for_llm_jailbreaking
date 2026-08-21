@@ -263,6 +263,35 @@ def pooled(sel, target, guard, cond):
     return out
 
 
+def balanced_overrefusal() -> dict:
+    """(target, guard_key, cond) -> pooled judged over-refusal % on the BALANCED draw.
+
+    Founded 2026-08-21. The figure and the Pareto table each carried a hardcoded
+    over-refusal block that `verify()` did NOT machine-check -- the ASR half was checked,
+    the utility half was not, and the unchecked half is the half that went stale (it kept
+    the two-category slice after the balanced set became the paper's better estimate).
+    This is the second computation those consumers were missing, so their verify() can now
+    cover both axes. Also returns the undefended floor under cond 'floor'.
+
+    Pooled exactly as `judged()` pools: text and image channels together over prompt ids
+    present in all three conditions, so gb/mc/rg share one denominator (n=600).
+    """
+    sel = scan()
+    out = {}
+    for target in TARGETS:
+        for g in GUARDS:
+            P = {c: pooled(sel, target, g, c) for c in ('gb', 'mc', 'rg')}
+            if any(v is None for v in P.values()):
+                continue
+            k = sorted(set(P['gb']) & set(P['mc']) & set(P['rg']))
+            for c in P:
+                out[(target, g, c)] = 100.0 * sum(P[c][i] for i in k) / len(k)
+        f = pooled(sel, target, 'FLOOR', 'floor')
+        if f:
+            out[(target, 'FLOOR', 'floor')] = 100.0 * sum(f.values()) / len(f)
+    return out
+
+
 def judged() -> None:
     sel = scan()
     print('\nJUDGED OVER-REFUSAL on the balanced draw — pooled text+image (n=600 paired)')
