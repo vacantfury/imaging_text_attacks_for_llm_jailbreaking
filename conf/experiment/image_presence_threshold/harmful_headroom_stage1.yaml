@@ -1,0 +1,112 @@
+# Paper B (AS-2) · E1 HARMFUL-HEADROOM CONTROL — STAGE 1 (build the ± canvas pairs)
+#
+# WHY THIS ROUND EXISTS. cspaper review 5 (rating 7, accept) con 3 + question 2:
+# "the central 'cost versus what it buys' framing relies on comparing a highly
+# powered benign refusal contrast against underpowered or floor-limited harmful
+# contrasts. In particular, qwen3-vl-8b's 2% -> 1% ASR result cannot support a
+# conclusion that the attachment cue produces no safety benefit." Review 4 con 3
+# said the same thing. The paper itself concedes it is an underpowered null.
+#
+# The floor is REAL and re-verified before designing this: every plain-harmful
+# cell we hold on qwen3-vl-8b sits at 0-6% ASR (11 cells, gpt-5-mini). So no
+# PLAIN harmful set can answer the reviewer — the model simply refuses plain
+# harmful text. Headroom has to be created by an attack, and then the question
+# becomes the sharp one: WHEN there is something left to prevent, does the
+# blank canvas prevent any of it?
+#
+# DESIGN. One source, one prompt set, four chains. Each chain writes BOTH steps,
+# so the +-canvas pair shares byte-identical encoded text and identical ids:
+#     step 1 = <encoder>            -> the no-image arm
+#     step 2 = <encoder> + ir_blank -> the same text, blank white canvas attached
+# The manipulation is therefore exactly AS-2's (attachment, request held fixed),
+# just measured where ASR is not on the floor.
+#
+# WHY THESE THREE ENCODERS. Picked from measured evidence, not guessed: across
+# every no-defense open-VLM cell in outputs/, llm_set_theory (max 82, median 53),
+# code_attack (max 80, median 60) and llm_formal_logic (max 67, median 45) are
+# the arms that actually produce mid-range ASR. Mid-range is what carries power:
+# a floored arm and a saturated arm both fake a null.
+#
+# WHY A NEW BENCHMARK FAMILY. The paper's harmful side is OR-Bench harmful only
+# (the "harmbench" path of the 2026-08-06 run is orbench_harmful_prompts.jsonl —
+# benchmark is inferred from the PATH, so read dataset_path, not the folder).
+# Review 5 q2 asks for "at least one additional benchmark or prompt family", so
+# this round uses data/harmbench_prompts.jsonl, a genuinely different family.
+#
+# WHY STAGE 1 IS BUILT ON NURC. Transform dirs are NOT carried by git (outputs/
+# is gitignored) and stage 2 needs the GPU that holds the qwen3-vl weights, which
+# is NURC. Building stage 1 anywhere else guarantees the "source_transform_subdir
+# does not exist" death this repo has already paid for once (2026-08-21).
+#
+# PRE-REGISTERED, BEFORE ANY DATA (this file is committed and pushed first):
+#   P1  The canvas produces NO significant ASR change on the headroom arms.
+#       Then the cue buys nothing even where there IS something to buy, the
+#       decoupling claim stops resting on a 2%->1% floor, and con 3 is answered
+#       with evidence instead of a hedge.
+#   P2  The canvas SIGNIFICANTLY REDUCES ASR on the headroom arms. THIS IS THE
+#       OUTCOME THAT COSTS US. It would mean the cue does buy safety once there
+#       is headroom, and the paper's "cost is paid with nothing to buy" prose
+#       must be withdrawn and rewritten as "on a floored model, nothing left to
+#       buy" — a real narrowing. WE REPORT P2 IF WE SEE IT. We do not rerun it
+#       away, and we do not retreat to the floored OR-Bench cell to avoid it.
+#   P3  The canvas SIGNIFICANTLY RAISES ASR. That is the pixtral/llava sign
+#       inversion appearing on this checkpoint too, under attack. It would make
+#       the cue actively harmful here and strengthen the paper's claim that the
+#       response is not risk-shaped.
+#
+# FLOOR/CEILING GUARD, fixed in advance: any arm whose NO-CANVAS ASR is <10% or
+# >90% is reported as floored/saturated and is NOT counted as a powered contrast,
+# whichever way its delta points. This is the same trap the 2%->1% cell fell into
+# and we are not allowed to fall into it a second time in either direction.
+#
+# COST. Stage 1 only: ~200 encoder calls on gpt-4.1-mini (set_theory + formal
+# logic) ~= $0.10. code_attack is rule-based and ir_blank is non-LLM, both free.
+# No target model, no judge in this stage.
+#
+# SUBMIT (NURC):
+#   ssh explorer 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment.sbatch image_presence_threshold/harmful_headroom_stage1'
+
+num_main_job_threads: 4
+
+# The canonical blank: 512x512 pure white, keep_text so the request still reaches
+# the model as text. Same object as the benign ladder's canvas, so the harmful
+# and benign sides are measured against the SAME manipulation.
+_canvas: &canvas
+  type: ir_blank
+  params: {width: 512, height: 512, bg_color: "#FFFFFF", keep_text: true}
+
+_base: &base
+  mode: prompt_transform
+  benchmark: harmbench
+  source_file: data/harmbench_prompts.jsonl
+  prompt_range: [0, 99]
+  campaign: paper_b_harmful_headroom
+
+tasks:
+  # --- floor reference: plain harmful text, no attack (expected ~0-6%) --------
+  - <<: *base
+    transformation_list:
+      - {type: non_llm_baseline}
+      - *canvas
+
+  # --- headroom arm 1: code_attack (rule-based, free) ------------------------
+  - <<: *base
+    transformation_list:
+      - {type: code_attack}
+      - *canvas
+
+  # --- headroom arm 2: set theory --------------------------------------------
+  # `model` pinned EXPLICITLY: conf/text_encoding/default.yaml's default does NOT
+  # reach the encoder when the step is part of a chain ending in an image
+  # transform (recorded failure, AICR 285658, "model is required").
+  - <<: *base
+    transformation_list:
+      - {type: llm_set_theory, params: {model: gpt-4.1-mini}}
+      - *canvas
+
+  # --- headroom arm 3: formal logic ------------------------------------------
+  - <<: *base
+    transformation_list:
+      - {type: llm_formal_logic, params: {model: gpt-4.1-mini}}
+      - *canvas
