@@ -38,6 +38,7 @@ TRANSFORMATION_ALIASES: dict[str, str] = {
     "addition_equation": "non_llm_addition_equation_split_reassemble",
     "conditional_probability": "non_llm_conditional_probability",
     "symbol_injection": "non_llm_symbol_injection",
+    "context_pad": "non_llm_context_pad",
     "semantic_camo": "llm_semantic_camo",
     "decode_evasion": "llm_decode_evasion",
     "cipher": "non_llm_cipher",

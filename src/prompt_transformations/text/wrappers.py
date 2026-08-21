@@ -17,6 +17,7 @@ from .encoders.non_llm_conditional_probability_encoder import (
     ConditionalProbabilityEncoder,
 )
 from .encoders.non_llm_symbol_injection_encoder import SymbolInjectionEncoder
+from .encoders.non_llm_context_pad_encoder import ContextPadEncoder
 from .encoders.llm_set_theory_encoder import SetTheoryLLMEncoder
 from .encoders.llm_formal_logic_encoder import FormalLogicLLMEncoder
 from .encoders.llm_quantum_mechanics_encoder import QuantumMechanicsLLMEncoder
@@ -34,6 +35,16 @@ from .encoders.llm_paraphrase_encoder import ParaphraseLLMEncoder
 class BaselineTransformation(TextEncoderTransformation):
     type_name = "non_llm_baseline"
     encoder_class = BaselineEncoder
+
+
+# AS-2 token-count control: prepends neutral filler text sized to the SAME token
+# budgets the blank canvases occupy (64 / 274 / 2311 vs the canvas's 64 / 256 /
+# 2304), with no image attached. Separates "presence" from "context length" on
+# the one checkpoint where image SIZE carries the effect.
+@register_transformation
+class ContextPadTransformation(TextEncoderTransformation):
+    type_name = "non_llm_context_pad"
+    encoder_class = ContextPadEncoder
 
 
 @register_transformation

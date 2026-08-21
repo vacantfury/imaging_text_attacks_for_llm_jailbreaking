@@ -1,0 +1,103 @@
+# Paper B (AS-2) · TOKEN-BUDGET CONTROL — STAGE 2
+#
+# THE QUESTION, IN ONE LINE. On `qwen3-vl-8b-instruct`, does benign refusal rise
+# because an IMAGE IS PRESENT, or simply because the INPUT GOT LONGER?
+#
+# AS-2's leg 1 says the shift varies with pixel count (256^2 vs 1536^2,
+# p=0.0004, tab:owprops). But pixels and visual tokens move together, so that
+# result is equally consistent with a context-length effect that has nothing to
+# do with modality. This round separates them with a 2x3 design plus a baseline:
+#
+#                       64 tok      256 tok     2304 tok
+#     IMAGE (canvas)    256^2       512^2       1536^2
+#     TEXT  (filler)    reps=3      reps=13     reps=110
+#
+# Budgets were MEASURED, not derived: the canvas counts are read off the
+# model's own `image_grid_thw` (patch 16, merge 2); the filler counts are its
+# own tokenizer (64 / 274 / 2311, each >= its canvas pair — the text arms are
+# never handed LESS context than the image arms they answer).
+#
+# ---------------------------------------------------------------------------
+# PRE-REGISTERED READ-OUT — committed and pushed BEFORE collection.
+#
+# P1 (presence survives — what we expect). The canvas arms reproduce the known
+#     ladder (+32pp at 256^2, +33pp at 1536^2 against the text baseline) while
+#     the padded arms stay inside the paper's stated ~7pp noise floor of the
+#     text baseline, INCLUDING at 2311 tokens. Then context length is excluded
+#     on the exact checkpoint where the size result lives, and leg 1 stands as
+#     written.
+#
+# P2 (the outcome that costs us — stated so it cannot be quietly dropped).
+#     The padded arms rise with token count and pad(110) approaches the 1536^2
+#     arm. Then the size result is a CONTEXT-LENGTH result, and AS-2's leg 1
+#     must be restated: "varies with pixel count" becomes "varies with context
+#     budget". ⚠️ NOTE THE PAPER STILL SURVIVES THIS — context length is no more
+#     a risk signal than canvas colour, so the thesis (the response does not
+#     behave like a risk policy) is untouched; what changes is which variable
+#     leg 1 names. We report P2 if we see it and rewrite the leg; we do not
+#     rerun it away.
+#
+# P3 (the informative middle). Padded arms move some but materially less than
+#     their canvas pairs -> BOTH matter, and leg 1 should name modality AND
+#     budget rather than pixels. Report the two ladders side by side; do not
+#     collapse them into one number.
+#
+# WHAT WOULD INVALIDATE THE ROUND (rig failure, not a result): the text baseline
+# here disagreeing with the canvas arms' own baseline, or the 256^2/1536^2 arms
+# failing to reproduce their published +32/+33. The target is nondeterministic,
+# which is exactly why the text arm and BOTH canvas arms are re-run inside THIS
+# job rather than paired across jobs.
+# ---------------------------------------------------------------------------
+#
+# ⚠️ STAGE-1 ANCHORS BELOW ARE PLACEHOLDERS UNTIL STAGE 1 RUNS. Fill them from
+# the three dirs stage 1 writes, and read the arm identity from each dir's
+# `results_history[*].<leaf>.config.repeats` — NEVER from the path, which ends
+# in `non_llm_context_pad` for all three and differs only by timestamp+rand.
+# Reading the arm off the last path component is the substring bug that has bitten
+# this paper three times.
+#
+# JUDGE pinned to gpt-5-mini + jbb_refusal — the same instrument as every other
+# benign-refusal number in AS-2, so these cells are reportable without a rejudge.
+#
+# COST: target self-served on our own GPUs = $0. Judge only: 7 cells x 100
+# prompts = ~700 gpt-5-mini refusal calls, ~$0.7. An ESTIMATE, not a measurement.
+#
+# SUBMIT (xc):
+#   ssh xc 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_xc.sbatch image_presence_threshold/token_budget_control_stage2'
+
+num_main_job_threads: 4
+num_cluster_jobs: 2          # orchestrator + 1 vLLM server (one target).
+
+# --- text baseline: the canonical no-image, no-padding arm -----------------
+_text:   &text   outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/non_llm_baseline
+
+# --- IMAGE ladder: reused verbatim from property_ablation_ow_stage2 --------
+#     (byte-identity to AICR's originals was proven by sha256 at that round)
+_b256:   &b256   outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_024745_58574532/ir_blank
+_b512:   &b512   outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_024745_46952977/ir_blank
+_b1536:  &b1536  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_024745_86212350/ir_blank
+
+# --- TEXT ladder: FILL FROM STAGE 1 ---------------------------------------
+_pad64:   &pad64   FILL_FROM_STAGE1_repeats3
+_pad274:  &pad274  FILL_FROM_STAGE1_repeats13
+_pad2311: &pad2311 FILL_FROM_STAGE1_repeats110
+
+_b: &b
+  mode: defense+evaluate
+  defense: no_defense
+  target_model: qwen3_vl_8b_instruct
+  prompt_range: [0, 99]
+  benchmark: jailbreakbench_benign
+  judge_method: jbb_refusal
+  judge_model: gpt-5-mini
+  campaign: paper_b_token_budget_control
+
+tasks:
+  - {<<: *b, source_transform_subdir: *text}      # baseline, 0 extra tokens
+  - {<<: *b, source_transform_subdir: *b256}      # image,   64 tok
+  - {<<: *b, source_transform_subdir: *b512}      # image,  256 tok
+  - {<<: *b, source_transform_subdir: *b1536}     # image, 2304 tok
+  - {<<: *b, source_transform_subdir: *pad64}     # text,    64 tok
+  - {<<: *b, source_transform_subdir: *pad274}    # text,   274 tok
+  - {<<: *b, source_transform_subdir: *pad2311}   # text,  2311 tok

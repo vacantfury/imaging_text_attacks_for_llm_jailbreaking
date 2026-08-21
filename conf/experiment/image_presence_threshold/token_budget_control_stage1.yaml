@@ -1,0 +1,76 @@
+# Paper B (AS-2) · TOKEN-BUDGET CONTROL — STAGE 1 (render the padded text arms)
+#
+# WHY THIS ROUND EXISTS. AS-2's leg 1 is that the shift "varies with canvas
+# colour and pixel count" — pixel count resting on the open-checkpoint result
+# 256^2 vs 1536^2, 18 flips to refusal against 2, p=0.0004 (tab:owprops). There
+# is an alternative reading the paper never addresses: a bigger canvas is more
+# VISUAL TOKENS, so "refusal rises with image size" is exactly the signature of
+# a plain context-length effect, which would be about the size of the input and
+# not about modality at all.
+#
+# The paper's existing zero-image refutation does NOT cover this. The placebo
+# ladder (+25pp with nothing attached) runs on `gemini-2.5-flash` — the one
+# model where the blank canvas does nothing (14 vs 15, n.s.). So on the very
+# checkpoint where the size result lives, context length is unrefuted.
+#
+# MEASURED BUDGETS (qwen3-vl-8b-instruct's own image processor, patch 16,
+# merge 2 — read off `image_grid_thw`, not computed from a formula):
+#     256^2  ->    64 visual tokens
+#     512^2  ->   256 visual tokens
+#     1536^2 ->  2304 visual tokens          (a 36x span)
+#
+# THIS STAGE renders the matched TEXT arms: neutral filler prepended to the same
+# canonical request set, no image anywhere. Repeat counts were solved against
+# the target's own tokenizer so each arm MEETS OR EXCEEDS its canvas budget —
+# overshooting deliberately, because a null result is only strong if the text
+# arm was not handed less context than the image arm:
+#     repeats=3   ->   64 tokens  (== 256^2's 64, exact)
+#     repeats=13  ->  274 tokens  (>= 512^2's 256)
+#     repeats=110 -> 2311 tokens  (>= 1536^2's 2304)
+#
+# THE FILLER NAMES NO MODALITY, BY CONSTRUCTION AND BY ASSERTION. It says
+# nothing about images, files or attachments, and makes no meta-claim about
+# carrying no information; `ContextPadEncoder` raises at construction if the
+# filler contains any attachment word. This matters because AS-2 already shows
+# that ASSERTING an attachment is itself worth +25pp with nothing attached —
+# filler that mentioned one would re-run that manipulation instead of this one.
+# It is also byte-identical across all 100 prompts, exactly like the canvas.
+#
+# COST: $0. Three non-LLM renders x 100 prompts, no target, no judge.
+#
+# SUBMIT (xc):
+#   ssh xc 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_xc.sbatch image_presence_threshold/token_budget_control_stage1'
+
+num_main_job_threads: 3
+
+# The sweep's canonical text channel — the SAME dir the blank-canvas arms and
+# the hosted rows chained off, so the padded arms slot beside them rather than
+# forming an island. Verified present on xc before writing this file.
+_source: &src outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/non_llm_baseline
+
+_base: &base
+  mode: prompt_transform
+  source_transform_subdir: *src
+  benchmark: jailbreakbench_benign
+  prompt_range: [0, 99]
+  campaign: paper_b_token_budget_control
+
+tasks:
+  # --- matched to 256^2 (64 visual tokens) ------------------------------
+  - <<: *base
+    transformation_list:
+      - type: non_llm_context_pad
+        params: {repeats: 3}
+
+  # --- matched to 512^2 (256 visual tokens) -----------------------------
+  - <<: *base
+    transformation_list:
+      - type: non_llm_context_pad
+        params: {repeats: 13}
+
+  # --- matched to 1536^2 (2304 visual tokens) ---------------------------
+  - <<: *base
+    transformation_list:
+      - type: non_llm_context_pad
+        params: {repeats: 110}
