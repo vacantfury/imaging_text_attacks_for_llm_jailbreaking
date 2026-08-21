@@ -14,8 +14,17 @@
 #
 # Budgets were MEASURED, not derived: the canvas counts are read off the
 # model's own `image_grid_thw` (patch 16, merge 2); the filler counts are its
-# own tokenizer (64 / 274 / 2311, each >= its canvas pair — the text arms are
-# never handed LESS context than the image arms they answer).
+# own tokenizer, measured on the ACTUAL rendered prompts after stage 1 ran —
+# 63 / 273 / 2310, against canvas budgets of 64 / 256 / 2304.
+#
+# ⚠️ ONE ARM IS 1 TOKEN SHORT, recorded rather than hidden. Pre-render this
+# header predicted 64/274/2311; the encoder `.strip()`s the filler block, which
+# drops the trailing space and costs exactly one token per arm. So the smallest
+# text arm carries 63 tokens against the 256^2 canvas's 64 — a 1.6% shortfall,
+# corrected here BEFORE any outcome data existed (stage 1 renders only; stage 2
+# had not run). It is immaterial and was not re-rendered, because chasing one
+# token is noise: the arm that decides this experiment is the largest, and there
+# the text arm carries 2310 against the canvas's 2304, i.e. MORE context.
 #
 # ---------------------------------------------------------------------------
 # PRE-REGISTERED READ-OUT — committed and pushed BEFORE collection.
@@ -49,12 +58,14 @@
 # job rather than paired across jobs.
 # ---------------------------------------------------------------------------
 #
-# ⚠️ STAGE-1 ANCHORS BELOW ARE PLACEHOLDERS UNTIL STAGE 1 RUNS. Fill them from
-# the three dirs stage 1 writes, and read the arm identity from each dir's
-# `results_history[*].<leaf>.config.repeats` — NEVER from the path, which ends
-# in `non_llm_context_pad` for all three and differs only by timestamp+rand.
-# Reading the arm off the last path component is the substring bug that has bitten
-# this paper three times.
+# STAGE-1 ANCHORS FILLED 2026-08-21 (job 285, 3/3 rendered, 300 prompts, $0).
+# The three dirs share the timestamp `20260821_074242` and differ ONLY by the
+# random suffix, so arm identity was read from each dir's
+# `results_history[*].non_llm_context_pad.config.repeats` — never from the path,
+# which ends in `non_llm_context_pad` for all three. Reading the arm off the last
+# path component is the substring bug that has bitten this paper three times.
+# Verified per arm: repeats=3 -> 63 filler tokens, 13 -> 273, 110 -> 2310, n=100
+# each, filler byte-identical across all 100 prompts within an arm.
 #
 # JUDGE pinned to gpt-5-mini + jbb_refusal — the same instrument as every other
 # benign-refusal number in AS-2, so these cells are reportable without a rejudge.
@@ -79,9 +90,9 @@ _b512:   &b512   outputs/image_presence_threshold/prompt_transform/jailbreakbenc
 _b1536:  &b1536  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260808_024745_86212350/ir_blank
 
 # --- TEXT ladder: FILL FROM STAGE 1 ---------------------------------------
-_pad64:   &pad64   FILL_FROM_STAGE1_repeats3
-_pad274:  &pad274  FILL_FROM_STAGE1_repeats13
-_pad2311: &pad2311 FILL_FROM_STAGE1_repeats110
+_pad63:   &pad63   outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_non_llm_context_pad_20260821_074242_187867/non_llm_context_pad
+_pad273:  &pad273  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_non_llm_context_pad_20260821_074242_80987771/non_llm_context_pad
+_pad2310: &pad2310 outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_non_llm_context_pad_20260821_074242_67787560/non_llm_context_pad
 
 _b: &b
   mode: defense+evaluate
@@ -98,6 +109,6 @@ tasks:
   - {<<: *b, source_transform_subdir: *b256}      # image,   64 tok
   - {<<: *b, source_transform_subdir: *b512}      # image,  256 tok
   - {<<: *b, source_transform_subdir: *b1536}     # image, 2304 tok
-  - {<<: *b, source_transform_subdir: *pad64}     # text,    64 tok
-  - {<<: *b, source_transform_subdir: *pad274}    # text,   274 tok
-  - {<<: *b, source_transform_subdir: *pad2311}   # text,  2311 tok
+  - {<<: *b, source_transform_subdir: *pad63}     # text,    63 tok (vs 256^2's 64)
+  - {<<: *b, source_transform_subdir: *pad273}    # text,   273 tok (vs 512^2's 256)
+  - {<<: *b, source_transform_subdir: *pad2310}   # text,  2310 tok (vs 1536^2's 2304)
