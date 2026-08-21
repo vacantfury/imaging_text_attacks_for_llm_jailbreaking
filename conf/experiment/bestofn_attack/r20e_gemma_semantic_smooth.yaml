@@ -1,0 +1,62 @@
+# bestofn_attack AS-4 — R20: re-run of the R19 cells that never produced data.
+#
+# R19 (AICR chain 337164-337172, 2026-08-11..14) landed 16 clean cells of 34. This preset
+# re-runs part of the missing 14. NOTHING here is a new measurement: same post-fix transform
+# (code_attack_20260805_212854_26701649), same campaigns, same cells.
+#
+# ── WHY R19 LOST THESE (diagnosed 2026-08-21, not guessed) ──────────────────
+# Two independent infrastructure failures, neither in these presets:
+#  (1) TARGET server discovery failed for jobs 337165/337166 ("All 3 server job(s) for
+#      <model> failed during discovery", 7 min and 5 min in). Both started on
+#      --dependency=afterany the instant 337164 was CANCELLED at its 24h wall, while that
+#      job's vLLM servers were still holding the per-user GPU allocation. A job that
+#      TIMES OUT does not tear its servers down cleanly the way a completing job does.
+#      => Mitigation: do not chain onto a job that can time out. Cell counts here are
+#         sized so each job finishes well inside the wall (r19d ran the same six qwen
+#         defenses in 3h13).
+#  (2) The cluster-served wildguard JUDGE hit rtx-devel's hard 4h cap mid-round
+#      (vllm_wildguard 337173/351969/354233/357688 all show TIMEOUT at 04:00:1x). Every
+#      R19 job under 4h completed clean; every job over 4h lost its judge. That routing is
+#      deliberate (conf/llm/wildguard.yaml: rtx-devel to escape the rtx-batch queue) and
+#      assumes rounds are CHUNKED to fit 4h -- R19 bundled 4-6 cells per job instead.
+#      => Mitigation: src/experiment/task.py now degrades a vanished judge to
+#         status="partial_judge" with raw_results.jsonl intact, so a judge death costs a
+#         free rejudge instead of the whole cell.
+#
+# ── SCOPE: 1 cell ──────────────────────────────────────────────────────────
+# One SemanticSmooth cell (r19g/h/i, jobs 337170-337172, 0 cells produced).
+# ⚠️ These are the round's most expensive cells and the ones R19 wasted worst: the llama
+# cell completed 100,000 target calls (~14h of generation, verified in the vLLM server log)
+# and was then discarded whole because the judge had died. The task.py fix above is what
+# makes that recoverable rather than fatal.
+#
+# ── ONE REPLICA, DELIBERATELY (changed from r19g/h/i) ──────────────────────
+# num_cluster_jobs 5 -> 3 (orchestrator + 1 target + 1 guard). Endpoint binding is
+# PER-TASK, so a single-task job can only ever use ONE replica: in R19's llama SS run
+# replica i1 served all 100,000 completions while i2 and the base replica served ZERO.
+# Requesting 3 replicas bought nothing and held GPUs that the next chained job then could
+# not get. This is not a throughput cut -- it is dropping two idle servers.
+num_main_job_threads: 1
+num_cluster_jobs: 3
+_E:
+  mode: defense+evaluate
+  target_model: gemma2_9b_it
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+_CODE: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+tasks:
+- mode: defense+evaluate
+  target_model: gemma2_9b_it
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  target_model_config:
+    temperature: 1.0
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  defense: semantic_smooth
+  defense_config:
+    n_copies: 5
+    perturbation_model: null
+    judge_model: wildguard
+  campaign: bestofn_attack_r19_p2_main
