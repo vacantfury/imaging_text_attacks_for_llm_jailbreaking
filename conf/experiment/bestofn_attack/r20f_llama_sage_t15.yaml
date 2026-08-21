@@ -1,0 +1,40 @@
+# bestofn_attack AS-4 — R20f: the ONE cell job 442875 could not finish.
+#
+# sage @ temperature 1.5, campaign r19_p3_review1. Its T=0.5 twin landed long ago
+# (asr 3.33); this completes that pair, and it is the last non-SemanticSmooth cell of the 34.
+#
+# ── WHY IT DID NOT FINISH IN 442875 ────────────────────────────────────────
+# Not stuck -- too slow to beat the 24h wall. Measured live at 16h elapsed: ~400 responses/hr,
+# ~41% done, ~15h of work left against ~8h of wall. 442875 was cancelled rather than left to
+# time out, because a timeout writes NOTHING for the in-flight cell and would also have held
+# the SemanticSmooth chain 8 more hours. Its other six cells were already on disk and are
+# unaffected.
+#
+# ── WHY THIS CELL IS ~10x SLOWER THAN ITS TWIN ─────────────────────────────
+# Temperature 1.5. At 744 tok/s and ~400 responses/hr that is ~6,700 tokens per response:
+# at high temperature the model rambles to the token cap instead of stopping. The cell is
+# intrinsically long, so it gets its own job rather than sharing one.
+#
+# ── THROUGHPUT FIX (2026-08-21) ────────────────────────────────────────────
+# target_model_config.max_concurrency raised 20 -> 64. Measured on job 442875: the vLLM
+# engine reported "Running: 20 reqs, Waiting: 0 reqs" while sustaining only ~744 tok/s --
+# the SERVER was never saturated, the client-side asyncio semaphore
+# (conf/llm/default.yaml: max_concurrency 20) was starving it. Combined with per-TASK
+# endpoint binding (a single-task job can only use ONE replica, so extra replicas do not
+# help a slow cell), that is why R19's SemanticSmooth cells took 9-15h.
+# Raised to 64, not higher, deliberately: the recurring failure in this round is servers
+# dying, and this round is not the place to find the saturation point.
+num_cluster_jobs: 3
+num_main_job_threads: 1
+tasks:
+- mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  target_model_config:
+    temperature: 1.5
+    max_concurrency: 64
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  defense: sage
+  campaign: bestofn_attack_r19_p3_review1

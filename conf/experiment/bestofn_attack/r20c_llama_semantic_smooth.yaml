@@ -37,6 +37,17 @@
 # Requesting 3 replicas bought nothing and held GPUs that the next chained job then could
 # not get. This is not a throughput cut -- it is dropping two idle servers.
 num_main_job_threads: 1
+#
+# ── THROUGHPUT FIX (2026-08-21) ────────────────────────────────────────────
+# target_model_config.max_concurrency raised 20 -> 64. Measured on job 442875: the vLLM
+# engine reported "Running: 20 reqs, Waiting: 0 reqs" while sustaining only ~744 tok/s --
+# the SERVER was never saturated, the client-side asyncio semaphore
+# (conf/llm/default.yaml: max_concurrency 20) was starving it. Combined with per-TASK
+# endpoint binding (a single-task job can only use ONE replica, so extra replicas do not
+# help a slow cell), that is why R19's SemanticSmooth cells took 9-15h.
+# Raised to 64, not higher, deliberately: the recurring failure in this round is servers
+# dying, and this round is not the place to find the saturation point.
+num_main_job_threads: 1
 num_cluster_jobs: 3
 _E:
   mode: defense+evaluate
@@ -53,6 +64,7 @@ tasks:
   benchmark: harmbench
   target_model_config:
     temperature: 1.0
+    max_concurrency: 64
   source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
   defense: semantic_smooth
   defense_config:
