@@ -153,3 +153,6 @@ NOW.md
 
 # task-estate store + operational state (personal data — never committed; task-estate refactor 2026-08-04)
 /state/
+
+# Private always-loaded law (owner standing orders) — never committed
+CLAUDE.local.md
