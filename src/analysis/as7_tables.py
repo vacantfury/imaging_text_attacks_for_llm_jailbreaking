@@ -89,6 +89,10 @@ CAMPAIGNS = ("as7_protocol_grant", "as7_channel_asr", "paper_b_guard_channel",
 # blocking everything is the failure signature.
 BENIGN_CAMPAIGNS = ("as7_benign_channel", "as7_guard_router_benign")
 
+# Defenses whose block counts the paper prints as BARE integers rather than the
+# "N/100" form (tab:router). verify() must token-match these, not literal-match.
+_BARE_COUNT_DEFENSES = ("guard_router",)
+
 OUTPUT_GLOBS = (
     "outputs/defense_read_access/defense+evaluate/*/*/results.json",
     "outputs/image_presence_threshold/defense+evaluate/*/*/results.json",
@@ -481,6 +485,18 @@ def verify(numbers: dict, tex_path: str) -> list[str]:
                 blk = f"{c['blocked']}/{c['n']}"
                 if blk not in tex:
                     missing.append(f"benign block rate {blk} absent from tex -- {tag}")
+            elif c["defense"] in _BARE_COUNT_DEFENSES:
+                # tab:router prints BARE counts ($79$), not the N/100 form, so the
+                # literal "79/100" check above would never match and the panel's
+                # headline numbers would ship unguarded. 2026-08-21: adding the
+                # router campaigns to CAMPAIGNS made these cells VISIBLE, which is
+                # necessary but not sufficient -- both block-rate clauses were also
+                # gated on defense == "guard_baseline", so the router's own block
+                # counts stayed unchecked. Token match, same strength as the ASR
+                # check: catch a measured value that moved and was never carried in.
+                blk = str(c["blocked"])
+                if not re.search(rf"(?<![0-9.]){re.escape(blk)}(?![0-9.])", tex):
+                    missing.append(f"benign block count {blk} absent from tex -- {tag}")
             continue
         if c["asr"] is None:
             continue
@@ -499,6 +515,10 @@ def verify(numbers: dict, tex_path: str) -> list[str]:
             blk = f"{c['blocked']}/{c['n']}"
             if blk not in tex:
                 missing.append(f"block rate {blk} absent from tex -- {tag}")
+        elif c["defense"] in _BARE_COUNT_DEFENSES:
+            blk = str(c["blocked"])
+            if not re.search(rf"(?<![0-9.]){re.escape(blk)}(?![0-9.])", tex):
+                missing.append(f"block count {blk} absent from tex -- {tag}")
     return missing
 
 
