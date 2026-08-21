@@ -558,11 +558,34 @@ def _run_defense_evaluate(task) -> dict[str, Any]:
     # keeps object references, so verdict columns still land back in all_rows.
     within_rows = [
         r for r in all_rows if r.is_within_maxlen and r.is_correctly_processed]
-    judged = _run_judging(
-        prompts=within, all_rows=within_rows, benchmark=benchmark,
-        judge_method_override=task.judge_method, stage_label=stage_label,
-        judge_model_override=task.judge_model,
-    )
+    # A judge failure must NEVER discard the target responses: generation is the
+    # expensive half of a cell (a 10k-draw SemanticSmooth cell is ~100k target
+    # calls / ~14h) while judging is minutes and re-runnable from disk via
+    # `mode: rejudge`. R19 lost three such cells outright (2026-08-12/13) when
+    # the cluster-served wildguard judge hit rtx-devel's hard 4h wall mid-round:
+    # acquire_endpoint() short-circuited with "All 1 server job(s) for
+    # allenai/wildguard failed during discovery", the exception escaped, and the
+    # output dirs were left EMPTY despite 100,000 completed target calls. Cells
+    # whose judge merely errored (rather than vanishing) already degraded to
+    # status="partial_judge" with responses intact and were rescued for free, so
+    # this makes the vanishing-judge path behave like the erroring-judge path.
+    # raw_results.jsonl is already on disk above; recording judge_errors here
+    # marks the cell partial_judge so the validity gate rejects it and a later
+    # rejudge can recover it.
+    try:
+        judged = _run_judging(
+            prompts=within, all_rows=within_rows, benchmark=benchmark,
+            judge_method_override=task.judge_method, stage_label=stage_label,
+            judge_model_override=task.judge_model,
+        )
+    except Exception as e:
+        logger.error(
+            f"Judging failed for {stage_label} — responses PRESERVED in "
+            f"{out_dir}/raw_results.jsonl; recover with `mode: rejudge` "
+            f"(responses_from: {out_dir}). Cause: {e}")
+        judged = {"asr": None, "refusal": None, "eval_stats": {},
+                  "judge_config_hash": None,
+                  "judge_errors": [f"judge unavailable: {e}"]}
     asr, refusal = judged["asr"], judged["refusal"]
     eval_stats, jhash, judge_errors = (
         judged["eval_stats"], judged["judge_config_hash"], judged["judge_errors"])
