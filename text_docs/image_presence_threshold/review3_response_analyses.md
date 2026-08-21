@@ -1029,3 +1029,56 @@ abstract alone.
 **Build after the fix:** 0 errors, 0 undefined refs, 0 overfull boxes, 20pp, from
 captured pdflatex stdout. `tex_stat_audit.py` re-run: CONSISTENT, 27/28 p-values and
 26/28 deltas checked (line 482 is the known CI-prose row).
+
+---
+
+## Review-4 lit round — all four verified, integrated (2026-08-21)
+
+Review 4 listed four references. The earlier lit round covered review 3's six; this list was
+never processed. **All four are real** (no hallucinated entry this time), but **two carried
+the wrong year in the review**, and both wrong in the same direction: the reviewer quoted the
+arXiv year for a paper that has since been published.
+
+| ref | reviewer said | VERIFIED | source of truth |
+|---|---|---|---|
+| `palaskar2026vlsu` VLSU | 2025 | **ICLR 2026** (arXiv 2510.18214) | Apple ML Research listing (authors' own institution) + `\iclrfinalcopy` in source. The arXiv Comments field still says "Under review" and is stale. |
+| `kim2025visualabsence` Visually Absent Tokens | 2025 | **EMNLP 2025**, pp. 21535--21557 (arXiv 2509.03025) | Semantic Scholar venue + page range |
+| `ren2026seeingthreat` Seeing the Threat | 2026 | **Human-Centric Intelligent Systems 6(2):208--218**, 2026-03-26, DOI `10.1007/s44230-026-00141-w` | Crossref API (Springer is auth-walled) |
+| `zhou2026visualignorance` Visual Ignorance | 2026 | **arXiv 2606.06890**, 2026-06-05, preprint | no acceptance record found; `\iclrfinalcopy` is set but that flag alone is not evidence (Gulati precedent), so it is staged conservatively as `@misc` |
+
+**A name trap worth recording.** "Seeing the Threat" is **Juan** Ren; `ren2025dualbench` already
+in the bib is **Kaixuan** Ren. Different people, shared coauthor (Usman Naseem). A key collision
+here would have merged two unrelated papers.
+
+**Scoop probe — mechanical, not asserted.** All four sources were grepped for
+`blank image|blank canvas|empty image|no-image|image presence|without an image`. **Zero hits in
+all four.** None manipulates image presence; every one holds an image present and varies its
+content. No scoop.
+
+**Where each landed.**
+- VLSU → taxonomy category (iv), plus the relation-to-(iv) passage, where it now carries the
+  same presence-vs-content argument that answers VSCBench: its $8{,}187$ samples all pair text
+  with a real image, so its axis is what the image *shows*. This is the reference most likely
+  to be thrown at us as "already done", and it is now pre-answered in the paper.
+- Kim (VA neurons) + Zhou (visual ignorance) → a new mechanism paragraph, explicitly labelled
+  hypotheses rather than explanations since neither studies safety. The framing they buy is
+  sharp: **content is frequently ignored, presence is not.** Kim is the closer cousin --- models
+  treat a text concept with no visual evidence as present, which is our placebo channel's shape.
+- Ren → the pixtral sign-inversion paragraph, as independent evidence that visual input moves
+  safety in both directions, plus an honest note that their direct/soft/partial refusal taxonomy
+  is finer than our binary classifier.
+
+**One more overclaim found and fixed while placing them.** §4.2 said the refusal anchor's
+$49$/$51$ text/image split *is* "the attachment manipulation itself", four sentences before the
+scope note admitting those labels come from a neighbouring manipulation with a payload image.
+Same failure shape as the carrier residue above: strong claim early, caveat late. Now reads "an
+attachment contrast, though not this paper's blank-canvas one (scope note below)".
+
+**Build:** 0 errors, 0 undefined refs, 0 overfull boxes, 21pp. All four keys resolve in the
+compiled PDF. `tex_stat_audit.py` CONSISTENT.
+
+**Downloads:** PDF + arXiv source in science `literature/llm-security/papers/{vlsu-joint-multimodal-safety,
+visually-absent-tokens, seeing-the-threat-vlm-adversarial, diagnosing-visual-ignorance}/`.
+Entries added to the science master `references.bib` (411 -> 415) and the paper's
+self-contained `paper.bib` (58 -> 62). No CANDIDATE markers: verification is complete for all
+four, with Zhou's venue deliberately left as a preprint rather than guessed.
