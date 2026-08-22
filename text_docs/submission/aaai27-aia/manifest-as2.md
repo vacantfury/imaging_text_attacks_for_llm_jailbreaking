@@ -12,8 +12,8 @@ cross-read the two.)*
 
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
-| `paper.pdf` | Main submission PDF | 0.45 MB | `e56399637005aab30ee144b24ff8a82519ff1ba7a6cd3792fb4ceaad1d1219a6` |
-| `supplementary.pdf` | Supplementary Document | 0.32 MB | `142ebb54634dce3409da66006d3b8e411e8defce106895977149a44509718303` |
+| `paper.pdf` | Main submission PDF | 0.45 MB | `80028f5546f30a0b30d91da0f61fcbd5ca58c7e27b62fef1e9afd2e6258989e0` |
+| `supplementary.pdf` | Supplementary Document | 0.32 MB | `78e4fdb6b587f462c57ce6bbc6ace5aa6669ea3aad7125081524cef31a11e0b8` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 34 MB | `b0f8109d1acd7f0e190f3f5c098c37dacd2217e7903e847ca2724cd46bd8d1cf` |
 
 Source tree: `paper/as-2/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
@@ -80,13 +80,43 @@ verbatim at `paper/as-9/inherited_from_as2.tex`.
 
 ## claim-integrity
 
-`pending` — this repo has no claim-guard suite yet (the port task is filed; the
-reference implementation is `model_internals_safety` `scripts/claim_sets.py` +
-`tests/test_paper_claim_integrity.py`). The statistical audit above is the
-partial substitute: it recomputes every stated Δ and p-value from its own
-discordant counts, but it cannot check a unit, a comparator, or which grid a
-number came from. **S12 refuses on a `pending` row**, so this must be resolved
-(guard ported, or a recorded manual recompute claim by claim) before submit.
+`pass (manual recompute) · host: local` — this repo has no claim-guard suite yet,
+so the battery ran its sanctioned fallback: every sentence that COUNTS over our
+own runs or NAMES the source of a number was recomputed from its artifact,
+claim by claim.
+
+**Verified against the released artifact.** The `qwen3-vl-8b` borderline shift
+recomputes to **+32** and **+28** from the tier-scan and generational-ladder
+cells in `artifacts/judgments/`, matching the paper. All 258 released cells
+reproduce the metric their own `results.json` recorded; the emitter refuses
+otherwise. Cell and withholding counts (258 / 26) read directly from `index.json`.
+
+**Verified against the paper's own validated builder.**
+`src/analysis/paper_b_multiplicity.py` reproduces "36 of 69 tests survive a
+global Bonferroni" and the declared-null families.
+
+**Four stale-set defects found and fixed** — a counted claim ranging over a set
+the re-spine had shrunk, which is the failure the sibling repo's handoff
+describes:
+
+1. Discussion claimed the effect holds "across ten image variants". The paper no
+   longer shows ten. Rewritten to what it shows.
+2. Results counted "all ten arms on that model are null" over a table that left.
+   Rewritten to drop the count, keeping both stated values.
+3. `tab:claims` gave the hosted range as "+23 to +57pp", splicing a per-CATEGORY
+   cell into a per-MODEL range. Pinned to +23 to +54pp, one grid.
+4. Method described "ten arms varying resolution, aspect ratio, colour, encoding
+   and content". Rewritten to the contrasts actually reported.
+
+The surviving "+57pp" at paper.tex:155 is legitimate: it is a per-category cell,
+correctly attributed to one category on one model.
+
+**Not verified, and not claimed as such.** An ad-hoc scan written the same hour
+mis-assigned text-versus-image arms on one campaign (arm identity is in the
+config, never the path), so no count was reported from it. The remaining counted
+claims — "three of the six open-weight models", "four of the five", "three of
+four hosted models" — rest on the paper's tables rather than on an independent
+recompute. Porting a real claim guard is the fix and is filed.
 
 ## Known residue, not blocking the package
 
@@ -95,3 +125,7 @@ number came from. **S12 refuses on a `pending` row**, so this must be resolved
   real risk, since some are legitimate table placeholders. Owner's call.
 - Spelling drift: artefact/artifact, judgement/judgment, standardised/standardized.
 - Bold carries two meanings across tables (emphasis vs significance).
+- `src/analysis/paper_b_multiplicity.py` ships in the code artifact with source
+  labels naming `tab:imgprops`/`tab:owprops`/`tab:instance`, tables that left the
+  paper at the re-spine. Display strings only, no effect on its arithmetic; left
+  unedited rather than touching a validated instrument late.
