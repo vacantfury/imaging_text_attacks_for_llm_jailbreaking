@@ -53,10 +53,10 @@ import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt, numpy as np
 from matplotlib.lines import Line2D
 OI = ['#E69F00','#56B4E9','#009E73','#F0E442','#0072B2','#D55E00','#CC79A7','#000000']
-FIGS = "paper/as-3/aaai_2027_main/aaai_main_latex/figs"
+FIGS = "paper/my_papers/as-3/aaai_2027_main/aaai_main_latex/figs"
 # The live submission is the AI-Alignment track version; figures must land in BOTH
 # trees or a regeneration silently updates only the retired main-track copy.
-FIGS_ALT = "paper/as-3/aaai_2027_ai_alignment/aaai_aia_latex/figs"
+FIGS_ALT = "paper/my_papers/as-3/aaai_2027_ai_alignment/aaai_aia_latex/figs"
 
 
 def save(fig, stem):

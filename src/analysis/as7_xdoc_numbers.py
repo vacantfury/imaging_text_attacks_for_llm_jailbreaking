@@ -42,7 +42,7 @@ import re
 import sys
 from pathlib import Path
 
-LATEX_DIR = Path("paper/as-7/aaai_2027_ai_alignment/aaai_aia_latex")
+LATEX_DIR = Path("paper/my_papers/as-7/aaai_2027_ai_alignment/aaai_aia_latex")
 MAIN = LATEX_DIR / "paper.tex"
 SUPP = LATEX_DIR / "supplementary.tex"
 

@@ -26,7 +26,7 @@ numbers printed in the paper are mutually consistent and that the p-values match
 their counts. A cell measured from the wrong output dir is consistent nonsense,
 and only provenance checks catch that.
 
-    python -m src.analysis.tex_stat_audit paper/as-2/.../paper.tex
+    python -m src.analysis.tex_stat_audit paper/my_papers/as-2/.../paper.tex
     python -m src.analysis.tex_stat_audit <tex> --n 100 --verbose
 """
 
