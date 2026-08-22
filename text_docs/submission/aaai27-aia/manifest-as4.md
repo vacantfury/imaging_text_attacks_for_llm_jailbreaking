@@ -6,11 +6,9 @@
 > press and all four matched this manifest, so what was uploaded is exactly what
 > is recorded here.
 >
-> As-pressed details not yet confirmed by the owner (he is the only observer of
-> the form): whether the AAAI main-track withdrawal was executed first, whether
-> the title/abstract were updated from the registered pair, and whether the form
-> carried a reproducibility-checklist slot. The last one is the standing
-> UNVERIFIED row in the packaging table below; his answer closes it.
+> Filed complete: main-track withdrawal, the updated title/abstract, all four
+> uploads including the reproducibility checklist. Nothing about this filing is
+> outstanding.
 
 Built 2026-08-22, after the main/supplementary split. This file is the package's
 identity: the submit step uploads exactly these files, and **any edit to a listed
@@ -57,7 +55,7 @@ rebuildable; it is not the AIA one.
 | Main submission must be self-contained; reviewers are not obliged to consult supplementary | same | 2026-08-21, cached |
 | Reproducibility checklist is allowed beyond the main PDF | AAAI-27 Format section | 2026-08-21, cached |
 | No repo link in the PDF (AAAI bans anonymous-repo links; code ships as the zip) | project policy + venue record | swept 2026-08-22: 0 URLs in either document |
-| **Whether the AIA OpenReview form has a checklist slot** | not established | ⚠️ **UNVERIFIED.** The checklist is built and ready either way; AS-2's package does not carry one. Walk the form at submit time and upload it if there is a slot. |
+| **Whether the AIA OpenReview form has a checklist slot** | the live AIA form | ✅ **VERIFIED 2026-08-22 at the AS-4 press — the slot EXISTS and the checklist was uploaded.** Settled for the venue; build and upload one for any AIA filing. Do not re-ask. ⚠️ This row should never have read UNVERIFIED: `manifest-as2.md` in this same directory already recorded the checklist as REQUIRED with a designated form field, quoted from the live AAAI-27 submission instructions, on this same day. Read the sibling manifests before flagging a venue fact as unknown. |
 | **Supplementary file-size cap** | not stated on the instructions page | ⚠️ **UNVERIFIED**, same as AS-2's manifest records. 9.3 MB is small enough that this is unlikely to bind. |
 
 ## What the split changed
