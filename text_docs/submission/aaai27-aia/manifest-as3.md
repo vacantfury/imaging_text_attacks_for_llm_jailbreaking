@@ -4,12 +4,20 @@ Built 2026-08-22. This file is the package's identity: the upload step sends
 exactly these files. **Any edit to a listed file invalidates this manifest** —
 rebuild that artifact and re-hash.
 
+⚠️ **A rebuild alone invalidates the two PDF hashes, with no edit at all.**
+`pdflatex` embeds a build timestamp, so `./build.sh` produces a byte-different
+PDF every run (verified 2026-08-22: the same source rebuilt to a different
+digest). These hashes therefore identify one specific build, which is the one
+sitting on disk now. If you rebuild before uploading, re-hash. The ZIP is
+unaffected: `zip -X` strips extra attributes and the builder is deterministic
+over an unchanged tree.
+
 ## The upload set
 
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
-| `paper.pdf` | Main submission PDF | 0.47 MB | `18f3fca12d1a180d7ac4b0ba397ce42acb69f4e6c71ed3bd294814dc609550cb` |
-| `supplementary.pdf` | Supplementary Document | 0.60 MB | `3f0d6d29ea6ec50fbb8c12139a3e49134951c5b8d73dbe4fbe219b642a5fc963` |
+| `paper.pdf` | Main submission PDF | 0.47 MB | `5078754f5549ba345553b4c5c037694dc2beb36062f838ade2dc39294f9dd9a7` |
+| `supplementary.pdf` | Supplementary Document | 0.60 MB | `0eaf23e23078e2fe3a1929d86e49317ea99d72b80738a370eb7491e5b5b949f5` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 6.62 MB | `1435d4c19b1088cd5a0b4aa64468c9fe8098196a5ed62b4d7bb850d4860f8906` |
 | `ReproducibilityChecklist/ReproducibilityChecklist.pdf` | Reproducibility checklist | 78 KB | `8f61db3987f514eea00939b2b037e6d9bbe967d04bff3d011b85af9b175dbbd8` |
 
