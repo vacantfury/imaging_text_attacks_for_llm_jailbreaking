@@ -161,6 +161,10 @@ PAPER_CLAIMS = {
     'mc_sole_code':    (18, 27),   # "CodeAttack is the sole breaker of 18-27%"
     'mc_sole_distr':   (6, 13),    # "distraction of 6-13%"
     'mc_sole_other_max': 6,        # "no other attack exceeds 6% in any cell"
+    # "a 3.3--4.7x gap between the two (mean 3.9 over the undefended floor and the ten
+    # guard-alone cells)" -- this one spans BOTH targets, so it is checked separately below.
+    'floor_gb_understate': (3.3, 4.7),
+    'floor_gb_understate_mean': 3.9,
 }
 
 
@@ -193,6 +197,32 @@ def verify():
           f'data says {other:.0f}')
     if not ok:
         fails.append(f'mc_sole_other_max: paper <={cap}, data {other:.0f}')
+
+    # The floor+guard-alone understatement range is stated over BOTH targets, so it needs a
+    # second pass with TARGET re-pointed. Verified 2026-08-21: 3.30-4.71, mean 3.93.
+    global TARGET
+    keep = TARGET
+    cells = []
+    try:
+        for tgt in ('qwen2_5_vl_7b', 'internvl3_8b'):
+            TARGET = tgt
+            s = select_cells()
+            cells.append(decomp(s, 'floor', 'none', f'{tgt} floor', quiet=True))
+            cells += [decomp(s, 'gb', g, f'{tgt} {g}', quiet=True) for g in GUARDS]
+    finally:
+        TARGET = keep
+    u = [c['understate'] for c in cells]
+    lo, hi, mean = min(u), max(u), sum(u) / len(u)
+    want_lo, want_hi = PAPER_CLAIMS['floor_gb_understate']
+    want_mean = PAPER_CLAIMS['floor_gb_understate_mean']
+    ok = (round(lo, 1) == want_lo and round(hi, 1) == want_hi
+          and round(mean, 1) == want_mean and len(cells) == 12)
+    print(f"  {'OK  ' if ok else 'FAIL'}  {'floor_gb_understate':<20} "
+          f'paper says {want_lo}-{want_hi} m{want_mean}  '
+          f'data says {lo:.1f}-{hi:.1f} m{mean:.1f} over {len(cells)} cells (both targets)')
+    if not ok:
+        fails.append(f'floor_gb_understate: paper {want_lo}-{want_hi} mean {want_mean}, '
+                     f'data {lo:.2f}-{hi:.2f} mean {mean:.2f} over {len(cells)} cells')
 
     print()
     if fails:
