@@ -245,6 +245,68 @@ test and was skipped. An earlier `diff` of emit output reported "IDENTICAL" whil
 comparing two empty files, because the subcommand had failed with rc=2. Both are
 the empty-check trap. Any such check must print its denominator.
 
+## Review-5 con 5: benign traffic that looks encoded (2026-08-22)
+
+Every benign number in the paper was measured on unencoded prose, while both
+recommended deployments key on encoding-shaped input. The reviewer asked us to
+measure it rather than concede it in Limitations.
+
+**Collected.** The same 100 JailbreakBench-benign prompts pushed through the
+three attack carriers with the same encoder as the harmful grid, plus a matched
+unencoded control that had to be built (the guard benign numbers are on ORBench,
+a different prompt set, and the one stored plain cell covered 20 prompts). Three
+guards x four arms = 12 cells, paired per prompt over shared ids.
+
+**Result.** Eleven of the twelve contrasts move DOWN: encoding a benign request
+makes every guard LESS likely to block it, by 20 to 49 points, all at p<1e-5.
+The single exception is the largest effect in the table, llama-guard-3-8b on the
+code carrier, 23/100 to 69/100. Our pre-registered prediction said the rate would
+rise; it rose on one cell of twelve and fell on the rest. The prediction is
+reported as half wrong rather than quietly restated.
+
+**Why it strengthens the paper.** For wildguard, the one guard with harmful
+counterparts on the same carriers, discrimination falls from +54 unencoded to
++19 on code and +25 on formal logic. The encoding does not merely slip a harmful
+payload past the gate; it degrades the gate's ability to separate harmful from
+benign at all, because the verdict tracks surface form rather than the request.
+A deployer cannot recover the coverage by tightening the gate: on the code
+carrier that setting costs 69 false positives per 100 benign requests while
+still admitting most harmful ones.
+
+**Two limits stated in the paper, not only here.** The unencoded column is not a
+cross-guard calibration figure, because JailbreakBench-benign is built as benign
+counterparts of harmful behaviours and is topically adjacent to them; the paired
+within-row deltas are the reported quantity. Discrimination is unpaired, since
+harmful and benign are different prompt sets, so no McNemar is reported for it,
+exactly as `tab:discrim` already does.
+
+**The refusal judge failed on all twelve cells** with `400 - can only
+concatenate str (not "list") to str`: InternVL3-8B serves as a target but not as
+this refusal judge. The headline is untouched, by design rather than by luck,
+because a block rate is an exact match on the canned refusal string in the
+stored response and never touches a judge; the preset header declared the judge
+non-load-bearing before the run. The harness flagged the failure and marked
+`refusal_rate` as not-a-measurement instead of shipping the fabricated 0.00%.
+Residue: the secondary read-out, whether the TARGET over-refuses what the guard
+passed, is unmeasured and recoverable by a rejudge at zero target cost.
+
+**A near-miss worth recording.** The first block count searched for a canned
+refusal string that appears nowhere in the data, matched nothing, and read as
+"0/100 blocked, zero false positives". The true value for that cell is 69/100.
+The committed analyzer now imports `GUARD_REFUSAL_TEXT` rather than retyping it,
+and its docstring records both halves of the trap (a wrong string reads as zero;
+a prefix heuristic counts the target's own refusals as guard blocks).
+
+**Paper delta.** `tab:benigncarrier` plus three paragraphs in `sec:res-benign`,
+placed after the channel-routed-panel recommendation because they price that
+deployment. The Limitations sentence was narrowed rather than deleted: the gates
+are now measured, the detector of `sec:res-gated` is still evaluated on
+unencoded prose only, so its 0-1% false-positive rate is labelled a lower bound
+and its recall constraint is said to have a possible precision twin.
+
+**Analyzer.** `src/analysis/as7_benign_carriers.py`, stdlib-only, with a
+`selftest` carrying the published values as assertions (green, 12/12 cells).
+
 ## Known risks
 
 1. **The paper source has no version control.** `paper/` is gitignored, so
