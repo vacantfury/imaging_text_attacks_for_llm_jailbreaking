@@ -23,10 +23,19 @@ WildGuard rejudge cells exist (34) but are July cells on retired targets coverin
 they cannot serve this analysis; see `project_wildguard_invalid_as_asr_judge` for why WildGuard is
 not a valid ASR judge here in any case.
 
-INTEGRITY GATE (this one can fail, unlike a self-comparison):
-  A rejudge pair is admitted only if the two dirs carry the SAME prompt ids AND byte-identical
-  stored responses for every joined id. A pair whose responses differ is not a judge comparison at
-  all -- it is two different experiments -- and is dropped loudly with a reason.
+INTEGRITY GATES (these can fail, unlike a self-comparison). A pair is admitted only if:
+  (1) both dirs carry the SAME prompt ids AND byte-identical stored responses for every joined id
+      -- a pair whose responses differ is not a judge comparison, it is two different experiments;
+  (2) NEITHER dir reports `fallback_parse_count > 0` in eval_stats.
+
+  Gate (2) exists because of a judge-failure sign not in the known set: a cell where EVERY judge
+  call returned HTTP 400 still writes a clean-looking `results.json` -- `warnings: []`, a populated
+  `eval_stats`, `total_evaluated: 100`, and a plausible ASR -- because the parser silently falls
+  back to "no" on an unparseable response. The only trace is `fallback_parse_count`, which nothing
+  was checking. A fallback label is not a judgement, so a pair carrying any is not evidence about
+  judge agreement; it would show up as fake disagreement. Live-root census 2026-08-21:
+  gpt-5-mini 0/3276 cells affected (the paper's judge is clean, so no published number rides on
+  this), against wildguard 153/488, gpt-5-nano 123/868, harmbench_llama_2_13b_cls 12/18.
 
 Usage:
     python3 src/analysis/judge_disagreement.py            # paper targets, table + per-attack rows
@@ -59,6 +68,18 @@ def _load(path):
             return json.load(fh)
     except Exception:
         return None
+
+
+def _fallbacks(meta):
+    """Total fallback_parse_count across evaluators; > 0 means some labels are parser defaults."""
+    stats = meta.get("eval_stats") or {}
+    if not isinstance(stats, dict):
+        return 0
+    n = 0
+    for _, d in stats.items():
+        if isinstance(d, dict):
+            n += d.get("fallback_parse_count") or 0
+    return n
 
 
 def _rows(cell_dir):
@@ -106,6 +127,10 @@ def collect(all_targets=False):
         (cell_a, meta_a), (cell_b, meta_b) = judges[JUDGE_A], judges[JUDGE_B]
         tgt = meta_b.get("target_model")
         if not all_targets and tgt not in PAPER_TARGETS:
+            continue
+        fa, fb_ = _fallbacks(meta_a), _fallbacks(meta_b)
+        if fa or fb_:
+            dropped.append((src, f"parse fallbacks ({JUDGE_A}={fa}, {JUDGE_B}={fb_}) -- labels are parser defaults"))
             continue
         ra, rb = _rows(cell_a), _rows(cell_b)
         shared = set(ra) & set(rb)
