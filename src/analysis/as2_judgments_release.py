@@ -48,9 +48,21 @@ CAMPAIGNS = {
     "paper_b_threshold_shift_openweight",# tab:ow_threshold
     "paper_b_alignment_tier_scan",       # model-selection scan
     "paper_b_generational_ladder",       # within-family replication
-    "paper_b_harmful_ladder",            # tab:owladder
+    "paper_b_harmful_ladder",            # generational ladder, harmful rungs
+    "paper_b_exchange_rate_ow",          # tab:owladder -- the open checkpoint's own
+                                         # ladder plus its matched harmful rung. Also
+                                         # missing until 2026-08-22: the 2%% plain-harmful
+                                         # figure quoted in the abstract, intro, results
+                                         # and conclusion is computed from these cells.
     "paper_b_harmful_headroom",          # tab:headroom
     "paper_b_sign_inversion",            # the llava inversion
+    "paper_b_symmetry_test",             # tab:hostedharm -- the hosted models'
+                                         # harmful side. This campaign was MISSING
+                                         # from the release until 2026-08-22: the
+                                         # four contrasts it holds are half the
+                                         # paper's central price claim and the whole
+                                         # input to the break-even table, and they
+                                         # shipped in no table and no artifact.
     "paper_b_interleaved_confirm",       # randomised-interleaving control
 }
 
