@@ -1,0 +1,81 @@
+# AS-7 · BENIGN PROMPTS PUT THROUGH THE ATTACK CARRIERS — STAGE 1 (encode only).
+#
+# WHY THIS EXISTS — cspaper review 5, con 5 + Q4 (2026-08-21):
+#
+#   "Table 14 also evaluates benign prompts without the encoded transformations
+#    that are central to the harmful-side protocol question. This leaves open
+#    whether defenses over-refuse benign code-heavy, mathematical, multilingual,
+#    or encoding-like requests, precisely the population most likely to be
+#    affected by detection or routing policies."
+#   "...can the authors evaluate benign requests that resemble the code,
+#    formal-logic, and set-theory carriers? This would clarify whether the
+#    proposed detector-gated or channel-routed deployment has a utility cost
+#    exactly where it is intended to operate."
+#
+# The criticism is correct and it is the sharpest utility question the paper
+# has not answered. Every benign number we report (tab:refusal, tab:discrim)
+# is measured on UNENCODED benign text. But both deployments we recommend key
+# on encoding-shaped input:
+#   - the detector-gated pipeline fires when the input "looks encoded", and we
+#     report its benign FPR as 0-1% — measured on plain benign prose, which is
+#     the easiest possible negative. A benign request that genuinely looks like
+#     a code or math problem is the adversarial negative for that detector, and
+#     it is exactly the traffic a real deployment carries.
+#   - the channel-routed panel sends text-channel input to llama-guard-3, whose
+#     benign calibration is our stated reason for choosing it. That calibration
+#     is measured on ORBench prose, not on encoded-looking text.
+# So the honest reading is that our reported utility cost is a LOWER BOUND, and
+# this round measures how much lower.
+#
+# WHAT THIS STAGE DOES. Encode the 100 JailbreakBench-benign prompts through
+# the same three carriers the harmful side uses, with the same encoder model
+# (gpt-4.1-mini) and the same configs, so the only difference from the harmful
+# grid is the harmfulness of the underlying request. Nothing is evaluated here.
+#
+# STAGE 2 (separate preset, needs this stage's timestamped subdir):
+#   (a) detector FPR on each carrier — the number that decides whether the
+#       gated deployment is usable;
+#   (b) llama-guard-3 / guardreasoner-vl block rates on the encoded benign text,
+#       i.e. the channel-routed panel's cost on its own operating population.
+#
+# PRE-REGISTERED READ-OUT (before the data lands):
+#   EXPECTED  the detector's FPR rises well above the 0-1% we report on plain
+#             benign, because "looks encoded" is exactly what a benign
+#             code/math request looks like. If so, the paper states the gated
+#             deployment's cost honestly on the traffic it targets, and the
+#             "detector recall is the binding constraint" line gains a twin:
+#             detector PRECISION is a second binding constraint.
+#   SURPRISE  FPR stays near zero, meaning the detector separates benign
+#             code-shaped text from encoded attacks. That is a stronger result
+#             for the mitigation than anything currently in the paper, and it
+#             would be reported as such.
+#   Either branch is reportable. This round cannot embarrass the paper's
+#   THESIS, which is about attribution and read access, not about whether our
+#   own mitigation is cheap.
+#
+# COST: 200 gpt-4.1-mini encoder calls (formal_logic + set_theory over 100
+# prompts each); code_attack is a non-LLM template and costs nothing.
+#
+# SUBMIT (NURC):
+#   ssh explorer 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment.sbatch defense_read_access/benign_carriers_stage1'
+
+num_main_job_threads: 3
+num_cluster_jobs: 1          # orchestrator only — encoder is an API model
+
+_base: &b
+  mode: prompt_transform
+  source_file: data/jbb_benign_prompts.jsonl
+  prompt_range: [0, 99]
+  benchmark: jailbreakbench_benign
+  campaign: as7_benign_carriers
+
+tasks:
+  # code_attack is the non-LLM deque template — the carrier most likely to look
+  # like ordinary developer traffic, and therefore the hardest negative for a
+  # "does this look encoded" detector.
+  - {<<: *b, transformation_list: [{type: code_attack}]}
+
+  # The two LLM rewriters, same helper model as the harmful grid.
+  - {<<: *b, transformation_list: [{type: formal_logic, params: {model: gpt-4.1-mini}}]}
+  - {<<: *b, transformation_list: [{type: set_theory,   params: {model: gpt-4.1-mini}}]}
