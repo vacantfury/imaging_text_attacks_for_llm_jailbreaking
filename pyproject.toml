@@ -45,6 +45,7 @@ dependencies = [
     # check exists. Unpinned major: timm is a stable, widely-pinned-by-others
     # vision-backbone package and VisRAG-Ret's file does not constrain a version.
     "timm>=1.0,<2.0",
+    "sentencepiece>=0.2.2",
 ]
 
 
