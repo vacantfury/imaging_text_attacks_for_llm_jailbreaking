@@ -585,7 +585,19 @@ def verify(numbers: dict, tex_path: str) -> list[str]:
     with open(tex_path) as fh:
         tex = fh.read()
     missing = _orphan_placeholders(numbers, tex)
-    for c in numbers["cells"]:
+    # SCOPE FILTER (2026-08-22 re-spine). `collect` writes every campaign it can
+    # reach, and the pinned numbers file is a MERGE across clusters that no single
+    # box can regenerate -- outputs live on whichever cluster produced them. So the
+    # file legitimately carries cells this paper no longer reports (the routed
+    # panel, which left for AS-8). Filtering here rather than re-collecting keeps
+    # ONE definition of scope, CAMPAIGNS, honoured by both commands, and avoids
+    # rewriting a merged artefact from a partial view of it.
+    checked = [c for c in numbers["cells"] if c.get("campaign") in CAMPAIGNS]
+    dropped = len(numbers["cells"]) - len(checked)
+    if dropped:
+        print(f"note: {dropped} cell(s) outside CAMPAIGNS not checked "
+              f"(campaigns in scope: {', '.join(CAMPAIGNS)})")
+    for c in checked:
         tag = (f"{c['campaign']}/{c['target']}/{c['defense']}/{c['guard']}"
                f"/{c['encoding']}/{c['arm']}/qs={c['query_source']}")
         # Benign cells report no ASR (ORBench scores refusal), so the ASR check
