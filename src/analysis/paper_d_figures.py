@@ -62,6 +62,58 @@ CAMPAIGNS = {
     "bestofn_attack_p7_gates_gemma",    # run G: 4 gemma cells, both gates x both attacks
     "bestofn_attack_p7_paraphrase",     # run H: 4 llama PARAPHRASE cells
 }
+
+# `CAMPAIGNS` above is the PRE-FIX era and stays the default so that importing this
+# module cannot silently move a published number (src/analysis/middle_band.py imports
+# the name directly). The alias makes the era explicit at the call site.
+CAMPAIGNS_PREFIX = CAMPAIGNS
+
+# The post-fix restatement (R19/R20, 2026-08-11..21). INERT until something selects it:
+# defining it here does not change any figure. These cells are wildguard-scored integrity
+# checks and will NOT pass load_cells()'s gate, which reads HarmBenchEvaluator stats --
+# they become readable only after the reportable gpt-5-mini rejudge pass.
+CAMPAIGNS_POSTFIX = {
+    "bestofn_attack_r19_p2_main",
+    "bestofn_attack_r19_p2_probe",
+    "bestofn_attack_r19_p3_review1",
+    "bestofn_attack_r19_p5_wrapper",
+    "bestofn_attack_r19_p6_selfcheck",
+    "bestofn_attack_r19_p7_gates",
+}
+
+# ---- Fidelity era of the code encoding ------------------------------------------
+# The code_attack encoder was corrected on 2026-08-05 (commit b266892): the tokenizer
+# changed from `query.split()` to `re.split(r"[\s\-]+", query)`, so hyphenated behaviors
+# produce a DIFFERENT word list. Cells built from the two transform runs are therefore not
+# comparable, and a panel mixing them is a silent error with no exception anywhere -- the
+# defect this guard exists to make impossible. Markers are the transform run directories.
+FIDELITY_ERAS = {
+    "code_attack_20260718_213010_40825967": "pre-fix",
+    "code_attack_20260805_212854_26701649": "post-fix",
+}
+
+
+def _fidelity_era(*metas) -> str | None:
+    """Which code_attack encoder built this cell, read off the upstream chain.
+
+    Returns None when no marker is found (a non-code attack arm, or an upstream whose
+    results.json is not on this machine) -- callers treat None as "not era-bearing"
+    rather than as a mismatch, so paraphrase/surface arms are unaffected.
+    """
+    for m in metas:
+        if not m:
+            continue
+        blob = " ".join((
+            str(m.get("source_transform_subdir", "")),
+            str(m.get("output_dir", "")),
+            str((m.get("upstream_ref") or {}).get("source_dir", "")),
+        ))
+        for marker, era in FIDELITY_ERAS.items():
+            if marker in blob:
+                return era
+    return None
+
+
 REJUDGE_GLOB = "outputs/bestofn_attack/rejudge/**/*"
 # The AIA tree is the SOLE live edit target for Paper D (owner ruling 2026-08-02:
 # the AAAI-main copy is off the table, the arXiv copy is refreshed only at
@@ -259,6 +311,7 @@ def load_cells(
     """(target, defense, attack) -> (successes per behavior, draws per behavior)."""
     cells: dict[tuple[str, str, str], tuple[collections.Counter, collections.Counter]] = {}
     failures: list[str] = []
+    eras: dict[str, list] = {}
     for d in glob.glob(os.path.join(root, REJUDGE_GLOB), recursive=True):
         results = os.path.join(d, "results.json")
         if not os.path.exists(results):
@@ -306,6 +359,19 @@ def load_cells(
                 f"cell; give one of them a distinct defense/target key")
             continue
         cells[key] = (hits, draws)
+        era = _fidelity_era(meta, upstream_meta, transform_meta)
+        if era:
+            eras.setdefault(era, []).append(key)
+
+    # A figure built from both encoder eras is wrong in a way nothing else catches:
+    # both cells look valid, the gate passes, and the number is quietly incomparable.
+    if len(eras) > 1:
+        detail = "; ".join(
+            f"{era}: {len(keys)} cells e.g. {sorted(keys)[0]}" for era, keys in sorted(eras.items()))
+        raise SystemExit(
+            "MIXED FIDELITY ERAS — refusing to build. The code_attack encoder was "
+            f"corrected 2026-08-05; these cells are not comparable. {detail}. "
+            "Select ONE era (CAMPAIGNS_PREFIX or CAMPAIGNS_POSTFIX), never both.")
     if failures:
         raise SystemExit(
             "coverage gate FAILED — a silently-safe judge failure would read as a low "
