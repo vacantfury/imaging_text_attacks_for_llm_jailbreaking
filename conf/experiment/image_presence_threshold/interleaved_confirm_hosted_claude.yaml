@@ -1,0 +1,54 @@
+# Paper B (AS-2) · REVIEW-7 Q1 — RANDOMIZED INTERLEAVED CONFIRMATION, claude only
+#
+# WHY THIS FILE EXISTS. `interleaved_confirm_hosted` carried two tasks. The
+# gemini-2.5-flash-lite task COMPLETED on NURC job 9452859 and its cell is
+# collected; the claude-sonnet-4-6 task died at 5.3s on a bug in the new
+# `interleaved_paired` mode (conversation ids used a "::" separator, which
+# Anthropic's batch API rejects against ^[a-zA-Z0-9_-]{1,64}$). Fixed by
+# switching to positional surrogate ids.
+#
+# Re-running the WHOLE hosted preset would re-spend on a cell we already have
+# AND write a second, newer gemini cell for the identical condition -- and
+# latest-wins cell selection would then silently prefer the rerun. So the
+# resubmission is claude-only. The gemini cell of record stays:
+#   outputs/image_presence_threshold/interleaved_paired/jailbreakbench_benign/
+#     gemini-2.5-flash-lite_text_vs_canvas_20260822_003415_45346152
+#
+# SEED UNCHANGED (20260822). The shuffle depends only on the seed and the unit
+# count, both of which the fix leaves untouched, so this run realizes exactly
+# the order the failed one would have -- the pre-registration still binds.
+#
+# PRE-REGISTERED READ-OUT: identical to `interleaved_confirm_ow`, against the
+# arm-batched claude borderline shift of ~+51pp. P1 reproduces in sign and
+# lands within a reasonable margin / P2 materially smaller or vanishes => the
+# paper's central magnitude is overstated, report it and rewrite the claim, do
+# NOT re-run it away / P3 materially larger => report as measured.
+# Floor/ceiling guard, pre-fixed: a text arm outside 10-90% is reported as
+# floored/saturated and not counted as powered.
+#
+# COST: one 200-conversation claude batch + ~200 gpt-5-mini judge calls.
+# Sized from measured per-arm target_usage; inside the standing run-it gate.
+#
+# SUBMIT (NURC):
+#   ssh explorer 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment.sbatch image_presence_threshold/interleaved_confirm_hosted_claude'
+
+num_main_job_threads: 1
+num_cluster_jobs: 1          # API target + API judge — no vLLM server needed.
+
+_text:  &text  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/non_llm_baseline
+_blank: &blank outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260821_232149_49683396/ir_blank
+
+tasks:
+  - mode: interleaved_paired
+    source_a: *text
+    source_b: *blank
+    label_a: text
+    label_b: canvas
+    benchmark: jailbreakbench_benign
+    judge_method: jbb_refusal
+    judge_model: gpt-5-mini
+    prompt_range: [0, 99]
+    campaign: paper_b_interleaved_confirm
+    target_model: claude-sonnet-4-6
+    seed: 20260822
