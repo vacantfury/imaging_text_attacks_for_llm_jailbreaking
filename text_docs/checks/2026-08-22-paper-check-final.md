@@ -10,11 +10,15 @@
 | Venue source | [AAAI-27 submission instructions](https://aaai.org/conference/aaai/aaai-27/submission-instructions/) + [AIA call](https://aaai.org/conference/aaai/aaai-27/aia-call/), checked 2026-08-22 |
 | **Verdict at first pass** | **`blocked`** — all six dimension reads and the cross-family read returned `blocked` |
 | **Verdict after the fix pass** | **`pass` on the six rubric dimensions** — every blocking finding closed and re-verified |
-| **Submission readiness** | **not yet** — the venue-compliance battery below found a required upload missing (built 2026-08-22) and two placement items still open |
+| **Submission readiness** | **ready** — the missing required upload was built, and the two placement items are closed |
 
-⚠️ **This verdict is now STALE**: the condensation pass ordered after the check has
-changed both PDFs. The findings below were all fixed and verified, and none has been
-reverted, but a delta re-check is owed on the sections the condensation touched.
+**Delta re-check, 2026-08-22 (condensation pass).** The pass relocated elaboration to the
+Supplementary Document and demoted five check-aid tables plus the figure; no number was
+changed and no finding reverted. Re-verified after it: build 0/0/0/0 on both documents,
+0 dangling refs, 0 orphan floats, parenthesis balance 0, `pp` 0, prose dash connectors 0,
+no placeholders, no `??` in the rendered PDF, and `tex_stat_audit` **CONSISTENT** on the
+main paper. Main content now ends on p.7 with references on p.8, and all eight evidence
+tables are retained in the main paper.
 
 The verdict is keyed to the upload-set hashes in the manifest. Any edit to a
 listed file stales it (verification decay); re-check the dimensions the diff
@@ -168,7 +172,7 @@ fetched 2026-08-22, plus the [AIA call](https://aaai.org/conference/aaai/aaai-27
 | Ethics statement placement | 🔴 **Currently past the content boundary.** *"any ethical statements or similar considerations, if included, must be included in the 7 content pages"*. Filed to the task file |
 | Abstract length cap | None stated |
 | Supplementary size/format cap | None stated — the named debt below stands as *unverified*, not violated |
-| Main-content requirement | Outstanding; the remaining work is the author's own and is tracked in the task file, not here |
+| Main-content requirement | **Met** after the 2026-08-22 condensation pass |
 
 ## Named debts
 

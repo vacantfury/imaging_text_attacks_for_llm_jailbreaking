@@ -10,20 +10,13 @@ the last build, never before) — repackage that artifact, then delta re-check.
 *(`manifest.md` in this directory is AS-7's package, a different paper. Do not
 cross-read the two.)*
 
-> ⚠️ **STALE AS OF 2026-08-22 (later that day).** The condensation pass ordered
-> after the check is in flight, so `paper.pdf` and `supplementary.pdf` no longer match
-> the hashes below. The `ReproducibilityChecklist.pdf` and
-> `supplementary_code_and_data.zip` rows are unaffected and still current. Re-hash the
-> two PDFs and run the delta re-check when the pass lands; **do not submit against this
-> manifest until it is reissued.**
-
 ## The upload set
 
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
-| `paper.pdf` | Main submission PDF | 0.5 MB | `73f7f35256a0778897538345b6256f7ed73b0a78646150fae223bf9aaed77551` |
-| `supplementary.pdf` | Supplementary Document | 0.3 MB | `7eb89d7321c77cf039b87c287939946dd0a25440bc284013aec0d4b6692470c2` |
-| `supplementary_code_and_data.zip` | Code and Data Supplement | 36.1 MB | `1c4d9d06c2cda4a0cd7159b77167063806d623da23cb3d912b891e2f3eede2eb` |
+| `paper.pdf` | Main submission PDF | 0.35 MB | `1971a4057c4faf2348f1d81466a24eac8492e0f6da6e2d1e846a19968a9ef0d5` |
+| `supplementary.pdf` | Supplementary Document | 0.46 MB | `57300454c855dc3f64550812672ed0c2bd6401cad2a28a7be20aa9aa364a57cc` |
+| `supplementary_code_and_data.zip` | Code and Data Supplement | 36.11 MB | `1c4d9d06c2cda4a0cd7159b77167063806d623da23cb3d912b891e2f3eede2eb` |
 | `ReproducibilityChecklist.pdf` | Reproducibility Checklist (separate field) | 0.08 MB | `d79e2dd53ec1078807faa6ccba1bde4060064ef366f6654e8e6f210668e488e1` |
 
 Source tree: `paper/as-2/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
