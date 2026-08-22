@@ -88,7 +88,18 @@ def load_rows(root: str = ".") -> dict[tuple[str, str, str], list[tuple[bool, bo
         if not os.path.exists(src_results):
             src_results = os.path.join(src_dir, "results.json")
         upstream_meta = json.load(open(src_results)) if os.path.exists(src_results) else {}
-        key = _classify(meta, upstream_meta)
+        # One level further up: the prompt_transform step. `_classify` has taken THREE
+        # arguments since it began reading the transform's recorded `variance_channel`
+        # (the only thing separating the surface arm from the paraphrase arm); this
+        # caller still passed two, so every run died with a TypeError before reaching
+        # any output. Resolved with the same root-joined-then-bare fallback used for
+        # the upstream above, since these paths are recorded relative to the run root.
+        tf_dir = (upstream_meta.get("upstream_ref") or {}).get("source_dir", "")
+        tf_results = os.path.join(root, tf_dir, "results.json")
+        if not os.path.exists(tf_results):
+            tf_results = os.path.join(tf_dir, "results.json")
+        transform_meta = json.load(open(tf_results)) if os.path.exists(tf_results) else {}
+        key = _classify(meta, upstream_meta, transform_meta)
         if key in cells:
             raise SystemExit(f"DUPLICATE cell {key} — refusing to overwrite silently")
         rows = []
@@ -99,11 +110,33 @@ def load_rows(root: str = ".") -> dict[tuple[str, str, str], list[tuple[bool, bo
     return cells
 
 
+def _spread(hazards: list[float]) -> str:
+    """Ratio of max to min hazard, or an honest refusal to divide.
+
+    The old form was `max/max(min, 1e-9)`, which turns a min of exactly 0.00% into a
+    fabricated "429184549.4x" -- a ratio of two near-zero quantities reported as if it
+    were a measurement. A hazard floor of zero means the spread is UNDEFINED, and the
+    only correct output is to say so; a near-zero floor means the ratio is dominated by
+    sampling noise in the denominator and is quoted with that caveat attached.
+    """
+    lo, hi = min(hazards), max(hazards)
+    if lo <= 0:
+        return f"UNDEFINED (min hazard is 0.00%; max {hi:.2f}%)"
+    ratio = hi / lo
+    if lo < 0.01:                     # < 1 success in 10,000 draws
+        return f"{ratio:.1f}x (UNRELIABLE — min hazard {lo:.3f}% is at the resolution floor)"
+    return f"{ratio:.1f}x"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=".")
     ap.add_argument("--defense", default="sage")
-    ap.add_argument("--attack", default="code")
+    # "code" was the attack label before the paraphrase arm split it into surf/para
+    # (_classify's vocabulary). It has matched NOTHING since, so the default silently
+    # printed an empty table -- a second, quieter drift than the _classify arity bug.
+    # "surf" is the surface arm: the code encoding queried directly.
+    ap.add_argument("--attack", default="surf", choices=["surf", "para"])
     args = ap.parse_args()
 
     cells = load_rows(args.root)
@@ -142,7 +175,7 @@ def main() -> None:
         refusals = [r for _, r, _ in rows_out]
         print(f"\nband hazard P(success | did not open with a refusal): "
               f"min {min(hazards):.2f}%  max {max(hazards):.2f}%  "
-              f"spread {max(hazards)/max(min(hazards), 1e-9):.1f}x")
+              f"spread {_spread(hazards)}")
         print(f"refusal rate spread: {min(refusals):.1f}% -> {max(refusals):.1f}%")
         print("\nReading: a FLAT hazard with a widely varying refusal rate says refusal "
               "disposition\nsets how much probability mass reaches the exposed band, and the "
