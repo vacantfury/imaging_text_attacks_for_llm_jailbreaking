@@ -1,0 +1,77 @@
+# AS-7 · ADAPTIVE ATTACK: the ENCODED payload placed inside the image — STAGE 1 (render only).
+#
+# WHY THIS EXISTS — cspaper review 6, con 6 / Q4 (2026-08-22):
+#
+#   "the paper does not evaluate an attacker who places the encoded harmful
+#    payload inside an image against the proposed routed panel or against the
+#    transform defenses in the same end-to-end setting. [...] a channel-routed
+#    multimodal panel may close the specific text-only blind spot while
+#    introducing distinct image-side failure modes."
+#
+# The criticism is correct and it is the ONLY con in review 6 that can change
+# the paper's deployment RECOMMENDATION rather than its wording. Every image-arm
+# cell we report renders PLAIN harmful text into the image; the multimodal guard
+# blocks 98-99/100 of those. Nobody has asked what it does when the text
+# rendered into the image is itself ENCODED — which is the attack an adaptive
+# adversary facing our panel would actually run, since it composes the two
+# manipulations the paper studies separately (channel relocation + encoding).
+#
+# WHAT THIS STAGE DOES. Chain a plain image render onto the SAME encoded harmful
+# upstreams the protocol grid uses, so the only change from the published image
+# arm is that the rendered text is the encoded payload rather than the plain
+# request. No model is called: `ir_plain` is a pure renderer, so this stage is
+# free and needs no GPU.
+#
+# ⚠️ `keep_text: false` IS PASSED EXPLICITLY AND IS LOAD-BEARING. The flag
+# decides whether the payload ALSO stays in the text field. Its constructor
+# default is TRUE, so omitting it would leave the request in the text channel,
+# a text-only guard would read it there, and the arm would silently stop being
+# an image-channel test at all. (The module docstring asserted the opposite
+# default until 2026-08-22; an AS-3 preset that trusted it turned a blind guard
+# into a sighted one and the resulting "finding" survived 11 days.) Never rely
+# on the default here in either direction.
+#
+# STAGE 2 (separate preset, needs this stage's timestamped subdir): the routed
+# panel `guard_router` plus the three gates and no_defense on `internvl3_8b`,
+# judged by gpt-5-mini. Targets are cluster-served so only the judge costs money
+# (~800 calls, ~$0.7).
+#
+# PRE-REGISTERED READ-OUT (written before the data lands):
+#   PANEL HOLDS   the multimodal guard blocks encoded-in-image at rates near its
+#                 98-99/100 on plain-in-image. Then the routed panel survives the
+#                 adaptive attack, which is a materially stronger recommendation
+#                 than the paper currently makes, and con 6 closes in our favour.
+#   PANEL BREAKS  blocking collapses on the encoded render. Then the panel closes
+#                 the text-only blind spot and opens an image-side one, the
+#                 deployment recommendation must be narrowed to non-encoded image
+#                 traffic, and the paper says so. This is the outcome that costs
+#                 us the most, and it is the reason to run it.
+#   Either branch is reportable and neither touches the paper's THESIS, which is
+#   about attribution and read access rather than about our own mitigation.
+#
+# SUBMIT (NURC):
+#   ssh explorer 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment.sbatch defense_read_access/adaptive_image_encoded_stage1'
+
+num_main_job_threads: 2
+num_cluster_jobs: 1          # orchestrator only — ir_plain is a pure renderer, no model call
+
+_base: &b
+  mode: prompt_transform
+  prompt_range: [0, 99]
+  benchmark: harmbench
+  campaign: as7_adaptive_image_encoded
+
+tasks:
+  # code_attack, already encoded, now rendered INTO the image with the text
+  # channel emptied to the stock placeholder.
+  - <<: *b
+    source_transform_subdir: outputs/image_presence_threshold/prompt_transform/harmbench/code_attack_ir_constant_20260805_213025_3168031/code_attack
+    transformation_list:
+      - {type: ir_plain, params: {keep_text: false}}
+
+  # formal_logic, same treatment, same anchor the protocol grid uses.
+  - <<: *b
+    source_transform_subdir: backup_files/arr_may_submission_files/outputs/prompt_transform/harmbench/formal_logic_ir_plain_20260525_010219_56487445/llm_formal_logic
+    transformation_list:
+      - {type: ir_plain, params: {keep_text: false}}
