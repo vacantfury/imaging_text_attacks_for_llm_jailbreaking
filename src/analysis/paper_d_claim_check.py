@@ -31,6 +31,21 @@ PANEL = {
     "llama70": dict(control=15, sage=29, selfdefend=2,  llm_self_defense=None),
 }
 ORDER = ["llama", "gemma", "qwen", "llama70"]
+SEQ_ORDER = ["llama", "qwen", "gemma", "llama70"]
+
+# Table 2's T=1.0 column, per target: (undefended, SAGE, guard baseline) coverage.
+# Added 2026-08-22 after a cross-family read flagged the borrowed-strength paragraph
+# for mixing this panel's numbers with the main matrix's, which reads as the paper
+# contradicting itself on the SAME cell (the 70B at 22 vs 25 is the pre/post-fix
+# encoder correction; the two are different rounds and must not be sequenced together).
+PANEL_T1 = {
+    "llama":   dict(undefended=96, sage=59, guard=9),
+    "qwen":    dict(undefended=98, sage=17, guard=9),
+    "gemma":   dict(undefended=97, sage=12, guard=10),
+    "llama70": dict(undefended=95, sage=25, guard=None),
+}
+# Per-draw block rates behind the accuracy-does-not-predict claim, Gemma, one round.
+GEMMA_BLOCK = {"sage": 99.8, "guard": 95.6}
 
 # tab:compose as published: (code N=1, BoN N=100, composed)
 COMPOSE = {"llama": (4.7, 3.0, 67.0), "qwen": (1.8, 0.0, 22.0), "gemma": (0.2, 0.0, 15.0)}
@@ -73,6 +88,30 @@ def checks() -> list[tuple[str, str, str]]:
     out.append(("matched-budget gain, character arm",
                 f"{COMPOSE['llama'][1]:+.1f}", "+3.0"))
 
+    # the borrowed-strength sequences must be ONE panel, not a mix of rounds
+    # NOTE the paper uses TWO target orders by convention: the temperature NETS are
+    # quoted llama/gemma/qwen/llama70 (ORDER), while target SEQUENCES run
+    # llama/qwen/gemma/llama70 (SEQ_ORDER). Mixing them silently transposes numbers.
+    seq_def = [PANEL_T1[t]["sage"] for t in SEQ_ORDER if PANEL_T1[t]["sage"] is not None]
+    seq_und = [PANEL_T1[t]["undefended"] for t in SEQ_ORDER]
+    out.append(("Table 2 defended sequence (llama/gemma/qwen/llama70)",
+                "/".join(str(v) for v in seq_def), "59/17/12/25 in llama/qwen/gemma/llama70 order"))
+    out.append(("Table 2 undefended sequence",
+                "/".join(str(v) for v in seq_und), "96/98/97/95 in llama/qwen/gemma/llama70 order"))
+    out.append(("defended spread within Table 2",
+                f"{max(seq_def)/min(seq_def):.1f}x", "almost 5x"))
+
+    # accuracy does not predict robustness: same target, same round
+    out.append(("Gemma: SAGE blocks vs loses",
+                f"blocks {GEMMA_BLOCK['sage']}%, loses {PANEL_T1['gemma']['sage']}",
+                "blocks 99.8%, loses 12"))
+    out.append(("Gemma: gate blocks vs loses",
+                f"blocks {GEMMA_BLOCK['guard']}%, loses {PANEL_T1['gemma']['guard']}",
+                "blocks 95.6%, loses 10"))
+    out.append(("the comparison holds (higher block rate, worse coverage)",
+                str(PANEL_T1["gemma"]["sage"] > PANEL_T1["gemma"]["guard"]
+                    and GEMMA_BLOCK["sage"] > GEMMA_BLOCK["guard"]), "True"))
+
     # 'inert on three of the four targets' == |fixed-verdict net| <= 8 on exactly 3
     inert = [t for t in ORDER if abs(PANEL[t]["selfdefend"]) <= 8]
     out.append(("targets where a fixed verdict is inert (<=8 pts)",
@@ -100,6 +139,10 @@ def main(tex_path: str | None = None) -> int:
         "control range": r"$12$--$24$ points",
         "matched-budget split": r"$+3.0$ points on the surface channel",
         "inert count": r"three of the four targets",
+        "one-panel defended sequence": r"($59$/$17$/$12$/$25$)",
+        "one-panel undefended sequence": r"($96$/$98$/$97$/$95$)",
+        "gemma blocks-vs-loses": r"blocks $99.8\%$",
+        "gemma gate counterpart": r"blocking $95.6\%$ loses $10$",
     }
     missing = [k for k, v in probes.items() if re.sub(r"\s+", " ", v) not in flat]
     print()

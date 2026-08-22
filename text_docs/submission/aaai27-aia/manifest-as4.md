@@ -11,9 +11,9 @@ papers. Do not cross-read them.)*
 
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
-| `aaai_aia_latex/paper.pdf` | Main submission PDF | 324 KB | `49858e7e0a9b968949087522b948ec2b5313ccbd2777f39ed2f5ffac6e947386` |
-| `aaai_aia_latex/supplementary.pdf` | Supplementary Document | 456 KB | `76ad79ce4a5fb8dcba6a1cf34ab81ede089f4fe85ceb743a4f55e38c9ff0b9b9` |
-| `supplementary_code_and_data.zip` | Code and Data Supplement | 9.3 MB | `ba3cf4238288e19a7435dd126292e6f19c3c988e5b816c52aa8bb064532613d4` |
+| `aaai_aia_latex/paper.pdf` | Main submission PDF | 324 KB | `30074bea0a30972a5fc285d0f7020dc6e58eb0dfbd943442e2e8d7d76c79e7fb` |
+| `aaai_aia_latex/supplementary.pdf` | Supplementary Document | 456 KB | `7f865de5eb72407b7630657a3594dd835b7d6705d3d8be1adfc378e6b5d4140a` |
+| `supplementary_code_and_data.zip` | Code and Data Supplement | 9.3 MB | `259d522ac78451e162004eceb581793f5c558c6a44ff099396a3fc25ae25aa70` |
 | `ReproducibilityChecklist/ReproducibilityChecklist.pdf` | Reproducibility checklist | 132 KB | `2736ba210a8d0f1b656193685d94b7238f34d172bf1a998f4a84597021d86c91` |
 
 Source tree: `paper/as-4/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
@@ -151,12 +151,54 @@ reproduced exactly").
   returns are all third-party citation authors. The owner's own published attack
   is not cited in this paper at all, so the third-person-citation hazard does not
   arise here.
-- Code artifact: 455 files, 103 strings scrubbed, `verify_tree` anonymization
+- Code artifact: 456 files, 103 strings scrubbed, `verify_tree` anonymization
   **PASSED**, 498 entries in the zip.
 - Three **pre-existing** uncited floats in the appendix (`tab:main`,
   `tab:app-band`, `tab:app-ci`) were found by the new float sweep and fixed.
   Uncited floats raise no LaTeX warning, which is this repo's known silent-defect
   class.
+
+## Cross-family review (the `paper-check` second opinion)
+
+Run against **Gemini 3.1 Pro** via `llm_utils`, a third model family: I am Claude,
+and the six prior cspaper rounds were GPT-family. The prompt gave it the **main
+paper only** and asked one question the venue rule makes decisive: judge
+self-containment as a reviewer who never opens the supplement. Four passes, ~$0.06
+each. It found real defects that nothing else did, and the fixes are in:
+
+1. **I had over-moved.** The temperature panel left while its prose still referred
+   to "panels" and "columns" that were no longer there, so the paper's third claim
+   had no table. **Table 2 is back in the main paper**; the budget-curve figure went
+   to the supplement in its place. First pass: "broken references: several". Second
+   pass onward: **"None found."**
+2. **An orphaned headline number.** The abstract and introduction compared SAGE's
+   $99.8\%$ per-draw block rate against "a classifier gate blocking $95.6\%$", and
+   $95.6$ appeared *nowhere else in the paper or the working notes*. Traced to the
+   Gemma round: SAGE blocks $99.8\%$ and loses **12** behaviors, the gate blocks
+   $95.6\%$ and loses **10** — same target, same round, both rows now visible in
+   Table 2. The claim is true and is now anchored where it is made.
+3. **A stale pre-fix number and a round mix-up.** The borrowed-strength sequences
+   spliced main-matrix values with the temperature panel and carried the 70B at its
+   **pre-correction** $22$ where Table 2 reads $25$. Both values are real, from
+   different rounds. The paragraph now reads one panel, and the paper states the
+   convention once, in Setup: *every contrast is read inside one panel, against that
+   panel's own control*. That single sentence retired three separate
+   "contradictions" the reviewer had raised across passes — all of them the reader
+   dividing one panel's number by another panel's baseline.
+4. **A broken cross-reference** (`Sections 5 and 5`: two subsections that render
+   identically under `secnumdepth 1`), **a labelling promise the tables did not
+   keep** (Setup promises pre-correction cells are labelled "CodeAttack variant";
+   the captions now say so), and **the wrapper variants were never defined** in the
+   main text (\textsc{verdict-only} and \textsc{+verdict} are now named where used).
+
+**Where it still objects, and why we are not acting on it.** Its final pass says the
+paper "functions as an extended abstract for the supplementary material" because the
+supporting experiments — the wrapper intervention, the paraphrase control, the
+SemanticSmooth and gate re-runs — state their outcome in prose while their tables
+sit in the supplement. That is the division the venue rule prescribes: those are
+*check*-material for claims the paper already states with its numbers, and the
+alternative is not fitting them in the main submission. The judgement to accept here
+is deliberate and recorded, not an oversight.
 
 ## Known residue, not blocking the package
 
