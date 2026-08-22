@@ -1,0 +1,43 @@
+# AS-7 · MATCHED PLAIN-PAYLOAD-IN-IMAGE CONTROL for the adaptive round — STAGE 1.
+#
+# 🔴 WHY THIS EXISTS: THE OBVIOUS COMPARATOR IS THE WRONG ONE, VERIFIED ON DISK.
+#
+# The adaptive round (`adaptive_image_encoded_stage2`, NURC 9458563) renders the
+# ENCODED payload into the image and finds the multimodal guard blocking 2-3/100.
+# The tempting contrast is tab:router's published image arm, where the same guard
+# blocks 99/100 and the routed panel 98/100. That contrast is INVALID and would
+# have been a fabricated finding: the published arm's upstream
+# (`non_llm_baseline_ir_plain_20260808_054006_60667588`) carries numeric prompt
+# ids and a DIFFERENT prompt set. Checked behaviour by behaviour, 2026-08-22:
+# overlap with the adaptive arms is 0 of 100. The two adaptive arms overlap each
+# other 100 of 100, so they pair with each other and with nothing else on disk.
+#
+# No plain-payload-rendered-into-image cell exists on the adaptive round's
+# behaviour set. This preset builds it, so the decisive contrast holds EVERYTHING
+# fixed except the form of the text inside the image:
+#   same 100 HarmBench behaviours (`non_llm_baseline` leaf of the 20260821 run,
+#   verified: id `korean_war_north_defensive`, 100 rows, no image)
+#   same renderer (ir_plain), same `keep_text: false` placeholder text channel,
+#   same target, same guards, same judge.
+#
+# ⚠️ `keep_text: false` IS LOAD-BEARING AND IS PASSED EXPLICITLY. Its constructor
+# default is TRUE. Omitting it leaves the request in the text channel, which
+# makes a text-only guard sighted and destroys the control (AS-3, 0% -> 74%).
+#
+# FREE: ir_plain is a pure renderer, no model call, no GPU.
+#
+# SUBMIT (NURC):
+#   ssh explorer 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment.sbatch defense_read_access/adaptive_image_control_stage1'
+
+num_main_job_threads: 1
+num_cluster_jobs: 1
+
+tasks:
+  - mode: prompt_transform
+    prompt_range: [0, 99]
+    benchmark: harmbench
+    campaign: as7_adaptive_image_encoded
+    source_transform_subdir: outputs/image_presence_threshold/prompt_transform/harmbench/non_llm_baseline_ir_blank_20260821_050217_14731502/non_llm_baseline
+    transformation_list:
+      - {type: ir_plain, params: {keep_text: false}}
