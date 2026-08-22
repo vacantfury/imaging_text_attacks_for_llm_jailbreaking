@@ -1,5 +1,17 @@
 # AS-4 — AAAI-27 AI Alignment special track — submission package manifest
 
+> ✅ **SUBMITTED 2026-08-22 (owner press), AAAI-27 AI Alignment special track,
+> OpenReview submission #205.** Filed inside the wall (22 Aug 2026 04:59 PDT /
+> 11:59 UTC). The four artifacts below were re-hashed immediately before the
+> press and all four matched this manifest, so what was uploaded is exactly what
+> is recorded here.
+>
+> As-pressed details not yet confirmed by the owner (he is the only observer of
+> the form): whether the AAAI main-track withdrawal was executed first, whether
+> the title/abstract were updated from the registered pair, and whether the form
+> carried a reproducibility-checklist slot. The last one is the standing
+> UNVERIFIED row in the packaging table below; his answer closes it.
+
 Built 2026-08-22, after the main/supplementary split. This file is the package's
 identity: the submit step uploads exactly these files, and **any edit to a listed
 file invalidates this manifest** — rebuild that artifact, re-hash, then re-check.
