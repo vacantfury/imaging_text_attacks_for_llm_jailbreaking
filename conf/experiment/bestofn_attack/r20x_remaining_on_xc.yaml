@@ -38,6 +38,20 @@
 #
 #   ssh xc; cd ~/projects/llm_guardrail_security
 #   sbatch scripts/run_experiment_xc.sbatch bestofn_attack/r20x_remaining_on_xc
+#
+# ── CONCURRENCY CORRECTED 64 -> 32 (2026-08-22, after job 286) ─────────────
+# 64 was too high and it cost ROWS, not just speed. llm_utils'
+# slurm_cluster_service.py sets httpx2.Timeout(600.0) and its retry loop fires ONLY on
+# rate-limit errors -- a timed-out request is never retried, so the response is lost,
+# the row is flagged is_correctly_processed=False and EXCLUDED, and total_evaluated
+# lands under 10,000, which fails the builder's validity gate. A lost RESPONSE cannot
+# be recovered by a rejudge, unlike a lost verdict.
+# Job 286 accrued "vLLM API error: Request timed out" at ~1/min: at 64 concurrent on one
+# A100 llama ran ~19.5 tok/s per request (761 tok/s / 39 in flight), so a max-length
+# generation needs ~840s and blows the 600s ceiling. At 32 the per-request rate roughly
+# doubles (~40 tok/s => ~410s) and clears it, while still keeping ~3x the stock
+# throughput of 20. The lesson generalizes: raising concurrency trades PER-REQUEST
+# latency, and long-generation cells (high temperature, large max_tokens) pay first.
 num_cluster_jobs: 5
 num_main_job_threads: 4
 tasks:
@@ -48,7 +62,7 @@ tasks:
   benchmark: harmbench
   target_model_config:
     temperature: 1.0
-    max_concurrency: 64
+    max_concurrency: 32
   source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
   defense: semantic_smooth
   defense_config:
@@ -63,7 +77,7 @@ tasks:
   benchmark: harmbench
   target_model_config:
     temperature: 1.0
-    max_concurrency: 64
+    max_concurrency: 32
   source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
   defense: semantic_smooth
   defense_config:
@@ -78,7 +92,7 @@ tasks:
   benchmark: harmbench
   target_model_config:
     temperature: 1.0
-    max_concurrency: 64
+    max_concurrency: 32
   source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
   defense: semantic_smooth
   defense_config:
@@ -93,7 +107,7 @@ tasks:
   benchmark: harmbench
   target_model_config:
     temperature: 1.5
-    max_concurrency: 64
+    max_concurrency: 32
   source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
   defense: sage
   campaign: bestofn_attack_r19_p3_review1
