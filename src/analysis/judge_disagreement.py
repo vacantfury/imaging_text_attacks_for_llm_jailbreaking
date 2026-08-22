@@ -28,12 +28,22 @@ INTEGRITY GATES (these can fail, unlike a self-comparison). A pair is admitted o
       -- a pair whose responses differ is not a judge comparison, it is two different experiments;
   (2) NEITHER dir reports `fallback_parse_count > 0` in eval_stats.
 
-  Gate (2) exists because of a judge-failure sign not in the known set: a cell where EVERY judge
+  Gate (2) exists because of a judge-failure sign not in AS-3's known set: a cell where EVERY judge
   call returned HTTP 400 still writes a clean-looking `results.json` -- `warnings: []`, a populated
   `eval_stats`, `total_evaluated: 100`, and a plausible ASR -- because the parser silently falls
-  back to "no" on an unparseable response. The only trace is `fallback_parse_count`, which nothing
-  was checking. A fallback label is not a judgement, so a pair carrying any is not evidence about
-  judge agreement; it would show up as fake disagreement. Live-root census 2026-08-21:
+  back to "no" on an unparseable response. The only trace is `fallback_parse_count`.
+
+  That field is NOT unchecked repo-wide: `as7_integrity.py` treats it as one of its named detectors
+  ("it must never be invisible: it is exactly how a rubric change hides"), and `paper_d_figures.py`,
+  `severity.py`, `middle_band.py`, `appendix_tables.py`, `paper_c_prompt_wording.py` and
+  `paper_c_splits.py` all read it. What was missing is narrower and worth stating exactly: AS-3's
+  MAIN table builders (`paper_c_benign_stratified`, `paper_c_figures`, `paper_c_pareto`,
+  `paper_c_view_vs_strictness`) do not check it, and it never becomes a `warning` on the cell
+  itself, so a fully corrupted cell reads as healthy at the source. This module adopts the
+  `as7_integrity` posture rather than inventing a new one.
+
+  A fallback label is not a judgement, so a pair carrying any is not evidence about judge
+  agreement; it would show up as fake disagreement. Live-root census 2026-08-21:
   gpt-5-mini 0/3276 cells affected (the paper's judge is clean, so no published number rides on
   this), against wildguard 153/488, gpt-5-nano 123/868, harmbench_llama_2_13b_cls 12/18.
 
