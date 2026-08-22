@@ -153,3 +153,48 @@ Two attacks targeting the caption-mediated re-check on `gpt-4o-mini` (n=50): bes
 * Pre-split working record (both papers): `text_docs/image_presence_threshold/experiment_matrix.md` *(gitignored)*
 * Paper source: `paper/as-7/aaai_2027_ai_alignment/aaai_aia_latex/`
 * Registry of record: science repo `portfolio.md` → the AS-7 card.
+
+---
+
+## 9. Spine and title decisions — 2026-08-21
+
+*(This section is the home for AS-7's frame reasoning. It does NOT belong in `paper/as-7/aaai_2027_main/reviews.md`, which stores reviews. Owner correction 2026-08-21.)*
+
+### 9.1 The paper was re-spined onto READ ACCESS
+
+Owner asked "should we think on the main story?", then "continue, but you need think deep then act".
+
+**Diagnosis.** The draft declared three spines in three places:
+
+1. Title + abstract opening + contribution (i): attribution ("Whose Refusal Is It?").
+2. Limitations, §"The input side may be the wrong read entirely": *"If read access is the variable that matters, which is this paper's thesis"*.
+3. Conclusion's close: "state the read / state the protocol / state the split", then *"the last of these is the one we would most like to see adopted"*, back to attribution.
+
+Symptoms beyond the inconsistency: the title promised a decomposition while the Results delivered one attribution subsection against nine on read scope and read content; and the abstract, introduction and conclusion each had to warn the reader that the two halves carry different consequences. A frame that needs the reader told twice that its branches differ in kind is a container, not a thesis.
+
+**The body already believed the read spine**, which is why this was a correction rather than something imposed. The Results intro already read "Part 1 is the *attacker's* variable: what a defense reads *in deployment* … Part 2 is the *evaluator's*: what an *evaluation* lets it read". `tab:attribution`'s first column is headed "What the guard reads". The 2026-08-08 title note already recorded "Read access is the paper's one variable".
+
+**The spine.** A black-box defense is a component that reads. What it is permitted to read is set by the attacker (scope: which channel carries the payload) and by the evaluator (content: which prompt fills the internal read), never by the deployer. Scope decides what the defense catches, a deployment exposure. Content decides what it appears to be worth, a literature artifact. The refusal decomposition is the INSTRUMENT that makes either visible, and it is free.
+
+**Why not grant inflation alone** (the sharper, narrower alternative, considered and rejected): read position is predictive rather than merely organizing. It predicts the inflation ordering across four defense types (gate, where the read *is* the decision, 24–47 points; caption-mediated re-check, 12–36; selection-only smoother, ~0; wrapper, where the grant is not definable). It predicted the within-defense stage result and was *corrected* by it, since we predicted the verdict stage and the regeneration stage carries the effect. It predicts the channel blindness and its fix. It predicts ECSO's inertness against a text-only attack. A frame sharpened by data is a thesis. Taking grant inflation alone would also have discarded the channel half, which is the cleanest experiment in the paper (nothing obfuscated on either arm) and its only deployment recommendation.
+
+**Changed, prose only, zero numbers touched.** Abstract rebuilt as read-claim / scope + instrument / content. Intro paragraphs 1–3 re-spined. `\paragraph{The split can be measured directly.}` → `\paragraph{The read is visible in the split, and the split is free.}`, its lead-in now "three settings that differ only in what the guard reads". Contribution (i) reheaded to the variable itself, decomposition demoted to instrument. Results intro: "the two halves of the read". Conclusion paragraphs 1–2 re-spined; the closing "state the split" recast as the check that catches the other two rather than the headline. Build clean; all four drift guards green; new prose carries zero dash-line connectors. Backup `paper.tex.bak-pre-read-spine`.
+
+### 9.2 The title that followed
+
+Owner delegated it: "you think deep on it and you decide".
+
+**`Who Controls What a Guardrail Reads? The Attacker Chooses the Channel, the Evaluator Chooses the Prompt`**
+
+The deciding argument: the paper's live risk is that its two halves read as two papers stapled together, and the parallel subtitle *is* the unification. One question establishes the variable; the two clauses show the same variable moved by two parties toward two different consequences.
+
+Rejected, so they are not re-litigated:
+
+- *"...The Attacker and the Evaluator, Not the Deployer"* — delivers the alignment sting (the party responsible for safety controls neither dimension) but names actors without showing they act on one variable, so it could describe two unrelated findings. The sting is kept in sentence 2 of the abstract, where it costs nothing.
+- Identity forms (*"A Guardrail Is What It Is Allowed to Read"*) — an identity claim reads as a universal law and collides with the paper's own scope discipline ("not as a universal characterization of black-box input defenses, a claim our grid is too narrow to support"). Same failure class as the grand words the 2026-08-08 title note warns about.
+- *"Guardrails Are Evaluated on a Read They Never Get"* — the sharpest and most memorable candidate, but it covers only the evaluation half and orphans Part 1.
+- Abstract subtitle pairs (*the Attacker Sets the Scope, the Evaluator Sets the Content*) — precise and matched to the paper's own vocabulary, but a cold reader does not know that scope means channel. Concrete beats precise in a title.
+
+Wording: "Controls" rather than "decides", because the claim is about standing control and not a single act. "Chooses the Prompt" is disambiguated by the question, which has already established that the subject is what the *guardrail* reads.
+
+**`paper.tex`'s title comment block is the canonical home of this reasoning; this section is its record in the proposal.** Three consumers follow `paper.tex` and were synced in the same act: this file's title line, the `text_docs/shared/papers.md` roster row, and the artifact bundle's `scripts/artifact_files/as7/{README.md,pyproject.toml}` (both had carried the old title into a reviewer-visible file). Bundle rebuilt after the sync: 598 files, 1.7 MB, anonymization verify passed.
