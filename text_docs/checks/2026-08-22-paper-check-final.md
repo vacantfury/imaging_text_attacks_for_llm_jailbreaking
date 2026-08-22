@@ -9,7 +9,8 @@
 | Upload-set hashes | `paper.pdf` `73f7f352…` · `supplementary.pdf` `7eb89d73…` · `supplementary_code_and_data.zip` `1c4d9d06…` (full values in `text_docs/submission/aaai27-aia/manifest-as2.md`) |
 | Venue source | [AAAI-27 submission instructions](https://aaai.org/conference/aaai/aaai-27/submission-instructions/) + [AIA call](https://aaai.org/conference/aaai/aaai-27/aia-call/), checked 2026-08-22 |
 | **Verdict at first pass** | **`blocked`** — all six dimension reads and the cross-family read returned `blocked` |
-| **Verdict after the fix pass** | **`pass`** — every blocking finding closed and re-verified |
+| **Verdict after the fix pass** | **`pass` on the six rubric dimensions** — every blocking finding closed and re-verified |
+| **Submission readiness** | **not yet** — the venue-compliance battery below found a required upload missing (built 2026-08-22) and two placement items still open |
 
 The verdict is keyed to the upload-set hashes in the manifest. Any edit to a
 listed file stales it (verification decay); re-check the dimensions the diff
@@ -148,7 +149,26 @@ sentence's *p* with the next sentence's counts. Both values were recomputed by
 hand and are correct — McNemar(10,1) = 0.0117 and McNemar(1,9) = 0.0215, exactly
 as printed.
 
+## Venue-compliance battery — run 2026-08-22 against the live instructions
+
+Source: [AAAI-27 submission instructions](https://aaai.org/conference/aaai/aaai-27/submission-instructions/),
+fetched 2026-08-22, plus the [AIA call](https://aaai.org/conference/aaai/aaai-27/aia-call/).
+
+| Check | Result |
+|---|---|
+| Template provenance | `aaai2027.sty` `[2027/05/04 AAAI 2027 Submission format]`, byte-identical to the sibling package's copy; `[submission]` option set; no margin/font tampering |
+| Anonymity formatting | `\author{Anonymous submission}`, empty affiliations, 0 web or repository pointers, no PDF Author metadata |
+| Packaging placement | Main PDF · Supplementary Document · Code and Data Supplement, matching the venue's own channel names |
+| No repo link in the PDF | 0 hits (AAAI bans anonymous-repo links) |
+| **Reproducibility checklist** | 🔴 **REQUIRED and was MISSING.** *"Authors must complete the reproducibility checklist provided in the AAAI-27 Author Kit and submit it at the time of paper submission"*, *"uploaded separately from the main paper in the designated field of the submission form"*. Built 2026-08-22, 24 applicable items answered, anonymity clean, now the fourth file in the manifest |
+| Ethics statement placement | 🔴 **Currently past the content boundary.** *"any ethical statements or similar considerations, if included, must be included in the 7 content pages"*. Filed to the task file |
+| Abstract length cap | None stated |
+| Supplementary size/format cap | None stated — the named debt below stands as *unverified*, not violated |
+| Main-content requirement | Outstanding; the remaining work is the author's own and is tracked in the task file, not here |
+
 ## Named debts
+
+
 
 - **Supplementary file-size cap unverified.** No published limit found on the
   AAAI-27 instructions page. 36.1 MB is within normal portal limits but is not

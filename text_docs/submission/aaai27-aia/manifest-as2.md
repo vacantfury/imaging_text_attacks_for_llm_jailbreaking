@@ -2,7 +2,7 @@
 
 Built 2026-08-22, after the one-quantity re-spine and the final `paper-check` fix pass. This file is the package's
 identity: `paper-check` FINAL's staleness key covers every file listed here, and
-the submit step uploads exactly these files. **Any edit to a listed file
+the submit step uploads exactly these four files. **Any edit to a listed file
 invalidates this manifest** (note: `build.sh` embeds a build timestamp, so a
 rebuild alone changes the two PDF hashes even with identical source; hash AFTER
 the last build, never before) — repackage that artifact, then delta re-check.
@@ -17,6 +17,7 @@ cross-read the two.)*
 | `paper.pdf` | Main submission PDF | 0.5 MB | `73f7f35256a0778897538345b6256f7ed73b0a78646150fae223bf9aaed77551` |
 | `supplementary.pdf` | Supplementary Document | 0.3 MB | `7eb89d7321c77cf039b87c287939946dd0a25440bc284013aec0d4b6692470c2` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 36.1 MB | `1c4d9d06c2cda4a0cd7159b77167063806d623da23cb3d912b891e2f3eede2eb` |
+| `ReproducibilityChecklist.pdf` | Reproducibility Checklist (separate field) | 0.08 MB | `d79e2dd53ec1078807faa6ccba1bde4060064ef366f6654e8e6f210668e488e1` |
 
 Source tree: `paper/as-2/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
 `7d53331`. ⚠️ `paper/` is gitignored, so the repo hash does **not** cover the
@@ -40,6 +41,9 @@ python scripts/build_code_artifact.py --paper as2              # the code zip
 | Appendix has no in-PDF home; it goes to the Supplementary Document | [AIA call](https://aaai.org/conference/aaai/aaai-27/aia-call/) + main-track instructions | 2026-08-21, cached in science `venues/aaai27_venue_info.md` |
 | Main submission must be self-contained; reviewers are not obliged to consult supplementary | same | 2026-08-21, cached |
 | No repo link in the PDF (AAAI bans anonymous-repo links; code ships as the zip) | project policy + venue record | swept 2026-08-22: 0 hits |
+| **Reproducibility checklist is REQUIRED, uploaded separately** | [AAAI-27 submission instructions](https://aaai.org/conference/aaai/aaai-27/submission-instructions/): *"Authors must complete the reproducibility checklist provided in the AAAI-27 Author Kit and submit it at the time of paper submission"*, *"uploaded separately from the main paper in the designated field of the submission form"* | 2026-08-22, live — ⚠️ **this was missing from the package until 2026-08-22**; built from the Author Kit template, all 24 applicable items answered, anonymity swept clean |
+| Ethics statement, if included, must sit in the main content pages (not the supplementary) | same | 2026-08-22, live |
+| No stated abstract length cap | same | 2026-08-22, live — not mentioned |
 | **Supplementary file-size cap** | not stated on the instructions page | ⚠️ **UNVERIFIED** — no published limit found 2026-08-22. 34 MB is within normal portal limits but is not confirmed against a stated cap. If the portal refuses it, the fallback is the lean projection (`{id, asr, refusal}`, ~1.3 MB) plus a one-sentence narrowing of the artifact statement. |
 
 ## What the re-spine changed
