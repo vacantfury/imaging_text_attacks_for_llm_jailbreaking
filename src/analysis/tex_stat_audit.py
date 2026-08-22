@@ -224,11 +224,20 @@ def _rows_from_tex(text: str, default_n: int) -> list[Row]:
         # tight ("32/0") and two-metric rate columns spaced ("68 / 29"). Both
         # otherwise satisfy a+b <= n, so the spacing is the only thing that
         # separates them.
-        found = [m for m in
-                 re.finditer(r"(?<![\d.])(\d{1,3})/(\d{1,3})(?![\d.])", chunk)
-                 if int(m.group(1)) + int(m.group(2)) <= default_n
-                 and int(m.group(2)) != default_n
-                 and not _TALLY.match(chunk[m.end():])]
+        # ⚠️ THE ADMISSION GATE MUST USE THE ROW'S OWN n, NOT THE GLOBAL DEFAULT.
+        # Bounding a+b by `default_n` silently DROPS every row of any table whose
+        # sample is larger than the default -- the row is never parsed, so it is
+        # not even reported as unchecked, which is strictly worse than a false
+        # positive (found 2026-08-22: a 300-prompt table with counts 111/6 and
+        # 176/1 was invisible, as was tab:strata before it). The per-table
+        # `% AUDIT-N:` marker already exists; it just has to reach this filter.
+        found = []
+        for m in re.finditer(r"(?<![\d.])(\d{1,3})/(\d{1,3})(?![\d.])", chunk):
+            n_here = _n_at(n_marks, line_at[seg_start + m.start()]) or default_n
+            if (int(m.group(1)) + int(m.group(2)) <= n_here
+                    and int(m.group(2)) != n_here
+                    and not _TALLY.match(chunk[m.end():])):
+                found.append(m)
         # Prose narrates counts too ("37 prompts flipping toward harm against 4
         # away"); those carry headline claims, so match them as well.
         prose = [(m, int(m.group(1)), int(m.group(2))) for m in re.finditer(
