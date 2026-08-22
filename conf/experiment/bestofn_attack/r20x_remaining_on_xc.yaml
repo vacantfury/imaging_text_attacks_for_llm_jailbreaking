@@ -1,0 +1,99 @@
+# bestofn_attack AS-4 — R20X: the LAST FOUR cells, moved to xc.
+#
+# The same four cells as r20c/d/e/f, run as ONE orchestrator on xc instead of a four-job
+# chain on AICR. Nothing about the measurement changes: same post-fix transform, same
+# campaigns, same defense configs, same max_concurrency 64.
+#
+# ── WHY xc ─────────────────────────────────────────────────────────────────
+# AICR's login node went unreachable 2026-08-21 (ssh reset at key exchange, three retries;
+# NURC answered fine from the same machine seconds later, so it is AICR-side). Its jobs keep
+# running on compute nodes but cannot be observed or cancelled. Meanwhile xc was completely
+# idle: partition `main` with NO 4h cap, all 8 A100-80GB free, empty queue, and — checked,
+# not assumed — every model this round needs ALREADY in its cache
+# (/home/thomas/huggingface_cache, the dedicated hf_home from conf/clusters/xc.yaml; the
+# ~/.cache/huggingface tree holds only the AS-3 VLMs and is NOT what the servers read).
+# Zero downloads required.
+#
+# xc is the RIGHT home for exactly these cells: they are the round's longest, and the 4h
+# judge wall on AICR's rtx-devel is what killed them in R19. conf/llm/wildguard.yaml now
+# carries an `xc` profile lifting that to 24h (a model cluster block otherwise overrides
+# conf/clusters/xc.yaml's own 24h default).
+#
+# ── ONE ORCHESTRATOR, NOT FOUR ─────────────────────────────────────────────
+# xc is a SINGLE node: concurrent orchestrators there collide on ports and contend for GPU
+# memory that `squeue` does not show (free job SLOTS never mean free GPU MEMORY). So all
+# four cells run under one orchestrator, four tasks in parallel, one server each:
+# llama + qwen + gemma targets + wildguard = 4 servers, inside xc.yaml's budget of 6.
+# num_cluster_jobs 5 = orchestrator + 4 servers; the replica allocator's floor division
+# gives each model exactly 1 replica, which is optimal anyway because endpoint binding is
+# PER-TASK -- a task can only ever use one replica.
+#
+# ── DUPLICATE HANDLING (deliberate, not an oversight) ──────────────────────
+# The AICR chain (443018/443019/443020/449980) may still be running these same cells and
+# cannot be cancelled while AICR is unreachable. Campaigns are deliberately kept IDENTICAL
+# because these are the same cells: a duplicate (target, defense, attack) key makes
+# load_cells() RAISE ("DUPLICATE cell ... refusing to overwrite silently"), so a collision
+# fails loudly instead of being silently resolved by latest-wins. Whichever copy lands
+# first wins; the other is quarantined. Cancel the AICR copies as soon as it answers.
+#
+#   ssh xc; cd ~/projects/llm_guardrail_security
+#   sbatch scripts/run_experiment_xc.sbatch bestofn_attack/r20x_remaining_on_xc
+num_cluster_jobs: 5
+num_main_job_threads: 4
+tasks:
+- mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  target_model_config:
+    temperature: 1.0
+    max_concurrency: 64
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  defense: semantic_smooth
+  defense_config:
+    n_copies: 5
+    perturbation_model: null
+    judge_model: wildguard
+  campaign: bestofn_attack_r19_p2_main
+- mode: defense+evaluate
+  target_model: qwen2_5_7b_instruct
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  target_model_config:
+    temperature: 1.0
+    max_concurrency: 64
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  defense: semantic_smooth
+  defense_config:
+    n_copies: 5
+    perturbation_model: null
+    judge_model: wildguard
+  campaign: bestofn_attack_r19_p2_main
+- mode: defense+evaluate
+  target_model: gemma2_9b_it
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  target_model_config:
+    temperature: 1.0
+    max_concurrency: 64
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  defense: semantic_smooth
+  defense_config:
+    n_copies: 5
+    perturbation_model: null
+    judge_model: wildguard
+  campaign: bestofn_attack_r19_p2_main
+- mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  target_model_config:
+    temperature: 1.5
+    max_concurrency: 64
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  defense: sage
+  campaign: bestofn_attack_r19_p3_review1

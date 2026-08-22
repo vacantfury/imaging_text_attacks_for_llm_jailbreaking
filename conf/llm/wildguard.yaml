@@ -54,3 +54,10 @@ cluster:
   profiles:
     aicr:
       partition: rtx-devel
+    xc:
+      # xc has ONE partition (`main`) with no 4h cap, so the rtx-devel-shaped wall above
+      # is not just unnecessary here, it is the exact defect that cost R19 four jobs: the
+      # judge server died at 04:00:1x while the round was still generating. conf/clusters/
+      # xc.yaml already defaults servers to 24h, but a model's own `cluster:` block wins
+      # over the cluster defaults, so the 4h value would follow us to xc without this.
+      time_limit: "24:00:00"
