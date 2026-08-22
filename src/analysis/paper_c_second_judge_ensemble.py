@@ -92,7 +92,9 @@ def main() -> int:
         last_guard = guard
 
     # ---- 2. orderings -------------------------------------------------------------
-    print('\n\nORDERING  (the paper\'s story: guard alone > amplifier > +reguard)\n')
+    # NOT "is it descending" — on LlamaGuard-3 the amplifier moves the WRONG way and the
+    # paper says so. The question is whether the two judges AGREE about each step's direction.
+    print('\n\nORDERING  (does each judge order the three conditions the same way?)\n')
     ok = bad = 0
     for guard in S.GUARDS:
         cells = [(guard, c) for c in CONDS]
@@ -102,10 +104,10 @@ def main() -> int:
         ob = [b[c][0] for c in cells]
         agree = all((oa[i] > oa[i + 1]) == (ob[i] > ob[i + 1]) for i in range(len(oa) - 1))
         ok, bad = (ok + 1, bad) if agree else (ok, bad + 1)
-        print(f'  {guard:<22}{"same ordering" if agree else "ORDERING DIFFERS":<20}'
-              f'{JUDGE_A}: {" > ".join(f"{v:.0f}" for v in oa):<20}'
-              f'{JUDGE_B}: {" > ".join(f"{v:.0f}" for v in ob)}')
-    print(f'\n  {ok} guard(s) preserve the ordering, {bad} do not.')
+        print(f'  {guard:<22}{"judges agree" if agree else "JUDGES DIFFER":<20}'
+              f'{JUDGE_A}: {" -> ".join(f"{v:.0f}" for v in oa):<22}'
+              f'{JUDGE_B}: {" -> ".join(f"{v:.0f}" for v in ob)}')
+    print(f'\n  {ok} guard(s): both judges order the conditions identically. {bad} differ.')
 
     # ---- 3. the reguard contrast, which is the corrected family-A result -----------
     print('\n\nTHE REGUARD CONTRAST  (amplifier -> +reguard), the only family that survives'
