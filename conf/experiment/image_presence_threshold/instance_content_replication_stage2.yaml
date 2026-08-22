@@ -1,0 +1,127 @@
+# Paper B (AS-2) · E2 CONTENT-INSTANCE REPLICATION — STAGE 2 (query + judge)
+#
+# Consumes the ten arms rendered by `instance_content_replication_stage1.yaml`
+# (NURC 9451840, 10/10, 45s). Answers cspaper review 6 con 3 / Q3, verbatim:
+# *"Stable multi-instance effects would raise my score."*
+#
+# ⚠️ TWO DIFFERENT CLAIMS LIVE IN THIS FILE. DO NOT MERGE THEM IN THE WRITE-UP.
+#   * INSTANCE replication (the reviewer's real question): three line drawings
+#     against a matched 512^2 blank, three caption sentences against a matched
+#     1024x141 blank. Three genuine draws from a content class.
+#   * RUN-TO-RUN replication (weaker, kept because it is cheap and useful):
+#     black and grey at 512^2 re-measure the published colour cells on a fresh
+#     draw. This is NOT instance replication -- three independent renders of a
+#     flat fill are byte-identical, so the instance of a colour IS the colour.
+#     The degeneracy is stated in the paper rather than papered over with three
+#     identical arms.
+#
+# ✅ STAGE-1 INTEGRITY VERIFIED BEFORE THIS FILE WAS WRITTEN (do not re-assume):
+# all ten arms hold exactly 100 images with exactly ONE distinct md5 each, and
+# all ten arm hashes differ from one another. So every arm is byte-identical
+# within itself -- the control that licenses "the cue carries no per-prompt
+# information" -- and genuinely distinct between arms.
+#
+# ⚠️ ANCHORS BELOW WERE READ FROM THE STORED RENDERER CONFIG, NOT THE PATH.
+# Four dirs end in `ir_blank` and six in `ir_constant`, so they differ ONLY by
+# timestamp+rand; identity came from `results_history[*].<leaf>.config`
+# (width/height/bg_color/image_path). Reading the arm from the last path
+# component is the substring bug that has bitten this paper three times.
+#
+# EVERY CONTRAST IS INTERNAL TO THIS JOB. Both matched blanks are re-run here
+# rather than compared against the published property cells, because these
+# targets are not deterministic and cross-job comparison is not licensed. That
+# is also what makes this a real replication instead of a continuation.
+#
+# JUDGE PINNED: `jbb_refusal` + `gpt-5-mini`, the same instrument as every other
+# AS-2 benign cell. Do NOT let it auto-infer.
+#
+# PRE-REGISTERED READ-OUT — see the stage-1 header, committed at 711a8b3 BEFORE
+# any data existed. In short: P1 = instances agree in direction and their spread
+# is smaller than the level effect (objection answered); P2 = spread comparable
+# to or larger than the effect, or signs disagree (the content property claim
+# comes OUT of the paper -- report it, do not re-run it away); P3 = the colour
+# contrasts reproduce in sign. Floor/ceiling guard: a block whose matched-blank
+# reference sits outside 10-90% is reported as floored/saturated and is not
+# counted as a powered contrast.
+#
+# COST — from THIS repo's stored `target_usage.total.cost` on real 100-prompt
+# benign cells, not from a rate card: median per cell claude-sonnet-4-6 $0.419
+# (14 cells), gpt-4o-mini $0.225 (21), gemini-2.5-flash-lite $0.034 (21).
+# 11 cells each => ~$7.3 target. Judge: 3300 gpt-5-mini calls at ~1.5k in /
+# ~0.15k out => ~$2.3. TOTAL ~$9.6 expected. Tail risk is output-length driven
+# (one stored claude cell ran to 192k output tokens = $1.45), so a verbose draw
+# could carry this to ~$15; that is the honest bound, not the estimate.
+# Owner-approved 2026-08-21 at the ~$11 tier.
+# NOTE: the older property-ablation header guessed ~$2.20/cell for claude. That
+# was an estimate; the measurement above supersedes it.
+#
+# SUBMIT (NURC — AICR was refusing SSH; this round is API-only, no GPU, and the
+# 1Password service-account injection was verified working on NURC first):
+#   ssh explorer 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment.sbatch image_presence_threshold/instance_content_replication_stage2'
+
+num_main_job_threads: 6
+num_cluster_jobs: 1          # API targets + API judge — no vLLM server needed.
+
+_text:   &text   outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/non_llm_baseline
+# --- BLOCK A: 512x512 ---
+_a_white: &a_white outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260821_232149_49683396/ir_blank
+_a_black: &a_black outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260821_232149_73227492/ir_blank
+_a_grey:  &a_grey  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260821_232149_87613822/ir_blank
+_a_house: &a_house outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_constant_20260821_232149_24032651/ir_constant
+_a_boat:  &a_boat  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_constant_20260821_232151_6765741/ir_constant
+_a_tree:  &a_tree  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_constant_20260821_232151_24589313/ir_constant
+# --- BLOCK B: 1024x141 ---
+_b_white: &b_white outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260821_232151_37041547/ir_blank
+_b_capa:  &b_capa  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_constant_20260821_232151_4348914/ir_constant
+_b_capb:  &b_capb  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_constant_20260821_232152_68702830/ir_constant
+_b_capc:  &b_capc  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_constant_20260821_232152_40795318/ir_constant
+
+_b: &b
+  mode: defense+evaluate
+  defense: no_defense
+  prompt_range: [0, 99]
+  benchmark: jailbreakbench_benign
+  judge_method: jbb_refusal
+  judge_model: gpt-5-mini
+  campaign: paper_b_instance_content_replication
+
+tasks:
+  # ================== gemini-2.5-flash-lite — 11 cells ==================
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *text}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *a_white}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *a_black}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *a_grey}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *a_house}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *a_boat}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *a_tree}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *b_white}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *b_capa}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *b_capb}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, source_transform_subdir: *b_capc}
+
+  # ====================== gpt-4o-mini — 11 cells ========================
+  - {<<: *b, target_model: gpt-4o-mini, source_transform_subdir: *text}
+  - {<<: *b, target_model: gpt-4o-mini, source_transform_subdir: *a_white}
+  - {<<: *b, target_model: gpt-4o-mini, source_transform_subdir: *a_black}
+  - {<<: *b, target_model: gpt-4o-mini, source_transform_subdir: *a_grey}
+  - {<<: *b, target_model: gpt-4o-mini, source_transform_subdir: *a_house}
+  - {<<: *b, target_model: gpt-4o-mini, source_transform_subdir: *a_boat}
+  - {<<: *b, target_model: gpt-4o-mini, source_transform_subdir: *a_tree}
+  - {<<: *b, target_model: gpt-4o-mini, source_transform_subdir: *b_white}
+  - {<<: *b, target_model: gpt-4o-mini, source_transform_subdir: *b_capa}
+  - {<<: *b, target_model: gpt-4o-mini, source_transform_subdir: *b_capb}
+  - {<<: *b, target_model: gpt-4o-mini, source_transform_subdir: *b_capc}
+
+  # =================== claude-sonnet-4-6 — 11 cells =====================
+  - {<<: *b, target_model: claude-sonnet-4-6, source_transform_subdir: *text}
+  - {<<: *b, target_model: claude-sonnet-4-6, source_transform_subdir: *a_white}
+  - {<<: *b, target_model: claude-sonnet-4-6, source_transform_subdir: *a_black}
+  - {<<: *b, target_model: claude-sonnet-4-6, source_transform_subdir: *a_grey}
+  - {<<: *b, target_model: claude-sonnet-4-6, source_transform_subdir: *a_house}
+  - {<<: *b, target_model: claude-sonnet-4-6, source_transform_subdir: *a_boat}
+  - {<<: *b, target_model: claude-sonnet-4-6, source_transform_subdir: *a_tree}
+  - {<<: *b, target_model: claude-sonnet-4-6, source_transform_subdir: *b_white}
+  - {<<: *b, target_model: claude-sonnet-4-6, source_transform_subdir: *b_capa}
+  - {<<: *b, target_model: claude-sonnet-4-6, source_transform_subdir: *b_capb}
+  - {<<: *b, target_model: claude-sonnet-4-6, source_transform_subdir: *b_capc}
