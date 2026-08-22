@@ -580,6 +580,13 @@ def _orphan_placeholders(numbers: dict, tex: str) -> list[str]:
     return []
 
 
+def _value_in(val: str, tex: str) -> bool:
+    """Same matching rule verify() uses: literal for N/100, token for a bare int."""
+    if "/" in val:
+        return val in tex
+    return bool(re.search(rf"(?<![0-9.]){re.escape(val)}(?![0-9.])", tex))
+
+
 def verify(numbers: dict, tex_path: str) -> list[str]:
     """Every measured ASR / block count must appear literally in the .tex."""
     with open(tex_path) as fh:
@@ -769,6 +776,11 @@ def main() -> int:
     v = sub.add_parser("verify", help="check paper.tex against the numbers file")
     v.add_argument("--numbers", required=True)
     v.add_argument("--tex", required=True)
+    v.add_argument("--supp", default=None,
+                   help="supplementary .tex. A value absent from --tex but present "
+                        "here is reported as a DEMOTION, not as drift: it is still "
+                        "shipped, but it no longer supports a claim in the main "
+                        "paper, which AAAI requires to be self-contained.")
 
     mp = sub.add_parser("multiplicity", help="Holm-Bonferroni within declared families")
     mp.add_argument("--numbers", required=True)
@@ -806,12 +818,29 @@ def main() -> int:
         return 0
 
     missing = verify(numbers, a.tex)
+    demoted = []
+    if missing and a.supp:
+        # Split the misses: still in the shipped package (demoted to the
+        # supplementary) vs gone from the submission entirely (real drift).
+        with open(a.supp) as fh:
+            supp_tex = fh.read()
+        still, gone = [], []
+        for m in missing:
+            val = m.split(" absent from tex")[0].split()[-1]
+            (still if _value_in(val, supp_tex) else gone).append(m)
+        demoted, missing = still, gone
+    if demoted:
+        print(f"DEMOTED: {len(demoted)} value(s) left the main paper but are in "
+              f"{a.supp} -- the main paper no longer states them")
+        for m in demoted:
+            print("  ..", m)
     if missing:
         print(f"DRIFT: {len(missing)} measured value(s) not found in {a.tex}")
         for m in missing:
             print("  !!", m)
         return 1
-    print(f"verify OK -- every measured ASR and block rate appears in {a.tex}")
+    print(f"verify OK -- every measured ASR and block rate appears in {a.tex}"
+          + (f" ({len(demoted)} demoted to the supplementary)" if demoted else ""))
     return 0
 
 
