@@ -1,4 +1,4 @@
-# bestofn_attack AS-4 — R21A: the VERDICT-ISOLATION experiment (Llama + Qwen).
+# bestofn_attack AS-4 — R21C: the VERDICT-ISOLATION experiment (Qwen).
 #
 # ── WHAT THIS ANSWERS ──────────────────────────────────────────────────────
 # cspaper review 8, con 2 / Q2: "run an intervention that holds the safety-screening
@@ -40,41 +40,22 @@
 # is ever reported. The reportable pass is a gpt-5-mini rejudge over stored
 # responses, costed and proposed separately once the cells land.
 #
-# ── JOB BUDGET ─────────────────────────────────────────────────────────────
-# NURC caps concurrent jobs low, so this preset takes two targets:
-# orchestrator + llama server + qwen server + wildguard = 4. Gemma runs in r21b,
-# chained behind it with --dependency=afterany.
-num_cluster_jobs: 4
+#
+# ── RESIZED 2026-08-22, AFTER A HARD BLOCK ─────────────────────────────────
+# The first version took two targets and asked for three servers. NURC's cap is
+# PER USER, not per session, and a sibling project's jobs were already holding
+# slots, so the orchestrator's own pre-flight read
+#     gpu_cap=4, existing GPU jobs=3, servers_wanted=3 -> available_slots=1
+# and submitted all three anyway. Two servers started; the llama server sat at
+# QOSMaxJobsPerUserLimit and could not. Both running tasks were the llama cells
+# (num_main_job_threads=2 takes the first two tasks, and both are llama), so the
+# round was fully blocked while its 8h wall ran down.
+# ONE TARGET PER ORCHESTRATOR is the fix: orchestrator + target + wildguard = 3
+# jobs, which fits beside a sibling's work instead of competing with it. The
+# three presets chain on --dependency=afterany so they never contend either.
+num_cluster_jobs: 3
 num_main_job_threads: 2
 tasks:
-- mode: defense+evaluate
-  target_model: llama3_1_8b_cluster
-  judge_model: wildguard
-  judge_method: wildguard
-  benchmark: harmbench
-  target_model_config:
-    temperature: 1.0
-    max_concurrency: 32
-  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
-  defense: llm_self_defense
-  defense_config:
-    filter_model: null
-    filter_temperature: 1.0
-  campaign: bestofn_attack_r21_verdict_isolation
-- mode: defense+evaluate
-  target_model: llama3_1_8b_cluster
-  judge_model: wildguard
-  judge_method: wildguard
-  benchmark: harmbench
-  target_model_config:
-    temperature: 1.0
-    max_concurrency: 32
-  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
-  defense: llm_self_defense
-  defense_config:
-    filter_model: null
-    filter_temperature: 0.0
-  campaign: bestofn_attack_r21_verdict_isolation
 - mode: defense+evaluate
   target_model: qwen2_5_7b_instruct
   judge_model: wildguard

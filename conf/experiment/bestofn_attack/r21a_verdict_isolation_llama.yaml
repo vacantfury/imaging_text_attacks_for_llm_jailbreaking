@@ -1,0 +1,86 @@
+# bestofn_attack AS-4 — R21A: the VERDICT-ISOLATION experiment (Llama).
+#
+# ── WHAT THIS ANSWERS ──────────────────────────────────────────────────────
+# cspaper review 8, con 2 / Q2: "run an intervention that holds the safety-screening
+# prompt and downstream answer-generation protocol fixed while varying only verdict
+# stochasticity." The paper's temperature panel (tab:temperature) cannot do this. It
+# moves the TARGET's decoding temperature, which changes the answer distribution and
+# the verdict distribution at the same time, so its net-of-control quantity is a
+# difference-in-differences on a nonlinear endpoint, not an isolated measurement of
+# verdict sampling. The reviewer is right about that.
+#
+# ── WHY NOT SAGE ───────────────────────────────────────────────────────────
+# SAGE cannot host this experiment AT ALL, and that is a finding rather than an
+# inconvenience. src/defense/sage.py issues a SINGLE call: it wraps the request in a
+# safety-analysis template and the verdict and the answer emerge from the same
+# generation. There is no separately addressable verdict to hold fixed. This also
+# explains review 8's con 2: SAGE and SelfDefend do not differ only in "whom they
+# ask", they differ first in CALL STRUCTURE (one fused call vs two).
+#
+# ── THE DESIGN ─────────────────────────────────────────────────────────────
+# LLM Self Defense already screens in a SECOND call, and with filter_model=null that
+# screener IS the target model -- the paper's own borrowed-strength condition. So we
+# pin generation at T=1.0 and vary ONLY the screening call's temperature:
+#
+#   A  generate T=1.0, screen T=1.0   (the standing condition)
+#   B  generate T=1.0, screen T=0.0   (verdict fixed, answer still sampled)
+#
+# A vs B holds the screening prompt, the model, the call structure and the downstream
+# protocol identical. Exactly one thing changes: whether the verdict is resampled.
+# That is the reviewer's requested intervention, and unlike the target-temperature
+# sweep it identifies the channel it names.
+#
+# Condition A is re-run rather than reused from tab:temperature so both arms come
+# from the SAME round; generation is free on the cluster and a cross-round control is
+# the cheapest way to keep drift out of the contrast.
+#
+# ── JUDGE ──────────────────────────────────────────────────────────────────
+# WildGuard, on the cluster, free. These are INTEGRITY numbers only -- WildGuard
+# over-flags on code-encoded arms and NO WildGuard number from a code-bearing round
+# is ever reported. The reportable pass is a gpt-5-mini rejudge over stored
+# responses, costed and proposed separately once the cells land.
+#
+#
+# ── RESIZED 2026-08-22, AFTER A HARD BLOCK ─────────────────────────────────
+# The first version took two targets and asked for three servers. NURC's cap is
+# PER USER, not per session, and a sibling project's jobs were already holding
+# slots, so the orchestrator's own pre-flight read
+#     gpu_cap=4, existing GPU jobs=3, servers_wanted=3 -> available_slots=1
+# and submitted all three anyway. Two servers started; the llama server sat at
+# QOSMaxJobsPerUserLimit and could not. Both running tasks were the llama cells
+# (num_main_job_threads=2 takes the first two tasks, and both are llama), so the
+# round was fully blocked while its 8h wall ran down.
+# ONE TARGET PER ORCHESTRATOR is the fix: orchestrator + target + wildguard = 3
+# jobs, which fits beside a sibling's work instead of competing with it. The
+# three presets chain on --dependency=afterany so they never contend either.
+num_cluster_jobs: 3
+num_main_job_threads: 2
+tasks:
+- mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  target_model_config:
+    temperature: 1.0
+    max_concurrency: 32
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  defense: llm_self_defense
+  defense_config:
+    filter_model: null
+    filter_temperature: 1.0
+  campaign: bestofn_attack_r21_verdict_isolation
+- mode: defense+evaluate
+  target_model: llama3_1_8b_cluster
+  judge_model: wildguard
+  judge_method: wildguard
+  benchmark: harmbench
+  target_model_config:
+    temperature: 1.0
+    max_concurrency: 32
+  source_transform_subdir: outputs/bestofn_attack/prompt_transform/harmbench/code_attack_20260805_212854_26701649/code_attack
+  defense: llm_self_defense
+  defense_config:
+    filter_model: null
+    filter_temperature: 0.0
+  campaign: bestofn_attack_r21_verdict_isolation
