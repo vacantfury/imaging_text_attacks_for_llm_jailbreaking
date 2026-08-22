@@ -403,8 +403,22 @@ class Experiment:
                 f"overrides {sorted(profile_overrides)}")
         return merged
 
-    def _count_existing_gpu_jobs(self) -> int:
+    def _count_existing_gpu_jobs(self, partition: str | None = None) -> int:
         """Count this user's existing GPU-holding SLURM jobs.
+
+        SCOPED BY PARTITION when one is given, because the cap this feeds is a
+        PARTITION QOS, not an account-wide quota. On NURC each GPU partition
+        carries its own QOS with its own `MaxTRESPU=gres/gpu` (measured
+        2026-08-22: `gpu`->qos `gpu`, 4 GPUs, 8h wall; `gpu-short`->qos
+        `gpu-short`, 2 GPUs, 2h; `sharing`->qos `sharing`, 2 GPUs, 1h), so a job
+        running in `gpu` does NOT consume any part of the `gpu-short` allowance.
+        Counting across partitions charged them against each other and made a
+        completely idle partition look full -- which is how a round sat waiting
+        on `gpu` while `gpu-short` had both its slots free.
+
+        Passing no partition keeps the old account-wide behaviour, which is
+        correct on the single-GPU-partition clusters (xc's `main`, AICR) and is
+        the fail-safe when a profile does not name its partition.
 
         The binding limit is on GPUs, not on jobs. NURC's `gpu` PARTITION
         enforces the `gpu` QOS (MaxJobsPU=4, MaxTRESPU=gres/gpu=4) even though
@@ -438,7 +452,7 @@ class Experiment:
         try:
             result = subprocess.run(
                 ["squeue", "-u", user, "-h",
-                 "-O", "JobID:.24,tres-per-node:.40,tres-per-job:.40"],
+                 "-O", "JobID:.24,Partition:.24,tres-per-node:.40,tres-per-job:.40"],
                 capture_output=True, text=True, timeout=15)
         except (subprocess.TimeoutExpired, FileNotFoundError):
             logger.debug("squeue unavailable; skipping pre-flight budget check.")
@@ -449,13 +463,20 @@ class Experiment:
         n = 0
         for line in result.stdout.splitlines():
             fields = line.split()
-            if not fields:
+            if len(fields) < 2:
                 continue
-            job_id, rest = fields[0], " ".join(fields[1:])
+            # Fields are JobID, Partition, then the two TRES columns. The GRES
+            # test reads the TRES columns ONLY -- a partition literally named
+            # "gpu-short" would otherwise match the substring test by its name
+            # and every job in it would count as GPU-holding.
+            job_id, job_partition, rest = fields[0], fields[1], " ".join(fields[2:])
             if own_job and job_id == own_job:
                 continue
-            if "gpu" in rest.lower():
-                n += 1
+            if "gpu" not in rest.lower():
+                continue
+            if partition and job_partition != partition:
+                continue
+            n += 1
         return n
 
     @staticmethod
@@ -589,10 +610,14 @@ class Experiment:
         import os
         from .config import load_cluster_profile
         profile = os.environ.get("CLUSTER_PROFILE", "").strip() or "nurc"
+        gpu_partition = None
         try:
             _prof = load_cluster_profile(profile, self.conf_dir)
             gpu_cap = int(_prof.get("max_gpu_jobs",
                                     _prof.get("budget", MAX_SUBMIT_JOBS_PER_USER)))
+            # The partition the SERVERS land in, which is the one whose QOS cap
+            # `gpu_cap` states. None -> count account-wide (see the counter).
+            gpu_partition = _prof.get("partition") or None
         except Exception:
             gpu_cap = MAX_SUBMIT_JOBS_PER_USER
 
@@ -600,7 +625,7 @@ class Experiment:
         # it is NOT charged against the GPU cap. `num_cluster_jobs` keeps its
         # historical meaning — orchestrator + servers — hence the -1 here.
         servers_wanted = self.num_cluster_jobs - 1
-        existing = self._count_existing_gpu_jobs()
+        existing = self._count_existing_gpu_jobs(gpu_partition)
         available_slots = min(servers_wanted, gpu_cap - existing)
         logger.info(
             f"Pre-flight [{profile}]: gpu_cap={gpu_cap}, existing GPU jobs={existing}, "

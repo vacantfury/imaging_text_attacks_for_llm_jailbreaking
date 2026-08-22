@@ -1,0 +1,35 @@
+# NURC variant that serves on the `gpu-short` partition instead of `gpu`.
+#
+# WHY THIS EXISTS (measured 2026-08-22). NURC's GPU ceiling is a PARTITION QOS,
+# not an account-wide quota, and each GPU partition carries its own:
+#
+#   partition    qos          MaxTRESPU      MaxJobsPU   wall
+#   gpu          gpu          gres/gpu=4     4           8:00:00
+#   gpu-short    gpu-short    gres/gpu=2     2           2:00:00
+#   sharing      sharing      gres/gpu=2     2           1:00:00
+#
+# So `gpu-short` is a SEPARATE two-GPU allowance that a full `gpu` partition
+# does not consume. With concurrent sessions saturating `gpu` (its cap of 4 is
+# per USER, so sibling sessions in other repos compete for it), this profile is
+# the difference between a short round running now and waiting hours. It raises
+# this account's usable concurrency from 4 GPUs to 6.
+#
+# The `multigpu` QOS (gres/gpu=8) exists on the box but is NOT reachable: this
+# account is associated with QOS `normal` only, and the partition's own QOS is
+# what binds. Do not add a profile for it without re-checking `sacctmgr show
+# assoc user=$USER` first.
+#
+# ONLY FOR SHORT ROUNDS. The 2h wall is hard, and a round that outruns its wall
+# dies partway with no data and no error. Comparable guard cells measured ~200s
+# each, so a 4-cell guard round plus server startup lands near 25 minutes, which
+# fits with wide margin. Check the projected length before every submit here;
+# anything that could approach 2h belongs on `gpu`.
+extends: nurc
+cluster:
+  sbatch: scripts/run_experiment_gpushort.sbatch
+  partition: gpu-short
+  budget: 2                                 # gpu-short QOS MaxTRESPU=gres/gpu=2
+  max_gpu_jobs: 2
+  max_submit: 8                             # gpu-short QOS MaxSubmitPU=8
+  max_slurm_time_limit: "02:00:00"          # hard partition wall; clamps time_limit
+  time_limit: "02:00:00"
