@@ -1,0 +1,74 @@
+# Paper B (AS-2) · REVIEW-7 Q1 — RANDOMIZED INTERLEAVED CONFIRMATION, open checkpoint
+#
+# WHY. cspaper review 7, con 1 and Q1, and named FIRST in the reviewer's own
+# "why not one level up": every contrast in the paper is assembled from two
+# separately-dispatched batches (one arm per task). The arms start within the
+# same second and their windows overlap by a median of 77% -- measured and
+# reported -- but that is a BOUND on the confound, not its removal. Transient
+# provider-side routing, load, cache state or a silent safety update could in
+# principle differ between two batches and be read as an attachment effect.
+# The reviewer asks for the design that removes it by construction:
+# *"randomize text-only and blank-image requests within the same microbatches
+# and randomize request order."*
+#
+# WHAT THIS DOES. `mode: interleaved_paired` (added for this round) pairs the two
+# source dirs on prompt id, emits one conversation per (id, condition), SHUFFLES
+# the combined 200 under a recorded seed, and issues them as ONE batch. Any
+# transient serving state is then shared across conditions rather than
+# confounded with them. Both arms are judged with the same pinned judge and the
+# paired contrast is computed by the validated builder
+# (`src/analysis/paired_binary.py`).
+#
+# ⚠️ CONFIRMATORY, NOT A REPLACEMENT — do not let a later session "upgrade" the
+# main design to this one. Interleaving deliberately gives up the property that
+# an arm is one homogeneous batch, and byte-identity-within-arm is exactly what
+# licenses the paper's claim that the cue carries no per-prompt information.
+# The two designs answer different objections and the paper keeps both.
+#
+# ⚠️ RUNG, NOT LABEL. Both dirs sit under a path-inferred
+# `jailbreakbench_benign` label, but their CONTENT is OR-Bench **borderline**-
+# benign (numeric ids, "seemingly toxic but actually benign"). Verified
+# 2026-08-21 by reading the prompts. Describe these cells by their RUNG. The
+# judge is pinned explicitly so the instrument matches every other AS-2 benign
+# cell regardless of the label.
+#
+# PRE-REGISTERED READ-OUT, recorded before the run:
+#   P1  The interleaved contrast reproduces the arm-batched one in SIGN and
+#       lands within a reasonable margin of it (the paper's qwen3-vl-8b
+#       borderline shift is ~+29pp, re-collected three times at +32/+28/+29).
+#       => the scheduling confound is not carrying the effect; con 1 answered.
+#   P2  The interleaved contrast is materially SMALLER or vanishes.
+#       => arm-level batching was contributing, the paper's central magnitude is
+#       overstated, and that must be reported and the claim rewritten. This is
+#       the outcome that costs us; report it, do not re-run it away.
+#   P3  The interleaved contrast is materially LARGER. => batching was masking
+#       part of the effect; report as measured, claim no more than that.
+# Floor/ceiling guard, pre-fixed: if the text arm falls outside 10-90% the
+# contrast is reported as floored/saturated and not counted as powered.
+#
+# COST: target is cluster-served (free GPU); ~200 gpt-5-mini judge calls, ~$0.12.
+# The HOSTED half of Q1 is sized separately and needs the owner's word.
+#
+# SUBMIT (NURC):
+#   ssh explorer 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment.sbatch image_presence_threshold/interleaved_confirm_ow'
+
+num_main_job_threads: 2
+num_cluster_jobs: 2          # orchestrator + 1 vLLM server (single target)
+
+_text:  &text  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/non_llm_baseline
+_blank: &blank outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260821_232149_49683396/ir_blank
+
+tasks:
+  - mode: interleaved_paired
+    source_a: *text
+    source_b: *blank
+    label_a: text
+    label_b: canvas
+    target_model: qwen3_vl_8b_instruct
+    benchmark: jailbreakbench_benign
+    judge_method: jbb_refusal
+    judge_model: gpt-5-mini
+    prompt_range: [0, 99]
+    seed: 20260821
+    campaign: paper_b_interleaved_confirm
