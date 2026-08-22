@@ -544,9 +544,54 @@ class AdaptiveAttackTask(_TaskBase):
 
 
 # Discriminated union: Pydantic dispatches by `mode`.
+class InterleavedPairedTask(_TaskBase):
+    """Both conditions of the principal contrast in ONE randomized batch.
+
+    WHY THIS MODE EXISTS. Every other mode runs one arm per task, so a paired
+    contrast is assembled from two separately-dispatched batches. The arms start
+    within the same second and their collection windows overlap heavily (measured
+    and reported), but overlap is incidental, not structural: transient
+    provider-side routing, load, cache state or a silent safety update could in
+    principle differ between two batches and masquerade as an attachment effect.
+    cspaper review 7, con 1 and Q1, asks for the design that removes the
+    objection by construction rather than bounding it by measurement:
+    *"randomize text-only and blank-image requests within the same microbatches
+    and randomize request order."*
+
+    WHAT IT DOES. Loads BOTH source dirs, pairs them on prompt id, emits one
+    conversation per (id, condition), shuffles the combined list under a recorded
+    seed, and issues them as a SINGLE batch to the target. Each condition is then
+    judged with the same judge and the paired contrast is computed on shared ids.
+    Any transient serving state is therefore shared across conditions instead of
+    being confounded with them.
+
+    ⚠️ THIS IS A CONFIRMATORY DESIGN, NOT A REPLACEMENT. Randomized interleaving
+    deliberately gives up the property that a single arm is one homogeneous
+    batch, and the main design's byte-identity-within-arm control is what
+    licenses the paper's claim that the cue carries no per-prompt information.
+    The two designs answer different objections; keep both.
+
+    NO DEFENSE. The principal contrast is measured with no defense anywhere in
+    the pipeline, so this mode calls the target directly and does not construct
+    a Defense. A defended variant would need the defense to own the interleaving,
+    which is a different object.
+    """
+    mode: Literal["interleaved_paired"]
+    source_a: str                # condition A dir (canonically the text arm)
+    source_b: str                # condition B dir (canonically the image arm)
+    target_model: str
+    label_a: str = "text"
+    label_b: str = "image"
+    seed: int = 20260821         # recorded in results.json; the run is replayable
+    judge_model: Optional[str] = None
+    judge_method: Optional[str] = None
+    system_message: Optional[str] = None
+    target_model_config: Optional[dict[str, Any]] = None
+
+
 TaskConfig = Annotated[
     Union[PromptTransformTask, DefenseEvaluateTask, AnalyzeTask, RejudgeTask,
-          AdaptiveAttackTask],
+          AdaptiveAttackTask, InterleavedPairedTask],
     Discriminator("mode"),
 ]
 

@@ -923,12 +923,204 @@ def _run_analyze(task) -> dict[str, Any]:
 # ======================== Dispatcher ========================
 
 
+def _run_interleaved_paired(task) -> dict[str, Any]:
+    """Both conditions of the principal contrast, randomized into ONE batch.
+
+    Answers cspaper review 7 con 1 / Q1. Every other mode dispatches one arm per
+    task, so a paired contrast is assembled from two separate batches; here the
+    two conditions are shuffled together under a recorded seed and issued as a
+    single batch, so transient provider-side state is SHARED across conditions
+    instead of being confounded with them.
+
+    See InterleavedPairedTask for why this is confirmatory and does not replace
+    the main design.
+    """
+    import random
+    from src.defense.base import build_conversation_message
+
+    t0 = time.time()
+    src_a, src_b = Path(task.source_a), Path(task.source_b)
+    for tag, d in (("source_a", src_a), ("source_b", src_b)):
+        if not d.exists():
+            raise FileNotFoundError(f"{tag} does not exist: {d}")
+    up_a, up_b = _load_results(str(src_a)), _load_results(str(src_b))
+    if not up_a or not up_b:
+        raise ValueError("both source dirs must carry results.json")
+    mm_a = bool(up_a.get("is_multimodal", False))
+    mm_b = bool(up_b.get("is_multimodal", False))
+    benchmark = (task.benchmark or up_b.get("benchmark")
+                 or _infer_benchmark(str(src_b)))
+
+    by_a = {p.id: p for p in _apply_prompt_range(_load_prompts(str(src_a)), task.prompt_range)}
+    by_b = {p.id: p for p in _apply_prompt_range(_load_prompts(str(src_b)), task.prompt_range)}
+    ids = [i for i in by_a if i in by_b]
+    if not ids:
+        raise ValueError(
+            "source_a and source_b share no prompt ids — the arms are not "
+            f"paired ({len(by_a)} vs {len(by_b)} prompts)")
+    unmatched = (set(by_a) ^ set(by_b))
+    if unmatched:
+        # Loud, never silent: an unpaired id would otherwise quietly shrink the
+        # contrast's denominator and look like a clean run.
+        logger.warning(
+            f"interleaved_paired: {len(unmatched)} prompt id(s) present in only "
+            f"one arm — EXCLUDED from both: {sorted(unmatched)[:10]}")
+
+    # Build one unit per (id, condition), then shuffle the COMBINED list. The
+    # seed is recorded in results.json, so the realized order is replayable.
+    units = []
+    for pid in ids:
+        units.append((f"{task.label_a}::{pid}", task.label_a, by_a[pid], src_a, mm_a))
+        units.append((f"{task.label_b}::{pid}", task.label_b, by_b[pid], src_b, mm_b))
+    rng = random.Random(task.seed)
+    rng.shuffle(units)
+
+    conversations = [
+        (uid, build_conversation_message(p, mm, sd))
+        for uid, _cond, p, sd, mm in units
+    ]
+    logger.info(
+        f"interleaved_paired: {len(ids)} ids x 2 conditions = "
+        f"{len(conversations)} conversations, shuffled under seed={task.seed}, "
+        f"issued as ONE batch to {task.target_model}")
+
+    out_dir = Path(get_new_experiment_data_dir(
+        "outputs/interleaved_paired", dataset=benchmark,
+        model=f"{task.target_model}_{task.label_a}_vs_{task.label_b}",
+    ))
+
+    target_overrides = dict(task.target_model_config or {})
+    target_service = LLMServiceFactory.create(task.target_model, **target_overrides)
+    target_llm = LLMModel.from_string(task.target_model)
+    target_model_config = {
+        **LLMServiceFactory._load_model_defaults(target_llm),
+        **target_overrides,
+    }
+
+    responses = dict(target_service.batch_chat(
+        conversations=conversations,
+        system_message=task.system_message,
+        is_test=True,
+    ))
+
+    # Split back by condition, judge each side with the SAME judge. Judging is a
+    # separate pass and is not part of the interleaving claim, which is about the
+    # target call.
+    arms: dict[str, dict] = {}
+    per_condition_rows: dict[str, list] = {}
+    for label, by_id, src in ((task.label_a, by_a, src_a), (task.label_b, by_b, src_b)):
+        rows, n_err = [], 0
+        for pid in ids:
+            resp = responses.get(f"{label}::{pid}", "")
+            failed = is_mechanism_error(resp)
+            n_err += bool(failed)
+            p = by_id[pid]
+            rows.append(EvaluationRow(
+                id=pid, prompt_stage=f"{label}__interleaved",
+                response=strip_mechanism_error(resp), asr=None,
+                num_images=len(p.image_encoded) if p.image_encoded else 0,
+                is_within_maxlen=True, is_correctly_processed=not failed))
+        if n_err:
+            logger.warning(
+                f"interleaved_paired[{label}]: {n_err}/{len(rows)} mechanism "
+                f"errors — excluded from judging.")
+        judged_rows = [r for r in rows if r.is_correctly_processed]
+        prompts_for_judge = [by_id[r.id] for r in judged_rows]
+        try:
+            judged = _run_judging(
+                prompts=prompts_for_judge, all_rows=judged_rows,
+                benchmark=benchmark, judge_method_override=task.judge_method,
+                stage_label=f"{label}__interleaved",
+                judge_model_override=task.judge_model,
+            )
+        except Exception as e:
+            logger.error(
+                f"interleaved_paired[{label}] judging failed — responses "
+                f"PRESERVED in {out_dir}; recover with mode: rejudge. Cause: {e}")
+            judged = {"asr": None, "refusal": None, "eval_stats": {},
+                      "judge_config_hash": None, "judge_errors": [str(e)],
+                      "metrics": {}, "primary_metric": None}
+        arms[label] = {
+            "asr": judged["asr"], "refusal_rate": judged["refusal"],
+            "eval_stats": judged["eval_stats"],
+            "judge_errors": list(judged["judge_errors"]),
+            "n_mechanism_errors": n_err, "n": len(rows),
+        }
+        per_condition_rows[label] = rows
+        write_jsonl_atomic(
+            out_dir / f"raw_results_{label}.jsonl",
+            [r.model_dump_json() for r in rows])
+
+    # Paired contrast on ids scored in BOTH arms, via the validated builder.
+    from src.analysis.paired_binary import paired_difference
+    contrasts: dict[str, dict] = {}
+    ra = {r.id: r for r in per_condition_rows[task.label_a]}
+    rb = {r.id: r for r in per_condition_rows[task.label_b]}
+    # BOTH metrics when both judges ran. An earlier version computed the first
+    # available metric and stopped, which on a benchmark with dual harm+refusal
+    # judges would have silently reported the refusal contrast under a harmful
+    # run and never computed ASR at all.
+    for field in ("refusal", "asr"):
+        pairs = [
+            (1 if getattr(rb[i], field) else 0, 1 if getattr(ra[i], field) else 0)
+            for i in ids
+            if getattr(rb.get(i), field, None) is not None
+            and getattr(ra.get(i), field, None) is not None
+        ]
+        if not pairs:
+            continue
+        res = paired_difference(pairs)
+        contrasts[field] = {
+            "metric": field, "direction": f"{task.label_b} minus {task.label_a}",
+            "n_pairs": len(pairs), "delta_pp": round(res.delta * 100, 2),
+            "discordant_b": res.b, "discordant_c": res.c, "p_exact_mcnemar": res.p,
+            "ci95_pp": [round(res.ci[0] * 100, 2), round(res.ci[1] * 100, 2)],
+        }
+    contrast = contrasts.get("refusal") or contrasts.get("asr")
+
+    elapsed = time.time() - t0
+    result = {
+        "mode": "interleaved_paired",
+        "target_model": task.target_model,
+        "target_model_config": target_model_config,
+        "benchmark": benchmark,
+        "seed": task.seed,
+        "n_ids": len(ids),
+        "n_conversations": len(conversations),
+        "labels": [task.label_a, task.label_b],
+        "arms": arms,
+        "paired_contrast": contrast,        # headline (refusal if judged, else ASR)
+        "paired_contrasts": contrasts,      # every metric with both judges present
+        # The realized dispatch order IS the experimental manipulation here, so
+        # it is stored rather than left implicit in the seed.
+        "realized_order": [u[0] for u in units],
+        "campaign": task.campaign,
+        "judge_model": task.judge_model,
+        "judge_method": task.judge_method,
+        "elapsed_seconds": round(elapsed, 2),
+        "output_dir": str(out_dir),
+        "status": "success",
+        "upstream_ref": {
+            "source_a": {"source_dir": str(src_a)},
+            "source_b": {"source_dir": str(src_b)},
+        },
+        **provenance_fields(),
+    }
+    write_json_atomic(out_dir / "results.json", result)
+    logger.info(
+        f"interleaved_paired done in {elapsed:.1f}s -> {out_dir} | "
+        f"{task.label_a} {arms[task.label_a].get('refusal_rate')} vs "
+        f"{task.label_b} {arms[task.label_b].get('refusal_rate')} | {contrast}")
+    return result
+
+
 TASK_MODES = {
     "prompt_transform": _run_prompt_transform,
     "defense+evaluate": _run_defense_evaluate,
     "analyze": _run_analyze,
     "rejudge": _run_rejudge,
     "adaptive_attack": _run_adaptive_attack,
+    "interleaved_paired": _run_interleaved_paired,
 }
 
 
