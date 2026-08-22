@@ -1,0 +1,63 @@
+# ============================================================
+# Paper C (AS-3) -- review 6 con 4 / Q3: the SECOND HOLE in the second-judge check
+# ============================================================
+# Found 2026-08-22 while reading the first fix (job 302). The appendix claims the gpt-5-nano
+# pass covered "every one of the 449 reported harm cells". Beyond the two chains the fidelity
+# audit rebuilt, TWO ENTIRE (guard, condition) CELLS were never covered by it at all:
+#   llama_guard_3_8b / +reguard      0 of 11 chains
+#   thinkguard       / +reguard      0 of 11 chains
+# So the reguard leg -- the ONLY contrast family that survives Bonferroni in the paper, and
+# therefore the paper's single strongest corrected result -- had no second-judge check on
+# two of its five guards. Job 302 supplied their 2 rebuilt chains; this fills the other 9
+# each, taking the second-judge ensemble panel from 3/5 guards to 5/5.
+#
+# 18 cells x 100 = 1,800 judgements, roughly $0.6-1.2 at gpt-5-nano's rate on this corpus.
+# ZERO target cost. Same discipline as job 302: every `responses_from` is the ORIGINAL
+# `defense+evaluate` dir, never a rejudge of it, because the selector resolves campaign
+# through one hop only.
+#
+# READ IT WITH: python3 src/analysis/paper_c_second_judge_ensemble.py
+# ⚠️ Check `asr is not None` + `status == success` + zero fallback/mechanism errors on all 18
+#    before computing. A timed-out rejudge leaves the PREVIOUS judge's verdicts in place.
+# ============================================================
+
+num_main_job_threads: 8
+num_cluster_jobs: 1
+
+tasks:
+  # llama_guard_3_8b/rg/llm_set_theory
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_llm_set_theory_20260723_051625_5429800", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # llama_guard_3_8b/rg/llm_formal_logic
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_llm_formal_logic_20260723_051622_35898165", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # llama_guard_3_8b/rg/llm_classical_language
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_llm_classical_language_20260723_051536_66506970", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # llama_guard_3_8b/rg/non_llm_cipher
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_non_llm_cipher_20260723_051649_3227649", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # llama_guard_3_8b/rg/ir_fc_flowchart
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_ir_fc_flowchart_20260723_050159_23976334", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # llama_guard_3_8b/rg/ir_low_contrast
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_ir_low_contrast_20260723_050159_6145283", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # llama_guard_3_8b/rg/ir_occluded
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_ir_occluded_20260723_051434_72009213", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # llama_guard_3_8b/rg/ir_mm_typo
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_ir_mm_typo_20260723_050159_89057008", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # llama_guard_3_8b/rg/ir_distraction_grid
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_ir_distraction_grid_20260723_050159_5603154", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # thinkguard/rg/llm_set_theory
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_llm_set_theory_20260723_052647_10280400", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # thinkguard/rg/llm_formal_logic
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_llm_formal_logic_20260723_052636_39435933", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # thinkguard/rg/llm_classical_language
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_llm_classical_language_20260723_052613_82971592", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # thinkguard/rg/non_llm_cipher
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_non_llm_cipher_20260723_052705_66982381", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # thinkguard/rg/ir_fc_flowchart
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_ir_fc_flowchart_20260723_051723_67092018", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # thinkguard/rg/ir_low_contrast
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_ir_low_contrast_20260723_052231_74849193", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # thinkguard/rg/ir_occluded
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_ir_occluded_20260723_052515_29655008", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # thinkguard/rg/ir_mm_typo
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_ir_mm_typo_20260723_052400_81766106", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
+  # thinkguard/rg/ir_distraction_grid
+  - {"mode": "rejudge", "responses_from": "outputs/autoattack_defense/defense+evaluate/harmbench/qwen2_5_vl_7b_modality_complete_ir_distraction_grid_20260723_051714_37439885", "judge_model": "gpt-5-nano", "judge_method": "harmbench", "campaign": "paper_c_secondjudge_reguard_fill"}
