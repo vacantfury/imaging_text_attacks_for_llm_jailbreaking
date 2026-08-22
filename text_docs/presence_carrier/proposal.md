@@ -68,10 +68,19 @@ are; new AS-9 rounds write to `conf/experiment/presence_carrier/`):
 | Second open checkpoint, built and pre-registered, **not yet run** | `second_checkpoint_gemma` | `paper_b_second_checkpoint_gemma` |
 | Carrier exclusion sweeps | `mechanism_sweep`, `mechanism_sweep_cider`, `mechanism_sweep_newtargets` | `paper_b_mechanism_sweep*` |
 
-Results in the current AS-2 draft that transfer (source of record is that paper's git
-history and the `paper.tex.pre-*` backups; labels named so they can be recovered after the
-restructure): tables `tab:imgprops`, `tab:imgvsimg`, `tab:contentinstance`, `tab:instance`,
-`tab:realistic`, `tab:secondcheckpoint`, `tab:locus`, `tab:owprops`.
+**The tables are already extracted, verbatim, at `paper/as-9/inherited_from_as2.tex`**
+(gitignored, like all paper sources): `tab:imgprops`, `tab:contentinstance`, `tab:instance`,
+`tab:realistic`, `tab:secondcheckpoint`, `tab:locus`, `tab:owprops`. That file is not
+compilable as it stands, since the captions still reference AS-2 labels and need rewriting.
+The prose that accompanied them is recoverable from
+`paper/as-2/aaai_2027_ai_alignment/aaai_aia_latex/paper.tex.pre-respine`.
+
+**One table did NOT transfer, deliberately.** `tab:imgvsimg` stays in AS-2 and now carries
+leg one of its spine: direct image-versus-image contrasts with an image attached in *both*
+arms, so only the named property moves. At the re-spine it gained a row, the open
+checkpoint's $1536^2$-vs-$256^2$ size contrast ($+16$pp, $18$ flips against $2$, $p=0.0004$,
+95% CI $[+7.7,+24.9]$, computed with `src/analysis/paired_binary.py`). AS-9 may re-use those
+cells but must not treat that table as its own.
 
 **The gemma round is built, pre-registered and unbought (~$1.6).** Its preset header records
 the architectural finding that motivated it: on that processor the blank ladder is
