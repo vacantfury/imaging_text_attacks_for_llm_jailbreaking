@@ -46,7 +46,8 @@ Regenerate with `.venv/bin/python -m src.analysis.paper_c_figures [--axis 2cat|b
 (runs verify() first).
 Uses the scientific-visualization skill's publication style."""
 import sys, os
-SKILL = "/Users/haoyu/.claude/skills/scientific-visualization"
+SKILL = os.environ.get("SCIVIS_SKILL",
+                       os.path.expanduser("~/.claude/skills/scientific-visualization"))
 sys.path.insert(0, SKILL + "/scripts"); sys.path.insert(0, SKILL + "/assets")
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt, numpy as np

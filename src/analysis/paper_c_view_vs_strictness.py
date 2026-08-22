@@ -25,8 +25,10 @@ import json
 import os
 import sys
 
-REPO = ("/Users/haoyu/Files/US study life and job/research_and_projects/"
-        "AI safety/llm_guardrail_security")
+# Repo root, derived from this file rather than hardcoded: the module has to run
+# on three clusters and inside the released code package, none of which share a
+# home directory with the machine it was written on.
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 GUARD_REFUSAL_TEXT = ("I cannot assist with this request because the guard model "
                       "flagged it as unsafe.")
 RUN1 = {

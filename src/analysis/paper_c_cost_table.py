@@ -32,8 +32,10 @@ import json
 import os
 import statistics as st
 
-REPO = ("/Users/haoyu/Files/US study life and job/research_and_projects/"
-        "AI safety/llm_guardrail_security")
+# Repo root, derived from this file rather than hardcoded: the module has to run
+# on three clusters and inside the released code package, none of which share a
+# home directory with the machine it was written on.
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TARGET = "qwen2_5_vl_7b"
 LABEL = {
     "no_defense": "no defense",
