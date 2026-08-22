@@ -1,0 +1,82 @@
+# AS-7 · GUARD BLOCK RATE ON BENIGN TRAFFIC THAT LOOKS ENCODED — llama_guard_3_8b.
+#
+# WHY THIS EXISTS — cspaper review 5, con 5 + Q4 (2026-08-21):
+#
+#   "Table 14 also evaluates benign prompts without the encoded transformations
+#    that are central to the harmful-side protocol question. This leaves open
+#    whether defenses over-refuse benign code-heavy, mathematical, multilingual,
+#    or encoding-like requests, precisely the population most likely to be
+#    affected by detection or routing policies."
+#
+# The paper already CONCEDES this in Limitations. The reviewer asks us to
+# measure it instead. Every benign number we report is on unencoded prose, so
+# our stated utility cost is a LOWER BOUND; this round measures how much lower
+# for the channel-routed panel, which is the deployment the main text recommends.
+#
+# DESIGN. One preset per guard, matching the validated `benign_channel_*` shape
+# in this namespace (orchestrator + target + one guard server), rather than one
+# preset serving three guards: the replica allocator floor-divides the job budget
+# across distinct models, so a many-model preset silently collapses every model
+# to a single replica.
+#
+# THE CONTROL IS LOAD-BEARING. A block rate on encoded benign text means nothing
+# without the SAME 100 prompts unencoded. No such cell existed before this round:
+# the paper's guard-gate benign numbers are measured on ORBench (a different
+# prompt set) and the one stored plain JailbreakBench-benign transform dir covers
+# 20 prompts. `benign_carriers_stage1b_plain` produces the matched control and
+# the `plain` arm below reads it.
+#
+# READING THE RESULT. These prompts are benign, so every block is a FALSE
+# POSITIVE and the healthy value is 0. The quantity of interest is the RISE from
+# the plain arm to each carrier arm: that is the utility cost of the routed
+# deployment on exactly the traffic it is built to inspect. Note the asymmetry
+# that makes this worth measuring: a text guard blocking encoded benign text
+# still has the payload in its channel, so unlike the image-channel result this
+# is a calibration failure rather than a coverage failure.
+#
+# PRE-REGISTERED READ-OUT (written before the data lands):
+#   EXPECTED  block rate rises on the carriers, most on `code_attack` (the
+#             non-LLM deque template, the arm that most resembles ordinary
+#             developer traffic). Then the paper reports the routed panel's cost
+#             on its own operating population, and "detector recall is the
+#             binding constraint" gains a twin: precision is a second one.
+#   SURPRISE  block rate stays at the plain baseline. That is a STRONGER result
+#             for the mitigation than anything now in the paper, and is reported
+#             as such.
+#   Either branch is reportable. This round cannot embarrass the paper's THESIS,
+#   which is about attribution and read access, not about whether our own
+#   mitigation is cheap.
+#
+# JUDGE CHOICE IS NOT LOAD-BEARING HERE. The headline quantity is the guard's
+# BLOCK rate, an exact string match on the canned refusal in the stored response,
+# so it is judge-independent; the refusal judge is a secondary read-out and runs
+# on the free cluster target rather than an API model.
+#
+# SUBMIT (NURC):
+#   ssh explorer 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment.sbatch defense_read_access/benign_carriers_stage2_llamaguard3'
+
+num_main_job_threads: 4
+num_cluster_jobs: 3          # orchestrator + target(=judge) + 1 guard server
+
+_plain: &plain  outputs/defense_read_access/prompt_transform/jailbreakbench_benign/non_llm_baseline_20260822_025833_31191393/non_llm_baseline
+_code:  &code   outputs/defense_read_access/prompt_transform/jailbreakbench_benign/code_attack_20260822_022904_15004983/code_attack
+_form:  &form   outputs/defense_read_access/prompt_transform/jailbreakbench_benign/formal_logic_20260822_022904_61501009/llm_formal_logic
+_set:   &set    outputs/defense_read_access/prompt_transform/jailbreakbench_benign/set_theory_20260822_022904_98392635/llm_set_theory
+
+_b: &b
+  mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range: [0, 99]
+  benchmark: jailbreakbench_benign
+  judge_method: jbb_refusal
+  judge_model: internvl3_8b
+  campaign: as7_benign_carriers
+  defense: guard_baseline
+  defense_config: {guard_model: llama_guard_3_8b}
+
+tasks:
+  - {<<: *b, source_transform_subdir: *plain}   # unencoded control
+  - {<<: *b, source_transform_subdir: *code}
+  - {<<: *b, source_transform_subdir: *form}
+  - {<<: *b, source_transform_subdir: *set}
