@@ -1,5 +1,11 @@
 # AS-7 — AAAI-27 AI Alignment special track — submission package manifest
 
+> ⚠️ **SUPERSEDED 2026-08-22.** This is AS-7's package as it stood BEFORE the
+> owner-ratified re-spine and the main/supplementary split. It is kept for
+> history. The live AS-7 package manifest is `manifest-as7.md` in this
+> directory. Do not submit from this file.
+
+
 Built by the `package-submission` skill, 2026-08-21. This file is the package's
 identity: `paper-check` FINAL's staleness key covers every file listed here, and
 the submit step uploads exactly these files. **Any edit to a listed file
