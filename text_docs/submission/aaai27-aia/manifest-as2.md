@@ -10,6 +10,13 @@ the last build, never before) — repackage that artifact, then delta re-check.
 *(`manifest.md` in this directory is AS-7's package, a different paper. Do not
 cross-read the two.)*
 
+> ⚠️ **STALE AS OF 2026-08-22 (later that day).** The condensation pass ordered
+> after the check is in flight, so `paper.pdf` and `supplementary.pdf` no longer match
+> the hashes below. The `ReproducibilityChecklist.pdf` and
+> `supplementary_code_and_data.zip` rows are unaffected and still current. Re-hash the
+> two PDFs and run the delta re-check when the pass lands; **do not submit against this
+> manifest until it is reissued.**
+
 ## The upload set
 
 | File | Channel | Size | SHA-256 |

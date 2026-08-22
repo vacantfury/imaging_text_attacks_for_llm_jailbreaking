@@ -12,6 +12,10 @@
 | **Verdict after the fix pass** | **`pass` on the six rubric dimensions** — every blocking finding closed and re-verified |
 | **Submission readiness** | **not yet** — the venue-compliance battery below found a required upload missing (built 2026-08-22) and two placement items still open |
 
+⚠️ **This verdict is now STALE**: the condensation pass ordered after the check has
+changed both PDFs. The findings below were all fixed and verified, and none has been
+reverted, but a delta re-check is owed on the sections the condensation touched.
+
 The verdict is keyed to the upload-set hashes in the manifest. Any edit to a
 listed file stales it (verification decay); re-check the dimensions the diff
 touches and reissue.
