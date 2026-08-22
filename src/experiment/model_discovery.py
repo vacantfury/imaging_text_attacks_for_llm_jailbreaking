@@ -229,8 +229,8 @@ def _referenced_models_for_task(info: "TaskInfo", providers=None) -> set:
     sizing a round with multiple concurrent cluster-guard tasks).
     """
     from .schemas import (
-        AdaptiveAttackTask, DefenseEvaluateTask, PromptTransformTask, RejudgeTask,
-        TransformationSpec,
+        AdaptiveAttackTask, DefenseEvaluateTask, InterleavedPairedTask,
+        PromptTransformTask, RejudgeTask, TransformationSpec,
     )
     from .task import _infer_benchmark
     from src.evaluation.evaluator_factory import judge_methods_for_benchmark
@@ -249,6 +249,32 @@ def _referenced_models_for_task(info: "TaskInfo", providers=None) -> set:
         judge = _resolve_model(task.judge_model)
         if _keep(judge):
             required.add(judge)
+        return required
+
+    # interleaved_paired: needs the TARGET and the JUDGE, either of which may be
+    # cluster-served. There is no defense and no transform chain, so the
+    # fall-through below (which keys off source_transform_subdir) cannot see this
+    # task at all. Omitting this branch is not a soft failure: the orchestrator
+    # concludes no cluster model is needed, never builds a server manager, and
+    # the run dies with "No ClusterModelServerManager registered" (observed, NURC
+    # job 9452712, 2026-08-21). Same class as selfdefend's `shadow_model` and
+    # guard_router's `text_guard`/`image_guard` -- a new task/defense shape that
+    # the discovery scan cannot see is a silent-until-runtime failure.
+    if isinstance(task, InterleavedPairedTask):
+        for name in (task.target_model, task.judge_model):
+            m = _resolve_model(name) if name else None
+            if _keep(m):
+                required.add(m)
+        if not task.judge_model:
+            try:
+                methods = judge_methods_for_benchmark(
+                    task.benchmark or _infer_benchmark(task.source_b))
+            except ValueError:
+                methods = []
+            for method in methods:
+                jm = _judge_model_for_method(method)
+                if _keep(jm):
+                    required.add(jm)
         return required
 
     # adaptive_attack: needs the TARGET, the ATTACKER LLM, the defense's guard,
