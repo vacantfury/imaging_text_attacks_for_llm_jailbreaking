@@ -1,6 +1,8 @@
 # AS-7 · Read Access — proposal
 
-**Title (SETTLED 2026-08-09, owner-approved):** *Whose Refusal Is It? The Unmeasured Contribution of Black-Box Multimodal Guardrails*
+**Title (CHANGED 2026-08-21, owner delegated: "you think deep on it and you decide"):** *Who Controls What a Guardrail Reads? The Attacker Chooses the Channel, the Evaluator Chooses the Prompt*
+
+*(Set when the paper was re-spined onto READ ACCESS: the attacker sets the read's SCOPE (which channel carries the payload), the evaluator sets its CONTENT (which prompt fills the internal read), and the deployer sets neither. The refusal decomposition is now the INSTRUMENT that makes the read visible, not the thesis. Retired the same day: "Whose Refusal Is It? Reported Guardrail Safety Measures the Pipeline, Not the Guardrail" and "Whose Refusal Is It? The Unmeasured Contribution of Black-Box Multimodal Guardrails" (settled 2026-08-09), both of which led with attribution. Full reasoning, including the rejected alternatives, is in the title comment block at the top of `paper.tex`.)*
 
 *(Previous working titles, retired: "What the Defense Can Read: Channel Scope and Evaluation Protocol…"; "Read Access: Channel Coverage and Oracle Inflation…". **The word "oracle" is retired from the paper** — `jailbreak oracle` (Lin et al., MLSys 2026) already names an unrelated object in this subfield. The protocol is now **granted** vs **deployable**, with one footnote recording the rename.)*
 
