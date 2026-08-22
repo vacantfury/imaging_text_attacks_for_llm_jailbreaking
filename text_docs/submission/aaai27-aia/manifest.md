@@ -9,12 +9,12 @@ invalidates this manifest** — repackage that artifact, then delta re-check.
 
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
-| `paper.pdf` | Main submission PDF | 0.47 MB | `7bb78385660dbd297e2603ab9abd48b558767a6fb5d7409553d21791194cc1ba` |
-| `supplementary.pdf` | Supplementary Document | 0.37 MB | `6fa57e34ecf3f18c80cc6da4f4c801e74f77f2c391d41ffd702c8569726fa3f2` |
-| `supplementary_code_and_data.zip` | Code and Data Supplement | 1.68 MB | `540d763f1306f675ceccf32c14e952b4ca57a03fdf3e829e8655ad94612cb54e` |
+| `paper.pdf` | Main submission PDF | 0.47 MB | `01c426d245f62c76a37deeed60cd38bc0f471924c5fec4cf75fea02cd523ba8e` |
+| `supplementary.pdf` | Supplementary Document | 0.37 MB | `3bde751916cc07be7ab40b89e8bde575daa949308bd59aa306774da499648afc` |
+| `supplementary_code_and_data.zip` | Code and Data Supplement | 1.68 MB | `237aa365bb7308713ff39173df7048fe9e8837163dc75e5be98064b56e1a9c2a` |
 
 Source tree: `paper/as-7/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
-`abce55784683fb87144b502fa0df62f0cfb0fca2`. ⚠️ `paper/` is gitignored, so the repo hash does **not** cover the
+`7a3ed1d27657b08f4a6dfdf50df632636eaf8447`. ⚠️ `paper/` is gitignored, so the repo hash does **not** cover the
 paper source. The `.tex` revision history lives only in
 `aaai_aia_latex/_backups/tex/` (see the note in the risks section).
 
@@ -75,18 +75,40 @@ CHECK a claim already stated and supported."
   backing grid.
 - **Satisfied, scoping only (2).** `sec:res-adaptive` is referenced from
   Limitations, where the paper narrows its own claims. Nothing is asserted on it.
-- 🔴 **ONE GENUINE GAP — the detector-gated mitigation (`sec:res-gated` /
-  `App. S6`).** The Introduction asserts it as a bound on reading the paper's
-  numbers, and the Discussion closes on it ("the open problem this work exposes is
-  detection of encoded inputs, not decoy design"). Both state the figures inline,
-  so the claim is *stated* in the main paper, but its only evidence table now sits
-  where a reviewer is not obliged to look, and it carries the paper's closing
-  argument. **Recommended resolution: soften the main body's reliance rather than
-  promote the table.** `tab:gated` is scored by `gpt-5-nano` while the rest of the
-  paper is `gpt-5-mini` (TODO item 43, disclosed in the manifest section as an
-  honest exclusion), so promoting a table that is explicitly not comparable to
-  `tab:main` into the main body would trade one defect for a worse one. This is a
-  drafting decision and is left open for the owner.
+- 🔴 **The detector-gated mitigation (`sec:res-gated` / `App. S6`) was read
+  end to end against its source table on 2026-08-21, and the finding was not the
+  placement.** The placement is already handled: the main paper carries an
+  explicit paragraph, "Two mitigations we measured, and why they sit in the
+  supplementary material", which justifies it on thesis grounds (these are
+  efficacy questions, and the paper answers attribution) and discloses that these
+  are the only two tables scored by the collection-era judge. What the read found
+  instead was that **the Introduction's one-sentence summary of that table was
+  wrong in four ways at once**, and that the main paper was asserting an efficacy
+  recommendation its own scope paragraph says it does not make. Both fixed:
+
+  | Introduction said | Source says | Fix |
+  |---|---|---|
+  | "returns benign cost to the **undefended** baseline" | the comparator is the **text** baseline (the text arm still runs the defense) | corrected |
+  | "$0$ points inflation" | gated benign is 9/10, 4/5, 11/11 vs text, so $0$ to $1$ point | corrected |
+  | "against $20$--$79$ **points** for unconditional attachment" | 20-79 is a benign refusal **rate**; the inflation is **+9 to +67 points** | corrected |
+  | "detector recall ... $9$--$16\\%$" | **12-16%**, in both the source prose and its caption; the stray 9 appears to bleed from the neighbouring "+9 to +67" | corrected |
+
+  The two overclaims were softened rather than deleted, so the paper keeps its
+  closing move ("the open problem this work exposes is detection of encoded
+  inputs, not decoy design") without asserting an efficacy result it elsewhere
+  declines to make: "the mitigation we can actually recommend" became "a
+  deployable variant we measured", and "buys safety in proportion to detector
+  recall" became "recovers the safety gain only where the detector fires".
+
+  **Guard added:** `src/analysis/as7_xdoc_numbers.py` catches the one member of
+  that group that is mechanically checkable, a numeric range printed as a rate in
+  one document and as a delta in the other. Its negative control re-injects the
+  real defect and requires the guard to fail. It deliberately does NOT claim to
+  cover the other three, where the numbers were present in the source and only
+  their meaning was wrong; those are caught by reading the source table against
+  the claim, which is a duty and not a script. A guard implying otherwise would
+  be the "reads green over ground it never covered" defect this repo has already
+  hit three times.
 
 ## Known risks
 
