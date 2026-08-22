@@ -1,0 +1,152 @@
+# Paper B (AS-2) · SECOND-CHECKPOINT REPLICATION of the CONTENT AXIS
+# on `gemini-2.5-flash-lite`  (review 8 con 1 / Q1)
+#
+# ---------------------------------------------------------------------------
+# WHAT THIS ROUND IS FOR. E5 overturned this paper's own carrier claim: at an
+# identical visual-token budget, uniform noise costs +10.8pp more than a blank
+# fill, so content is NOT inert and the carrier is two substitutable axes rather
+# than "the number of visual tokens". Review 8 con 1 says that mechanism result
+# is post-selection and single-checkpoint. This round replicates the NEW half —
+# the content axis — on a different vendor, at an effect size where it can
+# actually be detected.
+#
+# WHY A HOSTED MODEL, WHEN THE PAPER SAYS HOSTED PREPROCESSING IS OPAQUE.
+# The paper (sec:res-threshold) states the obstacle exactly: "how many visual
+# tokens a given canvas becomes is decided by the serving stack's image
+# preprocessing ... and a managed endpoint does not expose them", and names the
+# fix — "read back the host's own prompt-token accounting per arm and confirm
+# the canvas tokenises to the same count". THAT READBACK IS NOW DONE, and it is
+# free, because every cell already stores `target_usage.total.input_tokens`.
+#
+# MEASURED ON THE LIVE ENDPOINT, 2026-08-22, one call per arm (not vendor docs,
+# not a formula, not recall) — `gemini-2.5-flash-lite`, identical text:
+#     text only ............................  17 input tokens
+#     blank 256^2 / 512^2 / 1024^2 / 1536^2   275 input tokens  (all four)
+#     photo 512^2 / photo 1536^2 ...........  275 input tokens
+#     noise 512^2 ..........................  275 input tokens
+# So on this host the image costs a FIXED ~258 tokens whatever its size or
+# content. Every contrast below is therefore token-matched BY CONSTRUCTION, and
+# the match is re-verifiable after the run from each cell's own stored usage.
+#
+# ⚠️ THE SIZE AXIS IS NOT INSTRUMENTABLE HERE, AND THAT IS ITSELF A FINDING.
+# A pinned image budget is the COMMON case, not the exception. Measured the same
+# way on the same day:
+#     gemma-3-12b-it        256 tokens, fixed (896x896 resize, image_seq_length=256)
+#     gemini-2.5-flash      275 tokens, fixed
+#     gemini-2.5-flash-lite 275 tokens, fixed
+#     gpt-4o-mini           8523 tokens at 256^2/512^2 -> 25524 at 1024^2/1536^2 (steps)
+#     qwen3-vl-8b           64 / 256 / 2304 (continuous with pixel count)
+# The visual-token axis this paper identified on qwen3-vl depends on a
+# dynamic-resolution vision encoder. On three of five other checkpoints the
+# canvas cannot change the budget at all. That bounds the generality of the size
+# leg and should be said in the paper regardless of whether this round runs.
+#
+# ---------------------------------------------------------------------------
+# WHY THIS CHECKPOINT. `gemini-2.5-flash-lite` is the model on which the paper
+# already reports the widest content-dependent spread — "+23pp under one image
+# and +52pp under another" (sec:disc). That spread was measured with UNMATCHED
+# images and was never token-controlled, so it is a hint, not evidence. This
+# round converts it into a controlled test: same dimensions, same token count,
+# content varied from a 1-colour fill to 260k-colour noise to a 45k-colour
+# photograph.
+#
+# It is a genuine out-of-sample test of the carrier claim: this checkpoint's
+# presence effect was measured long before E5 existed, and the content-axis
+# prediction was never fitted to it.
+#
+# POWER. Unlike the gemma round (second_checkpoint_gemma.yaml), this checkpoint
+# carries a LARGE total effect, so a content sub-effect of E5's magnitude is
+# comfortably detectable at n=300: the exact-McNemar simulation gives power 1.00
+# at +8pp and 0.85 at +5pp (8% discordant). A null here is therefore
+# INFORMATIVE, which is the whole reason to prefer it over gemma for this
+# specific question.
+#
+# ---------------------------------------------------------------------------
+# PRE-REGISTERED READ-OUT — committed and pushed BEFORE collection.
+#
+# P1 (the content axis replicates). Cell 3 (noise) > cell 2 (blank) at a matched
+#     275-token budget. Then E5's finding is not a qwen artifact, it holds
+#     across two vendors and two architectures, and the revised two-axis carrier
+#     account has its second checkpoint. This is the outcome that answers con 1.
+#
+# P2 (content is inert here). Cells 2, 3 and 4 agree within noise while cell 2
+#     still beats cell 1 by the known large presence margin. Then the content
+#     axis is qwen-specific and the paper must say so: presence carries the
+#     effect on this host, content carries part of it on qwen, and the two-axis
+#     account is scoped to the checkpoint it was measured on. ⚠️ At n=300 this
+#     null is informative (power 1.00 at +8pp), so unlike the gemma round it may
+#     be reported as a real dissociation rather than as an untested arm.
+#
+# P3 (content matters MORE than presence). Cell 3 - cell 2 approaches or exceeds
+#     cell 2 - cell 1. Then "presence" is the wrong headline for this checkpoint
+#     and the framing needs revisiting, not just the mechanism section. Report
+#     it; do not average it away.
+#
+# P4 (size at a pinned budget). Cell 5 vs cell 2: same 275 tokens, same uniform
+#     white content, 9x the pixels. On qwen this contrast was impossible to
+#     separate from budget. ⚠️ Unlike the gemma round this is NOT a byte-identity
+#     check — we cannot see this host's preprocessing, only its token count — so
+#     a difference here is interpretable (canvas size matters at fixed budget)
+#     but a null does not prove the inputs were identical.
+#
+# ---------------------------------------------------------------------------
+# ⚠️ MANDATORY POST-RUN GATE, BEFORE ANY NUMBER IS REPORTED. Read
+# `target_usage.total.input_tokens / inference_count` for cells 2-5 and confirm
+# they are EQUAL. If they are not, the host changed its preprocessing between
+# the probe and the run and every content contrast in this round is confounded
+# by budget — exactly the failure the paper warns about. This is a hard gate,
+# not a sanity check, and it is the reason this round is legitimate at all.
+#
+# ⚠️ ARM IDENTITY IS IN THE CONFIG / upstream_ref.source_dir, NEVER THE PATH.
+# `_text` and `_b1536` are two LEAVES OF THE SAME stage-1 dir (`..._12503843`);
+# that is the chain structure, not a typo.
+#
+# STIMULI REUSED FROM E5, NOT RE-RENDERED — same 300 ORBench-benign-hard
+# prompts, same committed stimulus files, same canonical text channel, so these
+# cells pair directly against qwen's E5 cells. Verified on xc: all image arms
+# carry 300 images and exactly 1 distinct md5; the text arm carries 0 images.
+#
+# INSTRUMENT PINNED. `benchmark` and `judge_method` both set explicitly — left
+# to auto-inference an `orbench*`-derived path routes to the ORBench evaluator,
+# while every published benign-refusal cell in this paper was scored with the
+# JailbreakBench-refusal classifier.
+#
+# NO GPU REQUIRED. The target is an API model, so this round needs one
+# orchestrator slot and zero vLLM servers — it can run while every GPU on every
+# cluster is busy.
+#
+# COST: target ~$0.00007/call measured on the live endpoint x 1500 = ~$0.10.
+# Judge 5 cells x 300 = 1500 gpt-5-mini refusal calls at a measured ~$0.0009 =
+# ~$1.35. TOTAL ~$1.45. An ESTIMATE. ABOVE the standing $1 auto-run gate, so
+# this preset does NOT run without the owner's explicit go.
+#
+# SUBMIT (xc):
+#   ssh xc 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_xc.sbatch image_presence_threshold/second_checkpoint_hosted_content'
+
+num_main_job_threads: 4
+num_cluster_jobs: 1          # orchestrator only — API target, no vLLM server.
+
+# --- stage-1 anchors, reused verbatim from realistic_images_stage2.yaml -----
+_text:    &text    outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260822_060457_12503843/non_llm_baseline
+_b512:    &b512    outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260822_060457_42069018/ir_blank
+_n512:    &n512    outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_constant_20260822_060457_34476345/ir_constant
+_p512:    &p512    outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_constant_20260822_060457_88827375/ir_constant
+_b1536:   &b1536   outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260822_060457_12503843/ir_blank
+
+_b: &b
+  mode: defense+evaluate
+  defense: no_defense
+  target_model: gemini-2.5-flash-lite
+  prompt_range: [0, 299]
+  benchmark: jailbreakbench_benign   # pinned: hold the reporting path constant
+  judge_method: jbb_refusal          # pinned: hold the INSTRUMENT constant
+  judge_model: gpt-5-mini
+  campaign: paper_b_second_checkpoint_hosted
+
+tasks:
+  - {<<: *b, source_transform_subdir: *text}      # 1  no image           17 tok
+  - {<<: *b, source_transform_subdir: *b512}      # 2  blank  512  ->    275 tok
+  - {<<: *b, source_transform_subdir: *n512}      # 3  noise  512  ->    275 tok, vs 2 = CONTENT
+  - {<<: *b, source_transform_subdir: *p512}      # 4  photo  512  ->    275 tok, vs 2 = CONTENT
+  - {<<: *b, source_transform_subdir: *b1536}     # 5  blank  1536 ->    275 tok, vs 2 = SIZE @ pinned budget
