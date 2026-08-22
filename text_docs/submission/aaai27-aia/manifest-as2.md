@@ -3,7 +3,9 @@
 Built 2026-08-22, after the one-quantity re-spine and the final `paper-check` fix pass. This file is the package's
 identity: `paper-check` FINAL's staleness key covers every file listed here, and
 the submit step uploads exactly these files. **Any edit to a listed file
-invalidates this manifest** — repackage that artifact, then delta re-check.
+invalidates this manifest** (note: `build.sh` embeds a build timestamp, so a
+rebuild alone changes the two PDF hashes even with identical source; hash AFTER
+the last build, never before) — repackage that artifact, then delta re-check.
 
 *(`manifest.md` in this directory is AS-7's package, a different paper. Do not
 cross-read the two.)*
@@ -12,8 +14,8 @@ cross-read the two.)*
 
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
-| `paper.pdf` | Main submission PDF | 0.5 MB | `b7029017b67cecc77320cb2fc592db2778fb0577369fed6f8aa538323e881def` |
-| `supplementary.pdf` | Supplementary Document | 0.3 MB | `034bc2840af1929bde4cc46a760a7ea8bd0eaae0fe6ab9e67eb6e3febc46bd2e` |
+| `paper.pdf` | Main submission PDF | 0.5 MB | `73f7f35256a0778897538345b6256f7ed73b0a78646150fae223bf9aaed77551` |
+| `supplementary.pdf` | Supplementary Document | 0.3 MB | `7eb89d7321c77cf039b87c287939946dd0a25440bc284013aec0d4b6692470c2` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 36.1 MB | `1c4d9d06c2cda4a0cd7159b77167063806d623da23cb3d912b891e2f3eede2eb` |
 
 Source tree: `paper/as-2/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
