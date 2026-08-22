@@ -127,8 +127,31 @@ class Row:
     p_raw: str | None = None
     p_val: float | None = None
     p_bound: bool = False
+    n: int | None = None          # per-row denominator; None -> the global default
     context: str = ""
     findings: list[Finding] = field(default_factory=list)
+
+
+def _audit_n_marks(text: str) -> list[tuple[int, int]]:
+    """Line numbers where a `% AUDIT-N: <int>` marker changes the denominator."""
+    out = []
+    for i, raw in enumerate(text.split("\n"), start=1):
+        # Allow a trailing "% why" note after the number: a marker that
+        # cannot carry its own justification will be written without one,
+        # and an unexplained denominator override is the thing most likely
+        # to be wrong later.
+        m = re.match(r"\s*%\s*AUDIT-N:\s*(\d+)\s*(?:%.*)?$", raw)
+        if m:
+            out.append((i, int(m.group(1))))
+    return out
+
+
+def _n_at(marks: list[tuple[int, int]], line_no: int) -> int | None:
+    cur = None
+    for ln, val in marks:
+        if ln <= line_no:
+            cur = val
+    return cur
 
 
 def _rows_from_tex(text: str, default_n: int) -> list[Row]:
@@ -138,6 +161,18 @@ def _rows_from_tex(text: str, default_n: int) -> list[Row]:
     # happens to wrap: tabular rows end at \\, prose runs to the paragraph
     # break. Splitting per source line strands a result from the p-value that
     # wrapped onto the next line, and the audit then silently skips it.
+    # ⚠️ MIXED-n PAPERS. This audit was written when every paired table in the
+    # paper shared one denominator, and a single global -n was therefore safe.
+    # It stopped being safe the moment a table ran on a different sample (the
+    # 240-prompt held-out realistic-image round, 2026-08-22): every row in it
+    # was flagged INCONSISTENT against n=100, which is a FALSE POSITIVE, and the
+    # symmetric danger is worse -- a wrong global n can make a genuinely broken
+    # row look fine. A table may therefore declare its own denominator with a
+    # line `% AUDIT-N: <int>` anywhere before its rows; it applies until the
+    # next such marker. Absent any marker the global default is used exactly as
+    # before, so existing invocations are unaffected.
+    n_marks = _audit_n_marks(text)
+
     doc = "\n".join(_clean(raw) for raw in text.split("\n"))
     line_at = [1]
     for ch in doc:
@@ -175,7 +210,7 @@ def _rows_from_tex(text: str, default_n: int) -> list[Row]:
             b, c = _num(cells[gain_lost[0]]), _num(cells[gain_lost[1]])
             if b is not None and c is not None:
                 m = re.search(re.escape(cells[gain_lost[0]].strip()), chunk)
-                _emit_row(rows, line_at[seg_start + (m.start() if m else 0)],
+                _emit_row(rows, line_at[seg_start + (m.start() if m else 0)], n_marks,
                           chunk, m or re.match(r"", chunk), int(b), int(c),
                           skip_cols=gain_lost)
                 continue
@@ -202,11 +237,11 @@ def _rows_from_tex(text: str, default_n: int) -> list[Row]:
             r"of\s+(\d{1,3})\s+discordant\s+prompts?,\s*(\d{1,3})\s+gained"
             r"[^.;]{0,60}?none\s+lost", chunk)]
         for m, b, c in [(m, int(m.group(1)), int(m.group(2))) for m in found] + prose:
-            _emit_row(rows, line_at[seg_start + m.start()], chunk, m, b, c)
+            _emit_row(rows, line_at[seg_start + m.start()], n_marks, chunk, m, b, c)
     return rows
 
 
-def _emit_row(rows: list[Row], line_no: int, chunk: str,
+def _emit_row(rows: list[Row], line_no: int, n_marks: list, chunk: str, 
               m: re.Match, b: int, c: int,
               skip_cols: tuple[int, ...] = ()) -> None:
     """Build one Row, reading delta/p from a WINDOW around THIS result only.
@@ -216,7 +251,8 @@ def _emit_row(rows: list[Row], line_no: int, chunk: str,
     the same class of confusion that produced the review complaint this module
     answers, so the tool must not commit it.
     """
-    row = Row(line=line_no, b=b, c=c, context=chunk.strip()[:150])
+    row = Row(line=line_no, b=b, c=c, n=_n_at(n_marks, line_no),
+              context=chunk.strip()[:150])
     window = chunk[max(0, m.start() - 90):m.end() + 130]
     cells = [x.strip() for x in chunk.split("&")]
 
@@ -292,12 +328,16 @@ def audit(path: str, default_n: int, tol_rel: float = 0.06) -> list[Row]:
     for r in rows:
         exact = mcnemar_exact(r.b, r.c)
         # 1. delta vs discordant counts
+        n_row = r.n or default_n
         if r.delta is not None:
-            implied = (r.b - r.c) / default_n * 100
-            if abs(implied - r.delta) > 1e-9:
+            implied = (r.b - r.c) / n_row * 100
+            # Tables print Delta at one decimal, so compare at the printed
+            # precision rather than exactly; an exact test would flag every
+            # correctly-rounded row on a denominator that is not a power of ten.
+            if abs(implied - r.delta) > 0.05 + 1e-9:
                 r.findings.append(Finding(
                     r.line, "delta-vs-counts",
-                    f"stated Delta={r.delta:+g}pp but {r.b}/{r.c} on n={default_n} "
+                    f"stated Delta={r.delta:+g}pp but {r.b}/{r.c} on n={n_row} "
                     f"implies {implied:+g}pp", r.context))
         # 2. delta vs the two rates
         if r.delta is not None and r.before is not None and r.after is not None:
