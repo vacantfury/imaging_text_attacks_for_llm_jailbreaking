@@ -1,0 +1,60 @@
+# AS-7 · MATCHED PLAIN-PAYLOAD-IN-IMAGE CONTROL — STAGE 2 (evaluate).
+#
+# The paired comparator for `adaptive_image_encoded_stage2` (NURC 9458563).
+# Together the two rounds isolate ONE variable: whether the text rendered into
+# the image is the plain request or an encoded rewrite of it.
+#
+# ✅ PAIRING VERIFIED ON DISK BEFORE THIS PRESET WAS WRITTEN (2026-08-22).
+# Control render `non_llm_baseline_ir_plain_20260822_053731_12256642/ir_plain`
+# against both adaptive arms:
+#     prompt-id overlap        100/100 with code, 100/100 with formal logic
+#     behaviour-text overlap   100/100
+#     text channel             the SAME 46-character placeholder, byte-identical
+#     images per row           control 1, formal 1
+# So every contrast below is paired per prompt by construction.
+#
+# ⚠️ ONE ASYMMETRY, NAMED RATHER THAN HIDDEN. The code arm renders to 1-3 images
+# per row where the control and the formal arm render to exactly 1, because the
+# code carrier inflates the request's length and the renderer paginates. That is
+# intrinsic to the attack rather than a rig error (an encoder that lengthens the
+# payload necessarily buys more canvas), but it means the FORMAL-LOGIC contrast
+# is the clean one and the code contrast carries a page-count difference
+# alongside the form difference. Report both and say which is which.
+#
+# WHY IT MATTERS. tab:router's published image arm cannot serve as this
+# comparator: its upstream is a DIFFERENT prompt set (0/100 behaviour overlap,
+# checked 2026-08-22), so the tempting "98/100 -> 2/100 collapse" would have been
+# a comparison across prompt sets. This preset buys the real one.
+#
+# COST. Target and both guards are cluster-served = $0. Judge only: 4 cells x 100
+# = ~400 gpt-5-mini calls, estimate ~$0.35. An ESTIMATE: judge spend is not
+# recorded in results.json (filed as a defect 2026-08-22).
+#
+# SUBMIT (NURC):
+#   ssh explorer 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment.sbatch defense_read_access/adaptive_image_control_stage2'
+
+num_main_job_threads: 2
+num_cluster_jobs: 4          # orchestrator + target + 2 guards
+
+_ctrl: &ctrl outputs/defense_read_access/prompt_transform/harmbench/non_llm_baseline_ir_plain_20260822_053731_12256642/ir_plain
+
+_panel: &panel
+  text_guard: llama_guard_3_8b
+  image_guard: guardreasoner_vl_7b
+
+_b: &b
+  mode: defense+evaluate
+  target_model: internvl3_8b
+  prompt_range: [0, 99]
+  benchmark: harmbench
+  judge_method: harmbench
+  judge_model: gpt-5-mini
+  campaign: as7_adaptive_image_control
+  source_transform_subdir: *ctrl
+
+tasks:
+  - {<<: *b, defense: no_defense}
+  - {<<: *b, defense: guard_baseline, defense_config: {guard_model: llama_guard_3_8b}}
+  - {<<: *b, defense: guard_baseline, defense_config: {guard_model: guardreasoner_vl_7b}}
+  - {<<: *b, defense: guard_router, defense_config: {<<: *panel}}
