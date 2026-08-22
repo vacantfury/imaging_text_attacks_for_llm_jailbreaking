@@ -323,6 +323,26 @@ def _run_judging(
                 if covered == 0:
                     value = None
 
+            # Coverage counts how many rows got a VERDICT. It cannot see whether the
+            # verdicts came from the model, and that is a separate, recorded failure: the
+            # 2026-07-10 official-HarmBench run had PERFECT coverage (100/100) while every
+            # single verdict was fabricated from an HTTP 400 error string that the parser
+            # read as "no". Those cells shipped `asr: 0.0`, `warnings: []` and a populated
+            # eval_stats, indistinguishable from a real measurement.
+            #
+            # Evaluators now count these as `mechanism_error_count`. Any nonzero count means
+            # some labels are not judgements, so the cell is marked partial_judge and the
+            # validity gates reject it. Recovery is a `rejudge` over the stored responses,
+            # which costs nothing. Denominators are deliberately NOT adjusted here: silently
+            # shrinking n moves a rate without any behaviour changing.
+            mech = stats.get("mechanism_error_count") or 0
+            if mech:
+                msg = (f"{evaluator.__class__.__name__}: {mech}/{covered or '?'} judge calls "
+                       f"FAILED at the API layer (mechanism errors) — those rows carry "
+                       f"fail-safe defaults, not verdicts, so {stat_key} is not a measurement")
+                judge_errors.append(msg)
+                logger.error(f"[{stage_label}] JUDGE MECHANISM FAILURE — {msg}")
+
             if is_refusal:
                 refusal = value
             else:

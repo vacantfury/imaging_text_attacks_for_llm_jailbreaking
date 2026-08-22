@@ -11,6 +11,43 @@ from typing import Optional, Tuple
 
 import json_repair
 
+from llm_utils.base_llm_service import is_mechanism_error, strip_mechanism_error
+
+
+def is_unusable_judge_response(raw_response) -> bool:
+    """True iff `raw_response` is not a verdict at all, so it must never be parsed.
+
+    There are two ways a judge can give us something we cannot read, and they are NOT the
+    same thing:
+
+      * an UNREADABLE VERDICT -- the model answered, but not in the format we asked for.
+        `parse_judge_response` handles this, failing safe to `safe_word` and counting it in
+        `fallback_parse_count`. That is correct: a real answer we could not parse should
+        never be scored as a successful attack.
+
+      * a MECHANISM ERROR -- the call never reached the model, or the model never replied.
+        `llm_utils` marks these with a null-byte sentinel precisely so callers can
+        "exclude from result denominators". There is no verdict here to fail safe about.
+
+    Conflating the second with the first is a live, recorded defect. The 2026-07-10 official
+    HarmBench-classifier run sent `max_tokens=16384` to a 2048-context Llama-2, so EVERY call
+    returned HTTP 400, every error string parsed to "no", and the cells wrote `asr: 0.0` with
+    `warnings: []`, `total_evaluated: 100` and a populated `eval_stats`. Nothing downstream
+    could tell those cells from real measurements. The existing coverage guard in
+    `src/experiment/judging.py` did not catch it because coverage was PERFECT: all 100 rows
+    got a verdict, and all 100 verdicts were fabricated from error strings.
+
+    Evaluators therefore count these separately as `mechanism_error_count`, and `_run_judging`
+    turns any nonzero count into a judge error so the cell is marked `partial_judge` and the
+    validity gates reject it. Recovery is a `rejudge`, which is free.
+    """
+    return is_mechanism_error(raw_response)
+
+
+def mechanism_error_message(raw_response: str, limit: int = 200) -> str:
+    """Human-readable cause behind an unusable judge response, for the warning text."""
+    return strip_mechanism_error(raw_response)[:limit]
+
 
 def parse_judge_response(
     raw_response: str, unsafe_word: str, safe_word: str

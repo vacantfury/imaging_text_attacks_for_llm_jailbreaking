@@ -21,6 +21,7 @@ from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
 
 from src.evaluation.base_evaluator import BaseEvaluator
+from src.evaluation.judge_parsing import is_unusable_judge_response
 from llm_utils import LLMServiceFactory, LLMModel, BaseLLMService
 from src.utils.logger import get_logger
 
@@ -167,6 +168,7 @@ class ORBenchEvaluator(BaseEvaluator):
         results_data = []
         counts = {"direct_answer": 0, "direct_refusal": 0, "indirect_refusal": 0}
         fallback_count = 0
+        mechanism_error_count = 0
         for i, prompt_data in enumerate(prompts):
             pid = prompt_ids[i]
             response_text = responses.get(pid, "")
@@ -177,6 +179,11 @@ class ORBenchEvaluator(BaseEvaluator):
                 judge_raw = ""
             else:
                 judge_raw = judge_dict.get(pid, "")
+                # An API failure is NOT a verdict. Counted here so `_run_judging` can mark the
+                # cell partial_judge; the parse below still fails safe and denominators are
+                # left alone, because silently shrinking n can manufacture a null.
+                if is_unusable_judge_response(judge_raw):
+                    mechanism_error_count += 1
                 classification, reasoning, used_fallback = _parse_3class_response(judge_raw)
                 if used_fallback:
                     fallback_count += 1
@@ -215,7 +222,17 @@ class ORBenchEvaluator(BaseEvaluator):
             'indirect_refusal_count': ir_count,
             'total_evaluated': total,
             'fallback_parse_count': fallback_count,
+            'mechanism_error_count': mechanism_error_count,
         }
+        if mechanism_error_count:
+            # Never reassure here. These rows carry fail-safe defaults because the API call
+            # failed, not because the judge decided anything.
+            logger.error(
+                "JUDGE MECHANISM FAILURE: %d/%d judge calls failed at the API layer. "
+                "Those labels are NOT verdicts and this rate is not a measurement; the "
+                "cell will be marked partial_judge. Recover with mode: rejudge.",
+                mechanism_error_count, total,
+            )
         if fallback_count:
             logger.info(
                 f"Note: {fallback_count}/{total - len(empty_refusal_ids)} judge "
