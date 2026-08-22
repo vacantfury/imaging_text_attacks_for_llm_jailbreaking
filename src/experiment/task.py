@@ -968,10 +968,26 @@ def _run_interleaved_paired(task) -> dict[str, Any]:
 
     # Build one unit per (id, condition), then shuffle the COMBINED list. The
     # seed is recorded in results.json, so the realized order is replayable.
+    # The conversation id is a POSITIONAL SURROGATE (u0, u1, ...), NOT
+    # f"{label}::{pid}". Anthropic's batch API validates custom_id against
+    # ^[a-zA-Z0-9_-]{1,64}$, so a "::" separator is rejected with a 400 before a
+    # single request runs (observed, NURC job 9452859, 2026-08-21). llm_utils v5
+    # only routes a job to the native batch API once its estimated cost clears
+    # $1, so that failure hit ONLY the priciest target while the gemini and
+    # vLLM arms of the SAME round passed -- a provider-shaped bug that a cheap
+    # smoke test cannot reach. The surrogate also survives benchmarks whose
+    # prompt ids are behavior sentences (HarmBench), which would break the same
+    # pattern on length and on spaces.
     units = []
+    uid_of: dict[tuple[str, str], str] = {}
     for pid in ids:
-        units.append((f"{task.label_a}::{pid}", task.label_a, by_a[pid], src_a, mm_a))
-        units.append((f"{task.label_b}::{pid}", task.label_b, by_b[pid], src_b, mm_b))
+        for label, by, src, mm in (
+            (task.label_a, by_a, src_a, mm_a),
+            (task.label_b, by_b, src_b, mm_b),
+        ):
+            uid = f"u{len(units)}"
+            uid_of[(label, pid)] = uid
+            units.append((uid, label, by[pid], src, mm))
     rng = random.Random(task.seed)
     rng.shuffle(units)
 
@@ -1011,7 +1027,7 @@ def _run_interleaved_paired(task) -> dict[str, Any]:
     for label, by_id, src in ((task.label_a, by_a, src_a), (task.label_b, by_b, src_b)):
         rows, n_err = [], 0
         for pid in ids:
-            resp = responses.get(f"{label}::{pid}", "")
+            resp = responses.get(uid_of[(label, pid)], "")
             failed = is_mechanism_error(resp)
             n_err += bool(failed)
             p = by_id[pid]
@@ -1093,7 +1109,9 @@ def _run_interleaved_paired(task) -> dict[str, Any]:
         "paired_contrasts": contrasts,      # every metric with both judges present
         # The realized dispatch order IS the experimental manipulation here, so
         # it is stored rather than left implicit in the seed.
-        "realized_order": [u[0] for u in units],
+        # (condition, prompt_id) in realized shuffle order -- readable and
+        # replayable; the surrogate uid carries no information worth storing.
+        "realized_order": [[u[1], u[2].id] for u in units],
         "campaign": task.campaign,
         "judge_model": task.judge_model,
         "judge_method": task.judge_method,
