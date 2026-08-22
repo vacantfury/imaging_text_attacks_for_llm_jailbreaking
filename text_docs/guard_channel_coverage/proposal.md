@@ -125,3 +125,47 @@ cross-references in them point at labels that will not exist here.
 
 ⚠️ Because these files are gitignored, they exist on ONE machine. Anything AS-8
 means to keep must be rewritten into a committed AS-8 file before that matters.
+
+## An adaptive-attack result already collected, and it is AS-8's (2026-08-22)
+
+Collected in AS-7's session before the re-spine, in answer to a review asking why the
+routed panel is not tested against an attacker who puts the ENCODED payload inside the
+image. Since the panel left for AS-8, so does this. **It is the strongest single argument
+for AS-8 existing, and it goes against the recommendation AS-7 used to make.**
+
+Target `internvl3_8b`, 100 HarmBench behaviours per cell, gpt-5-mini judge, block counts by
+exact match on the canned string (judge-independent). Every arm renders its payload into the
+image with `keep_text: false`, so the text channel carries only the fixed 46-character
+placeholder.
+
+| arm (payload in image) | undefended | llama-guard-3 | guardreasoner-vl | routed panel |
+|---|---|---|---|---|
+| **plain request** (control) | ASR 12% | 0/100, 14% | **64/100**, 2% | **64/100**, 2% |
+| encoded, code carrier | ASR 12% | 0/100, 11% | **2/100**, 6% | **2/100**, 8% |
+| encoded, formal logic | ASR 27% | 0/100, 30% | **3/100**, 25% | **4/100**, 30% |
+
+**The multimodal guard's image-channel coverage is coverage of recognisable plain harmful
+text that happens to be in an image.** Encode the text first and blocking falls from 64/100
+to 2--4/100, holding the behaviours, the renderer, the placeholder text channel, the target
+and the guard fixed. On the formal-logic arm the panel leaves attack success exactly where
+the undefended target had it (30% vs 27%). The panel closes the text-only blind spot and
+opens an image-side one.
+
+Three things make it usable rather than merely alarming:
+- **The pairing was checked before anything was read.** The published `tab:router` image arm
+  is NOT the comparator: its upstream is a different prompt set, 0/100 behaviour overlap,
+  verified. The matched control above was collected for this reason. Using the published
+  98/100 would have overstated the collapse as 98→2 instead of 64→2.
+- **P1 holds**, so the finding is not a rig artefact: llama-guard-3 blocks 0/100 on all three
+  arms including the plain control, which is what an empty text channel must produce.
+- **One named asymmetry.** The code arm renders to 1--3 images per row where the control and
+  the formal arm render to exactly 1, because the code carrier lengthens the request and the
+  renderer paginates. Intrinsic to the attack, not a rig error, but the FORMAL contrast is
+  the clean one and the code contrast carries a page-count difference alongside the form
+  difference.
+
+Presets: `conf/experiment/defense_read_access/adaptive_image_encoded_stage{1,2}.yaml` and
+`adaptive_image_control_stage{1,2}.yaml`, each carrying its pre-registered read-out in the
+header, written before collection. Campaigns `as7_adaptive_image_encoded` and
+`as7_adaptive_image_control`. ⚠️ These campaigns are deliberately NOT in AS-7's drift-guard
+scope; they join AS-8's builder when it has one.
