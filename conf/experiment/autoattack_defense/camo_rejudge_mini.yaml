@@ -2,7 +2,7 @@
 # Paper C · CAMO — Step C: gpt-5-mini REJUDGE of the free-judge collection (2026-08-01)
 # ============================================================
 # Re-scores the 18 cells collected by camo_eval_collect.yaml (campaign
-# paper_c_camo_collect, run key-free on AICR as job 244573 while the 1Password
+# paper_c_camo_collect, run key-free on AICR as job 244573 while the the secret manager
 # service account was dead) with the paper's headline judge gpt-5-mini.
 # Reads each cell's saved raw_results.jsonl — NO target re-query, no vLLM servers.
 #

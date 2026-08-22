@@ -1,7 +1,7 @@
 # ============================================================
 # Paper C · CAMO — Step B (COLLECTION PASS): free wildguard judge (2026-07-31)
 # ============================================================
-# The 1Password service account was DELETED 2026-07-31 -> gpt-5-mini (OpenAI) cannot
+# The secret-manager service-account was DELETED 2026-07-31 -> gpt-5-mini (OpenAI) cannot
 # run on any box. This variant judges with the FREE cluster wildguard so all 18 cells'
 # TARGET responses persist to raw_results.jsonl (written PRE-judge, task.py:550). The
 # wildguard verdicts are GARBAGE for image-attack ASR and are DISCARDED; rejudge these

@@ -56,7 +56,7 @@
 # was an estimate; the measurement above supersedes it.
 #
 # SUBMIT (NURC — AICR was refusing SSH; this round is API-only, no GPU, and the
-# 1Password service-account injection was verified working on NURC first):
+# secret-manager service-account injection was verified working on NURC first):
 #   ssh explorer 'cd ~/projects/llm_guardrail_security && \
 #     sbatch scripts/run_experiment.sbatch image_presence_threshold/instance_content_replication_stage2'
 
