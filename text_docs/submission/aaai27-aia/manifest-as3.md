@@ -21,7 +21,7 @@ over an unchanged tree.
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 6.62 MB | `1435d4c19b1088cd5a0b4aa64468c9fe8098196a5ed62b4d7bb850d4860f8906` |
 | `ReproducibilityChecklist/ReproducibilityChecklist.pdf` | Reproducibility checklist | 78 KB | `8f61db3987f514eea00939b2b037e6d9bbe967d04bff3d011b85af9b175dbbd8` |
 
-Source tree: `paper/as-3/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
+Source tree: `paper/my_papers/as-3/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
 `46fca14`. ⚠️ `paper/` is gitignored, so the repo hash does **not** cover the
 paper source; the `.tex` revision history lives only in the `.pre-*` snapshots
 beside `paper.tex`.
@@ -29,7 +29,7 @@ beside `paper.tex`.
 Rebuild everything with:
 
 ```
-./paper/as-3/aaai_2027_ai_alignment/aaai_aia_latex/build.sh   # both PDFs + all checks
+./paper/my_papers/as-3/aaai_2027_ai_alignment/aaai_aia_latex/build.sh   # both PDFs + all checks
 python3 scripts/build_code_artifact.py --paper as3            # the code zip
 ```
 

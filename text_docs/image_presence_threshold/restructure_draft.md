@@ -298,7 +298,7 @@ contradicts. In rough dependency order:
 
 ## 5. Files
 
-* Truth: `paper/as-2/aaai_2027_ai_alignment/aaai_aia_latex/paper.tex`
+* Truth: `paper/my_papers/as-2/aaai_2027_ai_alignment/aaai_aia_latex/paper.tex`
 * Pre-spine-rewrite backup: `paper.tex.presplit-backup` in the same directory
   (⚠️ `paper/` is **gitignored** — there is no git history for the draft, so that
   file is the only rollback point).

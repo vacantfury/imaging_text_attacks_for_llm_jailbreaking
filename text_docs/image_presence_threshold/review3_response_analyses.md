@@ -891,7 +891,7 @@ the same recompute-and-check as the headline digits — they are what a reviewer
 
 # cspaper review 4 — handling (2026-08-10)
 
-Review 4 (`paper/as-2/aaai_2027_main/reviews.md`, gitignored) rated 4/reject. Its **first
+Review 4 (`paper/my_papers/as-2/aaai_2027_main/reviews.md`, gitignored) rated 4/reject. Its **first
 and heaviest con**, and the one it says drove the rating, was that the attachment x mention
 table is internally inconsistent: that `12/2` discordant pairs cannot give `+30`pp or
 `p=6.9e-8`, and `20/8` cannot give `+20`pp or `p=1.9e-6`.

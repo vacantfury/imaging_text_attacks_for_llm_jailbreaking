@@ -68,12 +68,12 @@ are; new AS-9 rounds write to `conf/experiment/presence_carrier/`):
 | Second open checkpoint, built and pre-registered, **not yet run** | `second_checkpoint_gemma` | `paper_b_second_checkpoint_gemma` |
 | Carrier exclusion sweeps | `mechanism_sweep`, `mechanism_sweep_cider`, `mechanism_sweep_newtargets` | `paper_b_mechanism_sweep*` |
 
-**The tables are already extracted, verbatim, at `paper/as-9/inherited_from_as2.tex`**
+**The tables are already extracted, verbatim, at `paper/my_papers/as-9/inherited_from_as2.tex`**
 (gitignored, like all paper sources): `tab:imgprops`, `tab:contentinstance`, `tab:instance`,
 `tab:realistic`, `tab:secondcheckpoint`, `tab:locus`, `tab:owprops`. That file is not
 compilable as it stands, since the captions still reference AS-2 labels and need rewriting.
 The prose that accompanied them is recoverable from
-`paper/as-2/aaai_2027_ai_alignment/aaai_aia_latex/paper.tex.pre-respine`.
+`paper/my_papers/as-2/aaai_2027_ai_alignment/aaai_aia_latex/paper.tex.pre-respine`.
 
 **One table did NOT transfer, deliberately.** `tab:imgvsimg` stays in AS-2 and now carries
 leg one of its spine: direct image-versus-image contrasts with an image attached in *both*

@@ -181,7 +181,7 @@ selector to a harm lexicon; until then, do not report an ArtPrompt number.
 
 ### 2.1 Five of the "eleven **published** attacks" carry no citation
 
-`paper/as-3/.../paper.tex:210` lists the suite. Citations are present for CodeAttack, FigStep,
+`paper/my_papers/as-3/.../paper.tex:210` lists the suite. Citations are present for CodeAttack, FigStep,
 FC-Attack, MM-SafetyBench and CS-DJ/Text-DJ. **Missing** for:
 
 | Suite member | What it actually is | Source that should be cited |
@@ -535,7 +535,7 @@ as a verdict on one it did.
 > are computed from those cells.
 
 
-All of §6's Block A is now in `paper/as-3/aaai_2027_ai_alignment/aaai_aia_latex/paper.tex`
+All of §6's Block A is now in `paper/my_papers/as-3/aaai_2027_ai_alignment/aaai_aia_latex/paper.tex`
 (the sole live AS-3 edit target; `aaai_2027_main/` and `arxiv_latex/` remain frozen). Build verified clean:
 **15pp, 0 errors, 0 undefined citations, 0 overfull boxes, no page growth.**
 

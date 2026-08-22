@@ -21,7 +21,7 @@ re-spine; it is kept for history and must not be used to submit.)*
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 6.7 MB | `432293dcf8f8548fc022f6c9e7aa304de1af961f4a7e0f710aa5a736a9335005` |
 | `ReproducibilityChecklist.pdf` | Reproducibility Checklist (separate designated field) | 80 KB | `f66dbb814bff272abda8087c2980b2c83f59cf44c683664ee6645971210f0d4b` |
 
-Source tree: `paper/as-7/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
+Source tree: `paper/my_papers/as-7/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
 `948e9d6`. ⚠️ `paper/` is gitignored, so the repo hash does **not** cover the
 paper source. Its revision history is the `paper.tex.pre-*` / `supplementary.tex.pre-*`
 backups beside it: `.pre-respine` is the last pre-re-spine state, `.pre-condense`
@@ -31,9 +31,9 @@ are intermediate checkpoints.
 Rebuild everything with:
 
 ```
-./paper/as-7/aaai_2027_ai_alignment/aaai_aia_latex/build.sh        # both PDFs
+./paper/my_papers/as-7/aaai_2027_ai_alignment/aaai_aia_latex/build.sh        # both PDFs
 python scripts/build_code_artifact.py --paper as7                  # the code zip
-cd paper/as-7/aaai_2027_ai_alignment/ReproducibilityChecklist && \
+cd paper/my_papers/as-7/aaai_2027_ai_alignment/ReproducibilityChecklist && \
   pdflatex -interaction=nonstopmode ReproducibilityChecklist.tex   # the checklist
 ```
 
@@ -74,7 +74,7 @@ the harness audit, extended positioning).
 
 **Left the paper entirely, to AS-8**: the routed panel, stacking, coverage,
 efficacy and the mitigations appendix. Preserved verbatim at
-`paper/as-8/inherited_from_as7.tex` — **not recoverable from git history**,
+`paper/my_papers/as-8/inherited_from_as7.tex` — **not recoverable from git history**,
 because `paper/` is gitignored and nothing under it has ever been tracked.
 
 ## Verification run on this package

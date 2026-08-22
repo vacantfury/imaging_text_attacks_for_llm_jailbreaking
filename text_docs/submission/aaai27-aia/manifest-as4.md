@@ -1,5 +1,14 @@
 # AS-4 — AAAI-27 AI Alignment special track — submission package manifest
 
+> 📁 **Paths moved 2026-08-22 (the `paper/` three-folder refactor).** Every path in
+> this file now reads `paper/my_papers/as-4/...`; the source tree is otherwise
+> untouched. ⚠️ `aaai_aia_latex/paper.pdf` and `supplementary.pdf` were REBUILT
+> after the move, so their local bytes no longer match the SHA-256s in the table
+> below. **The uploaded files are unchanged** — nothing was re-submitted. The
+> rebuild changed only the file path pdflatex embeds; `paper.tex` has not been
+> edited since before the press (mtime 2026-08-22 04:24, press ~04:5x). Treat the
+> hashes below as the identity of what was UPLOADED, not of what is on disk.
+
 > ✅ **SUBMITTED 2026-08-22 (owner press), AAAI-27 AI Alignment special track,
 > OpenReview submission #205.** Filed inside the wall (22 Aug 2026 04:59 PDT /
 > 11:59 UTC). The four artifacts below were re-hashed immediately before the
@@ -26,7 +35,7 @@ papers. Do not cross-read them.)*
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 9.3 MB | `259d522ac78451e162004eceb581793f5c558c6a44ff099396a3fc25ae25aa70` |
 | `ReproducibilityChecklist/ReproducibilityChecklist.pdf` | Reproducibility checklist | 132 KB | `2736ba210a8d0f1b656193685d94b7238f34d172bf1a998f4a84597021d86c91` |
 
-Source tree: `paper/as-4/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
+Source tree: `paper/my_papers/as-4/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
 `141f66b`. ⚠️ `paper/` is gitignored, so the repo hash does **not** cover the
 paper source. Its revision history is the `*.pre-*` backups beside it;
 `paper.tex.pre-aia-split` and `supplementary.tex.pre-aia-split` are the last
@@ -35,7 +44,7 @@ pre-split states.
 Rebuild everything with:
 
 ```
-./paper/as-4/aaai_2027_ai_alignment/aaai_aia_latex/build.sh   # both PDFs + package checks
+./paper/my_papers/as-4/aaai_2027_ai_alignment/aaai_aia_latex/build.sh   # both PDFs + package checks
 uv run python -m src.analysis.as4_judgments_release emit      # the judgment layer
 uv run python -m src.analysis.as4_judgments_release verify    # + legacy crosscheck
 uv run python scripts/build_code_artifact.py --paper as4      # the code zip
@@ -43,7 +52,7 @@ uv run python scripts/build_code_artifact.py --paper as4      # the code zip
 
 ⚠️ Use `--paper as4`. The older `--paper paperd` profile is the **legacy
 main-track** package and still points at the pre-2026-08-08 path
-`paper/bestofn_attack/aaai_2027_main/`. It is kept so that package stays
+`paper/my_papers/as-4/_legacy_aaai_main_track/`. It is kept so that package stays
 rebuildable; it is not the AIA one.
 
 ## Packaging profile relied on

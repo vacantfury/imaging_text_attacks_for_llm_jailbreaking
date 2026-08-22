@@ -4,7 +4,7 @@
 |---|---|
 | Mode | `final` (research-workflow S10b) |
 | Paper | AS-2, AAAI-27 **AI Alignment special track** |
-| Source | `paper/as-2/aaai_2027_ai_alignment/aaai_aia_latex/` (gitignored) |
+| Source | `paper/my_papers/as-2/aaai_2027_ai_alignment/aaai_aia_latex/` (gitignored) |
 | Repo HEAD | `7d53331` |
 | Upload-set hashes | `paper.pdf` `73f7f352…` · `supplementary.pdf` `7eb89d73…` · `supplementary_code_and_data.zip` `1c4d9d06…` (full values in `text_docs/submission/aaai27-aia/manifest-as2.md`) |
 | Venue source | [AAAI-27 submission instructions](https://aaai.org/conference/aaai/aaai-27/submission-instructions/) + [AIA call](https://aaai.org/conference/aaai/aaai-27/aia-call/), checked 2026-08-22 |

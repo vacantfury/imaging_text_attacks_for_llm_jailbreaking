@@ -19,7 +19,7 @@ cross-read the two.)*
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 36.11 MB | `1c4d9d06c2cda4a0cd7159b77167063806d623da23cb3d912b891e2f3eede2eb` |
 | `ReproducibilityChecklist.pdf` | Reproducibility Checklist (separate field) | 0.08 MB | `d79e2dd53ec1078807faa6ccba1bde4060064ef366f6654e8e6f210668e488e1` |
 
-Source tree: `paper/as-2/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
+Source tree: `paper/my_papers/as-2/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
 `7d53331`. ⚠️ `paper/` is gitignored, so the repo hash does **not** cover the
 paper source. Its revision history is the `paper.tex.pre-*` backups beside it;
 `paper.tex.pre-respine` is the last pre-re-spine state.
@@ -27,7 +27,7 @@ paper source. Its revision history is the `paper.tex.pre-*` backups beside it;
 Rebuild everything with:
 
 ```
-./paper/as-2/aaai_2027_ai_alignment/aaai_aia_latex/build.sh    # both PDFs
+./paper/my_papers/as-2/aaai_2027_ai_alignment/aaai_aia_latex/build.sh    # both PDFs
 python -m src.analysis.as2_judgments_release                   # the judgment release
 python scripts/build_code_artifact.py --paper as2              # the code zip
 ```
@@ -52,7 +52,7 @@ AS-2 was re-spined 2026-08-22 onto **one quantity**: the refusal shift caused by
 an uninformative image attachment. Material measuring a *different* quantity —
 which property of the visual input carries the magnitude — left for a separate
 paper (AS-9, `text_docs/presence_carrier/proposal.md`); its tables are extracted
-verbatim at `paper/as-9/inherited_from_as2.tex`.
+verbatim at `paper/my_papers/as-9/inherited_from_as2.tex`.
 
 - Body floats **23 → 10**; Introduction paragraphs **15 → 8**; abstract **3
   paragraphs / ~50 numbers → 1 paragraph / 3 numbers** (handbook rule).

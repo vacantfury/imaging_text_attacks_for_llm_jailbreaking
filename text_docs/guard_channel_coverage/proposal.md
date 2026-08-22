@@ -108,7 +108,7 @@ has ever been tracked** (`git ls-files paper/` is empty). Deleting the blocks fr
 
 They are therefore preserved as files, on disk, not in history:
 
-- `paper/as-8/inherited_from_as7.tex` — the four lifted blocks verbatim, each with
+- `paper/my_papers/as-8/inherited_from_as7.tex` — the four lifted blocks verbatim, each with
   a header naming the AS-7 section and label it came from:
   1. benign calibration, the routed panel, the benign-carrier grid
      (`tab:benigncarrier`, `tab:router`, `tab:routershare`)
@@ -116,7 +116,7 @@ They are therefore preserved as files, on disk, not in history:
   3. the safety--utility trade-off
   4. the mitigations appendix and the adaptive-attack appendix
      (`app:mitigations`, `app:adaptive`, `tab:gated`, `tab:adaptive`)
-- `paper/as-7/.../paper.tex.pre-respine` and `supplementary.tex.pre-respine` — the
+- `paper/my_papers/as-7/.../paper.tex.pre-respine` and `supplementary.tex.pre-respine` — the
   full pre-re-spine snapshots the blocks were cut from.
 
 These are AS-7 prose citing AS-7 labels. They are a SOURCE for AS-8, never AS-8

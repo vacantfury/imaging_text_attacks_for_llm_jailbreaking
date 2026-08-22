@@ -19,7 +19,7 @@ invalidates this manifest** — repackage that artifact, then delta re-check.
 | `supplementary.pdf` | Supplementary Document | 0.37 MB | `2a43281f7a359b4db7079f0023e0050b4f45088c15038190aa00559a8cb49d2e` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 1.68 MB | `237aa365bb7308713ff39173df7048fe9e8837163dc75e5be98064b56e1a9c2a` |
 
-Source tree: `paper/as-7/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
+Source tree: `paper/my_papers/as-7/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
 `ac8f9b0 (`paper/` is gitignored; this session's paper edits are not in it)`. ⚠️ `paper/` is gitignored, so the repo hash does **not** cover the
 paper source. The `.tex` revision history lives only in
 `aaai_aia_latex/_backups/tex/` (see the note in the risks section).
@@ -27,7 +27,7 @@ paper source. The `.tex` revision history lives only in
 Rebuild everything with:
 
 ```
-./paper/as-7/aaai_2027_ai_alignment/aaai_aia_latex/build.sh   # both PDFs
+./paper/my_papers/as-7/aaai_2027_ai_alignment/aaai_aia_latex/build.sh   # both PDFs
 python scripts/build_code_artifact.py --paper as7             # the code zip
 ```
 

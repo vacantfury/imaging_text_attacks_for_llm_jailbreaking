@@ -151,14 +151,14 @@ Two attacks targeting the caption-mediated re-check on `gpt-4o-mini` (n=50): bes
 * Presets: `conf/experiment/defense_read_access/`
 * Measured results + integrity notes: `text_docs/defense_read_access/experiment_results.md` *(gitignored)*
 * Pre-split working record (both papers): `text_docs/image_presence_threshold/experiment_matrix.md` *(gitignored)*
-* Paper source: `paper/as-7/aaai_2027_ai_alignment/aaai_aia_latex/`
+* Paper source: `paper/my_papers/as-7/aaai_2027_ai_alignment/aaai_aia_latex/`
 * Registry of record: science repo `portfolio.md` → the AS-7 card.
 
 ---
 
 ## 9. Spine and title decisions — 2026-08-21
 
-*(This section is the home for AS-7's frame reasoning. It does NOT belong in `paper/as-7/aaai_2027_main/reviews.md`, which stores reviews. Owner correction 2026-08-21.)*
+*(This section is the home for AS-7's frame reasoning. It does NOT belong in `paper/my_papers/as-7/aaai_2027_main/reviews.md`, which stores reviews. Owner correction 2026-08-21.)*
 
 ### 9.1 The paper was re-spined onto READ ACCESS
 
