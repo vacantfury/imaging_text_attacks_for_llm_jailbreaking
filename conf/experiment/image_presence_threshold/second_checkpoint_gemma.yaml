@@ -1,0 +1,195 @@
+# Paper B (AS-2) · SECOND-CHECKPOINT REPLICATION on `gemma-3-12b-it`
+# (review 8 con 1 / Q1 — "the most mechanistic result is post-selection and
+#  single-checkpoint")
+#
+# ---------------------------------------------------------------------------
+# ⚠️ THIS IS NOT THE EXPERIMENT THE REVIEWER ASKED FOR, AND THE REASON IS
+#    ARCHITECTURAL, NOT A PREFERENCE. READ THIS BLOCK BEFORE CHANGING ANYTHING.
+#
+# The reviewer asks for the 256^2/512^2/1024^2/1536^2 canvas ladder plus the
+# token-matched text control, repeated on a checkpoint chosen before its
+# presence result was inspected. On `gemma-3-12b-it` that ladder CANNOT be run,
+# because on this model the four rungs are literally the same input.
+#
+# READ OFF THE MODEL'S OWN PROCESSOR (`AutoProcessor.from_pretrained`,
+# google/gemma-3-12b-it, 2026-08-22 — not computed from a formula, not recalled):
+#     preprocessor_config.json : image_seq_length = 256
+#                                size = {height: 896, width: 896}
+#                                do_pan_and_scan = null  (disabled)
+# So EVERY image, at every input resolution, is resized to 896x896 and becomes
+# EXACTLY 256 visual tokens. Two consequences, both verified on the actual
+# committed stimuli rather than on synthetic canvases:
+#
+#   1. THE BLANK LADDER IS AN IDENTITY. The 512^2 and 1536^2 blank arms of the
+#      E5 round produce the SAME pixel tensor under gemma's processor:
+#          blank 512^2  -> (1,3,896,896) md5 f72231fd2593f91e8514563b3174f63b
+#          blank 1536^2 -> (1,3,896,896) md5 f72231fd2593f91e8514563b3174f63b
+#      A uniform fill is resize-invariant, so the rungs differ in no bit that
+#      reaches the model. Running the ladder would produce a GUARANTEED null
+#      that says nothing whatever about the carrier — and the reviewer's own
+#      stated rule ("if the size effect does not replicate, present the qwen
+#      result as an isolated case study") would then demote the paper on
+#      evidence that is vacuous by construction. That is the specific trap this
+#      preset exists to avoid.
+#
+#   2. THE TOKEN-MATCHED TEXT CONTROL COLLAPSES TO ONE BUDGET. qwen3-vl spans
+#      64/256/2304 visual tokens across the ladder, which is what made a 2x3
+#      image-vs-text design meaningful there. gemma has exactly one budget, 256.
+#      There is no token axis to match against.
+#
+# WHAT GEMMA CAN DO INSTEAD IS STRICTLY BETTER FOR THE CARRIER QUESTION.
+# On qwen3-vl pixel count and visual token count move together, so they are
+# perfectly confounded; separating them is what E5 had to engineer by hand.
+# gemma breaks that confound FOR FREE, in the architecture: token count is
+# pinned at 256 no matter what, while CONTENT still varies. Verified distinct
+# under the same processor, same stimuli:
+#     photo 512^2  -> md5 13e527766e70a4d30ac1ff6a489d4ce3
+#     noise 512^2  -> md5 2210a634eeacf88ea6c211d27e47528c
+#     photo 1536^2 -> md5 684c4002a97080c03998072d260d05b4
+# So every contrast below holds visual token count EXACTLY constant by
+# construction rather than by matched design, on a different model family with
+# a different vision encoder (SigLIP, not a dynamic-resolution ViT).
+#
+# ---------------------------------------------------------------------------
+# WHY GEMMA IS THE RIGHT SECOND CHECKPOINT, AND ITS ONE WEAKNESS.
+#
+# It satisfies the reviewer's non-selection requirement: it was NOT the model
+# the mechanism work was done on, it is a different family with a different
+# vision encoder, and its presence effect was measured three times BEFORE this
+# round was designed (+7 to +9pp; tab:tierscan, tab:sameweights). It is also
+# the only other open checkpoint that shows the effect at all — the tier scan
+# found one of five, which is precisely why "pick another checkpoint at random"
+# is not available as an option.
+#
+# ⚠️ ITS WEAKNESS, STATED UP FRONT: it is a SMALL-effect checkpoint. The paper's
+# own multiplicity appendix already concedes gemma's +9pp does not survive a
+# family-wise correction and that no claim rests on it. A small total effect is
+# hard to decompose. That is not a reason to skip the round; it is a reason to
+# fix the read-out in advance, which is what the power block below does.
+#
+# ---------------------------------------------------------------------------
+# POWER, COMPUTED BEFORE COLLECTION (exact-McNemar simulation, 20k trials,
+# alpha=0.05; simulated directly on paired outcomes because these cells run
+# 1-31 discordant pairs, where a normal approximation is exactly what would
+# mislead us). Calibrated against two observed anchors: qwen E5 noise-blank
+# (n=240, 15% discordant, +10.8pp) and gemma presence (n=100, 11%, +9pp; the
+# simulation reproduces its published significance at power 0.76).
+#
+#   PRESENCE (cells 2 vs 1), n=300 : power 0.96 at +7pp, 1.00 at +9pp.
+#       -> WELL POWERED. This arm can return a real null.
+#
+#   CONTENT at pinned tokens (cells 3 vs 2), n=300, 8% discordant assumed:
+#       +3.1pp -> power 0.39      (+3.1pp = qwen's +10.8pp scaled by gemma's
+#       +5.0pp -> power 0.85       ~0.29x smaller total presence effect, which
+#       +8.0pp -> power 1.00       is the honest planning value)
+#       n=300 detects +5pp at 85%, +4pp at 62%, +3pp at 37%.
+#       -> UNDERPOWERED IF THE SUB-EFFECT SCALES DOWN WITH THE TOTAL. This is
+#          recorded now so that a null CANNOT later be read as a failed
+#          replication. It would be an uninformative test, and the pre-committed
+#          reporting for that outcome is P3 below.
+#
+# ---------------------------------------------------------------------------
+# PRE-REGISTERED READ-OUT — committed and pushed BEFORE collection.
+#
+# P1 (presence replicates). Cell 2 > cell 1 by roughly +7 to +9pp, significant
+#     at n=300. Then the phenomenon is confirmed on a non-selected second
+#     checkpoint from a different family, at proper power for the first time,
+#     and gemma's row stops being the marginal one the multiplicity appendix
+#     has to apologise for. This directly answers the "single-checkpoint" half
+#     of con 1 for the PHENOMENON.
+#
+# P2 (content moves at a pinned token budget — the E5 finding replicates).
+#     Cell 3 (noise) > cell 2 (blank) with both at exactly 256 visual tokens.
+#     Then E5's content axis is not a qwen quirk: it holds across two families
+#     and two vision-encoder designs, and the revised carrier account ("two
+#     substitutable axes") gains its second checkpoint. This is the strongest
+#     outcome available from this round.
+#
+# P3 (content null — the outcome that costs us, and the one power says is
+#     likeliest if the sub-effect scales down). Report the interval AND the
+#     pre-computed power, together, in the same sentence. At n=300 a null here
+#     excludes a content effect of +5pp or larger with 85% power but says
+#     essentially nothing about +3pp. The paper must then say: the content axis
+#     is confirmed on qwen and UNTESTED at adequate power on gemma — NOT that it
+#     failed to replicate. We do not get to call an underpowered null a
+#     refutation, and we do not get to quietly drop the arm either.
+#
+# P4 (resolution at a pinned budget). Cell 6 vs cell 4: same 256 tokens, same
+#     content, different detail after resize. Any difference here is content
+#     detail, cleanly separated from budget for the first time in this paper —
+#     on qwen that separation was impossible. Exploratory, reported as such.
+#
+# ---------------------------------------------------------------------------
+# ⚠️ CELL 5 IS A BUILT-IN RIG CHECK, NOT AN ARM. Its input is BYTE-IDENTICAL to
+# cell 2's after gemma's preprocessing (md5 above), so cell 5 minus cell 2
+# measures NOTHING BUT this target's run-to-run nondeterminism on the same
+# input, at n=300. That makes it the empirical noise floor the paper currently
+# asserts at "~7pp" without ever having measured it. Two uses, both binding:
+#   * every other contrast in this round is read against it;
+#   * if |cell 5 - cell 2| is itself large or significant, THE ROUND IS
+#     UNINTERPRETABLE and no number from it may be reported. There is no reading
+#     under which identical inputs may legitimately differ.
+# This is the cheapest validity gate this paper has ever had; do not delete it
+# to save a cell.
+#
+# ⚠️ ARM IDENTITY IS IN THE CONFIG / upstream_ref.source_dir, NEVER THE PATH.
+# Four anchors below end in `ir_constant` and two in `ir_blank`, and two of them
+# share a timestamp and differ only by random suffix. Reading the arm off the
+# last path component is the substring bug that has bitten this paper three
+# times. Note especially that `_text` and `_b1536` are two LEAVES OF THE SAME
+# stage-1 dir (`..._12503843`) — that is the chain structure, not a typo.
+#
+# STIMULI REUSED FROM E5, NOT RE-RENDERED. Same 300 ORBench-benign-hard prompts,
+# same committed stimulus files, same canonical text channel — so gemma's cells
+# are directly paired against qwen's E5 cells rather than forming an island.
+# Verified on xc before writing this file: all five image arms carry 300 images
+# and EXACTLY 1 distinct md5 each; the text arm carries 0 images.
+#
+# NOT COMPARABLE ACROSS JOBS. The target is nondeterministic, so the text arm is
+# re-run HERE and every contrast is model-vs-itself inside this job.
+#
+# INSTRUMENT PINNED. `benchmark` and `judge_method` are both set explicitly —
+# left to auto-inference an `orbench*`-derived path routes to the ORBench
+# evaluator, while every published benign-refusal cell in this paper was scored
+# with the JailbreakBench-refusal classifier. Two rubrics, not one.
+#
+# COST: target self-served on our own GPUs = $0. Judge only: 6 cells x 300
+# prompts = 1800 gpt-5-mini refusal calls at a measured ~$0.0009/call = ~$1.6.
+# An ESTIMATE, not a measurement. ABOVE the standing $1 auto-run gate, so this
+# preset does NOT run without the owner's explicit go.
+#
+# WALL: 1800 short benign generations on a 12B at bf16; the gemma server config
+# carries a 4h limit and this needs well under 1h. Checked, not assumed.
+#
+# SUBMIT (xc):
+#   ssh xc 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment_xc.sbatch image_presence_threshold/second_checkpoint_gemma'
+
+num_main_job_threads: 4
+num_cluster_jobs: 2          # orchestrator + 1 vLLM server (one target).
+
+# --- stage-1 anchors, reused verbatim from realistic_images_stage2.yaml -----
+_text:    &text    outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260822_060457_12503843/non_llm_baseline
+_b512:    &b512    outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260822_060457_42069018/ir_blank
+_p512:    &p512    outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_constant_20260822_060457_88827375/ir_constant
+_n512:    &n512    outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_constant_20260822_060457_34476345/ir_constant
+_b1536:   &b1536   outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260822_060457_12503843/ir_blank
+_p1536:   &p1536   outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_constant_20260822_060500_89894438/ir_constant
+
+_b: &b
+  mode: defense+evaluate
+  defense: no_defense
+  target_model: google/gemma-3-12b-it
+  prompt_range: [0, 299]
+  benchmark: jailbreakbench_benign   # pinned: hold the reporting path constant
+  judge_method: jbb_refusal          # pinned: hold the INSTRUMENT constant
+  judge_model: gpt-5-mini
+  campaign: paper_b_second_checkpoint_gemma
+
+tasks:
+  - {<<: *b, source_transform_subdir: *text}      # 1  no image          (baseline)
+  - {<<: *b, source_transform_subdir: *b512}      # 2  blank  512   -> 256 vis tok
+  - {<<: *b, source_transform_subdir: *n512}      # 3  noise  512   -> 256 tok, vs 2 = CONTENT
+  - {<<: *b, source_transform_subdir: *p512}      # 4  photo  512   -> 256 tok, vs 2 = CONTENT
+  - {<<: *b, source_transform_subdir: *b1536}     # 5  blank  1536  -> IDENTICAL INPUT to 2 (rig check)
+  - {<<: *b, source_transform_subdir: *p1536}     # 6  photo  1536  -> 256 tok, vs 4 = RESOLUTION

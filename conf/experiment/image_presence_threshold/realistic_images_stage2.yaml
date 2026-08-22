@@ -96,7 +96,7 @@ _b: &b
 
 tasks:
   - {<<: *b, source_transform_subdir: *text}      # 1  no image
-  - {<<: *b, source_transform_subdir: *b512}      # 2  blank  512   (64 vis tok)
+  - {<<: *b, source_transform_subdir: *b512}      # 2  blank  512   (256 vis tok)
   - {<<: *b, source_transform_subdir: *p512}      # 3  photo  512   MATCHED to 2
   - {<<: *b, source_transform_subdir: *n512}      # 4  noise  512   MATCHED to 2
   - {<<: *b, source_transform_subdir: *b1536}     # 5  blank  1536  (2304 vis tok)
