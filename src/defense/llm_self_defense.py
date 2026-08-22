@@ -119,15 +119,33 @@ class LLMSelfDefense(Defense):
 
     type_name = "llm_self_defense"
 
-    def __init__(self, filter_model: Optional[str] = None, **kwargs):
+    def __init__(self, filter_model: Optional[str] = None,
+                 filter_temperature: Optional[float] = None, **kwargs):
         """
         Args:
             filter_model: model that screens the response. None (default) =
                 the TARGET model itself, i.e. the borrowed-strength condition.
                 A model name gives the separate-screener variant.
+            filter_temperature: decoding temperature for the SCREENING call
+                only. None (default) = whatever the screening service already
+                uses, which for filter_model=None is the target's own.
+
+                This knob exists to isolate ONE thing. Answering the question
+                "does a defense's own sampled verdict donate a channel to a
+                repeat attacker?" requires varying the verdict's stochasticity
+                while holding the answer's fixed. A target-temperature sweep
+                cannot do that: it moves both at once. SAGE cannot host the
+                experiment at all, because it fuses screening and answering into
+                a SINGLE generation, so its verdict is not separately
+                addressable. This defense already screens in a second call, so
+                pinning generation at T=1.0 and setting this to 0.0 changes
+                exactly one thing and holds the screening prompt, the model and
+                the downstream protocol identical.
         """
-        super().__init__(filter_model=filter_model, **kwargs)
+        super().__init__(filter_model=filter_model,
+                         filter_temperature=filter_temperature, **kwargs)
         self._filter_model = filter_model
+        self._filter_temperature = filter_temperature
         self._filter_service: Optional[BaseLLMService] = None
 
     def _get_filter_service(self, target_service: BaseLLMService) -> BaseLLMService:
@@ -167,14 +185,23 @@ class LLMSelfDefense(Defense):
             for p in prompts
         ]
         which = self._filter_model or "target(self)"
+        at_t = ("" if self._filter_temperature is None
+                else f" at T={self._filter_temperature}")
         logger.info(
             f"LLMSelfDefense: step 2/2 screening {len(screen_convs)} responses "
-            f"with {which}")
+            f"with {which}{at_t}")
+        # A per-call temperature override; the screening service is the TARGET
+        # service when filter_model is None, so this must NOT be set on the
+        # service object or it would silently change the generation call too.
+        screen_kwargs = {}
+        if self._filter_temperature is not None:
+            screen_kwargs["temperature"] = float(self._filter_temperature)
         verdicts = dict(filter_service.batch_chat(
             conversations=screen_convs,
             system_message=None,
             is_test=True,
             max_tokens=_FILTER_MAX_TOKENS,
+            **screen_kwargs,
         ))
 
         out, blocked, n_err = [], 0, 0
