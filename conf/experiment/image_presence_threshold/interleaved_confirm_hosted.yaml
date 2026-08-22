@@ -1,0 +1,59 @@
+# Paper B (AS-2) · REVIEW-7 Q1 — RANDOMIZED INTERLEAVED CONFIRMATION, hosted models
+#
+# The hosted companion to `interleaved_confirm_ow.yaml`. Review 7 Q1 asks for the
+# randomized-interleaving replication "ideally on at least one hosted model with
+# a large effect and qwen3-vl-8b"; the open checkpoint runs in the sibling
+# preset, this covers the hosted side.
+#
+# MODELS. `claude-sonnet-4-6` carries the largest borderline shift in the paper
+# ($12\to63$, +51pp) and is the model the reviewer's phrase "a hosted model with
+# a large effect" points at. `gemini-2.5-flash-lite` is added because it costs
+# almost nothing and gives a SECOND independent hosted replication rather than a
+# single hosted data point.
+#
+# INDEPENDENT ORDERS, NOT ONE SHUFFLE. Each task gets its own seed (ow=20260821,
+# claude=20260822, flash-lite=20260823), so the three runs are independent draws
+# from the space of interleavings. A single shared seed would make all three
+# inherit the same order, and "was it one lucky order?" would be unanswerable.
+# Every seed is recorded in its results.json alongside the realized order.
+#
+# ⚠️ RUNG, NOT LABEL — both dirs carry a path-inferred `jailbreakbench_benign`
+# label but hold OR-Bench **borderline**-benign content (verified 2026-08-21 by
+# reading the prompts). Judge pinned explicitly, so the instrument matches every
+# other AS-2 benign cell regardless of the label.
+#
+# ⚠️ CONFIRMATORY, NOT A REPLACEMENT for the arm-batched design — byte-identity
+# within an arm is what licenses the no-per-prompt-information claim, and
+# interleaving gives it up. The paper keeps both. See the sibling preset's header
+# for the pre-registered read-out (P1/P2/P3), which governs this preset too.
+#
+# COST, from THIS repo's stored per-arm `target_usage` on real benign cells (not
+# a rate card): claude text-arm $0.472 + image-arm $0.175, flash-lite $0.053 +
+# $0.029, plus ~$0.12 of gpt-5-mini judging per run (200 rows).
+# => ~$0.77 + ~$0.20 = **~$0.97 total**, inside the standing run-it gate.
+#
+# SUBMIT (NURC — API-only, no GPU):
+#   ssh explorer 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment.sbatch image_presence_threshold/interleaved_confirm_hosted'
+
+num_main_job_threads: 2
+num_cluster_jobs: 1          # API targets + API judge — no vLLM server needed.
+
+_text:  &text  outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260806_055851_77202176/non_llm_baseline
+_blank: &blank outputs/image_presence_threshold/prompt_transform/jailbreakbench_benign/non_llm_baseline_ir_blank_20260821_232149_49683396/ir_blank
+
+_b: &b
+  mode: interleaved_paired
+  source_a: *text
+  source_b: *blank
+  label_a: text
+  label_b: canvas
+  benchmark: jailbreakbench_benign
+  judge_method: jbb_refusal
+  judge_model: gpt-5-mini
+  prompt_range: [0, 99]
+  campaign: paper_b_interleaved_confirm
+
+tasks:
+  - {<<: *b, target_model: claude-sonnet-4-6,     seed: 20260822}
+  - {<<: *b, target_model: gemini-2.5-flash-lite, seed: 20260823}
