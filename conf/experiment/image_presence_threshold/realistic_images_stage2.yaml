@@ -41,6 +41,19 @@
 #      rather than an assumption, and it is the check that catches a silently
 #      re-rendered or mis-routed stimulus.
 #
+# ✅ THE MATCHED-TOKEN PREMISE IS VERIFIED, NOT ASSUMED (2026-08-22). Read back
+# from the target's OWN processor (`AutoProcessor.from_pretrained`, patch=16,
+# merge=2, i.e. 32 px per visual token), the stimuli tokenise to:
+#     512x512   blank / photo / noise        ->  256 visual tokens each
+#     1536x1536 blank / photo / photo-q40    -> 2304 visual tokens each
+# So every photo-vs-blank contrast in this round holds visual token count EXACTLY
+# constant while varying content from a 1-colour uniform fill to a 45k-colour
+# natural photograph. That is what makes it a test of the carrier claim rather
+# than one more robustness arm, and it is checked rather than inferred because
+# the whole round's meaning depends on it. (This is the same readback the paper
+# names as the precondition for a cross-route comparison; the method is now
+# demonstrated to work.)
+#
 # ⚠️ INSTRUMENT PINNED. `benchmark` and `judge_method` are BOTH set explicitly.
 # Left to auto-inference, an `orbench*`-derived path routes to the ORBench
 # evaluator while every published benign-refusal cell in this paper was scored
