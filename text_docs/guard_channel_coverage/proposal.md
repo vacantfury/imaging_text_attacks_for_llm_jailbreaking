@@ -97,3 +97,31 @@ paper is set by novelty rather than by deployment relevance, which is this paper
 - **No model-level refusal claims.** Whether the target's own threshold moves with attachment
   is AS-2's and AS-9's territory. Carry AS-7's scope control forward.
 - Public repo: no reviewer text, no personal data, no venue career-weighting in this file.
+
+## Where the inherited AS-7 text actually lives (correction, 2026-08-22)
+
+The re-spine handoff says the material lifted out of AS-7 "must remain recoverable
+from git history". It cannot be, and this was checked rather than assumed:
+**`paper/` is gitignored in this repo (`.gitignore` line 76) and nothing under it
+has ever been tracked** (`git ls-files paper/` is empty). Deleting the blocks from
+`paper.tex` would have destroyed them outright.
+
+They are therefore preserved as files, on disk, not in history:
+
+- `paper/as-8/inherited_from_as7.tex` — the four lifted blocks verbatim, each with
+  a header naming the AS-7 section and label it came from:
+  1. benign calibration, the routed panel, the benign-carrier grid
+     (`tab:benigncarrier`, `tab:router`, `tab:routershare`)
+  2. coverage / redundancy and stacking (`tab:stacked`)
+  3. the safety--utility trade-off
+  4. the mitigations appendix and the adaptive-attack appendix
+     (`app:mitigations`, `app:adaptive`, `tab:gated`, `tab:adaptive`)
+- `paper/as-7/.../paper.tex.pre-respine` and `supplementary.tex.pre-respine` — the
+  full pre-re-spine snapshots the blocks were cut from.
+
+These are AS-7 prose citing AS-7 labels. They are a SOURCE for AS-8, never AS-8
+text: every claim is re-read against AS-8's own quantity before reuse, and the
+cross-references in them point at labels that will not exist here.
+
+⚠️ Because these files are gitignored, they exist on ONE machine. Anything AS-8
+means to keep must be rewritten into a committed AS-8 file before that matters.
