@@ -14,8 +14,8 @@ cross-read the two.)*
 
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
-| `paper.pdf` | Main submission PDF | 0.35 MB | `6a7160c308ddd00b2ee9396f907856cdbe7eae27905eeb4eaa4e9bc104758e68` |
-| `supplementary.pdf` | Supplementary Document | 0.46 MB | `45eb2f3f032b8b97618bd3f2e789240b96adcd9cab9b9672f0b0e308e950caa3` |
+| `paper.pdf` | Main submission PDF | 0.35 MB | `eb4bc96624faab189349fa427c5cbdff7baa30acefafa88d950c685c861a3fe8` |
+| `supplementary.pdf` | Supplementary Document | 0.45 MB | `f2a4ad1221b26028b7052f7f57f64c64d4560cf99231f98b8b11a951e66d4c7a` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 36.11 MB | `1c4d9d06c2cda4a0cd7159b77167063806d623da23cb3d912b891e2f3eede2eb` |
 | `ReproducibilityChecklist.pdf` | Reproducibility Checklist (separate field) | 0.08 MB | `d79e2dd53ec1078807faa6ccba1bde4060064ef366f6654e8e6f210668e488e1` |
 
