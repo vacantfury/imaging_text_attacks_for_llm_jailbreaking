@@ -1,0 +1,120 @@
+# ============================================================
+# Paper C (AS-3) — cspaper review 5, Q2: THE IDENTIFICATION FACTORIAL
+# WildGuard / Qwen2.5-VL, image channel, all five arms IN ONE RUN.
+# ============================================================
+# WHAT THIS ANSWERS. con 1 says the paper's central causal claim is not identified:
+# the gb->mc transition changes modality visibility, transcription quality, language,
+# register AND input length at once, so the benign-blocking deltas could be plain
+# normalization rather than "restoring a view". Q2 names the missing arm and calls it
+# necessary: transcription plus a content-preserving, length-matched paraphrase.
+#
+# THE LADDER. Five arms, and the two middle steps are the whole point:
+#   (i)   gb          guard alone                       -- guard reads the placeholder text
+#   (ii)  recover     transcription only                -- guard reads the raw transcript
+#   (iii) paraphrase  transcription + rewrite, NO decode -- register/length/fluency change
+#   (iv)  decode      transcription + decode            -- the shipped amplifier
+#   (v)   +rg         decode + reguard                  -- re-screens the pre-decode surface
+# (iii)-(ii) prices REWRITING. (iv)-(iii) prices COMPREHENSION. That is the separation
+# the paper currently concedes it cannot make.
+#
+# WHY ONE RUN AND ONE CAMPAIGN. The obvious cheap route is to run only arm (iii) and
+# compare it against the existing gb/mc/+rg cells. That would reintroduce exactly the
+# defect review 5 con 6 already complains about ("explicitly from a separate run, yet
+# still interpreted directionally"): run-to-run drift is +/-8-10 points, which is larger
+# than the effect being identified. All five arms therefore run here, same campaign,
+# same upstream renders, paired on prompt id.
+#
+# THE INSTRUMENT IS JUDGE-FREE. The primary quantity is the GUARD BLOCK RATE, read off
+# the fixed canned refusal string, so identification does not depend on any judge. The
+# cluster judges below are pilot-grade and free (wildguard harm, qwen orbench refusal);
+# a gpt-5-mini rejudge over the stored responses produces any end-to-end number that
+# reaches the paper. NOTE: wildguard is NOT a valid ASR judge (it flags intent, not
+# completion) -- its harm numbers here are for smoke only and must never be published.
+#
+# ARM (iii) IS A CONTROL, NOT A PROPOSED DEFENSE. decode_style="paraphrase" exists to be
+# measured against, not shipped. If the model decodes anyway despite being told not to,
+# the contrast collapses toward the null, which is the direction that favours the
+# REVIEWER's normalization reading over ours -- so leakage cannot manufacture our result.
+# Measure it rather than assume it: score how often the paraphrase output states the
+# underlying request before reading the block rates.
+#
+# Servers: qwen (target + orbench judge) + wildguard (guard + harm judge) = 2
+#   -> num_cluster_jobs = orchestrator + 2 = 3, inside NURC's 4-job cap.
+# Sizing: 5 arms x (6 image attacks x 100 + 300 benign) = 4,500 prompts. At the paper's
+# measured ~3.6 s/prompt for the amplifier this is ~4.5 h against NURC's 8 h wall, and
+# the gb arm is cheaper than that figure since it makes one target call, not two.
+# ============================================================
+
+num_main_job_threads: 4
+num_cluster_jobs: 3
+
+_wg: &wg wildguard
+
+# ---- the five arms ----
+_gb:    &gb    {guard_model: wildguard}
+_rec:   &rec   {guard_model: wildguard, decode_text: false}
+_para:  &para  {guard_model: wildguard, decode_text: true, decode_style: paraphrase}
+_dec:   &dec   {guard_model: wildguard, decode_text: true, decode_style: recover}
+_rg:    &rg    {guard_model: wildguard, decode_text: true, decode_style: recover, reguard_original: true}
+
+_harm: &harm {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0, 99], judge_method: wildguard, judge_model: wildguard, campaign: paper_c_q2_view_vs_rewrite}
+_ben:  &ben  {mode: defense+evaluate, target_model: qwen2_5_vl_7b, prompt_range: [0, 299], benchmark: orbench_benign_hard, judge_method: orbench, judge_model: qwen2_5_vl_7b, campaign: paper_c_q2_view_vs_rewrite}
+
+# ---- upstreams: the CORRECTED render set the published grid uses ----
+_figstep:  &figstep  outputs/autoattack_defense/prompt_transform/harmbench/ir_figstep_20260805_215649_72871103/ir_figstep
+_fcflow:   &fcflow   outputs/autoattack_defense/prompt_transform/harmbench/ir_fc_flowchart_20260718_183457_52987863/ir_fc_flowchart
+_lowcon:   &lowcon   outputs/autoattack_defense/prompt_transform/harmbench/ir_low_contrast_20260718_183457_77423812/ir_low_contrast
+_occluded: &occluded outputs/autoattack_defense/prompt_transform/harmbench/ir_occluded_20260718_183457_84223144/ir_occluded
+_mmtypo:   &mmtypo   outputs/autoattack_defense/prompt_transform/harmbench/ir_mm_typo_20260718_183500_58590499/ir_mm_typo
+_distract: &distract outputs/autoattack_defense/prompt_transform/harmbench/ir_distraction_grid_20260718_183500_23630684/ir_distraction_grid
+# benign: keep_text=FALSE render (the corrected instrument; the earlier one left the
+# request in the text field, which made a text-only guard sighted and priced re-rendering)
+_orb_img:  &orb_img  outputs/autoattack_defense/prompt_transform/orbench_benign_hard/ir_plain_20260821_053159_70002875/ir_plain
+
+tasks:
+  # ================= HARMFUL: six image attacks x five arms =================
+  - {<<: *harm, defense: guard_baseline,    defense_config: *gb,   source_transform_subdir: *figstep}
+  - {<<: *harm, defense: modality_complete, defense_config: *rec,  source_transform_subdir: *figstep}
+  - {<<: *harm, defense: modality_complete, defense_config: *para, source_transform_subdir: *figstep}
+  - {<<: *harm, defense: modality_complete, defense_config: *dec,  source_transform_subdir: *figstep}
+  - {<<: *harm, defense: modality_complete, defense_config: *rg,   source_transform_subdir: *figstep}
+
+  - {<<: *harm, defense: guard_baseline,    defense_config: *gb,   source_transform_subdir: *fcflow}
+  - {<<: *harm, defense: modality_complete, defense_config: *rec,  source_transform_subdir: *fcflow}
+  - {<<: *harm, defense: modality_complete, defense_config: *para, source_transform_subdir: *fcflow}
+  - {<<: *harm, defense: modality_complete, defense_config: *dec,  source_transform_subdir: *fcflow}
+  - {<<: *harm, defense: modality_complete, defense_config: *rg,   source_transform_subdir: *fcflow}
+
+  - {<<: *harm, defense: guard_baseline,    defense_config: *gb,   source_transform_subdir: *lowcon}
+  - {<<: *harm, defense: modality_complete, defense_config: *rec,  source_transform_subdir: *lowcon}
+  - {<<: *harm, defense: modality_complete, defense_config: *para, source_transform_subdir: *lowcon}
+  - {<<: *harm, defense: modality_complete, defense_config: *dec,  source_transform_subdir: *lowcon}
+  - {<<: *harm, defense: modality_complete, defense_config: *rg,   source_transform_subdir: *lowcon}
+
+  - {<<: *harm, defense: guard_baseline,    defense_config: *gb,   source_transform_subdir: *occluded}
+  - {<<: *harm, defense: modality_complete, defense_config: *rec,  source_transform_subdir: *occluded}
+  - {<<: *harm, defense: modality_complete, defense_config: *para, source_transform_subdir: *occluded}
+  - {<<: *harm, defense: modality_complete, defense_config: *dec,  source_transform_subdir: *occluded}
+  - {<<: *harm, defense: modality_complete, defense_config: *rg,   source_transform_subdir: *occluded}
+
+  - {<<: *harm, defense: guard_baseline,    defense_config: *gb,   source_transform_subdir: *mmtypo}
+  - {<<: *harm, defense: modality_complete, defense_config: *rec,  source_transform_subdir: *mmtypo}
+  - {<<: *harm, defense: modality_complete, defense_config: *para, source_transform_subdir: *mmtypo}
+  - {<<: *harm, defense: modality_complete, defense_config: *dec,  source_transform_subdir: *mmtypo}
+  - {<<: *harm, defense: modality_complete, defense_config: *rg,   source_transform_subdir: *mmtypo}
+
+  - {<<: *harm, defense: guard_baseline,    defense_config: *gb,   source_transform_subdir: *distract}
+  - {<<: *harm, defense: modality_complete, defense_config: *rec,  source_transform_subdir: *distract}
+  - {<<: *harm, defense: modality_complete, defense_config: *para, source_transform_subdir: *distract}
+  - {<<: *harm, defense: modality_complete, defense_config: *dec,  source_transform_subdir: *distract}
+  - {<<: *harm, defense: modality_complete, defense_config: *rg,   source_transform_subdir: *distract}
+
+  # ================= BENIGN: the axis con 1 actually disputes =================
+  # The undefended floor is included so the five arms are read against it in-run rather
+  # than against a floor from another round.
+  - {<<: *ben, defense: no_defense,                              source_transform_subdir: *orb_img}
+  - {<<: *ben, defense: guard_baseline,    defense_config: *gb,   source_transform_subdir: *orb_img}
+  - {<<: *ben, defense: modality_complete, defense_config: *rec,  source_transform_subdir: *orb_img}
+  - {<<: *ben, defense: modality_complete, defense_config: *para, source_transform_subdir: *orb_img}
+  - {<<: *ben, defense: modality_complete, defense_config: *dec,  source_transform_subdir: *orb_img}
+  - {<<: *ben, defense: modality_complete, defense_config: *rg,   source_transform_subdir: *orb_img}
