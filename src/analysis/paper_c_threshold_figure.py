@@ -28,7 +28,12 @@ import matplotlib.pyplot as plt
 from .guard_threshold import load_config, load_records, sweep_guard
 from .paper_c_guard_threshold import load_benign_floor_labels, load_floor_labels
 
-FIGS = "paper/as-3/latex/figs"
+# ⚠️ STALE BEFORE THE 2026-08-22 refactor, not caused by it: `as-3/latex/` has
+# not existed since the 2026-08-01 paper-dir reorganization. Left pointing at
+# the mechanically-updated path so the breakage stays visible; the live Paper-C
+# figure dir is `as-3/aaai_2027_ai_alignment/aaai_aia_latex/figs` (see
+# paper_c_figures.py FIGS_ALT). Repoint deliberately when this script next runs.
+FIGS = "paper/my_papers/as-3/latex/figs"
 
 # Display names + a stable colour per guard, matching the other Paper-C figures.
 GUARDS = {
