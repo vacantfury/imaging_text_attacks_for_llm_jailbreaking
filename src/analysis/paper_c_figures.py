@@ -183,10 +183,8 @@ def load_balanced():
     MCRG_OR2 = [_over(i, g, 'rg') for g in GUARDS]
     FLOOR_OR, FLOOR_OR2 = _floor(q), _floor(i)
     print(f'balanced axis loaded: Qwen floor {FLOOR_OR}, InternVL3 floor {FLOOR_OR2}')
-    print('  ⚠ BALANCED AXIS: its image channel was rendered with keep_text=True, so the '
-          'guard reads\n    the request in the text field and no view is being restored. '
-          'Not commensurable with\n    the attack axis or with tab:viewprice. Diagnostic '
-          'only until the keep_text=false re-run.')
+    print('  balanced axis is instrument-matched as of the 2026-08-21 keep_text=false '
+          'redraw\n  (guarded by instrument_gate; --axis 2cat still plots the retired slice).')
 
 
 def load_2cat():
@@ -238,7 +236,7 @@ def main() -> None:
         print("style preset fallback:", e)
         plt.rcParams.update({'font.size':8,'axes.labelsize':9,'font.family':'sans-serif'})
     verify()
-    axis = 'balanced' if '--axis' in sys.argv and 'balanced' in sys.argv else '2cat'
+    axis = '2cat' if '--axis' in sys.argv and '2cat' in sys.argv else 'balanced'
     (load_balanced if axis == 'balanced' else load_2cat)()
     os.makedirs(FIGS, exist_ok=True)
 

@@ -102,8 +102,13 @@ CHANNELS = {'non_llm_baseline': 'text', 'ir_plain': 'image'}
 BONF = 0.05 / 20   # same family-wide correction the paper's Family C uses (20 contrasts)
 
 # The five Qwen numbers `tab:viewprice` already prints (gb->mc, image channel, block rate).
-SHIPPED_QWEN = {'wildguard': -8.0, 'llama_guard_3_8b': -1.3, 'qwen3guard_gen_8b': -10.0,
-                'thinkguard': -23.7, 'guardreasoner_vl_7b': -11.0}
+# What `tab:viewprice`'s benign column PRINTS. The gate's job is drift detection between the
+# paper and the data -- the original defect class -- not correctness; correctness is the
+# instrument gate's job, and this comparison is only meaningful once that one is green.
+# Updated 2026-08-21 from the contaminated keep_text=True values (-8.0/-1.3/-10.0/-23.7/-11.0)
+# to the corrected keep_text=False round.
+SHIPPED_QWEN = {'wildguard': 50.3, 'llama_guard_3_8b': 8.7, 'qwen3guard_gen_8b': 53.0,
+                'thinkguard': 30.7, 'guardreasoner_vl_7b': -1.0}
 
 ROOTS = ['outputs/autoattack_defense/defense+evaluate/orbench_benign_hard',
          'outputs/autoattack_defense/rejudge/orbench_benign_hard',
@@ -339,14 +344,17 @@ def main() -> None:
         tag = '' if p is None else ('‡' if p < BONF else ('†' if p < 0.05 else ' n.s.'))
         print(f'  {LABEL[g]:18} {"---" if d is None else f"{d:+.1f}"}{tag}'
               f'{"" if p is None else f"   p={p:.2g}"}')
-    neg = [k for k, v in deltas.items() if v < 0]
     what = ('restoring the view' if instrument_ok else
             'RE-RENDERING (instrument gate failed — not view restoration)')
-    print(f'\nsign check: {len(neg)}/{len(deltas)} guard-target pairs NEGATIVE '
-          f'({what} LOWERS benign blocking)')
+    pos = [k for k, v in deltas.items() if v > 0]
+    print(f'\nsign check: {len(pos)}/{len(deltas)} guard-target pairs POSITIVE '
+          f'({what} RAISES benign blocking, i.e. it is bought not free)')
     for k, v in sorted(deltas.items()):
-        if v >= 0:
-            print(f'  exception: {k[0]} / {LABEL[k[1]]}  {v:+.1f}  p={pvals[k]:.2g}')
+        if v <= 0:
+            note = '  (vision-language control: it already read the channel, '\
+                   'so no view is restored)' if k[1] == 'guardreasoner_vl_7b' else ''
+            print(f'  non-positive: {k[0]} / {LABEL[k[1]]}  {v:+.1f}  '
+                  f'p={pvals[k]:.2g}{note}')
 
 
 
