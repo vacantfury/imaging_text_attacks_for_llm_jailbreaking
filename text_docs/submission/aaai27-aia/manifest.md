@@ -9,12 +9,12 @@ invalidates this manifest** — repackage that artifact, then delta re-check.
 
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
-| `paper.pdf` | Main submission PDF | 0.47 MB | `01c426d245f62c76a37deeed60cd38bc0f471924c5fec4cf75fea02cd523ba8e` |
-| `supplementary.pdf` | Supplementary Document | 0.37 MB | `3bde751916cc07be7ab40b89e8bde575daa949308bd59aa306774da499648afc` |
+| `paper.pdf` | Main submission PDF | 0.47 MB | `c12371b545e3ba31b6207301efa236eec134239a9911c3cdc7fcb376c2f4d430` |
+| `supplementary.pdf` | Supplementary Document | 0.37 MB | `9ffcec24d0d2c3c1e084da30c1f5e24383b8ed16743695bad0ce12ea8cc2a53d` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 1.68 MB | `237aa365bb7308713ff39173df7048fe9e8837163dc75e5be98064b56e1a9c2a` |
 
 Source tree: `paper/as-7/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
-`7a3ed1d27657b08f4a6dfdf50df632636eaf8447`. ⚠️ `paper/` is gitignored, so the repo hash does **not** cover the
+`ac8f9b0 (`paper/` is gitignored; this session's paper edits are not in it)`. ⚠️ `paper/` is gitignored, so the repo hash does **not** cover the
 paper source. The `.tex` revision history lives only in
 `aaai_aia_latex/_backups/tex/` (see the note in the risks section).
 
@@ -109,6 +109,39 @@ CHECK a claim already stated and supported."
   the claim, which is a duty and not a script. A guard implying otherwise would
   be the "reads green over ground it never covered" defect this repo has already
   hit three times.
+
+## Source-read audit of the narrative claims (2026-08-21, second pass)
+
+The gated-mitigation read above found four numeric errors in ONE Introduction
+sentence, none of which any guard covered. That is a defect *class*, not one
+sentence, so every summary claim in the Abstract, Introduction, Discussion and
+Conclusion was then read against its source table. Eight findings, all fixed:
+
+| # | Finding | Severity |
+|---|---|---|
+| 1 | **The Experimental Setup section described a different paper.** It listed five API targets and three defenses. It omitted all three open-weight targets that carry the lead results (`qwen3-vl-8b-instruct`, `internvl3-8b`, `pixtral-12b`), all three guard classifiers, SemanticSmooth, the channel-routed panel, and both ORBench benign sets. Stale from before the read-access re-spine. | major |
+| 2 | **Three central instruments were never cited.** WildGuard, Llama Guard and GuardReasoner-VL carry Tables 1-5 and appeared nowhere in the bibliography. SemanticSmooth and OR-Bench had entries in `paper.bib` that no `\cite` ever reached. | major |
+| 3 | Conclusion scope claim "seven targets and two encodings"; the paper tests **eight** targets and **three** encodings. | real |
+| 4 | `tab:bypass`-describing prose called the variant `ir_plain`, while the paragraph immediately below it insists the table is `ir_plain+text` and that the distinction "is not terminological". | real |
+| 5 | Same sentence: "residual ASR $41$--$43\%$ on their worst cells". Both worst cells are $43$; the $41$ came from a non-worst cell. | real |
+| 6 | `tab:channelasr` caption asserted block counts are "target-independent by construction" while its own table shows `guardreasoner-vl` at $99$ and $98$ on the two targets. It is a *generative* guard, so sampling, not the target, explains the one-prompt difference. Caption now says so. | real |
+| 7 | One Introduction sentence spliced numbers from two different grids (`tab:benefit`, open-weight, and `tab:deployable`, API) without naming either, so a reviewer looking for $-63$ in the table supplying $-38/-24/-24$ would not find it. Both grids now named. | clarity |
+| 8 | "every cell $p<10^{-10}$" appeared twice in prose, but the tables' own legend only marks $p<10^{-4}$. **The claim is true**: recomputed by exact McNemar from the stored per-prompt outcomes, the four cells are $2.8\times10^{-17}$, $7.5\times10^{-11}$, $3.5\times10^{-18}$, $1.8\times10^{-15}$. The exact bounds are now in the `tab:benefit` caption so the claim is checkable from the paper. | unsupported, now supported |
+
+**What was checked and found correct** (recorded so a later session does not
+redo it): every figure in the Abstract; the three-setting attribution itemize;
+the channel block rates and their replication; the ARM-T/ARM-I attack-success
+consequence on `pixtral-12b`; the discrimination table and its bootstrap
+intervals; the router's four cells; the redundancy and stacking deltas; the
+whole of `tab:benefit`, whose sixteen values and significance marks were
+**recomputed from the per-prompt flags and match exactly**; the read-ladder
+ranges; the within-defense stage isolation; the $74$--$100\%$ benign-refusal
+bound; the SemanticSmooth $55$-to-$57$-point conclusion claim; and the gated
+sentence repaired in the first pass.
+
+**Two house sweeps, both clean on both documents**: no "pp" notation anywhere,
+and the draft-history narration battery (the `paper_writing.md` handbook rule
+seeded by this very paper) returns zero hits per fixed string.
 
 ## Known risks
 
