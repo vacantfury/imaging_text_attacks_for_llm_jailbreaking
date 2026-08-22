@@ -9,7 +9,7 @@ invalidates this manifest** — repackage that artifact, then delta re-check.
 
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
-| `paper.pdf` | Main submission PDF | 0.47 MB | `82241cf6b9e0f1d39af7d0ec8cb70d2abf621e3c3ada2a9ad96dd139ac3f905c` |
+| `paper.pdf` | Main submission PDF | 0.47 MB | `4b1ad5152a461e6673bcdd0d437ad51ccaf5cb7a16715ca05cf878b884e3329c` |
 | `supplementary.pdf` | Supplementary Document | 0.37 MB | `2a43281f7a359b4db7079f0023e0050b4f45088c15038190aa00559a8cb49d2e` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 1.68 MB | `237aa365bb7308713ff39173df7048fe9e8837163dc75e5be98064b56e1a9c2a` |
 
@@ -164,6 +164,30 @@ Verified after: both documents build 0/0/0/0, the full guard battery is green
 (`as7_tables verify`, `as7_xdoc_numbers verify` plus its negative control,
 `as7_may_cells` selftest), the "pp" and draft-history sweeps stay clean, and the
 rendered PDF text was spot-read at the heaviest rewrite sites.
+
+## cspaper review 5 — the score moved, and the review found a real defect (2026-08-21)
+
+**Rating 7, accept.** The first four rounds all scored 4/reject; this is the
+first movement, and it came after the read-access re-spine and the audits above.
+
+One con was a genuine defect and is already fixed. `tab:readladder` printed
+`---` for SemanticSmooth / \texttt{pixtral-12b} / \texttt{code\_attack}
+(deployable), and the paper's prose said "three of the four pairs are complete
+and all three are null". **The cell was never missing**: the numbers file carries
+it complete and clean (ASR 2.0, n=100, zero fallback parses, zero warnings), and
+the validated builder emits `inflation = -1`. Recomputed from the stored
+per-prompt flags the contrast is n.s. (discordant 2/1, exact McNemar p=1.000), so
+the row is now **four of four complete and all four null**, which strengthens the
+selection-only null rather than weakening it. Table and prose both corrected.
+
+**Why no guard caught it, and the guard added.** `as7_tables verify` is a one-way
+TOKEN-presence check: it asks whether each measured value appears somewhere in
+the .tex. It cannot see an em-dash placeholder, because the same digit appears in
+a neighbouring cell and the check passes. A reviewer found what the guard could
+not. `_orphan_placeholders()` now audits the rendered ladder: if the numbers file
+has every protocol-grant cell, the tabular must contain no `---` at all, and any
+excess placeholder is drift. Verified to FAIL on the re-injected defect and pass
+on the corrected paper.
 
 ## Known risks
 

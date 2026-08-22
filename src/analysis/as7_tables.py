@@ -469,11 +469,50 @@ def emit(numbers: dict) -> str:
 # verify
 # ---------------------------------------------------------------------------
 
+def _orphan_placeholders(numbers: dict, tex: str) -> list[str]:
+    """Catch a table cell printed as `---` while the data for it EXISTS.
+
+    WHY THIS EXISTS. `verify` is a one-way TOKEN-presence check: it asks whether
+    each measured value appears somewhere in the .tex. That cannot see a cell
+    rendered as an em-dash placeholder, because the same number usually appears
+    in a neighbouring cell and the check passes. On 2026-08-21 a cspaper reviewer
+    found what the guard could not: tab:readladder printed `---` for
+    SemanticSmooth / pixtral-12b / code_attack (deployable) while a complete,
+    clean n=100 cell for it sat in the numbers file. The paper was reporting its
+    own evidence as missing, and the prose said "three of the four pairs are
+    complete" when all four were.
+
+    So: for the protocol-grant ladder, if the numbers file has every cell, the
+    rendered tabular must contain no `---` at all. If a cell is genuinely absent
+    the count is allowed to match exactly how many are absent, never more.
+    """
+    cells = [c for c in numbers["cells"] if c["campaign"] == "as7_protocol_grant"]
+    have = {(c["defense"], c["target"], c["encoding"], c["query_source"])
+            for c in cells if c["asr"] is not None and c["query_source"] is not None}
+    defenses = {d for d, *_ in have}
+    targets = {t for _, t, *_ in have}
+    encodings = {e for _, _, e, _ in have}
+    expected = len(defenses) * len(targets) * len(encodings) * 2
+    absent = expected - len(have)
+
+    m = re.search(r"\\label\{tab:readladder\}", tex)
+    if not m:
+        return ["tab:readladder not found in tex -- placeholder audit could not run"]
+    start = tex.rfind(r"\begin{table}", 0, m.start())
+    block = tex[start:m.start()]
+    found = len(re.findall(r"&\s*---\s*(?=&|\\\\)", block))
+    if found > absent:
+        return [f"tab:readladder prints {found} `---` placeholder(s) but only "
+                f"{absent} protocol-grant cell(s) are actually missing from the "
+                f"numbers file -- a measured cell is being reported as absent"]
+    return []
+
+
 def verify(numbers: dict, tex_path: str) -> list[str]:
     """Every measured ASR / block count must appear literally in the .tex."""
     with open(tex_path) as fh:
         tex = fh.read()
-    missing = []
+    missing = _orphan_placeholders(numbers, tex)
     for c in numbers["cells"]:
         tag = (f"{c['campaign']}/{c['target']}/{c['defense']}/{c['guard']}"
                f"/{c['encoding']}/{c['arm']}/qs={c['query_source']}")
