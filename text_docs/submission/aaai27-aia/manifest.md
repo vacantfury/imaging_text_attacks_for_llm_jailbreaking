@@ -9,8 +9,8 @@ invalidates this manifest** — repackage that artifact, then delta re-check.
 
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
-| `paper.pdf` | Main submission PDF | 0.47 MB | `c12371b545e3ba31b6207301efa236eec134239a9911c3cdc7fcb376c2f4d430` |
-| `supplementary.pdf` | Supplementary Document | 0.37 MB | `9ffcec24d0d2c3c1e084da30c1f5e24383b8ed16743695bad0ce12ea8cc2a53d` |
+| `paper.pdf` | Main submission PDF | 0.47 MB | `82241cf6b9e0f1d39af7d0ec8cb70d2abf621e3c3ada2a9ad96dd139ac3f905c` |
+| `supplementary.pdf` | Supplementary Document | 0.37 MB | `2a43281f7a359b4db7079f0023e0050b4f45088c15038190aa00559a8cb49d2e` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 1.68 MB | `237aa365bb7308713ff39173df7048fe9e8837163dc75e5be98064b56e1a9c2a` |
 
 Source tree: `paper/as-7/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
@@ -142,6 +142,28 @@ sentence repaired in the first pass.
 **Two house sweeps, both clean on both documents**: no "pp" notation anywhere,
 and the draft-history narration battery (the `paper_writing.md` handbook rule
 seeded by this very paper) returns zero hits per fixed string.
+
+## House dash-connector sweep (2026-08-21, third pass)
+
+The owner's standing prose rule bans a dash line (em dash, `--`, `---`) used to
+join two sentences or clauses, in papers as in every other text written for him
+or on his behalf. Both documents are now clean: **192 sites in the main paper and
+55 in the supplementary**, each read and rewritten individually as a period, a
+comma, a colon, a semicolon, or a parenthetical, whichever the sentence wanted.
+Twelve `\paragraph{Step N --- ...}` headings in the supplementary became
+`Step N: ...`.
+
+Not a blind substitution, and three classes were deliberately preserved:
+`--` inside numeric ranges (`$41$--$43$`, an en dash, not a connector);
+`---` as a "not applicable" cell marker in five results tables, where rewriting
+it would have falsified a table; and dashes inside LaTeX comments, which reach
+no reader. Two grammar slips were fixed in passing, "the $1$ points gap" and
+"a $13$ points change", both now hyphenated singulars.
+
+Verified after: both documents build 0/0/0/0, the full guard battery is green
+(`as7_tables verify`, `as7_xdoc_numbers verify` plus its negative control,
+`as7_may_cells` selftest), the "pp" and draft-history sweeps stay clean, and the
+rendered PDF text was spot-read at the heaviest rewrite sites.
 
 ## Known risks
 
