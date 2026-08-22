@@ -79,9 +79,17 @@ REFUSAL_MARKERS = (
 # an allowlist that silently omits a round makes the guard report green on data
 # it never looked at. The rule that applies: the builder's allowlist is updated
 # in the SAME session as the round it must cover.
+# 2026-08-22 RE-SPINE: `as7_guard_router` and `as7_guard_router_benign` were
+# REMOVED from this tuple, and the removal is a scope change, not a relaxation.
+# Those cells are the channel-routed panel, which left AS-7 for AS-8 at the
+# owner-ratified re-spine (text_docs/defense_read_access/respine_handoff.md).
+# Keeping them here made the guard demand numbers this paper no longer reports:
+# it fired on the panel's benign block count of 79, correctly, for a table that
+# is no longer in the paper. They move to AS-8's builder when AS-8 has one; the
+# DATA is untouched on disk and `collect` still reads those directories.
+# Do not re-add them to AS-7 without re-adding the tables they check.
 CAMPAIGNS = ("as7_protocol_grant", "as7_channel_asr", "paper_b_guard_channel",
              "as7_read_position", "as7_benign_channel",
-             "as7_guard_router", "as7_guard_router_benign",
              "as7_protocol_grant_api")
 
 # The hosted-model protocol grid re-collected in ONE window (2026-08-22), both
@@ -104,7 +112,7 @@ API_SW_CAMPAIGN = "as7_protocol_grant_api"
 # count, not a miss count, so several checks below invert for them: 0 blocked is
 # the expected healthy value (and, on the image channel, the finding), while
 # blocking everything is the failure signature.
-BENIGN_CAMPAIGNS = ("as7_benign_channel", "as7_guard_router_benign")
+BENIGN_CAMPAIGNS = ("as7_benign_channel",)
 
 # Defenses whose block counts the paper prints as BARE integers rather than the
 # "N/100" form (tab:router). verify() must token-match these, not literal-match.
