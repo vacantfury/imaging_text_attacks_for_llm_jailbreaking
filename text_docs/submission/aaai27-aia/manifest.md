@@ -189,6 +189,62 @@ has every protocol-grant cell, the tabular must contain no `---` at all, and any
 excess placeholder is drift. Verified to FAIL on the re-injected defect and pass
 on the corrected paper.
 
+## Review-5 con 3: the same-window hosted protocol grid (2026-08-22)
+
+The reviewer's score-limiting objection was that `tab:deployable`'s two protocol
+columns come from two collection windows (granted from May, deployable from
+August), so their difference is not paired across protocols even though each
+column's own text-versus-decoy contrast is.
+
+**Inventory first, and it changed what had to be bought.** The open-weight ladder
+that carries the mechanism claim was ALREADY same-window (32 cells, one campaign,
+both protocols for all twelve triples, per-prompt flags stored) and already had a
+designed independent replicate. The confound was live only on the hosted grid,
+so only the hosted grid was re-collected.
+
+**What was collected.** `protocol_grant_api_samewindow`, 16 cells, both protocol
+arms in ONE preset reading the SAME upstream transform dirs, judge `gpt-5-mini`,
+zero fallback parses and zero mechanism errors on all sixteen.
+
+**Result: the pre-registered NARROWS branch.** Inflation survives on all four
+cells (-49, -36, -23, -46 against the two-window -60, -33, -38, -43), every cell
+same-signed. The granted arm reproduces its May values within 3 points; the
+movement is entirely in the deployable arm. One cell moves against us and is
+reported as such: `gpt-4o-mini`/`code_attack`'s deployable contrast is larger
+here (-28) than published (-15), shrinking that inflation from 38 to 23. The
+undefended control (content-free decoy, no defense) moves ASR by -4 to +6 points,
+all n.s., so the contrast measures the defense and not the image.
+
+**The text arm is an undefended cell on purpose.** ECSO is inert on text-only
+input by construction, so `query_source` cannot move the text arm and one cell
+serves both protocol columns. The paper already argues this and backs it with
+byte-identical responses on all 100 prompts; the May grid corroborates it on all
+eight hosted cells. No cells were bought for the text arm.
+
+**Paper delta.** New `tab:samewindow` and a "The same cells, one collection
+window" paragraph in `sec:res-deployable`, the float placed after
+`tab:deployable` so table numbering follows reading order; cross-references
+updated in the opening result paragraph and in Figure 1's caption, which
+previously named the two-window limitation with no remedy. The ladder's setup
+sentence now states plainly that its 32 cells are one campaign, one day, both
+arms against the same upstream prompts.
+
+**Builder delta, and a latent defect it exposed.** `as7_tables.py` set
+`flags[pid] = bool(asr)`, silently coercing a row the judge never scored to "not
+jailbroken" -- always biased one way, and the exact failure `as7_may_cells.py`
+was written to prevent. Unscored rows are now EXCLUDED and counted, with
+`integrity()` reporting them. Proven to move no published number: the emitted
+tables are byte-identical across all 77 lines before and after, and `verify`
+stays OK. One prompt is affected in the new round; excluding rather than coercing
+moves the headline contrast from -12 to -11 and changes no conclusion.
+
+**Two checks of mine that were worthless, recorded because they nearly passed.**
+A scan for coerced rows reported "0 affected" while covering ZERO cells: it
+joined a bare basename to `raw_results.jsonl`, so every path failed the existence
+test and was skipped. An earlier `diff` of emit output reported "IDENTICAL" while
+comparing two empty files, because the subcommand had failed with rc=2. Both are
+the empty-check trap. Any such check must print its denominator.
+
 ## Known risks
 
 1. **The paper source has no version control.** `paper/` is gitignored, so
