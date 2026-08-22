@@ -11,6 +11,7 @@ rebuild that artifact and re-hash.
 | `paper.pdf` | Main submission PDF | 0.47 MB | `18f3fca12d1a180d7ac4b0ba397ce42acb69f4e6c71ed3bd294814dc609550cb` |
 | `supplementary.pdf` | Supplementary Document | 0.60 MB | `3f0d6d29ea6ec50fbb8c12139a3e49134951c5b8d73dbe4fbe219b642a5fc963` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 6.62 MB | `1435d4c19b1088cd5a0b4aa64468c9fe8098196a5ed62b4d7bb850d4860f8906` |
+| `ReproducibilityChecklist/ReproducibilityChecklist.pdf` | Reproducibility checklist | 78 KB | `8f61db3987f514eea00939b2b037e6d9bbe967d04bff3d011b85af9b175dbbd8` |
 
 Source tree: `paper/as-3/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
 `46fca14`. ⚠️ `paper/` is gitignored, so the repo hash does **not** cover the
@@ -114,6 +115,30 @@ overfull boxes (counted, not fatal).
 - **Orphan floats fail for the main paper, warn for the supplement.** The
   supplement's layout is one-table-per-subsection, so the heading is the
   pointer. All 16 were checked by hand against the prose that discusses them.
+
+## The reproducibility checklist carried three wrong answers
+
+AS-3 had a checklist, but it sat in the retired main-track directory, dated
+2026-07-29, and predated the five-guard panel, the balanced benign redraw and the
+code-package decision. Copied into the AIA package and corrected:
+
+- **"Does this paper make theoretical contributions?" was `yes`**, and with it
+  "Proofs of all novel claims are included: `yes`". Both documents contain
+  **zero** theorem, lemma, proposition or proof environments. Now `no`, with the
+  seven theory sub-items `NA`.
+- **"the method used for setting seeds is described" was `yes`.** We set no
+  generation seed: determinism comes from greedy decoding, and SemanticSmooth's
+  paraphrase step samples at $T{=}0.7$ per its reference implementation. The
+  supplement says so. Now `partial`, which is what the disclosure supports.
+
+The other 28 answers were re-read against the current paper and hold. The
+data-appendix answer stays `partial` on purpose: the one dataset this work
+constructs is regenerable exactly from a shipped deterministic script, and
+shipping the derived file would redistribute the benchmark it draws from.
+
+⚠️ Whether the AIA OpenReview form has a checklist slot is **unverified**, the
+same open question AS-4's manifest records. The artifact is ready either way;
+walk the form at submit time.
 
 ## Packaging profile relied on
 
