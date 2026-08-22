@@ -1,0 +1,28 @@
+# AS-7 · UNENCODED CONTROL for the benign-carrier round (stage 1b).
+#
+# WHY THIS EXISTS. `benign_carriers_stage1` encoded the 100 JailbreakBench-benign
+# prompts through the three attack carriers. Reading a guard's block rate on
+# those encodings only means something against the SAME 100 prompts unencoded,
+# and no such cell exists: the paper's guard-gate benign numbers are measured on
+# ORBench (a different prompt set), and the one stored plain JailbreakBench-benign
+# transform dir covers 20 prompts, not 100. So this produces the matched control.
+#
+# This is a non-LLM passthrough: no model is called and the round costs nothing.
+# It is a separate preset rather than a fourth arm of stage 1 because stage 1 has
+# already run, and re-running it to add one free arm would re-pay for the two LLM
+# rewriters.
+#
+# SUBMIT (NURC):
+#   ssh explorer 'cd ~/projects/llm_guardrail_security && \
+#     sbatch scripts/run_experiment.sbatch defense_read_access/benign_carriers_stage1b_plain'
+
+num_main_job_threads: 1
+num_cluster_jobs: 1          # orchestrator only — nothing is served, nothing is called
+
+tasks:
+  - mode: prompt_transform
+    source_file: data/jbb_benign_prompts.jsonl
+    prompt_range: [0, 99]
+    benchmark: jailbreakbench_benign
+    campaign: as7_benign_carriers
+    transformation_list: [{type: non_llm_baseline}]

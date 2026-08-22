@@ -81,7 +81,24 @@ REFUSAL_MARKERS = (
 # in the SAME session as the round it must cover.
 CAMPAIGNS = ("as7_protocol_grant", "as7_channel_asr", "paper_b_guard_channel",
              "as7_read_position", "as7_benign_channel",
-             "as7_guard_router", "as7_guard_router_benign")
+             "as7_guard_router", "as7_guard_router_benign",
+             "as7_protocol_grant_api")
+
+# The hosted-model protocol grid re-collected in ONE window (2026-08-22), both
+# protocols in one preset reading the same upstream transform dirs, so the two
+# arms are paired per prompt. It answers the review-5 objection that
+# `tab:deployable`'s granted cells (May) and deployable cells (August) span two
+# collection windows on nondeterministic vendor endpoints, which makes their
+# difference-of-contrasts unpaired.
+#
+# THE TEXT ARM IS A `no_defense` CELL, DELIBERATELY, AND THIS IS NOT A
+# SUBSTITUTION. ECSO is inert on text-only input by construction: with no image
+# to caption it returns the initial response unchanged (`src/defense/ecso.py`,
+# the `is_multimodal` fast path), so its text column IS an undefended
+# re-execution -- the paper already states this and backs it with byte-identical
+# responses on all 100 prompts. `query_source` therefore cannot move the text
+# arm, and one undefended text cell serves both protocol columns.
+API_SW_CAMPAIGN = "as7_protocol_grant_api"
 
 # Campaigns whose prompts are BENIGN. Their block count is a false-positive
 # count, not a miss count, so several checks below invert for them: 0 blocked is
@@ -169,6 +186,7 @@ def collect(root: str = ".", campaigns: tuple = CAMPAIGNS) -> dict:
             flags: dict[str, bool] = {}
             block_flags: dict[str, bool] = {}
             refusal_flags: dict[str, bool] = {}
+            unjudged = 0               # rows the judge never scored (see below)
             raw = os.path.join(out_dir, "raw_results.jsonl")
             if os.path.exists(raw):
                 with open(raw) as fh:
@@ -179,7 +197,19 @@ def collect(root: str = ".", campaigns: tuple = CAMPAIGNS) -> dict:
                         asr = r.get("asr")
                         if asr is None:
                             asr = (r.get("judgment") or {}).get("asr")
-                        flags[pid] = bool(asr)
+                        # A row the judge never scored is EXCLUDED from the
+                        # per-prompt ASR channel, never coerced to False. The
+                        # coercion is silent and always biases the same way (an
+                        # unscored prompt reads as "not jailbroken"), which is
+                        # the failure `as7_may_cells.py` was written to prevent;
+                        # `contrast()` pairs on the intersection, so an excluded
+                        # id simply drops out of both arms of any test. The
+                        # count is carried on the cell so `integrity()` can say
+                        # so out loud instead of the loss being invisible.
+                        if asr is None:
+                            unjudged += 1
+                        else:
+                            flags[pid] = bool(asr)
                         # Per-prompt block decision, kept separately from `flags`
                         # so a block rate can be tested PAIRED across channels
                         # (same prompt id, text arm vs image arm). `flags` stays
@@ -216,6 +246,7 @@ def collect(root: str = ".", campaigns: tuple = CAMPAIGNS) -> dict:
                 "n": hb.get("total_evaluated"),
                 "fallback": hb.get("fallback_parse_count"),
                 "warnings": len(d.get("warnings") or []),
+                "unjudged": unjudged,
                 "blocked": blocked,
                 # DIAGNOSTIC, NOT A MEASUREMENT. See REFUSAL_MARKERS above. The
                 # paper's target-own refusal count is judged (gpt-5-mini,
@@ -324,6 +355,10 @@ def integrity(cells) -> list[str]:
         problems = []
         if c["n"] != 100:
             problems.append(f"n={c['n']}")
+        # An unscored row is dropped from the ASR channel rather than coerced
+        # (see collect); report it so the loss is visible in the cell listing.
+        if c.get("unjudged"):
+            problems.append(f"unjudged={c['unjudged']} (excluded, not coerced)")
         if (c["fallback"] or 0) > 0:
             # A fallback on EVERY row is a dead judge, not a noisy one. Say so
             # precisely: on the benign cells the judge is a secondary read-out
@@ -409,6 +444,35 @@ def emit(numbers: dict) -> str:
                     if st:
                         out.append(f"%   {defense:16} {target:13} {enc:7} {qs:10} "
                                    f"benefit={st['delta']:+3}{st['stars']} p={st['p']:.2e}")
+
+    # ---- same-window hosted protocol grid (tab:samewindow) ----------------
+    # Both protocol columns come from ONE campaign, so the difference of the two
+    # contrasts is paired per prompt rather than spanning two collection windows.
+    out.append("% ==== tab:samewindow ====")
+    sw = [c for c in cells if c["campaign"] == API_SW_CAMPAIGN]
+    for target in ("gemini-2.5-flash-lite", "gpt-4o-mini"):
+        for enc in ("code", "formal"):
+            kw = dict(campaign=API_SW_CAMPAIGN, target=target, encoding=enc)
+            txt = _find(sw, defense="no_defense", arm="TEXT", **kw)
+            got = {}
+            for qs in ("original", "encoded"):
+                got[qs] = contrast(txt, _find(sw, defense="ecso", arm="decoy",
+                                              query_source=qs, **kw))
+            if not (got["original"] and got["encoded"]):
+                continue
+            g, d = got["original"], got["encoded"]
+            infl = g["delta"] - d["delta"]
+            out.append(f"%   {target:22} {enc:7} "
+                       f"deployable={d['from']:>3}->{d['to']:>3} ({d['delta']:+3}){d['stars']:<3} "
+                       f"grant={g['from']:>3}->{g['to']:>3} ({g['delta']:+3}){g['stars']:<3} "
+                       f"inflation={infl:+3}  n={d['n']}/{g['n']}")
+            # The undefended control: a content-free decoy on its own must not
+            # move ASR much, else the contrast is measuring the image, not the
+            # defense.
+            nd = contrast(txt, _find(sw, defense="no_defense", arm="decoy", **kw))
+            if nd:
+                out.append(f"%     control no_defense text->decoy = "
+                           f"{nd['from']:>3}->{nd['to']:>3} ({nd['delta']:+3}){nd['stars']}")
 
     # ---- channel coverage -------------------------------------------------
     out.append("% ==== tab:channel / tab:channelasr ====")
