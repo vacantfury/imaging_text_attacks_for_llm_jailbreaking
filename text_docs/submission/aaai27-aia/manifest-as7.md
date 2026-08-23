@@ -19,7 +19,7 @@ re-spine; it is kept for history and must not be used to submit.)*
 | `paper.pdf` | Main submission PDF — **SUBMITTED, frozen** | 306 KB | see the note below |
 | `supplementary.pdf` | Supplementary Document (Technical Supplement field, 10 MB cap) | 478 KB | `0537e8a046785e1101b79e5325fca6ba027bd1938a34a156efbd2971ab913531` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement (50 MB cap) | 6.7 MB | `432293dcf8f8548fc022f6c9e7aa304de1af961f4a7e0f710aa5a736a9335005` |
-| `ReproducibilityChecklist.pdf` | Reproducibility Checklist (separate designated field) | 80 KB | `f66dbb814bff272abda8087c2980b2c83f59cf44c683664ee6645971210f0d4b` |
+| ~~`ReproducibilityChecklist.pdf`~~ | **NOT UPLOADED — owner ruling 2026-08-22: the Edit Supplementary Materials form carries no checklist field.** Built and kept for the record. | 76 KB | `f66dbb814bff272abda8087c2980b2c83f59cf44c683664ee6645971210f0d4b` |
 
 > ⚠️ **The main paper was SUBMITTED on 2026-08-22 and is frozen.** Two builds of it
 > existed that day (before and after a prose-refinement pass), and which one was
@@ -58,7 +58,7 @@ cd paper/my_papers/as-7/aaai_2027_ai_alignment/ReproducibilityChecklist && \
 | Channel names ("Supplementary Document", "Code and Data Supplement") | same | 2026-08-21, cached in science `venues/aaai27_venue_info.md` |
 | **Main submission must be self-contained; reviewers are not obliged to consult supplementary** | [AIA call](https://aaai.org/conference/aaai/aaai-27/aia-call/) + main-track instructions | 2026-08-21, cached |
 | AIA follows the regular technical-paper procedure, plus track selection | AIA call | 2026-08-21, cached |
-| Supplementary format / size caps | — | **UNVERIFIED**: the 2026-08-22 live read of the submission instructions does not state them. Read them off the OpenReview form before uploading. |
+| Supplementary size caps | the live OpenReview "Edit Supplementary Materials" form | **VERIFIED 2026-08-22**: Technical Supplement **10 MB**, Media Supplement **50 MB**, Code and Data Supplement **50 MB**. Ours: 0.49 MB and 7.01 MB. The same form states the repo-link ban in writing (*"linking to the paper sources/data in an external code/data repository is forbidden, including anonymized repositories like AnonymousGitHub and similar"*) and carries **no Reproducibility Checklist field**. |
 | No repo link in the PDF | project policy (AAAI bans anonymous-repo links; code ships as the zip) | swept 2026-08-22: **0 hits** for `github`/`gitlab`/`anonymous.4open`/`zenodo`/`osf.io`/any URL in either document. The live instructions do not address repo links either way, so carrying none is the safe position under both readings. |
 
 ## What the split rule actually was
