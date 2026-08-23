@@ -19,6 +19,7 @@ and the prose, which is where a stale claim survives a correct table.
 """
 from __future__ import annotations
 
+import os
 import re
 import sys
 
@@ -44,8 +45,68 @@ PANEL_T1 = {
     "gemma":   dict(undefended=97, sage=12, guard=10),
     "llama70": dict(undefended=95, sage=25, guard=None),
 }
-# Per-draw block rates behind the accuracy-does-not-predict claim, Gemma, one round.
+# Per-draw rates behind the accuracy-does-not-predict claim, Gemma, one round.
+#
+# ⚠️ These are per-draw NON-SUCCESS rates (100 - per-draw ASR), NOT block rates.
+# The main paper calls them "blocks", which is loose: only a GATE terminates a
+# draw with its own canned string, and SAGE (a transform defense) has none, so
+# its block rate in the gate's sense is 0.00% and every refusal in its cell is
+# the target's own. Recomputed 2026-08-22 from the two pinned cells:
+#   SAGE  cell: ASR 0.23%, non-success 99.77%, canned-block 0.00%, 12 behaviors
+#   gate  cell: ASR 4.44%, non-success 95.56%, canned-block 92.54%, 10 behaviors
+# The supplement's `tab:blockrate` prints the decomposition; see its section
+# "Per-draw stopping rates, and what they do and do not count."
 GEMMA_BLOCK = {"sage": 99.8, "guard": 95.6}
+
+#: Cells the two rates above are read from, and the gate's exact canned string.
+#: Kept next to the constants so the recomputation below can never drift from
+#: what the constants claim.
+GEMMA_BLOCK_CELLS = {
+    "sage": "outputs/bestofn_attack/rejudge/harmbench/"
+            "gemma2_9b_it_sage_gpt-5-mini_20260808_202050_47660385",
+    "guard": "outputs/bestofn_attack/rejudge/harmbench/"
+             "gemma2_9b_it_guard_baseline_gpt-5-mini_20260808_201905_22267190",
+}
+CANNED_GUARD_REFUSAL = (
+    "I cannot assist with this request because the guard model flagged it as unsafe."
+)
+
+
+def recompute_gemma_rates(root: str = ".") -> dict | None:
+    """Non-success and canned-block rates from the stored draws.
+
+    Returns None when the run outputs are not on this machine, so a host without
+    them reports `not-run` rather than passing silently. This is the artifact-backed
+    half of the claim-integrity battery; the probe list below is the
+    clone-checkable half and needs no outputs.
+    """
+    import json
+
+    out = {}
+    for arm, rel in GEMMA_BLOCK_CELLS.items():
+        path = os.path.join(root, rel, "raw_results.jsonl")
+        if not os.path.exists(path):
+            return None
+        rows = [json.loads(line) for line in open(path)]
+        if not rows:
+            return None
+        n = len(rows)
+        succ = sum(1 for r in rows if str(r.get("asr")).lower() == "true")
+        canned = sum(
+            1 for r in rows if (r.get("response") or "").strip() == CANNED_GUARD_REFUSAL
+        )
+        behaviors: dict[str, bool] = {}
+        for r in rows:
+            b = str(r.get("id", "")).split("__bon")[0]
+            behaviors[b] = behaviors.get(b, False) or str(r.get("asr")).lower() == "true"
+        out[arm] = {
+            "draws": n,
+            "asr": 100 * succ / n,
+            "non_success": 100 - 100 * succ / n,
+            "canned_block": 100 * canned / n,
+            "behaviors": sum(behaviors.values()),
+        }
+    return out
 
 # tab:compose as published: (code N=1, BoN N=100, composed)
 COMPOSE = {"llama": (4.7, 3.0, 67.0), "qwen": (1.8, 0.0, 22.0), "gemma": (0.2, 0.0, 15.0)}
@@ -126,6 +187,28 @@ def main(tex_path: str | None = None) -> int:
     for name, got, must in rows:
         print(f"{name:44s}  {got:34s}  {must}")
 
+    # Artifact-backed half: the two Gemma rates are recomputed from stored draws
+    # rather than trusted as constants. A host without the outputs says so.
+    live = recompute_gemma_rates()
+    print()
+    if live is None:
+        print("gemma per-draw rates: not-run (outputs not on this host)")
+    else:
+        print(f"{'gemma per-draw (from stored draws)':44s}  "
+              f"{'ASR':>7s} {'non-succ':>9s} {'canned':>8s} {'behav':>6s}")
+        for arm, v in live.items():
+            print(f"{arm:44s}  {v['asr']:7.2f} {v['non_success']:9.2f} "
+                  f"{v['canned_block']:8.2f} {v['behaviors']:6d}")
+        for arm in ("sage", "guard"):
+            want = GEMMA_BLOCK[arm]
+            got = round(live[arm]["non_success"], 1)
+            if abs(got - want) > 0.05:
+                print(f"MISMATCH: {arm} non-success {got} != declared {want}")
+                return 1
+        if live["sage"]["canned_block"] != 0.0:
+            print("MISMATCH: SAGE reported a canned block; it has no block string")
+            return 1
+
     if not tex_path:
         return 0
     tex = re.sub(r"(?m)^%.*$", "", open(tex_path).read())
@@ -144,6 +227,15 @@ def main(tex_path: str | None = None) -> int:
         "gemma blocks-vs-loses": r"blocks $99.8\%$",
         "gemma gate counterpart": r"blocking $95.6\%$ loses $10$",
     }
+    # The supplement carries the decomposition the main paper's loose wording
+    # needs; probe it only when a supplement is among the inputs.
+    if "supplementary" in os.path.basename(tex_path):
+        probes = {
+            "blockrate non-success sage": r"$\mathbf{99.77}$",
+            "blockrate non-success gate": r"$\mathbf{95.56}$",
+            "blockrate canned sage":      r"$0.00$",
+            "blockrate canned gate":      r"$92.54$",
+        }
     missing = [k for k, v in probes.items() if re.sub(r"\s+", " ", v) not in flat]
     print()
     if missing:
