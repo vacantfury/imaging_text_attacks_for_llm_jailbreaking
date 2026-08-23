@@ -236,3 +236,47 @@ is deliberate and recorded, not an oversight.
 ## Not submitted
 
 Nothing here has been uploaded. The submission press is the owner's.
+
+## Post-submission refinement, 2026-08-22 (supplement + code only)
+
+The main paper is SUBMITTED and FROZEN. Everything below concerns entries on #205
+that are still editable before the supplementary wall.
+
+**Re-upload these two. Leave the main paper alone.**
+
+| File | Channel | Size | SHA-256 (16) | Action |
+|---|---|---|---|---|
+| `aaai_aia_latex/supplementary.pdf` | Technical Supplement | 418 KB | `970105234f055308` | **RE-UPLOAD** |
+| `supplementary_code_and_data.zip` | Code and Data Supplement | 9.3 MB | `dcc1b0e28560f26f` | **RE-UPLOAD** |
+| `aaai_aia_latex/paper.pdf` | Main submission | 299 KB | `59ecbf3b09c77bf0` | do NOT re-upload; frozen, content unchanged since the press, bytes differ only from rebuilds |
+| `ReproducibilityChecklist.pdf` | checklist | 76 KB | `2736ba210a8d0f1b` | unchanged |
+
+Both re-uploads fit their caps (Technical Supplement 10 MB; Code and Data 50 MB),
+read off the live form. Code artifact rebuild: 456 files, 138 identifying strings
+scrubbed, **anonymization verify PASSED**.
+
+**What changed in the supplement.** A new subsection and table, `tab:blockrate`, in
+*The Temperature Panel*. The main paper says SAGE "blocks" 99.8% of draws against a
+gate "blocking" 95.6%, and cites Table 2, which contains no block rates. Recomputed
+from the two pinned cells (10,000 draws each): both figures are per-draw
+NON-SUCCESS, `100 - ASR`. SAGE's actual canned-block rate is 0.00%, because a
+transform defense has no block string and every refusal in its cell is the target's
+own; the gate's actual block rate is 92.54%, not 95.6%. The comparison the main
+paper draws is still sound, since both are the same quantity measured the same way,
+and the ordering is unaffected. Only the verb is wrong, and the supplement now
+carries the precise definition and the decomposition where a reviewer will look.
+
+**What changed in the code.** `paper_d_claim_check` previously hardcoded
+`GEMMA_BLOCK = {"sage": 99.8, "guard": 95.6}`, so it verified the abstract against a
+constant typed into itself. It now recomputes both rates from the stored draws,
+fails on a mismatch or on SAGE ever reporting a nonzero canned block, and reports
+`not-run` where the outputs are absent rather than passing silently.
+
+**Also.** `build.sh` counted `Overfull \hbox` only; it now sizes hbox and vbox and
+gates on anything over 5pt. That exposed a 34.62646pt vbox overfull on the
+supplement's first page, pre-existing and content-invariant, now baselined by exact
+value so any different or additional overfull still fails.
+
+⚠️ Still open on #205, not done: the TL;DR field was registered under the paper's
+OLD spine and no longer matches the submitted title; `+62.3` still has no supplement
+home; and Serve As Reviewer carries the same desk-reject exposure the form states.

@@ -16,9 +16,9 @@ over an unchanged tree.
 
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
-| `paper.pdf` | Main submission PDF | 0.47 MB | `5078754f5549ba345553b4c5c037694dc2beb36062f838ade2dc39294f9dd9a7` |
-| `supplementary.pdf` | Supplementary Document | 0.60 MB | `0eaf23e23078e2fe3a1929d86e49317ea99d72b80738a370eb7491e5b5b949f5` |
-| `supplementary_code_and_data.zip` | Code and Data Supplement | 6.62 MB | `1435d4c19b1088cd5a0b4aa64468c9fe8098196a5ed62b4d7bb850d4860f8906` |
+| `paper.pdf` | Main submission PDF | 0.33 MB | `07ae8a3279e57fa6f23a5352eaa2ab83ce48b098fbb468269b0f958383c3a499` |
+| `supplementary.pdf` | Supplementary Document | 0.67 MB | `de1be5255e23fd759993f2716768cc28d41bc067e51c7c4f2e19b29954bd1ffe` |
+| `supplementary_code_and_data.zip` | Code and Data Supplement | 6.63 MB | `c474abc5d83ee3d0e502ed131d46eebad6f60365a6fcc4068141bebf1eef01ae` |
 | `ReproducibilityChecklist/ReproducibilityChecklist.pdf` | Reproducibility checklist | 78 KB | `8f61db3987f514eea00939b2b037e6d9bbe967d04bff3d011b85af9b175dbbd8` |
 
 Source tree: `paper/my_papers/as-3/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
@@ -147,6 +147,45 @@ shipping the derived file would redistribute the benchmark it draws from.
 ⚠️ Whether the AIA OpenReview form has a checklist slot is **unverified**, the
 same open question AS-4's manifest records. The artifact is ready either way;
 walk the form at submit time.
+
+## Post-submission refinement of the supplement (2026-08-22)
+
+**The main paper is SUBMITTED and frozen.** `paper.tex` was not edited in this pass;
+after every rebuild the extracted text of `paper.pdf` was diffed against the
+submitted text and came back byte-identical. Only the supplement, the code ZIP
+and the form entries remain editable, which is what this pass touched.
+
+The supplement had been written against the **pre-condensation** main paper, so
+its cross-document pointers had gone stale in ways nothing would have caught at
+review time except a reader following them:
+
+| Stale pointer | Reality after the cut | Fix |
+|---|---|---|
+| "Table~1 of the main paper" ×13, meaning the results grid | condensation made the ladder Table 1 and the grid **Table 2** | repointed to Table~2 |
+| "Algorithm~1 of the main paper, line~5" | the algorithm now lives **in the supplement**, and the reguard branch is **line 7**, not 5 | `\ref{alg:amplifier}`, line 7 |
+| "Figure~2 of the main paper" | the main paper has **no figures at all** | `\ref{fig:frontier}` (this supplement) |
+| "the safety--utility frontier figure in the main paper" | relocated into the supplement | `\ref{fig:frontier}` |
+| "the main paper's evidence / leave-one-out / component-ablation table" | all three are supplement tables | `\ref{tab:evidence}`, `\ref{tab:loo}`, `\ref{tab:ablation}` |
+| "since Table~1 lists only the mc and +rg columns" | the submitted Table 2 **does** report guard-alone over-refusal | claim corrected |
+| ECSO's 26% floor cited to the main table | that table now reports the balanced draw (25.8) | cites the index-order draw the baselines used |
+
+Also fixed: the opening sentence read "This technical this supplement supplements
+the main paper", damage from the earlier appendix→supplement rename; the
+relocated pipeline figure and algorithm had **no** introducing text, so the
+relocated-material section now opens with a lead-in that references both; and all
+**five overfull boxes** are gone (four tables wrapped to column width, one
+unbreakable module path made breakable). Supplement now builds 0/0/0/0.
+
+**Not done, deliberately:** the supplement carries ~321 dash-line connectors. The
+sweep is the highest-risk edit left in the package, it is the surface reviewers
+are least obliged to read, and a mechanical pass earlier in this session is what
+produced the "this supplement supplements" damage above. Left for an explicit
+decision rather than done blind.
+
+**Builder path repair:** the 2026-08-22 restructure moved `paper/<name>/` to
+`paper/my_papers/<name>/`, which silently broke the `paper_dir` of **all five**
+profiles in `scripts/build_code_artifact.py`. They now resolve either layout via
+`_paper_dir()`, so the next move does not break them again.
 
 ## Packaging profile relied on
 
