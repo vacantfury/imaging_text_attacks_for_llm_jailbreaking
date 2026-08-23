@@ -16,10 +16,21 @@ re-spine; it is kept for history and must not be used to submit.)*
 
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
-| `paper.pdf` | Main submission PDF | 324 KB | `b18616d08fd803804a0abdabba3a34ce6259609482c6740a72fc9de0f4ebf20f` |
-| `supplementary.pdf` | Supplementary Document | 516 KB | `6fd1f24ad1822b44db14ace8eaaadd598c594f8c8865a9d1fa1a3a321969e38b` |
-| `supplementary_code_and_data.zip` | Code and Data Supplement | 6.7 MB | `432293dcf8f8548fc022f6c9e7aa304de1af961f4a7e0f710aa5a736a9335005` |
+| `paper.pdf` | Main submission PDF — **SUBMITTED, frozen** | 306 KB | see the note below |
+| `supplementary.pdf` | Supplementary Document (Technical Supplement field, 10 MB cap) | 478 KB | `0537e8a046785e1101b79e5325fca6ba027bd1938a34a156efbd2971ab913531` |
+| `supplementary_code_and_data.zip` | Code and Data Supplement (50 MB cap) | 6.7 MB | `432293dcf8f8548fc022f6c9e7aa304de1af961f4a7e0f710aa5a736a9335005` |
 | `ReproducibilityChecklist.pdf` | Reproducibility Checklist (separate designated field) | 80 KB | `f66dbb814bff272abda8087c2980b2c83f59cf44c683664ee6645971210f0d4b` |
+
+> ⚠️ **The main paper was SUBMITTED on 2026-08-22 and is frozen.** Two builds of it
+> existed that day (before and after a prose-refinement pass), and which one was
+> uploaded is not recorded here. It does not matter for the remaining uploads:
+> the two builds are **structurally identical** — same section headings in the
+> same order, same label set, so every section, table and appendix number the
+> Supplementary Document points at resolves the same way under either. Only prose
+> differs. Keep a copy of the uploaded PDF if you want a byte-exact record.
+>
+> **Everything else on the submission form is still editable and is what this
+> manifest now tracks.**
 
 Source tree: `paper/my_papers/as-7/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
 `948e9d6`. ⚠️ `paper/` is gitignored, so the repo hash does **not** cover the
@@ -115,3 +126,22 @@ detector-gated and adaptive-attack evaluations, both of which left for AS-8.
   required fields, and confirm the AIA track is selected.
 - **`paper-check` FINAL** has not been run on this upload set.
 - The submission itself is the owner's press. Nothing here submits anything.
+
+## Supplementary Document refinement pass, 2026-08-22 (after the main paper was submitted)
+
+The main paper being frozen, every fix below landed on the supplementary side.
+
+| Defect | Fix |
+|---|---|
+| 🔴 **The Supplementary Document carried the OLD PRE-RE-SPINE TITLE** ("Who Controls What a Guardrail Reads? The Attacker Chooses the Channel, the Evaluator Chooses the Prompt"). A reviewer opening it saw a different paper name than the submission. The title is hardcoded in `supplementary.tex` and the re-spine only changed `paper.tex`'s `\title{}`. | Synced to the submitted title verbatim. |
+| 🔴 **`\tableofcontents` printed a bare "Contents" heading with nothing under it.** `aaai2027.sty` line 92 does `\def\addcontentsline#1#2#3{}`, so a ToC can never populate under this style. Restoring the standard definition worked but overflowed `article`'s ToC number boxes with our `S16.1` numbering (14 overfull boxes), i.e. it required altering venue style machinery for a convenience. | Removed the dead ToC; replaced with a one-paragraph section guide that costs the style nothing. |
+| 🔴 **`sec:res-rootcause` was defined in BOTH documents** (a block moved at the split carried the main paper's `\label` with it). Under `xr` a duplicated label makes a cross-document `\ref` silently resolve to the local copy. Harmless today (nothing in the supplementary referenced it) but latent. | Dropped the stray label. **`build.sh` now counts `dup_label` and fails on it** — it previously checked only errors/undef refs/undef cites/overfull. |
+| **A whole subsection was duplicated** at 0.84 word-set similarity: the Discussion's guardrail-reconnaissance-and-stated-convention passage had been moved twice, into both `app:movedout` and `app:positioning`. | Deleted the `app:movedout` copy; left a one-line pointer so the frozen paper's dual citation still lands. |
+| **An empty subsection** ("Harness audit (full form)", heading with no body) sat above a subsection that reused the frozen main paper's own §4.6 title. | Merged into one subsection, "The released-code audit, in full". |
+| **`app:movedout` was titled "Main-paper detail moved out at packaging"** — our internal process, meaningless to a reviewer — and its subsections were all named "(full form)". It is the most-cited appendix (7 pointers from the frozen paper). | Retitled to "Supporting detail for the main paper's results"; all subsections given content titles. Label kept, since the frozen paper points at it. |
+| **The provenance, campaign-variation, replicate and multiplicity material** that the frozen §4.8 explicitly sends readers to `app:scope` for was buried at `\paragraph` depth inside one 10.7k-character subsection. | Promoted "Campaign-level variation", "A designed replicate of the protocol grid" and "Multiplicity accounting" to subsections. |
+| Two further subsections **cloned the frozen main paper's own section titles**. | Retitled so the two documents' headings are distinguishable. |
+
+**Verified after the pass:** both documents `errors=0 undef_ref=0 undef_cite=0 overfull=0 dup_label=0` · no label or citation lost against the pre-pass supplementary · every one of the supplementary's 13 cross-references into the main paper resolves · drift guard `verify OK`, 10 demoted, 0 drift · 0 dash-connector hits · 0 identity hits and no Author/Title metadata in the supplementary PDF · stale-content sweep for AS-8 material, old-spine vocabulary and unrun-work claims returns 0 · **the replicate sentence added to the main paper during the refine pass is supported in App. S16** ("median absolute change across the twelve pairs is 3 points").
+
+**Both uploads sit well inside the form's caps** (verified off the live OpenReview form): Technical Supplement 0.49 MB / 10 MB, Code and Data Supplement 7.01 MB / 50 MB.
