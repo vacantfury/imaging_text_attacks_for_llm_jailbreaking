@@ -14,8 +14,8 @@ cross-read the two.)*
 
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
-| `paper.pdf` | Main submission PDF | 0.35 MB | `eb4bc96624faab189349fa427c5cbdff7baa30acefafa88d950c685c861a3fe8` |
-| `supplementary.pdf` | Supplementary Document | 0.45 MB | `f2a4ad1221b26028b7052f7f57f64c64d4560cf99231f98b8b11a951e66d4c7a` |
+| `paper.pdf` | Main submission PDF — **SUBMITTED 2026-08-22, FROZEN** | 0.35 MB | `eb4bc96624faab189349fa427c5cbdff7baa30acefafa88d950c685c861a3fe8` |
+| `supplementary.pdf` | Supplementary Document | 0.45 MB | `666db3f22a2f2dad42186907bb6255377b645821ed104635906b06669f22c019` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 36.11 MB | `1c4d9d06c2cda4a0cd7159b77167063806d623da23cb3d912b891e2f3eede2eb` |
 | `ReproducibilityChecklist.pdf` | Reproducibility Checklist (separate field) | 0.08 MB | `d79e2dd53ec1078807faa6ccba1bde4060064ef366f6654e8e6f210668e488e1` |
 
@@ -44,7 +44,7 @@ python scripts/build_code_artifact.py --paper as2              # the code zip
 | **Reproducibility checklist is REQUIRED, uploaded separately** | [AAAI-27 submission instructions](https://aaai.org/conference/aaai/aaai-27/submission-instructions/): *"Authors must complete the reproducibility checklist provided in the AAAI-27 Author Kit and submit it at the time of paper submission"*, *"uploaded separately from the main paper in the designated field of the submission form"* | 2026-08-22, live — ⚠️ **this was missing from the package until 2026-08-22**; built from the Author Kit template, all 24 applicable items answered, anonymity swept clean |
 | Ethics statement, if included, must sit in the main content pages (not the supplementary) | same | 2026-08-22, live |
 | No stated abstract length cap | same | 2026-08-22, live — not mentioned |
-| **Supplementary file-size cap** | not stated on the instructions page | ⚠️ **UNVERIFIED** — no published limit found 2026-08-22. 34 MB is within normal portal limits but is not confirmed against a stated cap. If the portal refuses it, the fallback is the lean projection (`{id, asr, refusal}`, ~1.3 MB) plus a one-sentence narrowing of the artifact statement. |
+| **Supplementary file-size caps** | OpenReview submission form, AAAI-27 AIA Submission201 | 2026-08-22, read off the live form — **RESOLVED**: Technical Supplement **10 MB** (ours 0.45 MB), Code and Data Supplement **50 MB** (ours 36.11 MB). The earlier UNVERIFIED row is closed; no fallback projection needed. |
 
 ## What the re-spine changed
 
@@ -199,3 +199,70 @@ recompute. Porting a real claim guard is the fix and is filed.
   labels naming `tab:imgprops`/`tab:owprops`/`tab:instance`, tables that left the
   paper at the re-spine. Display strings only, no effect on its arithmetic; left
   unedited rather than touching a validated instrument late.
+
+
+## Post-submission state (2026-08-22)
+
+**The main paper was submitted and is frozen.** `paper.pdf` is immutable at
+`eb4bc966…`; `paper.SUBMITTED.pdf`, `paper.tex.SUBMITTED` and `paper.aux.SUBMITTED`
+are read-only copies beside it. The remaining OpenReview fields and the two
+supplementary uploads stay editable until the wall, so refinement continues on
+those alone.
+
+### The frozen cross-reference contract
+
+The submitted PDF renders **17 references into the Supplementary Document**
+(section, table and figure numbers). Those numbers are baked into a file that can
+no longer change, so the supplementary may be rewritten but **may not renumber**.
+The contract is recorded in `aaai_aia_latex/FROZEN_XREFS.txt` and enforced by
+`check_supp.py`, which fails the build if any of the 17 moves.
+
+Practical consequence for any later edit: prose, captions and **section titles**
+are free (the frozen paper prints bare numbers, never titles), but inserting or
+removing a numbered section, table or figure ahead of a pinned one is forbidden.
+Pinned: sections S4, S8, S17, S21, S22, S23, S24, S29 · tables S4, S8, S10, S11,
+S12, S14, S15, S16 · figure S1.
+
+`build.sh` rebuilds BOTH documents and would change the submitted PDF's bytes.
+**Use `build_supp.sh` instead** — it never runs pdflatex on `paper.tex` and
+restores `paper.aux` from the submitted copy before each run.
+
+### What the supplementary refinement fixed
+
+Damage left by the earlier condensation passes, all verified against the artifact
+or the document before acting:
+
+- **Six placeholder section headings** ("Elaboration, part four/three/five/six",
+  "Elaboration, continued") retitled to describe their contents. One of them, S11,
+  was **completely empty** and could not be deleted without shifting the frozen
+  ethics appendix; it now holds the pairing-protocol material relocated from S13.
+- **Four truncated headings** — `Conclu`, `Introdu`, `Experimental Setu` — repaired
+  to house style, and a duplicated closing passage removed (S13 and S16 carried
+  near-identical conclusions; S13's fuller version survives).
+- **A dangling auto-generated pointer** (`\S\ref{…} continues.`) and its stub
+  subsection removed; the real content was relocated into S15.
+- **The supplementary referred to itself in the third person** four times
+  ("Table X *of the Supplementary Document*", once doubled). All four tables are
+  defined in this document; the phrase is gone.
+- **Nine subsections opened mid-thought** with a referent that had left with the
+  main paper ("That limit…", "Their shortcut…", "That invariance…"). Each now names
+  its subject.
+- **`llava-1.5-7b` was missing as the subject of its own result.** The passage
+  reporting `37→76%` reads as though it describes `pixtral-12b`, whose cells are
+  48/50/80/81/83. Checked against the release: 37→76 harmful and 10→2 benign are
+  `llava_7b`, campaign `paper_b_sign_inversion` — the *second* inverting
+  checkpoint. Data correct, subject restored.
+- Spelling aligned to the frozen paper (`artifact`, `judgement`).
+
+**A claim I introduced and then removed:** a lead-in sentence I wrote asserted the
+effect acts through the image channel "on most of the checkpoints we test." The
+data does not support that count. Replaced with what is shown.
+
+`tex_stat_audit` flags line 233 as inconsistent. Re-verified by hand this session:
+exact McNemar(10,1)=0.01172 and McNemar(1,9)=0.02148, both exactly as printed. The
+tool pairs one sentence's p with the next sentence's counts. Not a defect.
+
+Build state: 0 errors, 0 undefined refs, 0 undefined cites, 0 overfull boxes, 0
+`??` in the rendered PDF, 17/17 frozen cross-references holding, anonymity clean
+(the only name hits are the third-person citation of a published paper, correct
+under double-blind) and no author in the PDF metadata.
