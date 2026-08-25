@@ -64,7 +64,7 @@ rebuildable; it is not the AIA one.
 | Main submission must be self-contained; reviewers are not obliged to consult supplementary | same | 2026-08-21, cached |
 | Reproducibility checklist is allowed beyond the main PDF | AAAI-27 Format section | 2026-08-21, cached |
 | No repo link in the PDF (AAAI bans anonymous-repo links; code ships as the zip) | project policy + venue record | swept 2026-08-22: 0 URLs in either document |
-| **Whether the AIA OpenReview form has a checklist slot** | the live AIA form | ✅ **VERIFIED 2026-08-22 at the AS-4 press — the slot EXISTS and the checklist was uploaded.** Settled for the venue; build and upload one for any AIA filing. Do not re-ask. ⚠️ This row should never have read UNVERIFIED: `manifest-as2.md` in this same directory already recorded the checklist as REQUIRED with a designated form field, quoted from the live AAAI-27 submission instructions, on this same day. Read the sibling manifests before flagging a venue fact as unknown. |
+| **Whether the AIA OpenReview form has a checklist slot** | the live AIA form | ✅ **VERIFIED — but the two forms differ, and an earlier note here conflated them.** The MAIN SUBMISSION form has a checklist field (used at the press). The **Edit Supplementary Materials** form does NOT: read directly off the captured form image 2026-08-23, its fields are TL;DR, Primary Topic, Secondary Topics, Country of Institutions, Technical Supplement, Media Supplement, Code and Data Supplement, Serve As Reviewer, Any Qualified Reviewer, and three policy checkboxes. So the checklist cannot be re-uploaded through the supplementary form. Settled for the venue; build and upload one for any AIA filing. Do not re-ask. ⚠️ This row should never have read UNVERIFIED: `manifest-as2.md` in this same directory already recorded the checklist as REQUIRED with a designated form field, quoted from the live AAAI-27 submission instructions, on this same day. Read the sibling manifests before flagging a venue fact as unknown. |
 | **Supplementary file-size cap** | not stated on the instructions page | ⚠️ **UNVERIFIED**, same as AS-2's manifest records. 9.3 MB is small enough that this is unlikely to bind. |
 
 ## What the split changed
@@ -351,3 +351,45 @@ alternative 21 gives +7 to +64 and does not. Row added as 26 / 28 / 52.
   future venue.
 - Page-1 vbox overfull, now 18.6pt, baselined in `build_supp.sh`. An earlier note
   calling it content-invariant was FALSIFIED and is corrected in both build scripts.
+
+## Reproducibility checklist audit — 2026-08-23
+
+Built from AAAI's own template (`AuthorKit27/ReproducibilityChecklist.tex`), verified
+structurally identical: same 4 sections, same 31 questions, same macros. Compiles
+clean, 2 pages, and a rendered-PDF sweep finds 0 identifying strings.
+
+All 31 answers were audited against the actual paper rather than accepted as
+written. Twenty-nine were already correct. **Two were overclaims, and both were
+fixed on the editable side rather than by downgrading the answer:**
+
+- **Q13** ("a motivation is given for why the experiments are conducted on the
+  selected datasets") answered *yes*, but the paper only NAMED HarmBench, it never
+  said why. The supplement's Reproducibility section now gives three reasons
+  specific to a best-of-N study: completion-style behaviors a judge can rule on,
+  the rubric our judge applies unmodified, and a scale that lets every cell afford
+  100 draws under a fixed budget.
+- **Q15** ("novel datasets will be made publicly available ... with a license that
+  allows free usage for research purposes") answered *yes*, but there was NO
+  license anywhere: not in the paper, not in the supplement, not in the zip. The
+  single "licen" hit in the supplement was a false positive ("a methodological
+  observation, not a license"). The artifact now ships a `LICENSE` (MIT for code,
+  CC BY 4.0 for the judgment release, benchmark content explicitly NOT relicensed),
+  the supplement states it, and the copyright line is anonymous for review.
+  `build_code_artifact.py` copies `LICENSE` when a profile stages one and skips it
+  otherwise, so the other papers' profiles are unaffected.
+
+Answers deliberately left as `partial` because `partial` is the honest answer:
+Q20 (hyperparameter ranges tried), Q25 (seed method), Q26 (infrastructure — vLLM,
+precision and single-card are stated; GPU model, memory, OS and library versions
+are not). Q4 `no` (no theoretical contributions) with Q5–Q11 `NA` is consistent.
+Q14 `yes` rests on the per-draw judgment release being the paper's novel dataset,
+which does ship in the Code and Data Supplement.
+
+## Upload set as of 2026-08-23
+
+| File | SHA-256 (16) | Size | Action |
+|---|---|---|---|
+| `aaai_aia_latex/paper.pdf` | `59ecbf3b09c77bf0` | 299 KB | FROZEN, never re-upload |
+| `aaai_aia_latex/supplementary.pdf` | `1b39340edd7ddcf6` | 430 KB | **re-upload** |
+| `supplementary_code_and_data.zip` | `d9e6567a12d5ab8d` | 9.3 MB | **re-upload** (now carries LICENSE) |
+| `ReproducibilityChecklist.pdf` | `f902fee9d9ebf411` | 76 KB | no slot on the supplementary form |
