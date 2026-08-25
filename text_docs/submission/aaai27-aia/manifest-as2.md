@@ -15,9 +15,9 @@ cross-read the two.)*
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
 | `paper.pdf` | Main submission PDF — **SUBMITTED 2026-08-22, FROZEN** | 0.35 MB | `eb4bc96624faab189349fa427c5cbdff7baa30acefafa88d950c685c861a3fe8` |
-| `supplementary.pdf` | Supplementary Document | 0.45 MB | `f655ce298dd9e7bd2b0e26925a84c8e7b8e26fa9867dbeafb4abbc35ffd48059` |
+| `supplementary.pdf` | Supplementary Document | 0.45 MB | `82f38c7abc4aea8840ea1097ac4df8cd50a159ec9e9e3ca4d92a62b0fdcaa77b` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 36.11 MB | `1c4d9d06c2cda4a0cd7159b77167063806d623da23cb3d912b891e2f3eede2eb` |
-| `ReproducibilityChecklist.pdf` | Reproducibility Checklist (separate field) | 0.08 MB | `d79e2dd53ec1078807faa6ccba1bde4060064ef366f6654e8e6f210668e488e1` |
+| `ReproducibilityChecklist.pdf` | Reproducibility Checklist (separate field) | 0.08 MB | `4aaa6cd5ae5c2423233afba7bdc02d84df23ce8ae6d9b27dbf49dd266eef9a8d` |
 
 Source tree: `paper/my_papers/as-2/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
 `7d53331`. ⚠️ `paper/` is gitignored, so the repo hash does **not** cover the
@@ -326,3 +326,59 @@ heading.
 Build state: 0 errors, 0 undefined refs, 0 undefined cites, 0 overfull boxes, 0
 `??`, 17/17 frozen cross-references holding, 17/17 pointers delivering, anonymity
 clean, no author in PDF metadata. Frozen `paper.pdf` still `eb4bc966…`.
+
+
+## Sample image and Reproducibility Checklist verified (2026-08-23)
+
+**Figure S1 (the three request-independent images) — verified correct.** The panel
+dimensions were checked against the source files, not against the caption's own
+words: `mountain.png` 1024x141, `blank.png` 512x512, `rabit.jpeg` 1189x1418, all
+three matching the caption exactly. The rendered figure was inspected: (a) the
+caption image carrying its typed sentence, (b) the pure-white blank, (c) the
+clip-art rabbit. The caption names the drawn subject deliberately, so a reader can
+verify for themselves that the content is request-independent. No change needed.
+
+**Reproducibility Checklist — official format confirmed, all 31 answered.** Built
+on the AAAI-27 Author Kit template (`\checksubsection` / `\question` /
+`\ifyespoints` macros, the `isChecklistMainFile` standalone-or-input conditional).
+Final tally: 19 yes, 1 no (the theoretical-contributions gate), 10 NA, 1 partial.
+Zero blanks, zero off-menu answers other than the gated NAs below. 2 pages,
+anonymity clean, no Author in the PDF metadata.
+
+Each answer was checked against the artifact rather than accepted as written:
+
+- **Q20 (values tried per hyperparameter + selection criterion): `partial` -> `yes`.**
+  Verified that AS-2 performed no hyperparameter search: its own config dir carries
+  no temperature override (it inherits the greedy default) and the files whose names
+  contain "sweep"/"grid" vary experimental *conditions* (image property, rung,
+  checkpoint), not model hyperparameters. A repo-wide grep does turn up non-zero
+  temperatures and real search machinery, but those belong to the sibling papers, so
+  the claim was scoped to this paper's configs before being made. A
+  **Parameter selection** paragraph was added to the reproducibility appendix stating
+  that one value was tried per parameter, fixed a priori, with reproducibility rather
+  than performance as the criterion. With that in place the question is fully
+  answered.
+- **Q26 (computing infrastructure): stays `partial`, deliberately.** The question
+  demands GPU/CPU models, memory, OS *and* library versions. The software stack is
+  fully specified (vLLM 0.25.0, PyTorch 2.11.0, CUDA 13.1, Transformers 5.13.1);
+  the hardware is not, and the runs span more than one cluster, so no single GPU
+  model could be asserted truthfully. Its option set offers no NA. `partial` is the
+  correct answer and was left alone rather than inflated.
+- **Q5-Q9 (`NA` against a `yes/partial/no` menu): correct, left as is.** These sit
+  behind "Does this paper make theoretical contributions? *no*", so their option list
+  assumes a reader who answered yes. Answering `no` would actively misstate (it would
+  claim we failed to state assumptions). All three sibling checklists — including
+  AS-4, already accepted by the portal — answer NA here.
+- Q25 (seeds), Q28 (runs per result) and Q31 (final hyperparameters) confirmed
+  against the reproducibility appendix, which states the decoding settings verbatim
+  and is honest that no hosted provider honours a seed, so bit-for-bit reproducibility
+  is not claimed anywhere.
+- Q14/Q15/Q18 (novel datasets) stay NA: every prompt set is drawn from an existing
+  public benchmark. The judgment rows and stimulus assets that *are* shipped are
+  results and stimuli, covered by Q21-Q23, all yes and all present in the zip
+  (`code/artifacts/` 284 entries, `code/data/`, `code/conf/`, `code/src/`).
+
+⚠️ **Whether the checklist can still be changed is a portal question.** The board
+records an owner ruling that the *edit* form exposes no checklist field (it was on
+the initial submission form). The corrected file is ready either way; confirm the
+field exists before assuming it can be re-uploaded.
