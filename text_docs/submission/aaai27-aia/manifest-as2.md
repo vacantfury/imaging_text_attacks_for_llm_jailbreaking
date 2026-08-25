@@ -382,3 +382,23 @@ Each answer was checked against the artifact rather than accepted as written:
 records an owner ruling that the *edit* form exposes no checklist field (it was on
 the initial submission form). The corrected file is ready either way; confirm the
 field exists before assuming it can be re-uploaded.
+
+
+## Authors — authoritative source (added 2026-08-23 after failure #398)
+
+⚠️ **The author list of this submission is NOT in this repo.** Every AIA
+`paper.tex` is `\author{Anonymous submission}` for double-blind, so the only
+authoritative record is the author list entered on **OpenReview** for this
+submission.
+
+**Do NOT read the author list off `paper/my_papers/<as-N>/arxiv_latex/`.** That is
+a different venue attempt and its `\author{}` block can be older and shorter than
+the submitted one. A session did exactly that on 2026-08-23, concluded a real
+co-author "is not an author", and nearly excluded a qualified AAAI reciprocal-reviewer
+nominee during the submission window (failures ledger #398,
+`agent.unverified_claim`). Known from the owner's correction: **Hanwen Liu is an
+author on AS-2 and AS-3, and on others** — he does not appear in any local `.tex`.
+
+Any question that turns on who authored a submission (reviewer nomination,
+conflicts, the concurrent-submission attestation) is answered from OpenReview or by
+asking the owner, never from a local tex file.
