@@ -17,7 +17,7 @@ re-spine; it is kept for history and must not be used to submit.)*
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
 | `paper.pdf` | Main submission PDF — **SUBMITTED, frozen** | 306 KB | `bc1250824ec1e77b0f876847401b844dc5aaea4851a57d6ab59baea54cc46fac` (bytes on disk; see the note below) |
-| `supplementary.pdf` | Supplementary Document (Technical Supplement field, 10 MB cap) | 488 KB | `ba4d89fcbc333ec8355e9d178b2812c7cdec1548f32ab125167252b25e9c3bdb` |
+| `supplementary.pdf` | Supplementary Document (Technical Supplement field, 10 MB cap) | 488 KB | `9f4dc0230efa36d619b1007681422a39a08b7aa0874caeb72e3e2a75eaf78388` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement (50 MB cap) | 6.7 MB | `c528cc5ad22b569dee1d3fc948938221793b2c35ee7120608fb7321827bc7ba2` |
 | ~~`ReproducibilityChecklist.pdf`~~ | **NOT UPLOADED — owner ruling 2026-08-22: the Edit Supplementary Materials form carries no checklist field.** Built and kept for the record. | 76 KB | `f66dbb814bff272abda8087c2980b2c83f59cf44c683664ee6645971210f0d4b` |
 
@@ -194,3 +194,7 @@ submitted paper's §4.5 contains a sentence beginning lower-case after a full st
 ("... under both protocols alike. and defenses whose decision does not depend
 ..."). It is in the frozen PDF. Record it for the camera-ready or an arXiv
 version; nothing about this submission turns on it.
+
+**One last typo caught on the render, pre-existing:** Table S7's caption legend read
+"guard *blk*ock (exact string match)" — `\\emph{blk}ock` sets "blk" against "ock",
+which is not a word. Now "guard *blk* (a block, exact string match)".
