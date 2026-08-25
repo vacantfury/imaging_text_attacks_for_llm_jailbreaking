@@ -17,9 +17,9 @@ re-spine; it is kept for history and must not be used to submit.)*
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
 | `paper.pdf` | Main submission PDF — **SUBMITTED, frozen** | 306 KB | `bc1250824ec1e77b0f876847401b844dc5aaea4851a57d6ab59baea54cc46fac` (bytes on disk; see the note below) |
-| `supplementary.pdf` | Supplementary Document (Technical Supplement field, 10 MB cap) | 488 KB | `9f4dc0230efa36d619b1007681422a39a08b7aa0874caeb72e3e2a75eaf78388` |
-| `supplementary_code_and_data.zip` | Code and Data Supplement (50 MB cap) | 6.7 MB | `c528cc5ad22b569dee1d3fc948938221793b2c35ee7120608fb7321827bc7ba2` |
-| ~~`ReproducibilityChecklist.pdf`~~ | **NOT UPLOADED — owner ruling 2026-08-22: the Edit Supplementary Materials form carries no checklist field.** Built and kept for the record. | 76 KB | `f66dbb814bff272abda8087c2980b2c83f59cf44c683664ee6645971210f0d4b` |
+| `supplementary.pdf` | Supplementary Document (Technical Supplement field, 10 MB cap) | 488 KB | `5d1061f80bbae343d50b45749de74c11cbe98b6d729f769f8d962582fa1c3ea6` |
+| `supplementary_code_and_data.zip` | Code and Data Supplement (50 MB cap) | 6.7 MB | `e260aa6f3e092aec22d9f81df685fda67bb3f9291132f72c20faed745a518e33` |
+| `ReproducibilityChecklist.pdf` | Reproducibility checklist — **re-verified and rebuilt 2026-08-24 on the owner's ask.** The instructions require it *"uploaded separately from the main paper in the designated field of the submission form"*, but the Edit Supplementary Materials form he screenshotted has no checklist field; it is ready if the field exists elsewhere on the submission page. | 76 KB | `691f980d514360d6a87064dccd828b173bc42c19dbb86bff5cc982601289543c` |
 
 > ⚠️ **The main paper was SUBMITTED on 2026-08-22 and is frozen.** Two builds of it
 > existed that day (before and after a prose-refinement pass), and which one was
@@ -198,3 +198,63 @@ version; nothing about this submission turns on it.
 **One last typo caught on the render, pre-existing:** Table S7's caption legend read
 "guard *blk*ock (exact string match)" — `\\emph{blk}ock` sets "blk" against "ock",
 which is not a word. Now "guard *blk* (a block, exact string match)".
+
+
+## Sample images and reproducibility checklist, 2026-08-24
+
+### The two sample-image figures
+
+Both were checked by rendering them, not by reading their captions. Two defects,
+both visible in the submitted-quality PDF:
+
+| Defect | Fix |
+|---|---|
+| 🔴 **Fig. S2 panel (c) was labelled "rabbit — natural image".** It is a black-and-white clip-art line drawing, its own caption calls it "the line-drawing decoy class", and the paper's Limitations list **natural photographs among the classes NOT tested**. The figure contradicted the Limitations in the same document. | Relabelled "rabbit: line-drawing illustration", matching the caption and the Limitations. |
+| 🔴 **Fig. S2 panel (a) printed literal backticks: ``` ``mountain'' ```.** LaTeX quote syntax was passed to a matplotlib title, which is not LaTeX and renders it verbatim. | Plain quotes. |
+| **Both figure generators were broken** and had been since the `paper/` refactor: `Path(__file__).parents[3]` pointed at `as-7/`, so neither script could find its source images. A reviewer running them from the artifact got `FileNotFoundError`. | Each now looks beside itself first (the images ship in `figs/`) and walks up to the harness copy as a fallback, so the figures rebuild from the released package alone. |
+| `make_variants.py`'s docstring still described the panels as `M0 / M2 / M4`, a naming the paper abandoned. | Rewritten to `text / ir_plain / decoy`. |
+| Em-dash connectors in three figure labels (invisible to the `.tex` sweep, which does not read images). | Replaced with colons. |
+
+Fig. S1 was correct and is unchanged apart from one label separator.
+
+### The checklist, verified against the official template
+
+The format is the AAAI-27 Author Kit's `ReproducibilityChecklist.tex`
+(`science/writing/venue_kits/AuthorKit27/`), confirmed against the live
+[AAAI-27 submission instructions](https://aaai.org/conference/aaai/aaai-27/submission-instructions/)
+and the [checklist page](https://aaai.org/conference/aaai/aaai-27/reproducibility-checklist/)
+on 2026-08-24.
+
+- **All 31 questions present, in the official order, with the official answer
+  options** — the `\question` lines are now byte-identical to the kit (one
+  straight apostrophe had replaced the kit's curly one; the kit says not to
+  modify any part of a `\question` command, so it was restored).
+- All 31 answered, no `Type your response here` left, builds `errors=0
+  overfull=0`, no identity string and no PDF Author/Title metadata.
+
+Three answers were checked against the artifact rather than assumed, and **two
+of them were not backed by anything** until this pass:
+
+| Item | Answer | What backs it now |
+|---|---|---|
+| 4.7 seeds described sufficiently to replicate | `yes` | Was unbacked: the document never mentioned a seed. App. S10 now has a **Randomness and seeds** paragraph — sampling is removed rather than seeded (greedy everywhere), hosted-API nondeterminism is not seedable and is handled by the measured drift band plus the designed replicate, the one bootstrap uses a stated fixed seed, and every significance test is exact rather than sampled. |
+| 4.8 computing infrastructure specified | `partial` | Was unbacked: the document said **nothing** about hardware, software or versions. App. S10 now has a **Computing infrastructure and software** paragraph. Kept at `partial`, honestly: GPU classes and library names with pinned ranges are given, exact per-node memory and OS are not. |
+| 4.5 code released under a research-permitting license | `yes` | Was a bare promise: the artifact shipped no license. It now ships `LICENSE` (MIT for code, CC BY 4.0 for the judgment release, third-party benchmark terms untouched, copyright line withheld for blind review) on the AS-4 pattern, plus README sections 6 and 7. |
+
+The remaining answers were re-checked and stand: no theoretical contributions
+(2.x all `NA`), no novel dataset introduced (3.3/3.4 `NA`), pre-processing and
+analysis code both shipped (4.3/4.4 `yes`, verified against the zip's
+`src/prompt_transformations`, `src/defense`, `src/evaluation`, `src/experiment`,
+`src/analysis`, `conf/experiment` and `data/`), and `partial` on 4.2 because no
+hyper-parameter search was run or reported.
+
+The artifact was rebuilt through `scripts/build_code_artifact.py --paper as7`
+rather than by hand, so the anonymization scrub and its verifier ran over
+everything: 623 files, 168 scrubs, **verify PASSED**. Hand-syncing would have
+undone it — the staged copy of one figure script deliberately differs from the
+repo copy where an internal paper letter was scrubbed out.
+
+**Verified after this pass:** all 27 numbers the submitted `paper.pdf` prints
+still hold, 0 drift · both documents build `0/0/0/0/0` · checklist builds
+`errors=0 overfull=0` · 0 unresolved refs · 0 identity hits · 0 prose dash
+connectors · submitted `paper.pdf` byte-identical at `bc125082…`.
