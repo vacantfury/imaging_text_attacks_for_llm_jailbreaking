@@ -17,9 +17,9 @@ over an unchanged tree.
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
 | `paper.pdf` | Main submission PDF | 0.33 MB | `07ae8a3279e57fa6f23a5352eaa2ab83ce48b098fbb468269b0f958383c3a499` |
-| `supplementary.pdf` | Supplementary Document | 0.67 MB | `3b872e7b3037bc334ca65030873927b8a91d716b44adaaaaa7b5f4e3b532e8a2` |
+| `supplementary.pdf` | Supplementary Document | 0.67 MB | `2f0289df5be72ed9d6ef2e79880a376bd43958946a270bc4877a8e672189d653` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 6.63 MB | `c474abc5d83ee3d0e502ed131d46eebad6f60365a6fcc4068141bebf1eef01ae` |
-| `ReproducibilityChecklist/ReproducibilityChecklist.pdf` | Reproducibility checklist | 78 KB | `8f61db3987f514eea00939b2b037e6d9bbe967d04bff3d011b85af9b175dbbd8` |
+| `ReproducibilityChecklist/ReproducibilityChecklist.pdf` | Reproducibility checklist (now also embedded in the supplement) | 0.08 MB | `7e8360e5b8610eeeae55099e2e4f26d2e5e43a49d6b211337df8615102f559d1` |
 
 Source tree: `paper/my_papers/as-3/aaai_2027_ai_alignment/`. Repo HEAD at packaging:
 `46fca14`. ⚠️ `paper/` is gitignored, so the repo hash does **not** cover the
@@ -225,6 +225,39 @@ one does not. It was moved and folded, not dropped.
 
 State: 45 pages, 0 errors / 0 undefined refs / 0 undefined citations / 0 overfull,
 anonymous, 14/14 frozen names resolving, no duplicate labels, no dangling refs.
+
+## Reproducibility checklist: verified, corrected, and given a channel (2026-08-22)
+
+**Template provenance (verified).** The file is AAAI's own kit checklist. Diffed
+against the pristine kit copy: **only 9 answer lines differ**, no question text
+and no structural edits, which is what the venue requires.
+
+**One answer contradicted the submitted paper.** Q3.2 — "All novel datasets
+introduced in this paper will be made publicly available upon publication ... with
+a license that allows free usage for research purposes" — was **yes**. The frozen
+Ethical Statement says *"Benchmark behaviors are not redistributed"*, and the code
+ZIP ships **no `data/` directory at all**. The only novel dataset we introduce is
+the category-balanced OR-Bench-Hard draw, which is derived from OR-Bench, so
+releasing the rows would redistribute the source benchmark. Corrected to
+**partial**: the deterministic construction script ships, the derived rows do not.
+
+All 31 answers were re-read against the final artifacts. The three corrected in
+the earlier pass still hold (no theoretical contributions; the seven theory
+sub-items NA; seeds `partial`, since we set none and rely on greedy decoding).
+Q4.4 (computing infrastructure) stays **partial** and its evidence is now real: a
+*Compute and software* paragraph was added to the supplement's Reproducibility
+section (vLLM, single-node A100/RTX-class GPUs under SLURM, hosted judge,
+Python >= 3.12).
+
+**Where it goes.** The AIA supplementary edit form has **no checklist field**, and
+the submitted paper does not carry one, so the Technical Supplement is the only
+channel that reaches reviewers. The checklist is now `\input` at the very end of
+`supplementary.tex`, after the bibliography, and included verbatim from the kit.
+⚠️ It must stay last: the kit file sets `secnumdepth` and redefines
+`\thesubsection`, so nothing of ours may follow it. Verified harmless here
+because the supplement's sections render unnumbered either way, which is also why
+the paper cites them by name. Supplement is now 47 pages; References on 43,
+checklist on 46-47. Reverting is one edit (`supplementary.tex.pre-checklist`).
 
 ## Packaging profile relied on
 
