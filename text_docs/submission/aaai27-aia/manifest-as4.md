@@ -280,3 +280,74 @@ value so any different or additional overfull still fails.
 ⚠️ Still open on #205, not done: the TL;DR field was registered under the paper's
 OLD spine and no longer matches the submitted title; `+62.3` still has no supplement
 home; and Serve As Reviewer carries the same desk-reject exposure the form states.
+
+## Supplement pass 2 — 2026-08-23 (main paper still frozen and untouched)
+
+**Re-upload the supplement. `supplementary.pdf` = `298938894a3692b6`, 429 KB.**
+The code zip is unchanged (`dcc1b0e28560f26f`); no `src/` file changed in this pass.
+`paper.pdf` was never rebuilt: `59ecbf3b09c77bf0` before and after.
+
+### New protection: the frozen cross-reference contract
+
+`build.sh` rebuilds BOTH documents, which regenerates the submitted `paper.pdf` for
+no reason. Three files now prevent that and the silent-rename hazard:
+
+- `FROZEN_XREFS.txt` — the 12 supplement section names the submitted paper cites
+  BY NAME. The two documents compile separately, so renaming one of these breaks a
+  pointer in a PDF we can no longer fix, with no warning from LaTeX anywhere.
+- `check_supp.py` — verifies all 12 resolve, catches duplicate section titles, and
+  pins `paper.tex` by CONTENT HASH (`e160328daa220697`) rather than mtime, so a
+  copy or an rsync does not raise a false alarm and a real edit cannot slip through.
+  Both breach kinds were negative-control tested.
+- `build_supp.sh` — builds the supplement ONLY, refuses to run on a broken
+  contract, and fails if `paper.pdf`'s hash changes.
+
+⚠️ These three live under `paper/`, which is gitignored, so they are the ONLY copy.
+
+### What the pass found and fixed
+
+**Coverage.** Every value quoted in the main paper's prose was tested for a home in
+the supplement. Before: 4 of 120 had none. After: **0 of 120**. Added, all derived
+from values the frozen paper already prints, none a new measurement:
+
+- `tab:amplification` — the eight donation ratios (4.2/3.2/6.8/1.9 against
+  1.8/-0.2/0.7/0.1). These had NO home; the apparent matches for 3.2 and 1.9 were
+  coincidental hits on unrelated ASR values in the results matrix. Each is a
+  defense's Net divided by that target's own control drop, and all eight reproduce
+  from the main paper's temperature table.
+- Budget Curves now states the matched-budget split explicitly: 4.7 to 67.0 is
+  +62.3 on the code arm against +3.0 on the character arm.
+- Uncertainty now carries the encoding-correction evidence: 67 pre-correction
+  against 61 (`r11_codefix`) and 59 (`r17`) post-correction, and notes the
+  correction moves the number DOWNWARD, so the reported effect is if anything
+  conservative.
+
+**A promise the supplement was not keeping.** The frozen paper says *"Full per-cell
+configurations, templates and prompts are in the supplement (Attack and Defense
+Configurations)"*. The supplement's own caption dropped the "in the supplement"
+half and deferred entirely to the code, and contained ZERO prompt text. Reviewers
+are not obliged to open a code archive any more than a supplement. New
+`Templates, verbatim` subsection now prints the CodeAttack scaffold (including the
+one-token `appendleft` difference that identifies pre-correction cells), the
+published SAGE wrapper, and both wrapper variants.
+
+**A table missing a row it was captioned for.** `tab:wrapper` printed three targets
+while its own caption said "12 cells", which is four targets times three columns.
+The main paper claims `8/8` cells at `+2` to `+64` behaviors; the six printed cells
+give only +14 to +64. The Llama-3.3-70B cells exist. No validated builder pins this
+table, and its `published` cells range 0 to 45 across campaigns, so the baseline was
+resolved by consistency instead: `published=26` is the ONLY value that makes the
+frozen paper's own stated range reproduce exactly (+2 to +64); the campaign-matched
+alternative 21 gives +7 to +64 and does not. Row added as 26 / 28 / 52.
+
+### Open, deliberately not done
+
+- The full results matrix does not carry per-draw rates or QtFS for the factorial
+  cells. Those cells are in the main paper's own table and in the released
+  judgments, so this is detail rather than a coverage gap, and adding unvalidated
+  rows to a submission document is the larger risk.
+- `tab:wrapper` still has no validated builder. It is the one paper table resolved
+  by consistency rather than by a pinned campaign. Worth a builder before any
+  future venue.
+- Page-1 vbox overfull, now 18.6pt, baselined in `build_supp.sh`. An earlier note
+  calling it content-invariant was FALSIFIED and is corrected in both build scripts.
