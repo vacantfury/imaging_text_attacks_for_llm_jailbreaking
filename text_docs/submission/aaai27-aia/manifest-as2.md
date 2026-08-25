@@ -15,7 +15,7 @@ cross-read the two.)*
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
 | `paper.pdf` | Main submission PDF — **SUBMITTED 2026-08-22, FROZEN** | 0.35 MB | `eb4bc96624faab189349fa427c5cbdff7baa30acefafa88d950c685c861a3fe8` |
-| `supplementary.pdf` | Supplementary Document | 0.45 MB | `666db3f22a2f2dad42186907bb6255377b645821ed104635906b06669f22c019` |
+| `supplementary.pdf` | Supplementary Document | 0.45 MB | `f655ce298dd9e7bd2b0e26925a84c8e7b8e26fa9867dbeafb4abbc35ffd48059` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 36.11 MB | `1c4d9d06c2cda4a0cd7159b77167063806d623da23cb3d912b891e2f3eede2eb` |
 | `ReproducibilityChecklist.pdf` | Reproducibility Checklist (separate field) | 0.08 MB | `d79e2dd53ec1078807faa6ccba1bde4060064ef366f6654e8e6f210668e488e1` |
 
@@ -266,3 +266,63 @@ Build state: 0 errors, 0 undefined refs, 0 undefined cites, 0 overfull boxes, 0
 `??` in the rendered PDF, 17/17 frozen cross-references holding, anonymity clean
 (the only name hits are the third-person citation of a published paper, correct
 under double-blind) and no author in the PDF metadata.
+
+
+## Second supplementary pass — checked AGAINST the submitted paper (2026-08-23)
+
+The first pass repaired the document on its own terms. This pass checked it as the
+**companion to the frozen paper**, which is now the fixed reference.
+
+**Pointer-delivery audit (verified, 17/17).** Every one of the 17 references the
+submitted PDF makes into this document was traced to its target and tested against
+what the paper *promises* there. All 17 deliver. One apparent failure was my own
+check being wrong, not the document: the paper's "three judges have now been
+applied" is delivered by S29 (`gpt-5-mini` at collection, `gpt-5-nano` across all
+88 cells, cross-family `gemini-2.5-pro` on the load-bearing ones, plus two human
+anchors); my probe searched for a literal phrase the section never uses.
+
+**Continuation audit (verified).** The document declares that each subsection
+continues a paragraph of the main paper. Condensation cut paragraphs, so every
+subsection was matched against the FINAL paper's headings: 32 of 34 match; the 2
+exceptions are the repaired Conclusion and Setup fragments, which correspond to
+paper *sections* rather than paragraphs. No subsection continues something that no
+longer exists.
+
+**A false claim in the opening, fixed.** The document asserted "Every table a
+load-bearing claim of the main paper rests on is printed in the main paper itself."
+That is not true: the paper cites **eight** tables defined here, including the three
+backing `qwen3-vl-8b`, the checkpoint the paper says "carries the paper's scope
+claim." The opening now states the defensible posture the paper's own source
+comments record ("numbers stated in text") — the main paper states in its text every
+quantity its argument turns on, and these tables are what a reader consults to check
+them — and it now **names all eight with their numbers**, so a reviewer arriving
+from the paper can navigate straight to the one cited.
+
+⚠️ **Self-containment note for any future venue.** For `tab:strata` the paper states
+the method (30 prompts × 10 categories) but *not* the result; it concedes "a sampling
+defect in the measurement carrying our central cost claim" and points here for
+whether the fix cured it. A reviewer reading only the main paper cannot tell. The
+supplementary answers it completely (S6 prose + Table S12: all 30 per-category
+contrasts positive, 26 surviving Benjamini--Hochberg, effect *larger* than the
+unrepresentative slice). Unfixable now that the paper is frozen; state the result
+inline if this work is ever re-filed.
+
+**Duplication swept (4 near-duplicate passages → 1).**
+- The **Limitations appendix contained two stacked write-ups**: three truncated
+  subsections (`Scope.` / `Coverage.` / `Instrument.`, all opening mid-sentence)
+  followed by the real elaboration, whose paragraphs fully subsume them. The frozen
+  paper points a reviewer straight at this section, so they were landing on the
+  broken copy first. Truncated trio deleted; the section now opens on its intro.
+- The randomised-interleaving numbers were printed verbatim in two sections;
+  S11 now points to S26, which carries the full comparison, seeds and caveats.
+- The one remaining pair is a section summary and its detailed home — legitimate.
+
+**Also:** a stale source comment claimed `tab:strata` had been "promoted to the main
+paper" (it was not); corrected, and the section holding the cited tables gained a
+label so the pointer is real. A `\tableofcontents` was tried and reverted: the
+aaai2027 style suppresses ToC generation, so it rendered as an empty "Contents"
+heading.
+
+Build state: 0 errors, 0 undefined refs, 0 undefined cites, 0 overfull boxes, 0
+`??`, 17/17 frozen cross-references holding, 17/17 pointers delivering, anonymity
+clean, no author in PDF metadata. Frozen `paper.pdf` still `eb4bc966…`.
