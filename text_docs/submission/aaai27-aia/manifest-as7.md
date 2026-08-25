@@ -16,9 +16,9 @@ re-spine; it is kept for history and must not be used to submit.)*
 
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
-| `paper.pdf` | Main submission PDF — **SUBMITTED, frozen** | 306 KB | see the note below |
-| `supplementary.pdf` | Supplementary Document (Technical Supplement field, 10 MB cap) | 478 KB | `0537e8a046785e1101b79e5325fca6ba027bd1938a34a156efbd2971ab913531` |
-| `supplementary_code_and_data.zip` | Code and Data Supplement (50 MB cap) | 6.7 MB | `432293dcf8f8548fc022f6c9e7aa304de1af961f4a7e0f710aa5a736a9335005` |
+| `paper.pdf` | Main submission PDF — **SUBMITTED, frozen** | 306 KB | `bc1250824ec1e77b0f876847401b844dc5aaea4851a57d6ab59baea54cc46fac` (bytes on disk; see the note below) |
+| `supplementary.pdf` | Supplementary Document (Technical Supplement field, 10 MB cap) | 488 KB | `ba4d89fcbc333ec8355e9d178b2812c7cdec1548f32ab125167252b25e9c3bdb` |
+| `supplementary_code_and_data.zip` | Code and Data Supplement (50 MB cap) | 6.7 MB | `c528cc5ad22b569dee1d3fc948938221793b2c35ee7120608fb7321827bc7ba2` |
 | ~~`ReproducibilityChecklist.pdf`~~ | **NOT UPLOADED — owner ruling 2026-08-22: the Edit Supplementary Materials form carries no checklist field.** Built and kept for the record. | 76 KB | `f66dbb814bff272abda8087c2980b2c83f59cf44c683664ee6645971210f0d4b` |
 
 > ⚠️ **The main paper was SUBMITTED on 2026-08-22 and is frozen.** Two builds of it
@@ -145,3 +145,52 @@ The main paper being frozen, every fix below landed on the supplementary side.
 **Verified after the pass:** both documents `errors=0 undef_ref=0 undef_cite=0 overfull=0 dup_label=0` · no label or citation lost against the pre-pass supplementary · every one of the supplementary's 13 cross-references into the main paper resolves · drift guard `verify OK`, 10 demoted, 0 drift · 0 dash-connector hits · 0 identity hits and no Author/Title metadata in the supplementary PDF · stale-content sweep for AS-8 material, old-spine vocabulary and unrun-work claims returns 0 · **the replicate sentence added to the main paper during the refine pass is supported in App. S16** ("median absolute change across the twelve pairs is 3 points").
 
 **Both uploads sit well inside the form's caps** (verified off the live OpenReview form): Technical Supplement 0.49 MB / 10 MB, Code and Data Supplement 7.01 MB / 50 MB.
+
+
+## Second supplementary pass, 2026-08-24 — read against the SUBMITTED main PDF
+
+The first pass read the supplementary against `supplementary.tex`. This one read
+it against what the frozen `paper.pdf` actually **prints**, which is the only
+thing a reviewer holds. Every appendix and float number the submitted PDF names
+was extracted with `pdftotext -layout` and pinned; each fix below had to hold
+them.
+
+**The one broken pointer.** The submitted paper says the complete
+5 model × 2 attack × 3 defense grid is *"in the supplementary material
+(App. S15, Table S19)"*. Table S19 existed and carried the right number, but it
+sat in **App. S18**, a section no pointer in the paper reaches at all. A reviewer
+following that sentence landed in the wrong appendix.
+
+| Defect | Fix |
+|---|---|
+| 🔴 **Table S19 (the complete amplification grid) was in App. S18, not the App. S15 the submitted paper names.** | Moved the grid and its significance paragraph into App. S15, placed after Table S18 so it still numbers **S19** — anywhere else renumbers a pointer already printed in the submitted PDF. App. S15's opening now leads with it. |
+| 🔴 **App. S18 was an unreachable leftover bin** (significance testing, duplicating App. S7, plus the channel replication), reached by no pointer from the paper. | Now one topic: "Channel replication, and what the coverage gap costs". App. S14's channel subsection points into it, so a reader following the channel thread arrives. |
+| **App. S16 was titled "Judge robustness, collection provenance, and multiplicity"**, leading with the one thing the paper does *not* send readers there for (§4.8 sends them for provenance, the replicate and multiplicity; judge questions go to App. S8). Its first subsection restated App. S8. | Retitled "Collection provenance, replication, and multiplicity"; the duplicate subsection deleted and its one new point (absolute ASR is judge-relative, do not compare across papers) folded into App. S8. |
+| **The submitted paper promises "all four [placements], with examples, in App. S3"; App. S3 opened on a figure of three** and named the fourth only inside that figure's caption. | App. S3 now opens by naming and distinguishing all four, and the caption says which three the figure draws. |
+| **Table S7 (complete outcome accounting) printed 16 read-position rows as 8 pairs with no column telling them apart** — a reader could not tell two encodings from the same cell twice. | Added a `Cell` column: `code` / `f.log`, superscript `r` for the replicate campaign, `--` for the encoder-free channel rows; three blocks separated by rules; caption explains it. Generated, not hand-typed: `src/analysis/as7_outcomes.py` now derives the label from each cell's upstream transform dir and sorts on it, so row order is no longer glob order. Every number is unchanged. |
+| **Every table from S7 on was deferred past the end of the text** (tables on pages 16–20, text ending page 15), so a reader checking a number in App. S9 jumped eight pages. | `\clearpage` at each section boundary from App. S9 on flushes the float queue; every table now lands inside the section that introduces it. |
+| **Six subsections in App. S14 and App. S17 were immediately followed by a `\paragraph` restating the subsection title.** | Redundant headers dropped, text kept. |
+| **App. S14 and App. S17 opened with internal process notes** ("Material moved out ... at the 2026-08-22 re-spine"), dated, describing our workflow to a reviewer. | Rewritten in reader terms. |
+
+**Verified after the pass:**
+
+| Check | Result |
+|---|---|
+| Every appendix/table/figure number printed in the SUBMITTED `paper.pdf` | **27 pinned numbers, 0 drift** — checked against `supplementary.aux` after the rebuild |
+| Submitted `paper.pdf` untouched | Backed up before the build, rendered text diffed identical after it, original bytes restored: `bc125082…` unchanged |
+| `build.sh` both documents | `errors=0 undef_ref=0 undef_cite=0 overfull=0 dup_label=0` |
+| Labels / citations lost | **0** (only the deliberately deleted duplicate subsection label `sec:res-judge`) |
+| Unresolved `??` in the supplementary PDF | 0 |
+| Number drift guard | `verify OK` — 10 demoted, **0 drift** (unchanged) |
+| Anonymity | 0 identity hits beyond third-person citations of the authors' own published work, which is the required double-blind form; no Author/Title PDF metadata; code tree clean |
+| Prose dash connectors | 0 (two hits are in LaTeX comments) |
+| Stale-content sweep | 0 hits for re-spine language, AS-8 material, paper-letter references, unrun-work claims |
+| Code zip | rebuilt after the `as7_outcomes.py` change: same 669 entries, staged copy compiles, anonymity clean |
+
+**Caps** (verified off the live OpenReview form): Technical Supplement 0.49 MB / 10 MB · Code and Data Supplement 6.7 MB / 50 MB.
+
+**One thing that cannot be fixed and is not worth a change of plan:** the
+submitted paper's §4.5 contains a sentence beginning lower-case after a full stop
+("... under both protocols alike. and defenses whose decision does not depend
+..."). It is in the frozen PDF. Record it for the camera-ready or an arXiv
+version; nothing about this submission turns on it.

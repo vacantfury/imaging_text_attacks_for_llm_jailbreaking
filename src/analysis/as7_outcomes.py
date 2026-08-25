@@ -64,6 +64,19 @@ def _arm_of(transform_up):
     return "I" if step.startswith("ir_") else "T"
 
 
+def _cell_label(transform_up, campaign):
+    """The CONDITION a protocol row was collected under, which target/guard/arm
+    alone do not identify: the encoding, plus a marker for the independent
+    replicate campaign. Without it the read-position block prints as eight pairs
+    of rows that differ only in their numbers, and a reader cannot tell whether
+    a pair is two encodings or the same cell twice."""
+    step = os.path.basename(transform_up or "")
+    enc = {"code_attack": "code", "llm_formal_logic": "f.log"}.get(step, "--")
+    if enc != "--" and campaign.endswith("_rep2"):
+        return enc + "$^{r}$"
+    return enc
+
+
 def _read_label(qs):
     """`query_source` is None (no read), a protocol name, or a per-slot dict
     from the within-defense isolation. Render the dict as the slot that was
@@ -167,6 +180,7 @@ def collect(root="."):
         cells.append({
             "transform_up": transform_up,
             "arm": _arm_of(transform_up),
+            "cell_label": _cell_label(transform_up, str(d.get("campaign"))),
             "campaign": str(d.get("campaign")),
             "target": str(d.get("target_model")),
             "defense": str(d.get("defense")),
@@ -218,17 +232,21 @@ def main():
         print("no refusal-judged cells found -- are the rejudge outputs local?")
         return
 
+    # transform_up is part of the key so the two encodings inside a
+    # (campaign, target, guard, protocol) group print in a fixed order; without
+    # it their order is glob order, which is filesystem-dependent.
     cells.sort(key=lambda c: (c["campaign"], c["target"], c["defense"],
-                              c["guard"], c["query_source"]))
+                              c["guard"], c["query_source"], c["transform_up"]))
     if not args.latex:
         hdr = (f"{'campaign':26} {'target':14} {'defense':15} {'guard':20} {'arm':>3} "
-               f"{'read':9} {'n':>4} {'blk':>4} {'ref':>4} {'both':>5} "
+               f"{'enc':>6} {'read':9} {'n':>4} {'blk':>4} {'ref':>4} {'both':>5} "
                f"{'harm':>5} {'nei':>4} {'share%':>7} {'ASR':>4} {'undef':>6} {'d':>6}")
         print(hdr)
         print("-" * len(hdr))
         for c in cells:
             print(f"{c['campaign'][:26]:26} {c['target'][:14]:14} "
                   f"{c['defense'][:15]:15} {c['guard'][:20]:20} {c['arm']:>3} "
+                  f"{c['cell_label'].replace('$^{r}$', '+r'):>6} "
                   f"{c['query_source'][:9]:9} {c['n']:>4} {c['block']:>4} "
                   f"{c['refusal_only']:>4} {c['both']:>5} {c['harmful_only']:>5} "
                   f"{c['neither']:>4} "
@@ -263,7 +281,7 @@ def main():
             c["query_source"], c["query_source"])
         dl = ("--" if c["asr_delta"] is None else format(c["asr_delta"], "+.0f"))
         und = ("--" if c["undef"] is None else format(c["undef"], ".0f"))
-        print(f"{tgt} & {grd} & {c['arm']} & {read} & "
+        print(f"{tgt} & {grd} & {c['arm']} & {c['cell_label']} & {read} & "
               f"{c['block']} & {c['refusal_only']} & {c['both']} & "
               f"{c['harmful_only']} & {c['neither']} & "
               f"{'--' if c['guard_share'] is None else format(c['guard_share'], '.0f')} & "
