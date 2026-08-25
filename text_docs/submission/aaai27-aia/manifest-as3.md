@@ -17,7 +17,7 @@ over an unchanged tree.
 | File | Channel | Size | SHA-256 |
 |---|---|---|---|
 | `paper.pdf` | Main submission PDF | 0.33 MB | `07ae8a3279e57fa6f23a5352eaa2ab83ce48b098fbb468269b0f958383c3a499` |
-| `supplementary.pdf` | Supplementary Document | 0.67 MB | `de1be5255e23fd759993f2716768cc28d41bc067e51c7c4f2e19b29954bd1ffe` |
+| `supplementary.pdf` | Supplementary Document | 0.67 MB | `3b872e7b3037bc334ca65030873927b8a91d716b44adaaaaa7b5f4e3b532e8a2` |
 | `supplementary_code_and_data.zip` | Code and Data Supplement | 6.63 MB | `c474abc5d83ee3d0e502ed131d46eebad6f60365a6fcc4068141bebf1eef01ae` |
 | `ReproducibilityChecklist/ReproducibilityChecklist.pdf` | Reproducibility checklist | 78 KB | `8f61db3987f514eea00939b2b037e6d9bbe967d04bff3d011b85af9b175dbbd8` |
 
@@ -186,6 +186,45 @@ decision rather than done blind.
 `paper/my_papers/<name>/`, which silently broke the `paper_dir` of **all five**
 profiles in `scripts/build_code_artifact.py`. They now resolve either layout via
 `_paper_dir()`, so the next move does not break them again.
+
+## Supplement restructured to stand on its own (2026-08-22, second pass)
+
+`paper.tex` untouched; `paper.pdf` still hash-matches the recorded upload. Built
+with the new **`build_supp.sh`**, which compiles the supplement ALONE — `build.sh`
+would rebuild the submitted PDF for no reason.
+
+**The frozen contract is now enforced, not remembered.** AS-3 does not use `xr`:
+the submitted paper cites **14 supplement sections BY NAME**, so renaming a
+heading breaks a pointer silently and cannot be fixed on the paper side.
+`FROZEN_XREFS.txt` records those 14 names plus what the paper actually contains
+(Tables 1-2, Eq. 1, and **no figures and no algorithm**); `check_supp.py` fails
+the build on any violation, in both directions.
+
+**Two defects the restructure surfaced:**
+
+1. 🔴 **The bibliography printed on page 28 of 44**, with sixteen more pages of
+   content after it, because `\bibliography` sat before the final section in the
+   source. Moved to the end; References now print on the last pages.
+2. The document carried **two parallel organisations** — a thematic one and a
+   20-subsection dump titled *Material Relocated from the Main Text*, a name that
+   only means anything to someone who saw the pre-condensation paper. Several of
+   its entries duplicated the thematic sections, and one pointed from the
+   supplement *at the supplement*.
+
+**What was done:** the relocated section is dissolved. All 20 subsections moved
+to the thematic section that owns their topic (setup, results, mechanism,
+over-refusal, adaptive, reliability, related work); the pipeline figure and
+algorithm became a real *The Pipeline, Diagrammed* subsection; three redundant
+adjacent headings were folded into the section that owns the topic; and the
+circular pointer now reads "given above".
+
+⚠️ **Nothing was deleted.** The obvious-looking merge — dropping *The Attack
+Suite, in Detail* as a duplicate of *The Attack Suite* — was checked first and
+refused: the shorter copy carries **five citations and three numbers** the longer
+one does not. It was moved and folded, not dropped.
+
+State: 45 pages, 0 errors / 0 undefined refs / 0 undefined citations / 0 overfull,
+anonymous, 14/14 frozen names resolving, no duplicate labels, no dangling refs.
 
 ## Packaging profile relied on
 
