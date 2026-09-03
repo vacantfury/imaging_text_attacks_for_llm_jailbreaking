@@ -22,7 +22,6 @@ dependencies = [
     # spot-verified as API-compatible, but there is no reason to adopt it).
     "anthropic (>=0.116,<1.0)",
     "google-genai (>=1.60.0,<2.0.0)",
-    "dotenv (>=0.9.9,<0.10.0)",
     "scikit-learn (>=1.8.0,<2.0.0)",
     "json-repair (>=0.56.0,<0.57.0)",
     "mlflow (>=3.10.0,<4.0.0)",
@@ -35,6 +34,13 @@ dependencies = [
     "pyspellchecker (>=0.9,<1.0)",
     "boto3>=1.43.51",
     "llm_utils @ git+https://github.com/vacantfury/llm_utils.git@v5.4.0",
+    # Canonical SLURM/vLLM server-lifecycle manager (overlap ruling
+    # 2026-09-02: devices is the single home; the llm_utils copy is
+    # retired in v7.0.0 and deprecated on the v5.x line). Consumed via
+    # src/experiment/cluster_manager.py. Pinned by tag per charter §3.7.
+    # git+ssh (not https) because `devices` is a PRIVATE repo — resolution
+    # needs the maintainer's SSH key, unlike the public llm_utils above.
+    "devices @ git+ssh://git@github.com/vacantfury/devices.git@v0.1.0",
     "spacy>=3.8.14",
     # Required by AMIA's masking encoder (openbmb/VisRAG-Ret). It is an INDIRECT
     # dependency that nothing in this repo imports: VisRAG-Ret is a

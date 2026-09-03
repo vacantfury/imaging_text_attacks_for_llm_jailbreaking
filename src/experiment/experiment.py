@@ -591,7 +591,9 @@ class Experiment:
         (sorted by model_id) — prevents collisions with mixed num_instances
         and keeps assignments reproducible across runs.
         """
-        from llm_utils.cluster_server_manager import ClusterModelServerManager
+        # Canonical SLURM server manager lives in `devices`; the local adapter
+        # keys it by LLMModel (see src/experiment/cluster_manager.py).
+        from .cluster_manager import ClusterModelServerManager
         from llm_utils import LLMServiceFactory
 
         self._server_manager = ClusterModelServerManager()
